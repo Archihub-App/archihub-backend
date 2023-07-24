@@ -2,11 +2,12 @@ from app.api.auth import bp
 from flask import jsonify, request
 from flask_jwt_extended import create_access_token
 from app.api.users.services import get_user
+import bcrypt
 
 @bp.route('/login', methods=['POST'])
 def login():
     """
-    Login a user
+    Login para obtener el token de acceso
     ---
     tags:
         - Auth
@@ -25,14 +26,26 @@ def login():
                 - password
     responses:
         200:
-            description: Login successful
+            description: Login exitoso
         401:
-            description: Invalid username or password
+            description: Usuario o contraseña inválidos
     """
     
+    # Obtener username y password del request
     username = request.json.get('username')
     password = request.json.get('password')
-    if username != 'test' or password != 'test':
-        return jsonify({'msg': 'Invalid username or password'}), 401
+    
+    # Buscar usuario en la base de datos
+    user = get_user(username)
+
+    # Verificar que el usuario exista
+    if not user:
+        return jsonify({'msg': 'Usuario inválido'}), 401
+    # Verificar que la contraseña sea correcta
+    if not bcrypt.checkpw(password.encode('utf-8'), user['password']):
+        return jsonify({'msg': 'Contraseña inválida'}), 401
+    
+    # Crear el token de acceso
     access_token = create_access_token(identity=username)
+    # Retornar el token de acceso
     return jsonify({'access_token': access_token}), 200
