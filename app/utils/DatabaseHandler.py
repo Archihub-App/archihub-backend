@@ -10,6 +10,7 @@ class DatabaseHandler:
         self.mydb = self.myclient[database_name]
         self.records = self.mydb["records"]
         self.resources = self.mydb["resources"]
+        self.resourcesTypes = self.mydb["resourcesTypes"]
         self.logs = self.mydb["processLogs"]
         self.df_list = []
         self.df = None
