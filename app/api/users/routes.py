@@ -2,17 +2,22 @@ from app.api.users import bp
 from flask import jsonify
 from flask import request
 from . import services
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import get_jwt_identity
 
 # En este archivo se registran las rutas de la API para los usuarios
 
 # Nuevo endpoint para registrar un usuario
 @bp.route('/register', methods=['POST'])
+@jwt_required()
 def register():
     """
     Registrar un nuevo usuario
     ---
+    security:
+        - JWT: []
     tags:
-        - Users
+        - Usuarios
     parameters:
         - in: body
           name: body
@@ -40,12 +45,15 @@ def register():
 
 # Nuevo endpoint para actualizar un usuario
 @bp.route('/update', methods=['PUT'])
+@jwt_required()
 def update():
     """
     Actualizar un usuario
     ---
+    security:
+        - JWT: []
     tags:
-        - Users
+        - Usuarios
     parameters:
         - in: body
           name: body
@@ -65,6 +73,7 @@ def update():
         400:
             description: Usuario no existe
     """
+    current_user = get_jwt_identity()
     # Obtener username y password del request
     username = request.json.get('username')
     password = request.json.get('password')

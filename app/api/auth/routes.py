@@ -45,10 +45,10 @@ def login():
     if not user:
         return jsonify({'msg': 'Usuario inválido'}), 401
     # Verificar que la contraseña sea correcta
-    if not bcrypt.checkpw(password.encode('utf-8'), user['password']):
+    if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
         return jsonify({'msg': 'Contraseña inválida'}), 401
     
-    # Crear el token de acceso
-    access_token = create_access_token(username=username)
+    # Crear el token de acceso para el usuario con el username
+    access_token = create_access_token(identity=username)
     # Retornar el token de acceso
     return jsonify({'access_token': access_token}), 200

@@ -12,6 +12,15 @@ def create_app(config_class=Config):
     jwt = JWTManager(app)
     # Inicializar Swagger
     swagger = Swagger(app)
+    # agregar security definition para JWT para que aparezca en la documentación la opción de agregar el token
+    swagger.config['securityDefinitions'] = {
+        'JWT': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header'
+        }
+    }
+    
 
     # Registrar users blueprint
     from app.api.users import bp as users_bp
