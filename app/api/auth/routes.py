@@ -46,6 +46,6 @@ def login():
         return jsonify({'msg': 'Contraseña inválida'}), 401
     
     # Crear el token de acceso
-    access_token = create_access_token(identity=username)
+    access_token = create_access_token(username=username)
     # Retornar el token de acceso
     return jsonify({'access_token': access_token}), 200
