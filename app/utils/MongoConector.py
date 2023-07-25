@@ -40,7 +40,5 @@ class MongoConector:
         return mongourl
         
     def get_client(self):
-        admin=self.admin
-        database=self.database
         client = pymongo.MongoClient(self.getMongoURI())
         return client

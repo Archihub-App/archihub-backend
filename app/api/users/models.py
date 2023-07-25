@@ -8,6 +8,8 @@ class User(BaseModel):
     name: str
     email: str
     password: str
+    accessLevel: str = "Public"
+    photo: Optional[str] = None
     roles: Optional[list[str]] = None
 
     class Config:
@@ -24,6 +26,8 @@ class UserUpdate(BaseModel):
     name: Optional[str]
     email: Optional[str]
     password: Optional[str]
+    accessLevel: Optional[str]
+    photo: Optional[str] = None
     roles: Optional[list[str]] = None
 
     class Config:

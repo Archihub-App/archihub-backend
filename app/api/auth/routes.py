@@ -4,6 +4,9 @@ from flask_jwt_extended import create_access_token
 from app.api.users.services import get_user
 import bcrypt
 
+# En este archivo se registran las rutas de la API para la autenticación
+
+# Nuevo endpoint para hacer login
 @bp.route('/login', methods=['POST'])
 def login():
     """

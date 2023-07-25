@@ -3,7 +3,7 @@ from flask import jsonify
 from app.utils import DatabaseHandler
 import bcrypt
 
-mongodb = DatabaseHandler('sim-backend-prod')
+mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
 # Nuevo servicio para registrar un usuario
 def register_user(username, password):
