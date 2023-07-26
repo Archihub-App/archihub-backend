@@ -16,3 +16,11 @@ class DatabaseHandler:
     # Esta función sirve para obtener un registro de una colección
     def get_record(self, collection, filters={}):
         return self.mydb[collection].find_one(filters)
+    
+    # Esta función sirve para actualizar un registro de una colección dado un filtro y un modelo de actualización. El modelo de actualización debe ser un pydantic model
+    def update_record(self, collection, filters, update_model):
+        return self.mydb[collection].update_one(filters, {'$set': update_model.dict(exclude_unset=True)})
+    
+    # Esta función sirve para insertar un registro en una colección. El registro debe ser un pydantic model
+    def insert_record(self, collection, record):
+        return self.mydb[collection].insert_one(record.dict(exclude_unset=True))

@@ -9,6 +9,7 @@ class User(BaseModel):
     email: str
     password: str
     accessLevel: str = "Public"
+    compromise: bool = False
     photo: Optional[str] = None
     roles: Optional[list[str]] = None
 
@@ -27,6 +28,7 @@ class UserUpdate(BaseModel):
     email: Optional[str]
     password: Optional[str]
     accessLevel: Optional[str]
+    compromise: Optional[bool]
     photo: Optional[str] = None
     roles: Optional[list[str]] = None
 
