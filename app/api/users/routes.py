@@ -145,7 +145,7 @@ def accept_compromise():
 @jwt_required()
 def get_user():
     """
-    Obtener un usuario por su username
+    Obtener un usuario por su header de autorización
     ---
     security:
         - JWT: []

@@ -19,7 +19,7 @@ def create_app(config_class=config['development']):
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 18000
     # Inicializar Swagger
     swagger = Swagger(app)
-    # agregar security definition para JWT para que aparezca en la documentación la opción de agregar el token
+    # agregar security definition para JWT Bearer type para que aparezca en la documentación la opción de agregar el token
     swagger.config['securityDefinitions'] = {
         'JWT': {
             'type': 'apiKey',
