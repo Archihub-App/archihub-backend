@@ -3,6 +3,8 @@ from flask import jsonify, request
 from flask_jwt_extended import create_access_token
 from app.api.users.services import get_user
 import bcrypt
+from app.utils.LogActions import log_actions
+from app.api.logs.services import register_log
 
 # En este archivo se registran las rutas de la API para la autenticación
 
@@ -50,5 +52,9 @@ def login():
     
     # Crear el token de acceso para el usuario con el username
     access_token = create_access_token(identity=username)
+
+    # Registrar el log de login
+    register_log(username, log_actions['user_login'])
+
     # Retornar el token de acceso
     return jsonify({'access_token': access_token}), 200
