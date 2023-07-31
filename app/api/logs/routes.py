@@ -38,3 +38,5 @@ def filter():
         400:
             description: No se encontraron logs
     """
+
+    return 'test'

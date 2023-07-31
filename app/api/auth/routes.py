@@ -5,6 +5,7 @@ from app.api.users.services import get_user
 import bcrypt
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
+from datetime import timedelta
 
 # En este archivo se registran las rutas de la API para la autenticación
 
@@ -50,8 +51,10 @@ def login():
     if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
         return jsonify({'msg': 'Contraseña inválida'}), 401
     
+    # expiración del token de acceso
+    expires_delta = timedelta(days=1)
     # Crear el token de acceso para el usuario con el username
-    access_token = create_access_token(identity=username)
+    access_token = create_access_token(identity=username, expires_delta=expires_delta)
 
     # Registrar el log de login
     register_log(username, log_actions['user_login'])

@@ -62,22 +62,32 @@ def create():
                 - name
                 - description
     responses:
-        200:
+        201:
             description: Tipo de post creado
         400:
             description: Error al crear el tipo de post
     """
     # Obtener el body de la request
     body = request.json
+
     # Obtener el usuario actual
     current_user = get_jwt_identity()
+
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
         return {'msg': 'No tiene permisos para crear un tipo de post'}, 401
     
     # Si el slug no está definido, crearlo
-    if not body.get('slug'):
-        body['slug'] = body.get('name').lower().replace(' ', '-')
-    
-    # Llamar al servicio para crear un tipo de post
-    return services.create(body)
+    if not body['slug'] or body['slug'] == '':
+        body['slug'] = body['name'].lower().replace(' ', '-')
+        # quitamos los caracteres especiales y las tildes pero dejamos los guiones
+        body['slug'] = ''.join(e for e in body['slug'] if e.isalnum() or e == '-')
+
+    slug_exists = services.get_by_slug(body['slug'])
+    # si el service.get_by_slug devuelve un error, entonces el tipo de post no existe
+    if 'msg' in slug_exists:
+        if slug_exists['msg'] == 'Tipo de post no existe':
+            # Llamar al servicio para crear un tipo de post
+            return services.create(body)
+    else:
+        return {'msg': 'El slug ya existe'}, 400

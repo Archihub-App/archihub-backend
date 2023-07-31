@@ -41,8 +41,8 @@ def create_app(config_class=config['development']):
     app.register_blueprint(types_bp, url_prefix='/types')
 
     # Registrar logs blueprint
-    from app.api.logs import bp as logs_bp
-    app.register_blueprint(logs_bp, url_prefix='/logs')
+    # from app.api.logs import bp as logs_bp
+    # app.register_blueprint(logs_bp, url_prefix='/logs')
 
     return app
 
