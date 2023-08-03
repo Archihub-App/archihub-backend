@@ -91,3 +91,88 @@ def create():
             return services.create(body)
     else:
         return {'msg': 'El slug ya existe'}, 400
+
+# Nuevo endpoint para obtener un tipo de post por su slug
+@bp.route('/<slug>', methods=['GET'])
+@jwt_required()
+def get_by_slug(slug):
+    """
+    Obtener un tipo de post por su slug
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Tipos de post
+    parameters:
+        - in: path
+            name: slug
+            schema:
+                type: string
+            required: true
+    responses:
+        200:
+            description: Tipo de post
+        404:
+            description: Tipo de post no existe
+    """
+    # se obtiene el usuario actual
+    current_user = get_jwt_identity()
+    # se verifica si el usuario tiene el rol de administrador o catalogador_gestor
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'catalogador_gestor'):
+        return {'msg': 'No tiene permisos para obtener un tipo de post'}, 401
+    # Llamar al servicio para obtener un tipo de post por su slug
+    slug_exists = services.get_by_slug(slug)
+    # si el service.get_by_slug devuelve un error, entonces el tipo de post no existe
+    if 'msg' in slug_exists:
+        if slug_exists['msg'] == 'Tipo de post no existe':
+            return slug_exists, 404
+    else:
+        return slug_exists
+
+# Nuevo endpoint para actualizar un tipo de post por su slug
+@bp.route('/<slug>', methods=['PUT'])
+@jwt_required()
+def update_by_slug(slug):
+    """
+    Actualizar un tipo de post por su slug
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Tipos de post
+    parameters:
+        - in: path
+            name: slug
+            schema:
+                type: string
+            required: true
+        - in: body
+            name: body
+            schema:
+                type: object
+                properties:
+                    name:
+                        type: string
+                    description:
+                        type: string
+                    icon:
+                        type: string
+                required:
+                    - name
+                    - description
+    responses:
+        200:
+            description: Tipo de post actualizado
+        404:
+            description: Tipo de post no existe
+    """
+    # se obtiene el usuario actual
+    current_user = get_jwt_identity()
+    # se verifica si el usuario tiene el rol de administrador o catalogador_gestor
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'catalogador_gestor'):
+        return {'msg': 'No tiene permisos para actualizar un tipo de post'}, 401
+    # Obtener el body de la request
+    body = request.json
+    # Llamar al servicio para actualizar un tipo de post por su slug
+    return services.update_by_slug(slug, body)
+            

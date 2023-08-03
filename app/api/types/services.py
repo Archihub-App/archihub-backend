@@ -3,6 +3,7 @@ from app.utils import DatabaseHandler
 from bson import json_util
 import json
 from app.api.types.models import PostType
+from app.api.types.models import PostTypeUpdate
 from flask import request
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
@@ -36,7 +37,31 @@ def get_by_slug(slug):
     # Si el tipo de post no existe, retornar error
     if not post_type:
         return {'msg': 'Tipo de post no existe'}
+    # quitamos el id del tipo de post
+    post_type.pop('_id')
+    # quitamos el slug del tipo de post
+    post_type.pop('slug')
+    # quitamos el parentType del tipo de post
+    post_type.pop('parentType')
+    # quitamos el hierarchical del tipo de post
+    post_type.pop('hierarchical')
+    # quitamos metadata del tipo de post
+    post_type.pop('metadata')
     # Parsear el resultado
     post_type = parse_result(post_type)
     # Retornar el resultado
     return post_type
+
+# Nuevo servicio para actualizar un tipo de post
+def update_by_slug(slug, body):
+    # Buscar el tipo de post en la base de datos
+    post_type = mongodb.get_record('post_types', {'slug': slug})
+    # crear instancia de PostTypeUpdate con el body del request
+    post_type_update = PostTypeUpdate(**body)
+    # Si el tipo de post no existe, retornar error
+    if not post_type:
+        return {'msg': 'Tipo de post no existe'}, 404
+    # Actualizar el tipo de post
+    mongodb.update_record('post_types', {'slug': slug}, body)
+    # Retornar el resultado
+    return {'msg': 'Tipo de post actualizado exitosamente'}

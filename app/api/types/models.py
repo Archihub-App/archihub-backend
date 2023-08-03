@@ -22,3 +22,18 @@ class PostType(BaseModel):
                 "description": "Publicación de texto"
             }
         }
+
+# Modelo para la actualización de tipos de contenido
+class PostTypeUpdate(BaseModel):
+    name: Optional[str]
+    description: Optional[str]
+    icon: Optional[str]
+
+    class Config:
+        allow_population_by_field_name = True
+        schema_extra = {
+            "example": {
+                "name": "Post",
+                "description": "Publicación de texto"
+            }
+        }
