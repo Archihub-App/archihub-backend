@@ -13,7 +13,7 @@ from datetime import timedelta
 @bp.route('/login', methods=['POST'])
 def login():
     """
-    Login para obtener el token de acceso
+    Login para obtener el token de acceso al gestor documental
     ---
     tags:
         - Auth

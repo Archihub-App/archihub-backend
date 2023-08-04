@@ -17,20 +17,20 @@ def filter():
     security:
         - JWT: []
     tags:
-        - Logs
+        - Logs del sistema
     parameters:
         - in: body
           name: body
           schema:
-          type: object
-          properties:
-            username:
+            type: object
+            properties:
+              username:
                 type: string
-            action:
+              action:
                 type: string
-            from_date:
+              from_date:
                 type: string
-            to_date:
+              to_date:
                 type: string
     responses:
         200:

@@ -9,7 +9,7 @@ class PostType(BaseModel):
     description: str
     slug: str
     post_count: int = 0
-    metadata: list[dict] = None
+    metadata: list[str] = None
     icon: str = None
     hierarchical: bool = False
     parentType: str = None

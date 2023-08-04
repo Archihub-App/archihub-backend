@@ -5,37 +5,37 @@ from app.api.types import services
 from app.api.users import services as user_services
 from flask import request
 
-# En este archivo se registran las rutas de la API para los tipos de post
+# En este archivo se registran las rutas de la API para los tipos de contenido
 
-# Nuevo endpoint para obtener todos los tipos de post
+# Nuevo endpoint para obtener todos los tipos de contenido
 @bp.route('', methods=['GET'])
 @jwt_required()
 def get_all():
     """
-    Obtener todos los tipos de post
+    Obtener todos los tipos de contenido de catalogación
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de post
+        - Tipos de contenido
     responses:
         200:
-            description: Lista de tipos de post
+            description: Lista de tipos de contenido
     """
-    # Llamar al servicio para obtener todos los tipos de post
+    # Llamar al servicio para obtener todos los tipos de contenido
     return services.get_all()
 
-# Nuevo endpoint para crear un tipo de post
+# Nuevo endpoint para crear un tipo de contenido
 @bp.route('', methods=['POST'])
 @jwt_required()
 def create():
     """
-    Crear un tipo de post nuevo con el body del request
+    Crear un tipo de contenido nuevo con el body del request
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de post
+        - Tipos de contenido
     parameters:
         - in: body
           name: body
@@ -63,9 +63,11 @@ def create():
                 - description
     responses:
         201:
-            description: Tipo de post creado
+            description: Tipo de contenido creado
         400:
-            description: Error al crear el tipo de post
+            description: Error al crear el tipo de contenido
+        401:
+            description: No tiene permisos para crear un tipo de contenido
     """
     # Obtener el body de la request
     body = request.json
@@ -75,74 +77,91 @@ def create():
 
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para crear un tipo de post'}, 401
+        return {'msg': 'No tiene permisos para crear un tipo de contenido'}, 401
     
     # Si el slug no está definido, crearlo
     if not body['slug'] or body['slug'] == '':
         body['slug'] = body['name'].lower().replace(' ', '-')
         # quitamos los caracteres especiales y las tildes pero dejamos los guiones
         body['slug'] = ''.join(e for e in body['slug'] if e.isalnum() or e == '-')
+        # quitamos los guiones al inicio y al final
+        body['slug'] = body['slug'].strip('-')
+        # quitamos los guiones repetidos
+        body['slug'] = body['slug'].replace('--', '-')
 
-    slug_exists = services.get_by_slug(body['slug'])
-    # si el service.get_by_slug devuelve un error, entonces el tipo de post no existe
-    if 'msg' in slug_exists:
-        if slug_exists['msg'] == 'Tipo de post no existe':
-            # Llamar al servicio para crear un tipo de post
-            return services.create(body)
+        # Llamar al servicio para obtener un tipo de contenido por su slug
+        slug_exists = services.get_by_slug(body['slug'])
+
+        # Mientras el slug exista, agregar un número al final
+        index = 1
+        while 'msg' not in slug_exists:
+            body['slug'] = body['slug'] + '-' + index
+            slug_exists = services.get_by_slug(body['slug'])
+            index += 1
+
+        # Llamar al servicio para crear un tipo de contenido
+        return services.create(body)
     else:
-        return {'msg': 'El slug ya existe'}, 400
+        slug_exists = services.get_by_slug(body['slug'])
+        # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
+        if 'msg' in slug_exists:
+            if slug_exists['msg'] == 'Tipo de contenido no existe':
+                # Llamar al servicio para crear un tipo de contenido
+                return services.create(body)
+        else:
+            return {'msg': 'El slug ya existe'}, 400
 
-# Nuevo endpoint para obtener un tipo de post por su slug
+# Nuevo endpoint para obtener un tipo de contenido por su slug
 @bp.route('/<slug>', methods=['GET'])
 @jwt_required()
 def get_by_slug(slug):
     """
-    Obtener un tipo de post por su slug
+    Obtener un tipo de contenido por su slug
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de post
+        - Tipos de contenido
     parameters:
-        - slug (string): slug del tipo de post a obtener
+        - slug (string): slug del tipo de contenido a obtener
     responses:
         200:
-            description: Tipo de post
+            description: Tipo de contenido
         404:
-            description: Tipo de post no existe
+            description: Tipo de contenido no existe
     """
     # se obtiene el usuario actual
     current_user = get_jwt_identity()
     # se verifica si el usuario tiene el rol de administrador o catalogador_gestor
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'catalogador_gestor'):
-        return {'msg': 'No tiene permisos para obtener un tipo de post'}, 401
-    # Llamar al servicio para obtener un tipo de post por su slug
+        return {'msg': 'No tiene permisos para obtener un tipo de contenido'}, 401
+    # Llamar al servicio para obtener un tipo de contenido por su slug
     slug_exists = services.get_by_slug(slug)
-    # si el service.get_by_slug devuelve un error, entonces el tipo de post no existe
+    # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
     if 'msg' in slug_exists:
-        if slug_exists['msg'] == 'Tipo de post no existe':
+        if slug_exists['msg'] == 'Tipo de contenido no existe':
             return slug_exists, 404
     else:
         return slug_exists
 
-# Nuevo endpoint para actualizar un tipo de post por su slug
+# Nuevo endpoint para actualizar un tipo de contenido por su slug
 @bp.route('/<slug>', methods=['PUT'])
 @jwt_required()
 def update_by_slug(slug):
     """
-    Actualizar un tipo de post por su slug
+    Actualizar un tipo de contenido por su slug
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de post
+        - Tipos de contenido
     parameters:
         - in: path
           name: slug
           schema:
             type: string
           required: true
-          description: slug del tipo de post a actualizar
+          description: slug del tipo de contenido a actualizar
         - in: body
           name: body
           schema:
@@ -156,17 +175,17 @@ def update_by_slug(slug):
                     
     responses:
         200:
-            description: Tipo de post actualizado
+            description: Tipo de contenido actualizado
         404:
-            description: Tipo de post no existe
+            description: Tipo de contenido no existe
     """
     # se obtiene el usuario actual
     current_user = get_jwt_identity()
     # se verifica si el usuario tiene el rol de administrador o catalogador_gestor
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'catalogador_gestor'):
-        return {'msg': 'No tiene permisos para actualizar un tipo de post'}, 401
+        return {'msg': 'No tiene permisos para actualizar un tipo de contenido'}, 401
     # Obtener el body de la request
     body = request.json
-    # Llamar al servicio para actualizar un tipo de post por su slug
+    # Llamar al servicio para actualizar un tipo de contenido por su slug
     return services.update_by_slug(slug, body)
             
