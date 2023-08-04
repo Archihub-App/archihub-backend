@@ -54,6 +54,7 @@ def get_by_slug(slug):
 
 # Nuevo servicio para actualizar un tipo de post
 def update_by_slug(slug, body):
+    print(slug)
     # Buscar el tipo de post en la base de datos
     post_type = mongodb.get_record('post_types', {'slug': slug})
     # crear instancia de PostTypeUpdate con el body del request
@@ -62,6 +63,6 @@ def update_by_slug(slug, body):
     if not post_type:
         return {'msg': 'Tipo de post no existe'}, 404
     # Actualizar el tipo de post
-    mongodb.update_record('post_types', {'slug': slug}, body)
+    mongodb.update_record('post_types', {'slug': slug}, post_type_update)
     # Retornar el resultado
     return {'msg': 'Tipo de post actualizado exitosamente'}

@@ -104,11 +104,7 @@ def get_by_slug(slug):
     tags:
         - Tipos de post
     parameters:
-        - in: path
-            name: slug
-            schema:
-                type: string
-            required: true
+        - slug (string): slug del tipo de post a obtener
     responses:
         200:
             description: Tipo de post
@@ -142,24 +138,22 @@ def update_by_slug(slug):
         - Tipos de post
     parameters:
         - in: path
-            name: slug
-            schema:
-                type: string
-            required: true
+          name: slug
+          schema:
+            type: string
+          required: true
+          description: slug del tipo de post a actualizar
         - in: body
-            name: body
-            schema:
-                type: object
-                properties:
-                    name:
-                        type: string
-                    description:
-                        type: string
-                    icon:
-                        type: string
-                required:
-                    - name
-                    - description
+          name: body
+          schema:
+            type: object
+            properties:
+                name:
+                    type: string
+                description:
+                    type: string
+            
+                    
     responses:
         200:
             description: Tipo de post actualizado
