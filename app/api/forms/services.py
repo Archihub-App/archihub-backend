@@ -3,6 +3,7 @@ from app.utils import DatabaseHandler
 from bson import json_util
 import json
 from app.api.forms.models import Form
+from app.api.forms.models import FormUpdate
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -40,4 +41,18 @@ def get_by_slug(slug):
     # Parsear el resultado
     form = parse_result(form)
     # Retornar el resultado
-    return form
+    return 
+
+# Nuevo servicio para actualizar un formulario
+def update_by_slug(slug, body):
+    # Buscar el formulario en la base de datos
+    form = mongodb.get_record('forms', {'slug': slug})
+    # Si el formulario no existe, retornar error
+    if not form:
+        return {'msg': 'Formulario no existe'}, 404
+    # Crear instancia de FormUpdate con el body del request
+    form_update = FormUpdate(**body)
+    # Actualizar el formulario en la base de datos
+    mongodb.update_record('forms', {'slug': slug}, form_update)
+    # Retornar el resultado
+    return {'msg': 'Formulario actualizado exitosamente'}, 200

@@ -65,4 +65,4 @@ def update_by_slug(slug, body):
     # Actualizar el tipo de post
     mongodb.update_record('post_types', {'slug': slug}, post_type_update)
     # Retornar el resultado
-    return {'msg': 'Tipo de post actualizado exitosamente'}
+    return {'msg': 'Tipo de post actualizado exitosamente'}, 200

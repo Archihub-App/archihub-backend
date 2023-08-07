@@ -2,6 +2,7 @@ from app.api.forms import bp
 from flask import jsonify, request
 from flask_jwt_extended import jwt_required
 from app.api.forms import services
+from app.api.users import services as user_services
 from flask_jwt_extended import get_jwt_identity
 
 # En este archivo se registran las rutas de la API para los estándares de metadatos
@@ -67,7 +68,7 @@ def create():
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
-    if not services.is_admin(current_user):
+    if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # si el slug no está definido, crearlo
     if 'slug' not in body or body['slug'] == '':
@@ -130,3 +131,57 @@ def get_by_slug(slug):
             return jsonify(resp), 404
     # Retornar el estándar
     return jsonify(resp), 200
+
+# Nuevo endpoint para actualizar un estándar por su slug
+@bp.route('/<slug>', methods=['PUT'])
+@jwt_required()
+def update_by_slug(slug):
+    """
+    Actualizar un estándar por su slug
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Estándares de metadatos
+    parameters:
+        - in: path
+          name: slug
+          schema:
+            type: string
+          required: true
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                name:
+                    type: string
+                description:
+                    type: string
+                slug:
+
+                    type: string
+                fields:
+                    type: array
+                    items:
+                        type: object
+            required:
+                - name
+                - description
+    responses:
+        200:
+            description: Estándar de metadatos actualizado exitosamente
+        400:
+            description: Error al actualizar el estándar de metadatos
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el body de la request
+    body = request.json
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Llamar al servicio para actualizar el estándar por su slug
+    return services.update_by_slug(slug, body)
