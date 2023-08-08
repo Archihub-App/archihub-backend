@@ -41,7 +41,7 @@ def get_by_slug(slug):
     # Parsear el resultado
     form = parse_result(form)
     # Retornar el resultado
-    return 
+    return form
 
 # Nuevo servicio para actualizar un formulario
 def update_by_slug(slug, body):

@@ -21,7 +21,14 @@ def get_all():
     responses:
         200:
             description: Lista de estándares de metadatos
+        401:
+            description: No tienes permisos para realizar esta acción
     """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener todos los estándares de metadatos
     return services.get_all()
 
@@ -120,14 +127,21 @@ def get_by_slug(slug):
     responses:
         200:
             description: estándar obtenido exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
         404:
             description: estándar no encontrado
     """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener el estándar por su slug
     resp = services.get_by_slug(slug)
     # Si el estándar no existe, retornar error
     if 'msg' in resp:
-        if resp['msg'] == 'estándar no existe':
+        if resp['msg'] == 'Formulario no existe':
             return jsonify(resp), 404
     # Retornar el estándar
     return jsonify(resp), 200
@@ -178,6 +192,7 @@ def update_by_slug(slug):
     """
     # Obtener el body de la request
     body = request.json
+    
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
