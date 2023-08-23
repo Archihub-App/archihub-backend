@@ -4,6 +4,9 @@ from flask_jwt_extended import get_jwt_identity
 from app.api.types import services
 from app.api.users import services as user_services
 from flask import request
+from app.utils.LogActions import log_actions
+from app.api.logs.services import register_log
+
 
 # En este archivo se registran las rutas de la API para los tipos de contenido
 
@@ -100,14 +103,14 @@ def create():
             index += 1
 
         # Llamar al servicio para crear un tipo de contenido
-        return services.create(body)
+        return services.create(body, current_user)
     else:
         slug_exists = services.get_by_slug(body['slug'])
         # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
         if 'msg' in slug_exists:
             if slug_exists['msg'] == 'Tipo de contenido no existe':
                 # Llamar al servicio para crear un tipo de contenido
-                return services.create(body)
+                return services.create(body, current_user)
         else:
             return {'msg': 'El slug ya existe'}, 400
 
@@ -187,5 +190,5 @@ def update_by_slug(slug):
     # Obtener el body de la request
     body = request.json
     # Llamar al servicio para actualizar un tipo de contenido por su slug
-    return services.update_by_slug(slug, body)
+    return services.update_by_slug(slug, body, current_user)
             
