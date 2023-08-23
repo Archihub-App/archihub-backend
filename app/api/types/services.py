@@ -35,6 +35,7 @@ def create(body, user):
     register_log(user, log_actions['type_create'])
     # Limpiar la cache
     get_all.cache_clear()
+    get_by_slug.cache_clear()
     # Retornar el resultado
     return {'msg': 'Tipo de post creado exitosamente'}, 201
 

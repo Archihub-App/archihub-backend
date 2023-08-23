@@ -36,6 +36,7 @@ def create(body, user):
     # Registrar el log
     register_log(user, log_actions['form_create'])
     # Limpiar la cache
+    get_by_slug.cache_clear()
     get_all.cache_clear()
     # Retornar el resultado
     return {'msg': 'Formulario creado exitosamente'}, 201
