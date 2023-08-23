@@ -2,6 +2,7 @@ from flask import jsonify
 from app.utils import DatabaseHandler
 from bson import json_util
 import json
+from functools import lru_cache
 from app.api.types.models import PostType
 from app.api.types.models import PostTypeUpdate
 from flask import request
@@ -14,10 +15,11 @@ mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
-# Nuevo servicio para obtener todos los tipos de post
+# Nuevo servicio para obtener todos los tipos de 
+@lru_cache(maxsize=1)
 def get_all():
-    # Obtener todos los tipos de post
-    post_types = mongodb.get_all_records('post_types')
+    # Obtener todos los tipos de post en orden alfabetico ascendente por el campo name
+    post_types = mongodb.get_all_records('post_types', {}, [('name', 1)])
     # Quitar todos los campos menos el nombre y la descripción
     post_types = [{ 'name': post_type['name'], 'description': post_type['description'], 'slug': post_type['slug']} for post_type in post_types]
     # Retornar post_types
@@ -31,6 +33,8 @@ def create(body, user):
     new_post_type = mongodb.insert_record('post_types', post_type)
     # Registrar el log
     register_log(user, log_actions['type_create'])
+    # Limpiar la cache
+    get_all.cache_clear()
     # Retornar el resultado
     return {'msg': 'Tipo de post creado exitosamente'}, 201
 
@@ -69,5 +73,8 @@ def update_by_slug(slug, body, user):
     mongodb.update_record('post_types', {'slug': slug}, post_type_update)
     # Registrar el log
     register_log(user, log_actions['type_update'])
+    # Limpiar la cache
+    get_all.cache_clear()
+    get_by_slug.cache_clear()
     # Retornar el resultado
     return {'msg': 'Tipo de post actualizado exitosamente'}, 200

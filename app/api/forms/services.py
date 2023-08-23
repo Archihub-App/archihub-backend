@@ -1,6 +1,7 @@
 from flask import jsonify, request
 from app.utils import DatabaseHandler
 from bson import json_util
+from functools import lru_cache
 import json
 from app.api.forms.models import Form
 from app.api.forms.models import FormUpdate
@@ -14,9 +15,10 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para obtener todos los estándares de metadatos
+@lru_cache(maxsize=1)
 def get_all():
     # Obtener todos los estándares de metadatos
-    forms = mongodb.get_all_records('forms')
+    forms = mongodb.get_all_records('forms', {}, [('name', 1)])
     # Quitar todos los campos menos el nombre y la descripción
     forms = [{ 'name': form['name'], 'description': form['description'], 'slug': form['slug']} for form in forms]
     # Retornar forms
@@ -33,10 +35,13 @@ def create(body, user):
     new_form = mongodb.insert_record('forms', form)
     # Registrar el log
     register_log(user, log_actions['form_create'])
+    # Limpiar la cache
+    get_all.cache_clear()
     # Retornar el resultado
     return {'msg': 'Formulario creado exitosamente'}, 201
 
 # Nuevo servicio para devolver un formulario por su slug
+@lru_cache(maxsize=30)
 def get_by_slug(slug):
     # Buscar el formulario en la base de datos
     form = mongodb.get_record('forms', {'slug': slug})
@@ -66,5 +71,8 @@ def update_by_slug(slug, body, user):
     mongodb.update_record('forms', {'slug': slug}, form_update)
     # Registrar el log
     register_log(user, log_actions['form_update'])
+    # Limpiar la cache
+    get_all.cache_clear()
+    get_by_slug.cache_clear()
     # Retornar el resultado
     return {'msg': 'Formulario actualizado exitosamente'}, 200

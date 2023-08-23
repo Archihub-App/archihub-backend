@@ -2,6 +2,7 @@ from flask import jsonify, request
 from app.utils import DatabaseHandler
 from bson import json_util
 import json
+from functools import lru_cache
 from app.api.lists.models import List
 from app.api.lists.models import ListUpdate
 from app.utils.LogActions import log_actions
@@ -14,11 +15,13 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para obtener todos los listados
+@lru_cache(maxsize=1)
 def get_all():
     # Obtener todos los listados
-    lists = mongodb.get_all_records('lists')
-    # Quitar todos los campos menos el nombre y la descripción
-    lists = [{ 'name': lista['name'], 'description': lista['description'], 'slug': lista['slug']} for lista in lists]
+    lists = mongodb.get_all_records('lists', {}, [('name', 1)])
+
+    # Quitar todos los campos menos el nombre y la descripción si es que existe
+    lists = [{ 'name': lista['name'] } for lista in lists]
     # Retornar lists
     return jsonify(lists), 200
 
@@ -33,10 +36,13 @@ def create(body, user):
     new_list = mongodb.insert_record('lists', lista)
     # Registrar el log
     register_log(user, log_actions['list_create'])
+    # Limpiar la cache
+    get_all.cache_clear()
     # Retornar el resultado
     return {'msg': 'Listado creado exitosamente'}, 201
 
 # Nuevo servicio para devolver un listado por su slug
+@lru_cache(maxsize=30)
 def get_by_slug(slug):
     # Buscar el listado en la base de datos
     lista = mongodb.get_record('lists', {'slug': slug})
@@ -66,5 +72,8 @@ def update_by_slug(slug, body, user):
     mongodb.update_record('lists', {'slug': slug}, list_update)
     # Registrar el log
     register_log(user, log_actions['list_update'])
+    # Limpiar la cache
+    get_by_slug.cache_clear()
+    get_all.cache_clear()
     # Retornar el resultado
     return {'msg': 'Listado actualizado exitosamente'}, 200
