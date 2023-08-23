@@ -97,14 +97,14 @@ def create():
             index += 1
             
         # Llamar al servicio para crear un listado
-        return services.create(body)
+        return services.create(body, current_user)
     else:
         slug_exists = services.get_by_slug(body['slug'])
         # si el service.get_by_slug devuelve un error, entonces el listado no existe
         if 'msg' in slug_exists:
             if slug_exists['msg'] == 'Listado no existe':
                 # Llamar al servicio para crear un listado
-                return services.create(body)
+                return services.create(body, current_user)
         else:
             return {'msg': 'El slug ya existe'}, 400
 
@@ -199,4 +199,4 @@ def update_by_slug(slug):
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para actualizar el estándar por su slug
-    return services.update_by_slug(slug, body)
+    return services.update_by_slug(slug, body, current_user)

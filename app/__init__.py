@@ -19,6 +19,7 @@ def create_app(config_class=config['development']):
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 18000
     # Inicializar Swagger
     swagger = Swagger(app)
+    
     # agregar security definition para JWT Bearer type para que aparezca en la documentación la opción de agregar el token
     swagger.config['securityDefinitions'] = {
         'JWT': {
@@ -47,6 +48,10 @@ def create_app(config_class=config['development']):
     # Registrar forms blueprint
     from app.api.forms import bp as forms_bp
     app.register_blueprint(forms_bp, url_prefix='/forms')
+
+    # Registrar lists blueprint
+    from app.api.lists import bp as lists_bp
+    app.register_blueprint(lists_bp, url_prefix='/lists')
 
     return app
 
