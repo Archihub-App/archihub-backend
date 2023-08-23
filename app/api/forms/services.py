@@ -3,7 +3,7 @@ from app.utils import DatabaseHandler
 from bson import json_util
 import json
 from app.api.forms.models import Form
-from app.api.forms.models import 
+from app.api.forms.models import FormUpdate
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 
@@ -23,7 +23,7 @@ def get_all():
     return jsonify(forms), 200
 
 # Nuevo servicio para crear un estándar de metadatos
-def create(body):
+def create(body, user):
     # Crear instancia de Form con el body del request
     try:
         form = Form(**body)
