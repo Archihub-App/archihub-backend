@@ -18,65 +18,100 @@ def parse_result(result):
 # Nuevo servicio para obtener todos los tipos de 
 @lru_cache(maxsize=1)
 def get_all():
-    # Obtener todos los tipos de post en orden alfabetico ascendente por el campo name
-    post_types = mongodb.get_all_records('post_types', {}, [('name', 1)])
-    # Quitar todos los campos menos el nombre y la descripción
-    post_types = [{ 'name': post_type['name'], 'description': post_type['description'], 'slug': post_type['slug']} for post_type in post_types]
-    # Retornar post_types
-    return jsonify(post_types), 200
+    try:
+        # Obtener todos los tipos de post en orden alfabetico ascendente por el campo name
+        post_types = mongodb.get_all_records('post_types', {}, [('name', 1)])
+        # Quitar todos los campos menos el nombre y la descripción
+        post_types = [{ 'name': post_type['name'], 'description': post_type['description'], 'slug': post_type['slug']} for post_type in post_types]
+        # Retornar post_types
+        return jsonify(post_types), 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
 
 # Nuevo servicio para crear un tipo de post
 def create(body, user):
-    # Crear instancia de PostType con el body del request
-    post_type = PostType(**body)
-    # Insertar el tipo de post en la base de datos
-    new_post_type = mongodb.insert_record('post_types', post_type)
-    # Registrar el log
-    register_log(user, log_actions['type_create'])
-    # Limpiar la cache
-    get_all.cache_clear()
-    get_by_slug.cache_clear()
-    # Retornar el resultado
-    return {'msg': 'Tipo de post creado exitosamente'}, 201
+    try:
+        # Crear instancia de PostType con el body del request
+        post_type = PostType(**body)
+        # Insertar el tipo de post en la base de datos
+        new_post_type = mongodb.insert_record('post_types', post_type)
+        # Registrar el log
+        register_log(user, log_actions['type_create'], {'post_type': {
+            'name': post_type.name,
+            'slug': post_type.slug,
+        }})
+        # Limpiar la cache
+        get_all.cache_clear()
+        get_by_slug.cache_clear()
+        # Retornar el resultado
+        return {'msg': 'Tipo de post creado exitosamente'}, 201
+    except Exception as e:
+        return {'msg': str(e)}, 500
 
 # Nuevo servicio para obtener un tipo de post por su slug
 @lru_cache(maxsize=30)
 def get_by_slug(slug):
-    # Buscar el tipo de post en la base de datos
-    post_type = mongodb.get_record('post_types', {'slug': slug})
-    # Si el tipo de post no existe, retornar error
-    if not post_type:
-        return {'msg': 'Tipo de post no existe'}
-    # quitamos el id del tipo de post
-    post_type.pop('_id')
-    # quitamos el slug del tipo de post
-    post_type.pop('slug')
-    # quitamos el parentType del tipo de post
-    post_type.pop('parentType')
-    # quitamos el hierarchical del tipo de post
-    post_type.pop('hierarchical')
-    # quitamos metadata del tipo de post
-    post_type.pop('metadata')
-    # Parsear el resultado
-    post_type = parse_result(post_type)
-    # Retornar el resultado
-    return post_type
+    try:
+        # Buscar el tipo de post en la base de datos
+        post_type = mongodb.get_record('post_types', {'slug': slug})
+        # Si el tipo de post no existe, retornar error
+        if not post_type:
+            return {'msg': 'Tipo de post no existe'}
+        # quitamos el id del tipo de post
+        post_type.pop('_id')
+        # quitamos el slug del tipo de post
+        post_type.pop('slug')
+        # quitamos el parentType del tipo de post
+        post_type.pop('parentType')
+        # quitamos el hierarchical del tipo de post
+        post_type.pop('hierarchical')
+        # quitamos metadata del tipo de post
+        post_type.pop('metadata')
+        # Parsear el resultado
+        post_type = parse_result(post_type)
+        # Retornar el resultado
+        return post_type
+    except Exception as e:
+        return {'msg': str(e)}, 500
 
 # Nuevo servicio para actualizar un tipo de post
 def update_by_slug(slug, body, user):
     # Buscar el tipo de post en la base de datos
     post_type = mongodb.get_record('post_types', {'slug': slug})
-    # crear instancia de PostTypeUpdate con el body del request
-    post_type_update = PostTypeUpdate(**body)
+    try:
+        # crear instancia de PostTypeUpdate con el body del request
+        post_type_update = PostTypeUpdate(**body)
+        # Si el tipo de post no existe, retornar error
+        if not post_type:
+            return {'msg': 'Tipo de post no existe'}, 404
+        # Actualizar el tipo de post
+        mongodb.update_record('post_types', {'slug': slug}, post_type_update)
+        # Registrar el log
+        register_log(user, log_actions['type_update'], {'post_type': body})
+        # Limpiar la cache
+        get_all.cache_clear()
+        get_by_slug.cache_clear()
+        # Retornar el resultado
+        return {'msg': 'Tipo de post actualizado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+# Nuevo servicio para eliminar un tipo de post
+def delete_by_slug(slug, user):
+    # Buscar el tipo de post en la base de datos
+    post_type = mongodb.get_record('post_types', {'slug': slug})
     # Si el tipo de post no existe, retornar error
     if not post_type:
         return {'msg': 'Tipo de post no existe'}, 404
-    # Actualizar el tipo de post
-    mongodb.update_record('post_types', {'slug': slug}, post_type_update)
+    # Eliminar el tipo de post
+    mongodb.delete_record('post_types', {'slug': slug})
     # Registrar el log
-    register_log(user, log_actions['type_update'])
+    register_log(user, log_actions['type_delete'], {'post_type': {
+        'name': post_type['name'],
+        'slug': post_type['slug'],
+    }})
     # Limpiar la cache
     get_all.cache_clear()
     get_by_slug.cache_clear()
     # Retornar el resultado
-    return {'msg': 'Tipo de post actualizado exitosamente'}, 200
+    return {'msg': 'Tipo de post eliminado exitosamente'}, 200

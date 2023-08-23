@@ -23,6 +23,8 @@ def get_all():
             description: Lista de listados
         401:
             description: No tienes permisos para realizar esta acción
+        500:
+            description: Error al obtener los listados
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -69,6 +71,8 @@ def create():
             description: Error al crear el listado
         401:
             description: No tienes permisos para realizar esta acción
+        500:
+            description: Error al crear el listado
     """
     # Obtener el body de la request
     body = request.json
@@ -131,6 +135,8 @@ def get_by_slug(slug):
             description: No tienes permisos para realizar esta acción
         404:
             description: Listado no encontrado
+        500:
+            description: Error al obtener el listado
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -189,6 +195,10 @@ def update_by_slug(slug):
             description: Error al actualizar el listado
         401:
             description: No tienes permisos para realizar esta acción
+        404:
+            description: Listado no encontrado
+        500:
+            description: Error al actualizar el listado
     """
     # Obtener el body de la request
     body = request.json

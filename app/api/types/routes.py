@@ -24,6 +24,10 @@ def get_all():
     responses:
         200:
             description: Lista de tipos de contenido
+        401:
+            description: No tiene permisos para obtener los tipos de contenido
+        500:
+            description: Error al obtener los tipos de contenido
     """
     # Llamar al servicio para obtener todos los tipos de contenido
     return services.get_all()
@@ -71,6 +75,8 @@ def create():
             description: Error al crear el tipo de contenido
         401:
             description: No tiene permisos para crear un tipo de contenido
+        500:
+            description: Error al crear el tipo de contenido
     """
     # Obtener el body de la request
     body = request.json
@@ -130,8 +136,12 @@ def get_by_slug(slug):
     responses:
         200:
             description: Tipo de contenido
+        401:
+            description: No tiene permisos para obtener un tipo de contenido
         404:
             description: Tipo de contenido no existe
+        500:
+            description: Error al obtener el tipo de contenido
     """
     # se obtiene el usuario actual
     current_user = get_jwt_identity()
@@ -179,8 +189,12 @@ def update_by_slug(slug):
     responses:
         200:
             description: Tipo de contenido actualizado
+        401:
+            description: No tiene permisos para actualizar un tipo de contenido
         404:
             description: Tipo de contenido no existe
+        500:
+            description: Error al actualizar el tipo de contenido
     """
     # se obtiene el usuario actual
     current_user = get_jwt_identity()

@@ -69,6 +69,8 @@ def create():
             description: Error al crear el estándar de metadatos
         401:
             description: No tienes permisos para realizar esta acción
+        500:
+            description: Error al crear el estándar de metadatos
     """
     # Obtener el body de la request
     body = request.json
@@ -131,6 +133,8 @@ def get_by_slug(slug):
             description: No tienes permisos para realizar esta acción
         404:
             description: estándar no encontrado
+        500:
+            description: Error al obtener el estándar
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -189,6 +193,10 @@ def update_by_slug(slug):
             description: Error al actualizar el estándar de metadatos
         401:
             description: No tienes permisos para realizar esta acción
+        404:
+            description: Estándar de metadatos no encontrado
+        500:
+            description: Error al actualizar el estándar de metadatos
     """
     # Obtener el body de la request
     body = request.json
