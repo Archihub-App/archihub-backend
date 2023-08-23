@@ -3,11 +3,16 @@ from . import MongoConector
 # Esta clase sirve para manejar la base de datos siguiendo un esquema definido para los registros
 
 class DatabaseHandler:
-    def __init__(self, database_name):
-        self.database_name = database_name
-        self.mongo_conector = MongoConector.MongoConector(database_name)
-        self.myclient = self.mongo_conector.get_client()
-        self.mydb = self.myclient[database_name]
+    _instance = None
+
+    def __new__(cls, database_name):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.database_name = database_name
+            cls._instance.mongo_conector = MongoConector.MongoConector(database_name)
+            cls._instance.myclient = cls._instance.mongo_conector.get_client()
+            cls._instance.mydb = cls._instance.myclient[database_name]
+        return cls._instance
 
     # Esta función sirve para obtener todos los registros de una colección
     def get_all_records(self, collection, filters={}, sort=[]):

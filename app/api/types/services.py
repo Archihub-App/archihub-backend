@@ -39,6 +39,7 @@ def create(body, user):
     return {'msg': 'Tipo de post creado exitosamente'}, 201
 
 # Nuevo servicio para obtener un tipo de post por su slug
+@lru_cache(maxsize=30)
 def get_by_slug(slug):
     # Buscar el tipo de post en la base de datos
     post_type = mongodb.get_record('post_types', {'slug': slug})
