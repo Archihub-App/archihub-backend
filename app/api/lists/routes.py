@@ -1,26 +1,26 @@
-from app.api.forms import bp
+from app.api.lists import bp
 from flask import jsonify, request
 from flask_jwt_extended import jwt_required
-from app.api.forms import services
+from app.api.lists import services
 from app.api.users import services as user_services
 from flask_jwt_extended import get_jwt_identity
 
-# En este archivo se registran las rutas de la API para los estándares de metadatos
+# En este archivo se registran las rutas de la API para los listados cerrados
 
-# Nuevo endpoint para obtener todos los estándares de metadatos
+# Nuevo endpoint para obtener todos los listados
 @bp.route('', methods=['GET'])
 @jwt_required()
 def get_all():
     """
-    Obtener todos los estándares de metadatos de la base de datos
+    Obtener todos los listados de la base de datos
     ---
     security:
         - JWT: []
     tags:
-        - Estándares de metadatos
+        - Listados
     responses:
         200:
-            description: Lista de estándares de metadatos
+            description: Lista de listados
         401:
             description: No tienes permisos para realizar esta acción
     """
@@ -29,20 +29,20 @@ def get_all():
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
-    # Llamar al servicio para obtener todos los estándares de metadatos
+    # Llamar al servicio para obtener todos los listados
     return services.get_all()
 
-# Nuevo endpoint para crear un estándar de metadatos
+# Nuevo endpoint para crear un listado
 @bp.route('', methods=['POST'])
 @jwt_required()
 def create():
     """
-    Crear un estándar de metadatos nuevo con el body del request
+    Crear un listado nuevo con el body del request
     ---
     security:
         - JWT: []
     tags:
-        - Estándares de metadatos
+        - Listados
     parameters:
         - in: body
           name: body
@@ -64,9 +64,9 @@ def create():
                 - description
     responses:
         201:
-            description: Estándar de metadatos creado exitosamente
+            description: Listado creado exitosamente
         400:
-            description: Error al crear el estándar de metadatos
+            description: Error al crear el listado
         401:
             description: No tienes permisos para realizar esta acción
     """
@@ -88,7 +88,7 @@ def create():
         body['slug'] = body['slug'].replace('--', '-')
 
         # llamamos al servicio para verificar si el slug ya existe
-        slug_exists = services.slug_exists(body['slug'])
+        slug_exists = services.get_by_slug(body['slug'])
         # Mientras el slug exista, agregar un número al final
         index = 1
         while 'msg' not in slug_exists:
@@ -96,14 +96,14 @@ def create():
             slug_exists = services.get_by_slug(body['slug'])
             index += 1
             
-        # Llamar al servicio para crear un estándar de metadatos
+        # Llamar al servicio para crear un listado
         return services.create(body)
     else:
         slug_exists = services.get_by_slug(body['slug'])
-        # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
+        # si el service.get_by_slug devuelve un error, entonces el listado no existe
         if 'msg' in slug_exists:
-            if slug_exists['msg'] == 'Tipo de contenido no existe':
-                # Llamar al servicio para crear un tipo de contenido
+            if slug_exists['msg'] == 'Listado no existe':
+                # Llamar al servicio para crear un listado
                 return services.create(body)
         else:
             return {'msg': 'El slug ya existe'}, 400
@@ -118,7 +118,7 @@ def get_by_slug(slug):
     security:
         - JWT: []
     tags:
-        - Estándares de metadatos
+        - Listados
     parameters:
         - in: path
           name: slug
@@ -126,27 +126,27 @@ def get_by_slug(slug):
           required: true
     responses:
         200:
-            description: estándar obtenido exitosamente
+            description: Listado obtenido exitosamente
         401:
             description: No tienes permisos para realizar esta acción
         404:
-            description: estándar no encontrado
+            description: Listado no encontrado
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
-    # Llamar al servicio para obtener el estándar por su slug
+    # Llamar al servicio para obtener el listado por su slug
     resp = services.get_by_slug(slug)
-    # Si el estándar no existe, retornar error
+    # Si el listado no existe, retornar error
     if 'msg' in resp:
-        if resp['msg'] == 'Formulario no existe':
+        if resp['msg'] == 'Listado no existe':
             return jsonify(resp), 404
-    # Retornar el estándar
+    # Retornar el listado
     return jsonify(resp), 200
 
-# Nuevo endpoint para actualizar un estándar por su slug
+# Nuevo endpoint para actualizar un listado por su slug
 @bp.route('/<slug>', methods=['PUT'])
 @jwt_required()
 def update_by_slug(slug):
@@ -156,7 +156,7 @@ def update_by_slug(slug):
     security:
         - JWT: []
     tags:
-        - Estándares de metadatos
+        - Listados
     parameters:
         - in: path
           name: slug
@@ -184,9 +184,9 @@ def update_by_slug(slug):
                 - description
     responses:
         200:
-            description: Estándar de metadatos actualizado exitosamente
+            description: Listado actualizado exitosamente
         400:
-            description: Error al actualizar el estándar de metadatos
+            description: Error al actualizar el listado
         401:
             description: No tienes permisos para realizar esta acción
     """

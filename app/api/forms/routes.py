@@ -88,7 +88,7 @@ def create():
         body['slug'] = body['slug'].replace('--', '-')
 
         # llamamos al servicio para verificar si el slug ya existe
-        slug_exists = services.slug_exists(body['slug'])
+        slug_exists = services.get_by_slug(body['slug'])
         # Mientras el slug exista, agregar un número al final
         index = 1
         while 'msg' not in slug_exists:
@@ -97,14 +97,14 @@ def create():
             index += 1
             
         # Llamar al servicio para crear un estándar de metadatos
-        return services.create(body)
+        return services.create(body, current_user)
     else:
         slug_exists = services.get_by_slug(body['slug'])
         # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
         if 'msg' in slug_exists:
             if slug_exists['msg'] == 'Tipo de contenido no existe':
                 # Llamar al servicio para crear un tipo de contenido
-                return services.create(body)
+                return services.create(body, current_user)
         else:
             return {'msg': 'El slug ya existe'}, 400
 
@@ -199,4 +199,4 @@ def update_by_slug(slug):
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para actualizar el estándar por su slug
-    return services.update_by_slug(slug, body)
+    return services.update_by_slug(slug, body, current_user)

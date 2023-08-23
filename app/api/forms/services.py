@@ -3,7 +3,9 @@ from app.utils import DatabaseHandler
 from bson import json_util
 import json
 from app.api.forms.models import Form
-from app.api.forms.models import FormUpdate
+from app.api.forms.models import 
+from app.utils.LogActions import log_actions
+from app.api.logs.services import register_log
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -23,9 +25,14 @@ def get_all():
 # Nuevo servicio para crear un estándar de metadatos
 def create(body):
     # Crear instancia de Form con el body del request
-    form = Form(**body)
+    try:
+        form = Form(**body)
+    except Exception as e:
+        return {'msg': str(e)}, 400
     # Insertar el estándar de metadatos en la base de datos
     new_form = mongodb.insert_record('forms', form)
+    # Registrar el log
+    register_log(user, log_actions['form_create'])
     # Retornar el resultado
     return {'msg': 'Formulario creado exitosamente'}, 201
 
@@ -44,9 +51,12 @@ def get_by_slug(slug):
     return form
 
 # Nuevo servicio para actualizar un formulario
-def update_by_slug(slug, body):
+def update_by_slug(slug, body, user):
     # Buscar el formulario en la base de datos
-    form = mongodb.get_record('forms', {'slug': slug})
+    try:
+        form = mongodb.get_record('forms', {'slug': slug})
+    except Exception as e:
+        return {'msg': str(e)}, 400
     # Si el formulario no existe, retornar error
     if not form:
         return {'msg': 'Formulario no existe'}, 404
@@ -54,5 +64,7 @@ def update_by_slug(slug, body):
     form_update = FormUpdate(**body)
     # Actualizar el formulario en la base de datos
     mongodb.update_record('forms', {'slug': slug}, form_update)
+    # Registrar el log
+    register_log(user, log_actions['form_update'])
     # Retornar el resultado
     return {'msg': 'Formulario actualizado exitosamente'}, 200

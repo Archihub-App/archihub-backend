@@ -4,4 +4,8 @@ log_actions = {
     'user_login': 'USER_LOGIN',
     'type_create': 'TYPE_CREATE',
     'type_update': 'TYPE_UPDATE',
+    'type_delete': 'TYPE_DELETE',
+    'form_create': 'FORM_CREATE',
+    'form_update': 'FORM_UPDATE',
+    'form_delete': 'FORM_DELETE',
 }
