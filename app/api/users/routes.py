@@ -165,3 +165,60 @@ def get_user():
     if not user:
         return jsonify({'msg': 'Usuario no existe'}), 400
     return user, 200
+
+# Nuevo endpoint para obtener un token de acceso para un usuario
+@bp.route('/token', methods=['GET'])
+@jwt_required()
+def get_token():
+    """
+    Obtener un token de acceso para un usuario
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    responses:
+        200:
+            description: Token obtenido exitosamente
+        400:
+            description: Usuario no existe, no ha aceptado el compromise o no tiene token de acceso
+    """
+    current_user = get_jwt_identity()
+    # Llamar al servicio para obtener el token
+    return services.get_token(current_user)
+
+# Nuevo endpoint POST con un username y password en el body para generar un token de acceso para un usuario
+@bp.route('/token', methods=['POST'])
+@jwt_required()
+def generate_token():
+    """
+    Generar un token de acceso para un usuario
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                password:
+                    type: string
+            required:
+                - password
+    responses:
+        200:
+            description: Token generado exitosamente
+        400:
+            description: Usuario no existe o contraseña incorrecta
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Obtener el body del request
+    body = request.json
+    # Obtener la contraseña del body
+    password = body.get('password')
+    # Llamar al servicio para generar el token
+    return services.generate_token(current_user, password)

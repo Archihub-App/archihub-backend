@@ -89,3 +89,27 @@ def update_by_slug(slug, body, user):
     
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+# Nuevo servicio para eliminar un listado
+def delete_by_slug(slug, user):
+    try:
+        # Buscar el listado en la base de datos
+        lista = mongodb.get_record('lists', {'slug': slug})
+        # Si el listado no existe, retornar error
+        if not lista:
+            return {'msg': 'Listado no existe'}, 404
+        # Eliminar el listado de la base de datos
+        mongodb.delete_record('lists', {'slug': slug})
+        # Registrar el log
+        register_log(user, log_actions['list_delete'], {'list': {
+            'name': lista['name'],
+            'slug': lista['slug'],
+        }})
+        # Limpiar la cache
+        get_by_slug.cache_clear()
+        get_all.cache_clear()
+        # Retornar el resultado
+        return {'msg': 'Listado eliminado exitosamente'}, 200
+    
+    except Exception as e:
+        return {'msg': str(e)}, 500

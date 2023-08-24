@@ -4,6 +4,8 @@ import bcrypt
 from bson import json_util
 import json
 from app.api.users.models import User, UserUpdate
+from datetime import timedelta
+from flask_jwt_extended import create_access_token
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -64,3 +66,41 @@ def has_role(username, role):
         return True
     # Si el usuario no tiene el rol, retornar False
     return False
+
+# Nuevo servicio para generar un token de autenticación para usar la API
+def generate_token(username, password):
+    # Buscar el usuario en la base de datos
+    user = mongodb.get_record('users', {'username': username})
+    # Si el usuario no existe, retornar error
+    if not user:
+        return jsonify({'msg': 'Usuario no existe'}), 400
+    # Si la contraseña no coincide, retornar error
+    if not bcrypt.checkpw(password.encode('utf-8'), user['password']):
+        return jsonify({'msg': 'Contraseña incorrecta'}), 400
+    # Si el usuario no ha aceptado el compromiso, retornar error
+    if not user['compromise_accepted']:
+        return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
+    
+    # Crear el token de acceso para el usuario con el username y sin expiración
+    access_token = create_access_token(identity=username, expires_delta=False)
+    # guardar el token de acceso en la base de datos
+    mongodb.update_record('users', {'username': username}, {'access_token': access_token})
+
+    # Retornar el token de acceso
+    return jsonify({'access_token': access_token}), 200
+
+# Nuevo servicio que devuelve el token de acceso de un usuario
+def get_token(username):
+    # Buscar el usuario en la base de datos
+    user = mongodb.get_record('users', {'username': username})
+    # Si el usuario no existe, retornar error
+    if not user:
+        return jsonify({'msg': 'Usuario no existe'}), 400
+    # Si el usuario no ha aceptado el compromiso, retornar error
+    if not user['compromise_accepted']:
+        return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
+    # Si el usuario no tiene token de acceso, retornar error
+    if not user['access_token']:
+        return jsonify({'msg': 'Usuario no tiene token de acceso'}), 400
+    # Retornar el token de acceso
+    return jsonify({'access_token': user['access_token']}), 200

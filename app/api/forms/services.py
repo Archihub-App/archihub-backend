@@ -35,7 +35,10 @@ def create(body, user):
         # Insertar el estándar de metadatos en la base de datos
         new_form = mongodb.insert_record('forms', form)
         # Registrar el log
-        register_log(user, log_actions['form_create'])
+        register_log(user, log_actions['form_create'], {'form': {
+            'name': form.name,
+            'slug': form.slug,
+        }})
         # Limpiar la cache
         get_by_slug.cache_clear()
         get_all.cache_clear()
@@ -75,11 +78,34 @@ def update_by_slug(slug, body, user):
         # Actualizar el formulario en la base de datos
         mongodb.update_record('forms', {'slug': slug}, form_update)
         # Registrar el log
-        register_log(user, log_actions['form_update'])
+        register_log(user, log_actions['form_update'], {'form': body})
         # Limpiar la cache
         get_all.cache_clear()
         get_by_slug.cache_clear()
         # Retornar el resultado
         return {'msg': 'Formulario actualizado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+# Nuevo servicio para eliminar un formulario
+def delete_by_slug(slug, user):
+    # Buscar el formulario en la base de datos
+    try:
+        form = mongodb.get_record('forms', {'slug': slug})
+        # Si el formulario no existe, retornar error
+        if not form:
+            return {'msg': 'Formulario no existe'}, 404
+        # Eliminar el formulario de la base de datos
+        mongodb.delete_record('forms', {'slug': slug})
+        # Registrar el log
+        register_log(user, log_actions['form_delete'], {'form': {
+            'name': form['name'],
+            'slug': form['slug']
+        }})
+        # Limpiar la cache
+        get_all.cache_clear()
+        get_by_slug.cache_clear()
+        # Retornar el resultado
+        return {'msg': 'Formulario eliminado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500

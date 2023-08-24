@@ -206,3 +206,34 @@ def update_by_slug(slug):
     # Llamar al servicio para actualizar un tipo de contenido por su slug
     return services.update_by_slug(slug, body, current_user)
             
+
+# Nuevo endpoint para eliminar un tipo de contenido por su slug
+@bp.route('/<slug>', methods=['DELETE'])
+@jwt_required()
+def delete_by_slug(slug):
+    """
+    Eliminar un tipo de contenido por su slug
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Tipos de contenido
+    parameters:
+        - slug (string): slug del tipo de contenido a eliminar
+    responses:
+        200:
+            description: Tipo de contenido eliminado
+        401:
+            description: No tiene permisos para eliminar un tipo de contenido
+        404:
+            description: Tipo de contenido no existe
+        500:
+            description: Error al eliminar el tipo de contenido
+    """
+    # se obtiene el usuario actual
+    current_user = get_jwt_identity()
+    # se verifica si el usuario tiene el rol de administrador o catalogador_gestor
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'catalogador_gestor'):
+        return {'msg': 'No tiene permisos para eliminar un tipo de contenido'}, 401
+    # Llamar al servicio para eliminar un tipo de contenido por su slug
+    return services.delete_by_slug(slug, current_user)

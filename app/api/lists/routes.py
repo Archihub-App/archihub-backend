@@ -210,3 +210,38 @@ def update_by_slug(slug):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para actualizar el estándar por su slug
     return services.update_by_slug(slug, body, current_user)
+
+# Nuevo endpoint para eliminar un listado por su slug
+@bp.route('/<slug>', methods=['DELETE'])
+@jwt_required()
+def delete_by_slug(slug):
+    """
+    Eliminar un listado por su slug
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Listados
+    parameters:
+        - in: path
+          name: slug
+          schema:
+            type: string
+          required: true
+    responses:
+        200:
+            description: Listado eliminado exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
+        404:
+            description: Listado no encontrado
+        500:
+            description: Error al eliminar el listado
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Llamar al servicio para eliminar el listado por su slug
+    return services.delete_by_slug(slug, current_user)
