@@ -9,7 +9,7 @@ class PostType(BaseModel):
     description: str
     slug: str
     post_count: int = 0
-    metadata: list[str] = None
+    metadata: str = None
     icon: str = None
     hierarchical: bool = False
     parentType: str = None
@@ -28,6 +28,9 @@ class PostTypeUpdate(BaseModel):
     name: Optional[str]
     description: Optional[str]
     icon: Optional[str]
+    hierarchical: Optional[bool]
+    parentType: Optional[str]
+    metadata: Optional[str]
 
     class Config:
         allow_population_by_field_name = True

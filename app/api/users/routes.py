@@ -171,7 +171,7 @@ def get_user():
 @jwt_required()
 def get_token():
     """
-    Obtener un token de acceso para un usuario
+    Obtener un token de acceso a la API pública para un usuario
     ---
     security:
         - JWT: []
@@ -192,7 +192,7 @@ def get_token():
 @jwt_required()
 def generate_token():
     """
-    Generar un token de acceso para un usuario
+    Generar un token de acceso a la API pública para un usuario
     ---
     security:
         - JWT: []

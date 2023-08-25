@@ -22,7 +22,7 @@ def get_all():
         lists = mongodb.get_all_records('lists', {}, [('name', 1)])
 
         # Quitar todos los campos menos el nombre y la descripción si es que existe
-        lists = [{ 'name': lista['name'] } for lista in lists]
+        lists = [{ 'name': lista['name'], 'id': str(lista['_id']) } for lista in lists]
         # Retornar lists
         return jsonify(lists), 200
     except Exception as e:
@@ -41,7 +41,7 @@ def create(body, user):
             'slug': lista.slug,
         }})
         # Limpiar la cache
-        get_by_slug.cache_clear()
+        get_by_id.cache_clear()
         get_all.cache_clear()
         # Retornar el resultado
         return {'msg': 'Listado creado exitosamente'}, 201
@@ -51,10 +51,10 @@ def create(body, user):
 
 # Nuevo servicio para devolver un listado por su slug
 @lru_cache(maxsize=30)
-def get_by_slug(slug):
+def get_by_id(id):
     try:
         # Buscar el listado en la base de datos
-        lista = mongodb.get_record('lists', {'slug': slug})
+        lista = mongodb.get_record('lists', {'_id': id})
         # Si el listado no existe, retornar error
         if not lista:
             return {'msg': 'Listado no existe'}
@@ -68,9 +68,9 @@ def get_by_slug(slug):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para actualizar un listado
-def update_by_slug(slug, body, user):
+def update_by_id(id, body, user):
     # Buscar el listado en la base de datos
-    lista = mongodb.get_record('lists', {'slug': slug})
+    lista = mongodb.get_record('lists', {'_id': id})
     # Si el listado no existe, retornar error
     if not lista:
         return {'msg': 'Listado no existe'}, 404
@@ -78,11 +78,11 @@ def update_by_slug(slug, body, user):
     try:
         list_update = ListUpdate(**body)
         # Actualizar el listado en la base de datos
-        mongodb.update_record('lists', {'slug': slug}, list_update)
+        mongodb.update_record('lists', {'_id': id}, list_update)
         # Registrar el log
         register_log(user, log_actions['list_update'], {'list': body})
         # Limpiar la cache
-        get_by_slug.cache_clear()
+        get_by_id.cache_clear()
         get_all.cache_clear()
         # Retornar el resultado
         return {'msg': 'Listado actualizado exitosamente'}, 200
@@ -91,22 +91,22 @@ def update_by_slug(slug, body, user):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para eliminar un listado
-def delete_by_slug(slug, user):
+def delete_by_id(id, user):
     try:
         # Buscar el listado en la base de datos
-        lista = mongodb.get_record('lists', {'slug': slug})
+        lista = mongodb.get_record('lists', {'_id': id})
         # Si el listado no existe, retornar error
         if not lista:
             return {'msg': 'Listado no existe'}, 404
         # Eliminar el listado de la base de datos
-        mongodb.delete_record('lists', {'slug': slug})
+        mongodb.delete_record('lists', {'_id': id})
         # Registrar el log
         register_log(user, log_actions['list_delete'], {'list': {
             'name': lista['name'],
-            'slug': lista['slug'],
+            'id': lista['_id'],
         }})
         # Limpiar la cache
-        get_by_slug.cache_clear()
+        get_by_id.cache_clear()
         get_all.cache_clear()
         # Retornar el resultado
         return {'msg': 'Listado eliminado exitosamente'}, 200

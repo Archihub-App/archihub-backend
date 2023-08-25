@@ -59,14 +59,6 @@ def get_by_slug(slug):
             return {'msg': 'Tipo de post no existe'}
         # quitamos el id del tipo de post
         post_type.pop('_id')
-        # quitamos el slug del tipo de post
-        post_type.pop('slug')
-        # quitamos el parentType del tipo de post
-        post_type.pop('parentType')
-        # quitamos el hierarchical del tipo de post
-        post_type.pop('hierarchical')
-        # quitamos metadata del tipo de post
-        post_type.pop('metadata')
         # Parsear el resultado
         post_type = parse_result(post_type)
         # Retornar el resultado
