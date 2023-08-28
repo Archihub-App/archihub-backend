@@ -1,9 +1,8 @@
 from app.api.lists import bp
 from flask import jsonify, request
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api.lists import services
 from app.api.users import services as user_services
-from flask_jwt_extended import get_jwt_identity
 
 # En este archivo se registran las rutas de la API para los listados cerrados
 
@@ -113,11 +112,11 @@ def create():
             return {'msg': 'El slug ya existe'}, 400
 
 # Nuevo endpoint para devolver un estándar por su slug
-@bp.route('/<slug>', methods=['GET'])
+@bp.route('/<id>', methods=['GET'])
 @jwt_required()
-def get_by_slug(slug):
+def get_by_id(id):
     """
-    Obtener un estándar por su slug
+    Obtener un estándar por su id
     ---
     security:
         - JWT: []
@@ -125,7 +124,7 @@ def get_by_slug(slug):
         - Listados
     parameters:
         - in: path
-          name: slug
+          name: id
           type: string
           required: true
     responses:
@@ -143,8 +142,8 @@ def get_by_slug(slug):
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
-    # Llamar al servicio para obtener el listado por su slug
-    resp = services.get_by_slug(slug)
+    # Llamar al servicio para obtener el listado por su id
+    resp = services.get_by_id(id)
     # Si el listado no existe, retornar error
     if 'msg' in resp:
         if resp['msg'] == 'Listado no existe':
@@ -153,11 +152,11 @@ def get_by_slug(slug):
     return jsonify(resp), 200
 
 # Nuevo endpoint para actualizar un listado por su slug
-@bp.route('/<slug>', methods=['PUT'])
+@bp.route('/<id>', methods=['PUT'])
 @jwt_required()
-def update_by_slug(slug):
+def update_by_id(id):
     """
-    Actualizar un estándar por su slug
+    Actualizar un listado por su id
     ---
     security:
         - JWT: []
@@ -178,16 +177,13 @@ def update_by_slug(slug):
                     type: string
                 description:
                     type: string
-                slug:
-
-                    type: string
-                fields:
+                options:
                     type: array
                     items:
                         type: object
+
             required:
                 - name
-                - description
     responses:
         200:
             description: Listado actualizado exitosamente
@@ -200,16 +196,21 @@ def update_by_slug(slug):
         500:
             description: Error al actualizar el listado
     """
-    # Obtener el body de la request
-    body = request.json
     
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # parseamos el body
+    try:
+        body = request.json
+    except Exception as e:
+        print(str(e))
+        return {'msg': str(e)}, 400
+    print("hola")
     # Llamar al servicio para actualizar el estándar por su slug
-    return services.update_by_slug(slug, body, current_user)
+    return services.update_by_id(id, body, current_user)
 
 # Nuevo endpoint para eliminar un listado por su slug
 @bp.route('/<slug>', methods=['DELETE'])

@@ -5,8 +5,11 @@ import json
 from functools import lru_cache
 from app.api.lists.models import List
 from app.api.lists.models import ListUpdate
+from app.api.lists.models import Option
+from app.api.lists.models import OptionUpdate
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
+from bson.objectid import ObjectId
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -50,18 +53,36 @@ def create(body, user):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para devolver un listado por su slug
-@lru_cache(maxsize=30)
+@lru_cache(maxsize=100)
 def get_by_id(id):
     try:
         # Buscar el listado en la base de datos
-        lista = mongodb.get_record('lists', {'_id': id})
+        lista = mongodb.get_record('lists', {'_id': ObjectId(id)})
         # Si el listado no existe, retornar error
         if not lista:
             return {'msg': 'Listado no existe'}
+        
+        opts = []
+
+        records = mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(id) for id in lista['options']]}}, [('term', 1)])
+        
+        # opts es igual a un arreglo de diccionarios con los campos id y term
+        for record in records:
+            opts.append({'id': str(record['_id']), 'term': record['term']})
+
+        # agregamos los campos al listado
+        lista['options'] = opts
         # quitamos el id del listado
         lista.pop('_id')
+        # quitamos el path del listado
+        lista.pop('path')
+        lista.pop('type')
+        lista.pop('__v')
+        lista.pop('createdAt')
+        
         # Parsear el resultado
         lista = parse_result(lista)
+
         # Retornar el resultado
         return lista
     except Exception as e:
@@ -69,23 +90,33 @@ def get_by_id(id):
 
 # Nuevo servicio para actualizar un listado
 def update_by_id(id, body, user):
+    print(body)
     # Buscar el listado en la base de datos
-    lista = mongodb.get_record('lists', {'_id': id})
+    lista = mongodb.get_record('lists', {'_id': ObjectId(id)})
     # Si el listado no existe, retornar error
     if not lista:
         return {'msg': 'Listado no existe'}, 404
     # Crear instancia de ListUpdate con el body del request
     try:
-        list_update = ListUpdate(**body)
         # Actualizar el listado en la base de datos
-        mongodb.update_record('lists', {'_id': id}, list_update)
-        # Registrar el log
-        register_log(user, log_actions['list_update'], {'list': body})
-        # Limpiar la cache
-        get_by_id.cache_clear()
-        get_all.cache_clear()
-        # Retornar el resultado
-        return {'msg': 'Listado actualizado exitosamente'}, 200
+        # para cada opcion en el body, se convierte el id a ObjectId
+        if('options' in body):
+            for option in body['options']:
+                option['id'] = ObjectId(option['id'])
+                # se actualiza la opcion en la base de datos
+                option_update = OptionUpdate(**option)
+                mongodb.update_record('options', {'_id': option['id']}, option_update)
+
+            list_update = ListUpdate(**body)
+
+            mongodb.update_record('lists', {'_id': ObjectId(id)}, list_update)
+            # Registrar el log
+            register_log(user, log_actions['list_update'], {'list': body})
+            # Limpiar la cache
+            get_by_id.cache_clear()
+            get_all.cache_clear()
+            # Retornar el resultado
+            return {'msg': 'Listado actualizado exitosamente'}, 200
     
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -94,12 +125,12 @@ def update_by_id(id, body, user):
 def delete_by_id(id, user):
     try:
         # Buscar el listado en la base de datos
-        lista = mongodb.get_record('lists', {'_id': id})
+        lista = mongodb.get_record('lists', {'_id': ObjectId(id)})
         # Si el listado no existe, retornar error
         if not lista:
             return {'msg': 'Listado no existe'}, 404
         # Eliminar el listado de la base de datos
-        mongodb.delete_record('lists', {'_id': id})
+        mongodb.delete_record('lists', {'_id': ObjectId(id)})
         # Registrar el log
         register_log(user, log_actions['list_delete'], {'list': {
             'name': lista['name'],

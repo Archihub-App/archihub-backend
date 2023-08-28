@@ -33,3 +33,28 @@ class ListUpdate(BaseModel):
                 "description": "Listado de registro de datos"
             }
         }
+
+# Modelo para el registro de opciones
+class Option(BaseModel):
+    id: str = Field(default_factory=uuid.uuid4, alias="_id")
+    term: str
+
+    class Config:
+        allow_population_by_field_name = True
+        schema_extra = {
+            "example": {
+                "term": "Opción"
+            }
+        }
+
+# Modelo para la actualización de opciones
+class OptionUpdate(BaseModel):
+    term: Optional[str]
+
+    class Config:
+        allow_population_by_field_name = True
+        schema_extra = {
+            "example": {
+                "term": "Opción"
+            }
+        }
