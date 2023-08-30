@@ -32,6 +32,9 @@ def get_all():
 def create(body, user):
     # Crear instancia de Form con el body del request
     try:
+        # se verifica el arbol completo de metadatos de la herramienta
+        update_main_schema(body)
+
         form = Form(**body)
         # Insertar el estándar de metadatos en la base de datos
         new_form = mongodb.insert_record('forms', form)
@@ -71,7 +74,7 @@ def update_by_slug(slug, body, user):
     # Buscar el formulario en la base de datos
     try:
         # se verifica el arbol completo de metadatos de la herramienta
-        update_main_schema()
+        update_main_schema(body)
 
         form = mongodb.get_record('forms', {'slug': slug})
         # Si el formulario no existe, retornar error
@@ -115,7 +118,7 @@ def delete_by_slug(slug, user):
         return {'msg': str(e)}, 500
     
 # Funcion que itera entre todos los formularios y devuelve la estructura combinada de todos
-def update_main_schema():
+def update_main_schema(new_form = None):
     try:
         # diccionario que contiene la estructura de todos los formularios
         resp = {}
@@ -138,6 +141,18 @@ def update_main_schema():
                         if(resp[field['destiny']] != tipo):
                             if(tipo not in same_types and resp[field['destiny']] not in same_types):
                                 # si el tipo del campo no es igual al tipo del campo que ya existe en el diccionario, se lanza una excepcion
+                                raise Exception("Error: el campo " + field['destiny'] + " tiene dos tipos diferentes")
+                    else:
+                        resp[field['destiny']] = tipo
+
+        # si se agrego un nuevo formulario, se itera entre los campos del formulario y se agregan al diccionario resp
+        if(new_form):
+            for field in new_form['fields']:
+                tipo = field['type']
+                if 'destiny' in field:
+                    if(field['destiny'] in resp):
+                        if(resp[field['destiny']] != tipo):
+                            if(tipo not in same_types and resp[field['destiny']] not in same_types):
                                 raise Exception("Error: el campo " + field['destiny'] + " tiene dos tipos diferentes")
                     else:
                         resp[field['destiny']] = tipo
