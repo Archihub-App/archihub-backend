@@ -8,7 +8,7 @@ class List(BaseModel):
     name: str
     slug: str
     description: str
-    fields: list[dict]
+    options: list[str]
 
     class Config:
         allow_population_by_field_name = True
@@ -23,7 +23,7 @@ class List(BaseModel):
 class ListUpdate(BaseModel):
     name: Optional[str]
     description: Optional[str]
-    fields: Optional[list[dict]]
+    options: Optional[list[str]]
 
     class Config:
         allow_population_by_field_name = True

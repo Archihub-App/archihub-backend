@@ -64,10 +64,13 @@ def get_by_id(id):
         
         opts = []
 
+        print(lista['options'])
+
         records = mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(id) for id in lista['options']]}}, [('term', 1)])
         
         # opts es igual a un arreglo de diccionarios con los campos id y term
         for record in records:
+            print(record)
             opts.append({'id': str(record['_id']), 'term': record['term']})
 
         # agregamos los campos al listado
@@ -75,7 +78,6 @@ def get_by_id(id):
         # quitamos el id del listado
         lista.pop('_id')
         # quitamos el path del listado
-        lista.pop('path')
         lista.pop('type')
         lista.pop('__v')
         lista.pop('createdAt')
@@ -84,6 +86,7 @@ def get_by_id(id):
         lista = parse_result(lista)
 
         # Retornar el resultado
+        print(lista)
         return lista
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -101,15 +104,34 @@ def update_by_id(id, body, user):
         # Actualizar el listado en la base de datos
         # para cada opcion en el body, se convierte el id a ObjectId
         if('options' in body):
-            for option in body['options']:
-                option['id'] = ObjectId(option['id'])
-                # se actualiza la opcion en la base de datos
-                option_update = OptionUpdate(**option)
-                mongodb.update_record('options', {'_id': option['id']}, option_update)
+            to_delete = []
+            to_save = []
+            for x in range(0, len(body['options'])):
+                option = body['options'][x]
+                if 'deleted' in option:
+                    print(option)
+                    if option['deleted'] == True:
+                        to_delete.append(x)
+                        continue
+                if 'id' in option:
+                    # se actualiza la opcion en la base de datos
+                    option_update = OptionUpdate(**option)
+                    mongodb.update_record('options', {'_id': ObjectId(option['id'])}, option_update)
+                    to_save.append(option['id'])
+                else:
+                    # se crea la opcion en la base de datos
+                    option = Option(**option)
+                    resp = mongodb.insert_record('options', option)
+                    # se agrega el id de la opcion al listado
+                    to_save.append(str(resp.inserted_id))
+
+            body['options'] = to_save
 
             list_update = ListUpdate(**body)
 
-            mongodb.update_record('lists', {'_id': ObjectId(id)}, list_update)
+            resp = mongodb.update_record('lists', {'_id': ObjectId(id)}, list_update)
+            print('Matched count:', resp.matched_count)
+            print('Modified count:', resp.modified_count)
             # Registrar el log
             register_log(user, log_actions['list_update'], {'list': body})
             # Limpiar la cache
