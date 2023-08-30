@@ -7,6 +7,7 @@ from app.api.forms.models import Form
 from app.api.forms.models import FormUpdate
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
+from app.api.system.services import update_resources_schema
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -69,6 +70,9 @@ def get_by_slug(slug):
 def update_by_slug(slug, body, user):
     # Buscar el formulario en la base de datos
     try:
+        # se verifica el arbol completo de metadatos de la herramienta
+        update_main_schema()
+
         form = mongodb.get_record('forms', {'slug': slug})
         # Si el formulario no existe, retornar error
         if not form:
@@ -109,3 +113,70 @@ def delete_by_slug(slug, user):
         return {'msg': 'Formulario eliminado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+# Funcion que itera entre todos los formularios y devuelve la estructura combinada de todos
+def update_main_schema():
+    try:
+        # diccionario que contiene la estructura de todos los formularios
+        resp = {}
+        # arreglo que contiene los tipos de campos que son iguales
+        same_types = [
+            'select',
+            'select-multiple2',
+        ]
+        # Obtener todos los formularios
+        forms = mongodb.get_all_records('forms', {}, [('name', 1)])
+        # Iterar entre todos los formularios
+        for form in forms:
+            # Iterar el campo fields del formulario
+            for field in form['fields']:
+                # Si el campo no tiene el atributo 'form', se agrega el slug del formulario
+                tipo = field['type']
+                if 'destiny' in field:
+                    # el destino del campo es de tipo llave.llave (ej: 'metadata.title'), agregamos el campo al diccionario resp con el tipo del campo
+                    if(field['destiny'] in resp):
+                        if(resp[field['destiny']] != tipo):
+                            if(tipo not in same_types and resp[field['destiny']] not in same_types):
+                                # si el tipo del campo no es igual al tipo del campo que ya existe en el diccionario, se lanza una excepcion
+                                raise Exception("Error: el campo " + field['destiny'] + " tiene dos tipos diferentes")
+                    else:
+                        resp[field['destiny']] = tipo
+
+        # se itera entre todos los campos del diccionario resp y se transforman las llaves en diccionarios. Por ejemplo, si la llave es 'metadata.title', se transforma en {'metadata': {'title': resp['metadata.title']}}, y se agrega al diccionario final 'final_resp'
+        final_resp = {}
+        for key in resp:
+            # se obtiene el arreglo de llaves
+            keys = key.split('.')
+            # se obtiene el tipo del campo
+            tipo = resp[key]
+            if tipo in same_types:
+                tipo = 'select'
+            # se obtiene el valor del campo
+            value = {
+                'type': tipo,
+            }
+            # se itera entre las llaves del arreglo
+            for i in range(len(keys) - 1, -1, -1):
+                # se crea un diccionario con la llave actual y el valor del campo
+                value = {
+                    keys[i]: value
+                }
+            # se agrega el diccionario haciendo un merge con el diccionario final
+            merge_dicts(final_resp, value)
+
+        # print(final_resp)
+        update_resources_schema(final_resp)
+        
+
+    except Exception as e:
+        raise Exception(str(e))
+    
+# Funcion que hace un merge entre dos diccionarios
+def merge_dicts(dict1, dict2):
+    for key, value in dict2.items():
+        if isinstance(value, dict):
+            if key not in dict1:
+                dict1[key] = {}
+            merge_dicts(dict1.get(key, {}), value)
+        else:
+            dict1[key] = value
