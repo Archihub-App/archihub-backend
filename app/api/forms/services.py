@@ -82,6 +82,8 @@ def update_by_slug(slug, body, user):
             return {'msg': 'Formulario no existe'}, 404
         # Crear instancia de FormUpdate con el body del request
         form_update = FormUpdate(**body)
+
+        print(form_update.dict())
         # Actualizar el formulario en la base de datos
         mongodb.update_record('forms', {'slug': slug}, form_update)
         # Registrar el log

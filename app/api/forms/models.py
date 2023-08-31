@@ -23,6 +23,7 @@ class Form(BaseModel):
 class FormUpdate(BaseModel):
     name: Optional[str]
     description: Optional[str]
+    fields: Optional[list[dict]]
 
     class Config:
         allow_population_by_field_name = True
