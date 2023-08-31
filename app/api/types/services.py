@@ -8,6 +8,7 @@ from app.api.types.models import PostTypeUpdate
 from flask import request
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
+from app.api.forms.services import get_by_slug as get_form_by_slug
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -65,6 +66,13 @@ def get_by_slug(slug):
         parents = get_parents(post_type)
         # Agregar los padres al tipo de post
         post_type['parents'] = parents
+        # Si el campo metadata es un string y es distinto a '', recuperar el formulario con ese slug
+        if type(post_type['metadata']) == str and post_type['metadata'] != '':
+            post_type['metadata'] = get_form_by_slug(post_type['metadata'])
+            # dejar solo los campos name y slug del formulario
+            post_type['metadata'] = { 'name': post_type['metadata']['name'], 'fields': post_type['metadata']['fields'] }
+        else:
+            post_type['metadata'] = None
         # Retornar el resultado
         return post_type
     except Exception as e:
