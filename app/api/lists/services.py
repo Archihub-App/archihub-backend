@@ -58,42 +58,32 @@ def get_by_id(id):
     try:
         # Buscar el listado en la base de datos
         lista = mongodb.get_record('lists', {'_id': ObjectId(id)})
+        # a lista solo le dejamos los campos name, description, slug y options
+        lista = { 'name': lista['name'], 'description': lista['description'], 'slug': lista['slug'], 'options': lista['options'] }
         # Si el listado no existe, retornar error
         if not lista:
             return {'msg': 'Listado no existe'}
         
         opts = []
 
-        print(lista['options'])
-
         records = mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(id) for id in lista['options']]}}, [('term', 1)])
         
         # opts es igual a un arreglo de diccionarios con los campos id y term
         for record in records:
-            print(record)
             opts.append({'id': str(record['_id']), 'term': record['term']})
 
         # agregamos los campos al listado
         lista['options'] = opts
-        # quitamos el id del listado
-        lista.pop('_id')
-        # quitamos el path del listado
-        lista.pop('type')
-        lista.pop('__v')
-        lista.pop('createdAt')
-        
         # Parsear el resultado
         lista = parse_result(lista)
 
         # Retornar el resultado
-        print(lista)
         return lista
     except Exception as e:
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para actualizar un listado
 def update_by_id(id, body, user):
-    print(body)
     # Buscar el listado en la base de datos
     lista = mongodb.get_record('lists', {'_id': ObjectId(id)})
     # Si el listado no existe, retornar error

@@ -61,6 +61,10 @@ def get_by_slug(slug):
         post_type.pop('_id')
         # Parsear el resultado
         post_type = parse_result(post_type)
+        # Obtener los padres del tipo de post
+        parents = get_parents(post_type)
+        # Agregar los padres al tipo de post
+        post_type['parents'] = parents
         # Retornar el resultado
         return post_type
     except Exception as e:
@@ -107,3 +111,19 @@ def delete_by_slug(slug, user):
     get_by_slug.cache_clear()
     # Retornar el resultado
     return {'msg': 'Tipo de post eliminado exitosamente'}, 200
+
+# Funcion que devuelve recursivamente los padres de un tipo de post
+def get_parents(post_type):
+    # Si el tipo de post no tiene padre, retornar una lista vacia
+    if post_type['parentType'] == '':
+        return []
+    # Buscar el padre del tipo de post
+    parent = mongodb.get_record('post_types', {'slug': post_type['parentType']})
+    # Si el padre no existe, retornar una lista vacia
+    if not parent:
+        return []
+    # Retornar el padre y los padres del padre
+    return [{
+        'name': parent['name'],
+        'slug': parent['slug'],
+    }] + get_parents(parent)
