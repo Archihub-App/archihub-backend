@@ -24,20 +24,22 @@ def create():
           schema:
             type: object
             properties:
-                name:
+                post_type:
                     type: string
-                description:
-                    type: string
-                type:
-                    type: string
-                form:
-                    type: string
-                fields:
+                metadata:
+                    type: object
+                files:
                     type: array
                     items:
                         type: object
-                icon:
+                        properties:
+                            name:
+                                type: string
+                            file:
+                                type: string
+                ident:
                     type: string
+
     responses:
         201:
             description: Recurso creado exitosamente
@@ -46,9 +48,12 @@ def create():
         500:
             description: Error al crear el recurso
     """
+    print("hola")
     # Obtener el usuario actual
-    user = get_jwt_identity()
+    current_user = get_jwt_identity()
     # Obtener el body del request
-    body = request.get_json()
+    body = request.json
 
     print(body)
+
+    return "hola", 201
