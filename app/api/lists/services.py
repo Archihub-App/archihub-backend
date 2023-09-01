@@ -59,7 +59,7 @@ def get_by_id(id):
         # Buscar el listado en la base de datos
         lista = mongodb.get_record('lists', {'_id': ObjectId(id)})
         # a lista solo le dejamos los campos name, description, slug y options
-        lista = { 'name': lista['name'], 'description': lista['description'], 'slug': lista['slug'], 'options': lista['options'] }
+        lista = { 'name': lista['name'], 'description': lista['description'], 'options': lista['options'] }
         # Si el listado no existe, retornar error
         if not lista:
             return {'msg': 'Listado no existe'}

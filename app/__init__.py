@@ -53,6 +53,10 @@ def create_app(config_class=config['development']):
     from app.api.lists import bp as lists_bp
     app.register_blueprint(lists_bp, url_prefix='/lists')
 
+    # Registrar resources blueprint
+    from app.api.resources import bp as resources_bp
+    app.register_blueprint(resources_bp, url_prefix='/resources')
+
     return app
 
     
