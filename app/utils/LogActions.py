@@ -11,4 +11,7 @@ log_actions = {
     'list_create': 'LIST_CREATE',
     'list_update': 'LIST_UPDATE',
     'list_delete': 'LIST_DELETE',
+    'resource_create': 'RESOURCE_CREATE',
+    'resource_update': 'RESOURCE_UPDATE',
+    'resource_delete': 'RESOURCE_DELETE',
 }

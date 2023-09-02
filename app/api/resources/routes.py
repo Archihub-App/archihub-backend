@@ -1,9 +1,10 @@
 from app.api.resources import bp
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import get_jwt_identity
-from app.api.types import services
+from app.api.resources import services
 from app.api.users import services as user_services
-from flask import request
+from flask import request, jsonify
+
 
 # En este archivo se registran las rutas de la API para los recursos
 
@@ -51,9 +52,11 @@ def create():
     print("hola")
     # Obtener el usuario actual
     current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Obtener el body del request
     body = request.json
 
-    print(body)
-
-    return "hola", 201
+    # Llamar al servicio para crear el recurso
+    return services.create(body, current_user)

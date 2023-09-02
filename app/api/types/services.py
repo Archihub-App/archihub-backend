@@ -135,3 +135,15 @@ def get_parents(post_type):
         'name': parent['name'],
         'slug': parent['slug'],
     }] + get_parents(parent)
+
+# Funcion para agregar al contador de recursos de un tipo de post
+def add_resource(post_type_slug):
+    # Buscar el tipo de post en la base de datos
+    post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
+    # Si el tipo de post no existe, retornar error
+    if not post_type:
+        return {'msg': 'Tipo de post no existe'}, 404
+    # Incrementar el contador de recursos del tipo de post
+    mongodb.update_record('post_types', {'slug': post_type_slug}, {'$inc': {'resources': 1}})
+    # Retornar el resultado
+    return {'msg': 'Contador de recursos incrementado exitosamente'}, 200
