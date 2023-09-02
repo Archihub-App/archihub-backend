@@ -99,3 +99,116 @@ def create():
 
     # Llamar al servicio para crear el recurso
     return services.create(body, current_user)
+
+# Nuevo endpoint para obtener un recurso por su id
+@bp.route('/<id>', methods=['GET'])
+@jwt_required()
+def get_by_id(id):
+    """
+    Obtener un recurso por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+    responses:
+        200:
+            description: Recurso obtenido exitosamente
+        401:
+            description: No tiene permisos para obtener el recurso
+        500:
+            description: Error al obtener el recurso
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Llamar al servicio para obtener el recurso
+    return services.get_by_id(id, current_user)
+
+# Nuevo endpoint para actualizar un recurso por su id
+@bp.route('/<id>', methods=['PUT'])
+@jwt_required()
+def update_by_id(id):
+    """
+    Actualizar un recurso por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                metadata:
+                    type: object
+                files:
+                    type: array
+                    items:
+                        type: object
+                        properties:
+                            name:
+                                type: string
+                            file:
+                                type: string
+                ident:
+                    type: string
+    responses:
+        200:
+            description: Recurso actualizado exitosamente
+        401:
+            description: No tiene permisos para actualizar el recurso
+        500:
+            description: Error al actualizar el recurso
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Obtener el body del request
+    body = request.json
+    # Llamar al servicio para actualizar el recurso
+    return services.update_by_id(id, body, current_user)
+
+# Nuevo endpoint para eliminar un recurso por su id
+@bp.route('/<id>', methods=['DELETE'])
+@jwt_required()
+def delete_by_id(id):
+    """
+    Eliminar un recurso por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+    responses:
+        200:
+            description: Recurso eliminado exitosamente
+        401:
+            description: No tiene permisos para eliminar el recurso
+        500:
+            description: Error al eliminar el recurso
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Llamar al servicio para eliminar el recurso
+    return services.delete_by_id(id, current_user)

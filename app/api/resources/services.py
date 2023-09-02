@@ -42,3 +42,44 @@ def create(body, user):
         return {'msg': 'Recurso creado exitosamente'}, 201
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+# Nuevo servicio para obtener un recurso por su id
+def get_by_id(id, user):
+    try:
+        # Buscar el recurso en la base de datos
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': 'Recurso no existe'}
+        # Registrar el log
+        register_log(user, log_actions['resource_read'], {'resource': id})
+        # Retornar el recurso
+        return jsonify(resource), 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+# Nuevo servicio para actualizar un recurso
+def update(id, body, user):
+    try:
+        # Crear instancia de ResourceUpdate con el body del request
+        resource = ResourceUpdate(**body)
+        # Actualizar el recurso en la base de datos
+        updated_resource = mongodb.update_record('resources', {'_id': ObjectId(id)}, resource)
+        # Registrar el log
+        register_log(user, log_actions['resource_update'], {'resource': body})
+        # Retornar el resultado
+        return {'msg': 'Recurso actualizado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+# Nuevo servicio para eliminar un recurso
+def delete(id, user):
+    try:
+        # Eliminar el recurso de la base de datos
+        deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})
+        # Registrar el log
+        register_log(user, log_actions['resource_delete'], {'resource': id})
+        # Retornar el resultado
+        return {'msg': 'Recurso eliminado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
