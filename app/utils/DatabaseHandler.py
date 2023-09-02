@@ -15,8 +15,8 @@ class DatabaseHandler:
         return cls._instance
 
     # Esta función sirve para obtener todos los registros de una colección
-    def get_all_records(self, collection, filters={}, sort=[]):
-        return self.mydb[collection].find(filters).sort(sort)
+    def get_all_records(self, collection, filters={}, sort=[], limit=0, skip=0):
+        return self.mydb[collection].find(filters).sort(sort).limit(limit).skip(skip)
     
     # Esta función sirve para obtener un registro de una colección
     def get_record(self, collection, filters={}):

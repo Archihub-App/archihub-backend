@@ -16,6 +16,16 @@ mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
+# Nuevo servicio para obtener todos los recursos dado un tipo de contenido
+def get_all(post_type, body, user):
+    try:
+        # Obtener todos los recursos dado un tipo de contenido
+        resources = mongodb.get_all_records('resources', {'post_type': post_type}, limit=20, skip=0)
+        # Retornar los recursos
+        return jsonify(resources), 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 # Nuevo servicio para crear un recurso
 def create(body, user):
     try:
