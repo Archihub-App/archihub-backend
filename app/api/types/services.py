@@ -64,8 +64,11 @@ def get_by_slug(slug):
         post_type = parse_result(post_type)
         # Obtener los padres del tipo de post
         parents = get_parents(post_type)
+        # si es jerarquico, agregar campo a los padres
+        if post_type['hierarchical']:
+            parents = [{'name': post_type['name'], 'slug': post_type['slug'], 'icon': post_type['icon'], 'direct': True}] + parents
         # Agregar los padres al tipo de post
-        post_type['parents'] = parents
+        post_type['parentsTypes'] = parents
         # Si el campo metadata es un string y es distinto a '', recuperar el formulario con ese slug
         if type(post_type['metadata']) == str and post_type['metadata'] != '':
             post_type['metadata'] = get_form_by_slug(post_type['metadata'])
@@ -121,29 +124,41 @@ def delete_by_slug(slug, user):
     return {'msg': 'Tipo de post eliminado exitosamente'}, 200
 
 # Funcion que devuelve recursivamente los padres de un tipo de post
-def get_parents(post_type):
+def get_parents(post_type, first = True):
     # Si el tipo de post no tiene padre, retornar una lista vacia
     if post_type['parentType'] == '':
         return []
     # Buscar el padre del tipo de post
     parent = mongodb.get_record('post_types', {'slug': post_type['parentType']})
     # Si el padre no existe, retornar una lista vacia
-    if not parent:
+    if not parent and not parent['hierarchical']:
         return []
     # Retornar el padre y los padres del padre
     return [{
         'name': parent['name'],
         'slug': parent['slug'],
-    }] + get_parents(parent)
+        'icon': parent['icon'],
+        'direct': True if first else False
+    }] + get_parents(parent, False)
 
 # Funcion para agregar al contador de recursos de un tipo de post
-def add_resource(post_type_slug):
+def add_resource(post_type_slug, increment=1):
     # Buscar el tipo de post en la base de datos
     post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
     # Si el tipo de post no existe, retornar error
     if not post_type:
         return {'msg': 'Tipo de post no existe'}, 404
     # Incrementar el contador de recursos del tipo de post
-    mongodb.update_record('post_types', {'slug': post_type_slug}, {'$inc': {'resources': 1}})
+    mongodb.update_record('post_types', {'slug': post_type_slug}, {'$inc': {'resources': increment}})
     # Retornar el resultado
     return {'msg': 'Contador de recursos incrementado exitosamente'}, 200
+
+# Funcion para devolver si el tipo de post es jerarquico y si tiene padres
+def is_hierarchical(post_type_slug):
+    # Buscar el tipo de post en la base de datos
+    post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
+    # Si el tipo de post no existe, retornar error
+    if not post_type:
+        return {'msg': 'Tipo de post no existe'}, 404
+    # Retornar el resultado
+    return (post_type['hierarchical'], post_type['parentType'] != '')

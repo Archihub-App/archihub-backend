@@ -212,3 +212,39 @@ def delete_by_id(id):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para eliminar el recurso
     return services.delete_by_id(id, current_user)
+
+# Nuevo endpoint para obtener las estructura de arból de un tipo de contenido y sus recursos
+@bp.route('/tree', methods=['POST'])
+@jwt_required()
+def get_tree():
+    """
+    Obtener las estructura de arból de un tipo de contenido y sus recursos
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                post_type:
+                    type: string
+                filters:
+                    type: object
+    responses:
+        200:
+            description: Estructura de arból obtenida exitosamente
+        401:
+            description: No tiene permisos para obtener la estructura de arból
+        500:
+            description: Error al obtener la estructura de arból
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Obtener el body del request
+    body = request.json
+    # Llamar al servicio para obtener la estructura de arból
+    return services.get_tree(body['post_type'], current_user)
