@@ -34,15 +34,32 @@ def get_all(post_type, body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user):
     try:
-        print(user,body)
+        # si el body tiene parents, verificar que el recurso sea jerarquico
+        if 'parents' in body:
+            parent = body['parents'][0]
+            # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
+            if parent['post_type'] == body['post_type'] and not is_hierarchical(body['post_type'])[0]:
+                return {'msg': 'El tipo de contenido no es jerarquico'}, 400
+            # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
+            elif not has_parent_postType(body['post_type'], parent['post_type']):
+                return {'msg': 'El recurso no tiene como padre al recurso padre'}, 400
+            
+        body['status'] = 'created'
+        body['parents'] = [{'type': item['post_type'], 'id': item['id']} for item in body['parents']]
         # Crear instancia de Resource con el body del request
         resource = Resource(**body)
         # Insertar el recurso en la base de datos
         new_resource = mongodb.insert_record('resources', resource)
-        # Registrar el log
+        body['_id'] = str(new_resource.inserted_id)
+        # # Registrar el log
         register_log(user, log_actions['resource_create'], {'resource': body})
-        # agregar el recurso al tipo de contenido
+        # # agregar el recurso al tipo de contenido
         add_resource(body['post_type'])
+        # limpiar la cache
+        has_parent_postType.cache_clear()
+        get_tree.cache_clear()
+        get_children.cache_clear()
+
         # Retornar el resultado
         return {'msg': 'Recurso creado exitosamente'}, 201
     except Exception as e:
@@ -66,6 +83,7 @@ def get_by_id(id, user):
 # Nuevo servicio para actualizar un recurso
 def update(id, body, user):
     try:
+        body['status'] = 'updated'
         # Crear instancia de ResourceUpdate con el body del request
         resource = ResourceUpdate(**body)
         # Actualizar el recurso en la base de datos
@@ -88,22 +106,63 @@ def delete(id, user):
         return {'msg': 'Recurso eliminado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
-
-@lru_cache(maxsize=32)
-def get_tree(post_type, user):
+    
+@lru_cache(maxsize=1000)
+def get_children(id, available, resp = False):
     try:
-        # Obtener si el tipo de contenido es jerarquico
-        hierarchical = is_hierarchical(post_type)
-        # Si el tipo de contenido no existe, retornar error
-        if not post_type:
-            return {'msg': 'Tipo de contenido no existe'}, 404
+        list_available = available.split('|')
         # Obtener los recursos del tipo de contenido
-        resources = list(mongodb.get_all_records('resources', {'post_type': post_type}, sort=[('metadata.firstLevel.title', 1)]))
+        if not resp:
+            resources = mongodb.get_record('resources', {'post_type': {'$in': list_available}, 'parents.type': {'$in': list_available}, 'parents.id': id})
+        else:
+            resources = mongodb.get_all_records('resources', {'post_type': {'$in': list_available}, 'parents.type': {'$in': list_available}, 'parents.id': id}, limit=10)
+        
+        if(resources and not resp):
+            return True
+        elif not resp:
+            return False
+        
+        if not resources:
+            return []
+        else:
+            resources = [{ 'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(re['_id'])} for re in resources]
+            return resources
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+@lru_cache(maxsize=1000)
+def get_tree(root, available, user):
+    try:
+        list_available = available.split('|')
+        # Obtener los recursos del tipo de contenido
+        if root == 'all':
+            resources = list(mongodb.get_all_records('resources', {'post_type': list_available[-1]}, sort=[('metadata.firstLevel.title', 1)]))
         # Obtener el icono del post type
-        icon = mongodb.get_record('post_types', {'slug': post_type})['icon']
+        icon = mongodb.get_record('post_types', {'slug': list_available[-1]})['icon']
         # Devolver solo los campos necesarios
-        resources = [{ 'name': post_type['metadata']['firstLevel']['title'], 'post_type': post_type['post_type'], 'id': str(post_type['_id']), 'icon': icon} for post_type in resources]
+        resources = [{ 'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(re['_id']), 'icon': icon} for re in resources]
+
+        for resource in resources:
+            resource['children'] = get_children(resource['id'], available)
         # Retornar los recursos y los padres
         return resources, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+@lru_cache(maxsize=1000)
+def has_parent_postType(post_type, compare):
+    try:
+        print(post_type, compare)
+        # Obtener el tipo de post
+        post_type = mongodb.get_record('post_types', {'slug': post_type})
+        # Si el tipo de post no existe, retornar error
+        if not post_type:
+            return {'msg': 'Tipo de post no existe'}, 404
+        # Si el tipo de post tiene padre, retornar True
+        if post_type['parentType'] != '':
+            if(post_type['parentType'] == compare):
+                return True
+        # Si el tipo de post no tiene padre, retornar False
+        return False
     except Exception as e:
         return {'msg': str(e)}, 500

@@ -230,9 +230,9 @@ def get_tree():
           schema:
             type: object
             properties:
-                post_type:
+                root:
                     type: string
-                filters:
+                parents:
                     type: object
     responses:
         200:
@@ -246,5 +246,6 @@ def get_tree():
     current_user = get_jwt_identity()
     # Obtener el body del request
     body = request.json
+
     # Llamar al servicio para obtener la estructura de arból
-    return services.get_tree(body['post_type'], current_user)
+    return services.get_tree(body['root'],'|'.join(item['slug'] for item in body['tree']), current_user)

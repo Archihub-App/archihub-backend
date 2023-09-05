@@ -149,9 +149,8 @@ def add_resource(post_type_slug, increment=1):
     if not post_type:
         return {'msg': 'Tipo de post no existe'}, 404
     # Incrementar el contador de recursos del tipo de post
-    mongodb.update_record('post_types', {'slug': post_type_slug}, {'$inc': {'resources': increment}})
-    # Retornar el resultado
-    return {'msg': 'Contador de recursos incrementado exitosamente'}, 200
+    mongodb.increment_record('post_types', {'slug': post_type_slug}, 'resourcesCount', increment)
+
 
 # Funcion para devolver si el tipo de post es jerarquico y si tiene padres
 def is_hierarchical(post_type_slug):

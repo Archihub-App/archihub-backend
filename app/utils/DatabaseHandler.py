@@ -32,3 +32,7 @@ class DatabaseHandler:
     # Esta función sirve para insertar un registro en una colección. El registro debe ser un pydantic model
     def insert_record(self, collection, record):
         return self.mydb[collection].insert_one(record.dict(exclude_unset=True))
+    
+    # Esta función sirve para incrementar un campo de un registro en una colección
+    def increment_record(self, collection, filters, field, value):
+        return self.mydb[collection].update_one(filters, {'$inc': {field: value}})

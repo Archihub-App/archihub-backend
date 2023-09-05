@@ -7,8 +7,10 @@ class Resource(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
     post_type: str
     metadata: dict
+    parents: list[dict] = None
     files: list[dict] = []
     ident: str
+    status: str = 'created'
 
     class Config:
         allow_population_by_field_name = True
@@ -32,6 +34,8 @@ class ResourceUpdate(BaseModel):
     post_type: Optional[str]
     metadata: Optional[dict]
     files: Optional[list[dict]]
+    parents: Optional[list[dict]]
+    status: Optional[str]
 
     class Config:
         allow_population_by_field_name = True
