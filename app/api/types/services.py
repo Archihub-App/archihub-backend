@@ -161,3 +161,14 @@ def is_hierarchical(post_type_slug):
         return {'msg': 'Tipo de post no existe'}, 404
     # Retornar el resultado
     return (post_type['hierarchical'], post_type['parentType'] != '')
+
+# Funcion para devolver el icono de un tipo de post
+@lru_cache(maxsize=1000)
+def get_icon(post_type_slug):
+    # Buscar el tipo de post en la base de datos
+    post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
+    # Si el tipo de post no existe, retornar error
+    if not post_type:
+        return {'msg': 'Tipo de post no existe'}, 404
+    # Retornar el resultado
+    return post_type['icon']

@@ -246,6 +246,5 @@ def get_tree():
     current_user = get_jwt_identity()
     # Obtener el body del request
     body = request.json
-
     # Llamar al servicio para obtener la estructura de arból
     return services.get_tree(body['root'],'|'.join(item['slug'] for item in body['tree']), current_user)

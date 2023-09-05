@@ -10,6 +10,7 @@ from app.api.logs.services import register_log
 from app.api.resources.models import ResourceUpdate
 from app.api.types.services import add_resource
 from  app.api.types.services import is_hierarchical
+from  app.api.types.services import get_icon
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -42,6 +43,7 @@ def create(body, user):
                 return {'msg': 'El tipo de contenido no es jerarquico'}, 400
             # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
             elif not has_parent_postType(body['post_type'], parent['post_type']):
+                print(body['post_type'], parent['post_type'])
                 return {'msg': 'El recurso no tiene como padre al recurso padre'}, 400
             
         body['status'] = 'created'
@@ -137,6 +139,8 @@ def get_tree(root, available, user):
         # Obtener los recursos del tipo de contenido
         if root == 'all':
             resources = list(mongodb.get_all_records('resources', {'post_type': list_available[-1]}, sort=[('metadata.firstLevel.title', 1)]))
+        else:
+            resources = list(mongodb.get_all_records('resources', {'post_type': {"$in": list_available},'parents.id': root}, sort=[('metadata.firstLevel.title', 1)]))
         # Obtener el icono del post type
         icon = mongodb.get_record('post_types', {'slug': list_available[-1]})['icon']
         # Devolver solo los campos necesarios
@@ -144,6 +148,7 @@ def get_tree(root, available, user):
 
         for resource in resources:
             resource['children'] = get_children(resource['id'], available)
+            resource['icon'] = get_icon(resource['post_type'])
         # Retornar los recursos y los padres
         return resources, 200
     except Exception as e:
@@ -162,6 +167,9 @@ def has_parent_postType(post_type, compare):
         if post_type['parentType'] != '':
             if(post_type['parentType'] == compare):
                 return True
+            if(post_type['hierarchical'] and post_type['parentType'] != compare):
+                return True
+            
         # Si el tipo de post no tiene padre, retornar False
         return False
     except Exception as e:
