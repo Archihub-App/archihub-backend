@@ -26,6 +26,7 @@ def get_all(post_type, body, user):
         resources = list(mongodb.get_all_records('resources', {'post_type': post_type}, limit=20, skip=0))
         # Para cada recurso, obtener el formulario asociado y quitar los campos _id
         for resource in resources:
+            resource['id'] = str(resource['_id'])
             resource.pop('_id')
         # Retornar los recursos
         return jsonify(resources), 200
@@ -35,19 +36,27 @@ def get_all(post_type, body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user):
     try:
+        print(body)
         # si el body tiene parents, verificar que el recurso sea jerarquico
         if 'parents' in body:
-            parent = body['parents'][0]
-            # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
-            if parent['post_type'] == body['post_type'] and not is_hierarchical(body['post_type'])[0]:
-                return {'msg': 'El tipo de contenido no es jerarquico'}, 400
-            # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
-            elif not has_parent_postType(body['post_type'], parent['post_type']):
-                print(body['post_type'], parent['post_type'])
-                return {'msg': 'El recurso no tiene como padre al recurso padre'}, 400
-            
+            hierarchical = is_hierarchical(body['post_type'])
+            if body['parents']:
+                parent = body['parents'][0]
+                # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
+                if parent['post_type'] == body['post_type'] and not hierarchical[0]:
+                    return {'msg': 'El tipo de contenido no es jerarquico'}, 400
+                # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
+                elif not has_parent_postType(body['post_type'], parent['post_type']):
+                    return {'msg': 'El recurso no tiene como padre al recurso padre'}, 400
+                
+                body['parents'] = [{'type': item['post_type'], 'id': item['id']} for item in body['parents']]
+            else:
+                if hierarchical[0] and hierarchical[1]:
+                    return {'msg': 'El tipo de contenido es jerarquico y no tiene padre'}, 400
+                elif hierarchical[0] and not hierarchical[1]:
+                    return {'msg': 'El tipo de contenido es jerarquico y no tiene padre'}, 400
+
         body['status'] = 'created'
-        body['parents'] = [{'type': item['post_type'], 'id': item['id']} for item in body['parents']]
         # Crear instancia de Resource con el body del request
         resource = Resource(**body)
         # Insertar el recurso en la base de datos
@@ -92,18 +101,26 @@ def update(id, body, user):
         updated_resource = mongodb.update_record('resources', {'_id': ObjectId(id)}, resource)
         # Registrar el log
         register_log(user, log_actions['resource_update'], {'resource': body})
+        # limpiar la cache
+        has_parent_postType.cache_clear()
+        get_tree.cache_clear()
+        get_children.cache_clear()
         # Retornar el resultado
         return {'msg': 'Recurso actualizado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para eliminar un recurso
-def delete(id, user):
+def delete_by_id(id, user):
     try:
         # Eliminar el recurso de la base de datos
         deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})
         # Registrar el log
         register_log(user, log_actions['resource_delete'], {'resource': id})
+        # limpiar la cache
+        has_parent_postType.cache_clear()
+        get_tree.cache_clear()
+        get_children.cache_clear()
         # Retornar el resultado
         return {'msg': 'Recurso eliminado exitosamente'}, 200
     except Exception as e:

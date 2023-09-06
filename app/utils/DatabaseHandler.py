@@ -36,3 +36,7 @@ class DatabaseHandler:
     # Esta función sirve para incrementar un campo de un registro en una colección
     def increment_record(self, collection, filters, field, value):
         return self.mydb[collection].update_one(filters, {'$inc': {field: value}})
+    
+    # Esta función sirve para eliminar un registro de una colección
+    def delete_record(self, collection, filters):
+        return self.mydb[collection].delete_one(filters)
