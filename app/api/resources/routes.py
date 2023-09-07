@@ -121,6 +121,8 @@ def get_by_id(id):
             description: Recurso obtenido exitosamente
         401:
             description: No tiene permisos para obtener el recurso
+        404:
+            description: Recurso no encontrado
         500:
             description: Error al obtener el recurso
     """

@@ -8,6 +8,7 @@ class Resource(BaseModel):
     post_type: str
     metadata: dict
     parents: list[dict] = None
+    parent: dict = None
     files: list[dict] = []
     ident: str
     status: str = 'created'
@@ -35,6 +36,7 @@ class ResourceUpdate(BaseModel):
     metadata: Optional[dict]
     files: Optional[list[dict]]
     parents: Optional[list[dict]]
+    parent: Optional[dict]
     status: Optional[str]
 
     class Config:

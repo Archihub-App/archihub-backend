@@ -36,7 +36,6 @@ def get_all(post_type, body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user):
     try:
-        print(body)
         # si el body tiene parents, verificar que el recurso sea jerarquico
         if 'parents' in body:
             hierarchical = is_hierarchical(body['post_type'])
@@ -49,7 +48,9 @@ def create(body, user):
                 elif not has_parent_postType(body['post_type'], parent['post_type']):
                     return {'msg': 'El recurso no tiene como padre al recurso padre'}, 400
                 
-                body['parents'] = [{'type': item['post_type'], 'id': item['id']} for item in body['parents']]
+                body['parents'] = [{'post_type': item['post_type'], 'id': item['id']} for item in body['parents']]
+                body['parents'] = [parent, *get_parents(parent['id'])]
+                body['parent'] = [parent]
             else:
                 if hierarchical[0] and hierarchical[1]:
                     return {'msg': 'El tipo de contenido es jerarquico y no tiene padre'}, 400
@@ -83,17 +84,43 @@ def get_by_id(id, user):
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         # Si el recurso no existe, retornar error
         if not resource:
-            return {'msg': 'Recurso no existe'}
+            return {'msg': 'Recurso no existe'}, 404
         # Registrar el log
-        register_log(user, log_actions['resource_read'], {'resource': id})
+        register_log(user, log_actions['resource_open'], {'resource': id})
+        resource['_id'] = str(resource['_id'])
         # Retornar el recurso
         return jsonify(resource), 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para actualizar un recurso
-def update(id, body, user):
+def update_by_id(id, body, user):
     try:
+        print(body)
+        # si el body tiene parents, verificar que el recurso sea jerarquico
+        if 'parents' in body:
+            hierarchical = is_hierarchical(body['post_type'])
+            if body['parents']:
+                parent = body['parents'][0]
+                # si el id del padre es el mismo que el del hijo, retornar error
+                if parent['id'] == id:
+                    return {'msg': 'El recurso no puede ser su propio padre'}, 400
+                # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
+                if parent['post_type'] == body['post_type'] and not hierarchical[0]:
+                    return {'msg': 'El tipo de contenido no es jerarquico'}, 400
+                # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
+                elif not has_parent_postType(body['post_type'], parent['post_type']):
+                    return {'msg': 'El recurso no tiene como padre al recurso padre'}, 400
+                
+                body['parents'] = [parent, *get_parents(parent['id'])]
+                body['parent'] = parent
+
+            else:
+                if hierarchical[0] and hierarchical[1]:
+                    return {'msg': 'El tipo de contenido es jerarquico y no tiene padre'}, 400
+                elif hierarchical[0] and not hierarchical[1]:
+                    return {'msg': 'El tipo de contenido es jerarquico y no tiene padre'}, 400
+                
         body['status'] = 'updated'
         # Crear instancia de ResourceUpdate con el body del request
         resource = ResourceUpdate(**body)
@@ -132,9 +159,9 @@ def get_children(id, available, resp = False):
         list_available = available.split('|')
         # Obtener los recursos del tipo de contenido
         if not resp:
-            resources = mongodb.get_record('resources', {'post_type': {'$in': list_available}, 'parents.type': {'$in': list_available}, 'parents.id': id})
+            resources = mongodb.get_record('resources', {'post_type': {'$in': list_available}, 'parents.post_type': {'$in': list_available}, 'parents.id': id})
         else:
-            resources = mongodb.get_all_records('resources', {'post_type': {'$in': list_available}, 'parents.type': {'$in': list_available}, 'parents.id': id}, limit=10)
+            resources = mongodb.get_all_records('resources', {'post_type': {'$in': list_available}, 'parents.post_type': {'$in': list_available}, 'parents.id': id}, limit=10)
         
         if(resources and not resp):
             return True
@@ -157,7 +184,7 @@ def get_tree(root, available, user):
         if root == 'all':
             resources = list(mongodb.get_all_records('resources', {'post_type': list_available[-1]}, sort=[('metadata.firstLevel.title', 1)]))
         else:
-            resources = list(mongodb.get_all_records('resources', {'post_type': {"$in": list_available},'parents.id': root}, sort=[('metadata.firstLevel.title', 1)]))
+            resources = list(mongodb.get_all_records('resources', {'post_type': {"$in": list_available},'parent.id': root}, sort=[('metadata.firstLevel.title', 1)]))
         # Obtener el icono del post type
         icon = mongodb.get_record('post_types', {'slug': list_available[-1]})['icon']
         # Devolver solo los campos necesarios
@@ -191,3 +218,27 @@ def has_parent_postType(post_type, compare):
         return False
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+@lru_cache(maxsize=1000)
+def get_parents(id):
+    try:
+        # Buscar el recurso en la base de datos
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': 'Recurso no existe'}, 404
+        # Si el recurso no tiene padre, retornar una lista vacia
+        if 'parents' not in resource:
+            return []
+        else:
+            if resource['parents']:
+                # Obtener los padres del recurso
+                parents = [{'post_type': item['post_type'], 'id': item['id']} for item in resource['parents']]
+                if 'parents' in resource:
+                    parents = [*resource['parents']]
+                # Retornar los padres
+                return parents
+            else:
+                return []
+    except Exception as e:
+        raise Exception(str(e))
