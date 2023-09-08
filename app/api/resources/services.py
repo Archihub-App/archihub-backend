@@ -9,8 +9,12 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.resources.models import ResourceUpdate
 from app.api.types.services import add_resource
-from  app.api.types.services import is_hierarchical
-from  app.api.types.services import get_icon
+from app.api.types.services import is_hierarchical
+from app.api.types.services import get_icon
+from app.api.types.services import get_metadata
+from app.api.system.services import validate_text
+from app.api.system.services import get_value_by_path
+
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -36,6 +40,7 @@ def get_all(post_type, body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user):
     try:
+        print(body)
         # si el body tiene parents, verificar que el recurso sea jerarquico
         if 'parents' in body:
             hierarchical = is_hierarchical(body['post_type'])
@@ -53,11 +58,28 @@ def create(body, user):
                 body['parent'] = [parent]
             else:
                 if hierarchical[0] and hierarchical[1]:
-                    return {'msg': 'El tipo de contenido es jerarquico y no tiene padre'}, 400
+                    return {'msg': 'El tipo de contenido es jerarquico y debe tener padre'}, 400
                 elif hierarchical[0] and not hierarchical[1]:
-                    return {'msg': 'El tipo de contenido es jerarquico y no tiene padre'}, 400
-
+                    return {'msg': 'El tipo de contenido debe tener un padre'}, 400
+                elif not hierarchical[0] and hierarchical[1]:
+                    return {'msg': 'El tipo de contenido debe tener un padre'}, 400
+        
+        if 'metadata' not in body:
+            return {'msg': 'El recurso debe tener metadata'}, 400
+        # Agregar el campo status al body
         body['status'] = 'created'
+        # Obtener los metadatos en función del tipo de contenido
+        metadata = get_metadata(body['post_type'])
+        # Iterar sobre los metadatos
+        for field in metadata['fields']:
+            try:
+                print(field)
+                if field['type'] != 'file' and field['type'] != 'separator':
+                    if field['destiny'] != 'ident':
+                        if field['type'] == 'text':
+                            validate_text(get_value_by_path(body, field['destiny']), field)
+            except Exception as e:
+                return {'msg': "Error al obtener el valor del campo " + field['label']}, 500
         # Crear instancia de Resource con el body del request
         resource = Resource(**body)
         # Insertar el recurso en la base de datos

@@ -172,3 +172,19 @@ def get_icon(post_type_slug):
         return {'msg': 'Tipo de post no existe'}, 404
     # Retornar el resultado
     return post_type['icon']
+
+# Funcion para devolver los campos del metadato de un tipo de post
+@lru_cache(maxsize=1000)
+def get_metadata(post_type_slug):
+    # Buscar el tipo de post en la base de datos
+    post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
+    # Si el tipo de post no existe, retornar error
+    if not post_type:
+        return {'msg': 'Tipo de post no existe'}, 404
+    # Si el campo metadata es un string y es distinto a '', recuperar el formulario con ese slug
+    if type(post_type['metadata']) == str and post_type['metadata'] != '':
+        post_type['metadata'] = get_form_by_slug(post_type['metadata'])
+    else:
+        post_type['metadata'] = None
+    # Retornar el resultado
+    return post_type['metadata']
