@@ -4,7 +4,7 @@ from flask_jwt_extended import get_jwt_identity
 from app.api.resources import services
 from app.api.users import services as user_services
 from flask import request, jsonify
-
+import json
 
 # En este archivo se registran las rutas de la API para los recursos
 
@@ -95,10 +95,18 @@ def create():
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Obtener el body del request
-    body = request.json
+    # body = request.json
+
+    # read the form data from the request, the value has been save in a FormData object
+    body = request.form.to_dict()
+    data = body['data']
+    # convertir data una cadena de texto JSON stringify a un diccionario
+    data = json.loads(data)
+
+    files = request.files.getlist('files')
 
     # Llamar al servicio para crear el recurso
-    return services.create(body, current_user)
+    return services.create(data, current_user, files)
 
 # Nuevo endpoint para obtener un recurso por su id
 @bp.route('/<id>', methods=['GET'])
@@ -178,10 +186,16 @@ def update_by_id(id):
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
-    # Obtener el body del request
-    body = request.json
-    # Llamar al servicio para actualizar el recurso
-    return services.update_by_id(id, body, current_user)
+    
+    body = request.form.to_dict()
+    data = body['data']
+    # convertir data una cadena de texto JSON stringify a un diccionario
+    data = json.loads(data)
+
+    files = request.files.getlist('files')
+
+    # Llamar al servicio para crear el recurso
+    return services.update_by_id(id, data, current_user, files)
 
 # Nuevo endpoint para eliminar un recurso por su id
 @bp.route('/<id>', methods=['DELETE'])

@@ -3,6 +3,7 @@ from app.utils import DatabaseHandler
 from bson import json_util
 from functools import lru_cache
 import json
+import re
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.system.models import Option
@@ -32,29 +33,17 @@ def update_resources_schema(schema):
 # Funcion para obtener el valor de un dict dado un path
 def get_value_by_path(dict, path):
     try:
-        # Si el path es un string, convertirlo a lista
-        if isinstance(path, str):
-            path = path.split('.')
-        # Si el path es una lista vacía, retornar el dict
-        if len(path) == 0:
-            return dict
-        # Si el path no es una lista, retornar error
-        if not isinstance(path, list):
-            raise Exception('El path debe ser un string o una lista')
-        # Si el path es una lista, obtener el primer elemento
-        key = path[0]
-        # Si el key no existe en el dict, retornar error
-        if key not in dict:
-            raise Exception(f'El campo {key} no existe')
-        # Si el key existe en el dict, obtener el valor
-        value = dict[key]
+        keys = path.split('.')
+        value = dict
+        for key in keys:
+            if key in value:
+                value = value.get(key)
+            else:
+                value = None
+                break
 
-        # Si el path tiene más de un elemento, llamar recursivamente a la función
-        if len(path) > 1:
-            return get_value_by_path(value, '.'.join(path[1:]))
-        # Si el path tiene un solo elemento, retornar el valor
-        else:
-            return value
+        return value
+    
     except Exception as e:
         raise Exception(f'Error al obtener el valor del campo {key}')
     
@@ -70,4 +59,58 @@ def validate_text(value, field):
             raise Exception(f'El campo {label} es requerido')
         return value
     except Exception as e:
+        raise Exception(f'Error al validar el campo {label}')
+    
+# Funcion para validar un array de textos
+def validate_text_array(value, field):
+    try:
+        label = field['label']
+        # Si el valor no es de tipo array, retornar error
+        if not isinstance(value, list):
+            raise Exception(f'El campo {label} debe ser de tipo array')
+        # Si field.required entonces el valor no puede ser vacío o == []
+        if field['required'] and (value == [] or value == None):
+            raise Exception(f'El campo {label} es requerido')
+        # Si el campo tiene min_items, validar que el array tenga al menos min_items items
+        if 'min_items' in field and len(value) < field['min_items']:
+            raise Exception(f'El campo {label} debe tener al menos {field["min_items"]} items')
+        # Si el campo tiene max_items, validar que el array tenga como máximo max_items items
+        if 'max_items' in field and len(value) > field['max_items']:
+            raise Exception(f'El campo {label} debe tener como máximo {field["max_items"]} items')
+        # Si el campo tiene items, validar que todos los items del array sean de tipo string
+        if 'items' in field:
+            for item in value:
+                if not isinstance(item, str):
+                    raise Exception(f'El campo {label} debe ser de tipo string')
+        return value
+    except Exception as e:
+        raise Exception(f'Error al validar el campo {label}')
+    
+# Funcion para validar un text de acuerdo a un regex
+def validate_text_regex(value, field):
+    print(value,field)
+    try:
+        label = field['label']
+        # Si el valor no es de tipo string, retornar error
+        if not isinstance(value, str):
+            raise Exception(f'El campo {label} debe ser de tipo string')
+        # Si field.required entonces el valor no puede ser vacío o == ''
+        if field['required'] and (value == '' or value == None):
+            raise Exception(f'El campo {label} es requerido')
+        
+
+        # Si el campo tiene regex, validar que el valor cumpla con el regex
+        if 'pattern' in field:
+            print("1", field['pattern'])
+            
+            # regex para validar una url
+            regex = field['pattern']
+
+            # si el pattern es url, validar que el valor sea una url
+            if not re.match(regex, value):
+
+                raise Exception(f'El campo {label} debe ser una url')
+        return value
+    except Exception as e:
+        print(str(e))
         raise Exception(f'Error al validar el campo {label}')

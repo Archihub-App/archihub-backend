@@ -13,8 +13,12 @@ from app.api.types.services import is_hierarchical
 from app.api.types.services import get_icon
 from app.api.types.services import get_metadata
 from app.api.system.services import validate_text
+from app.api.system.services import validate_text_array
+from app.api.system.services import validate_text_regex
 from app.api.system.services import get_value_by_path
-
+from werkzeug.utils import secure_filename
+from app.api.records.services import create as create_record
+import os
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -26,8 +30,13 @@ def parse_result(result):
 def get_all(post_type, body, user):
     try:
         print(post_type, body, user)
+        filters = {}
+        filters['post_type'] = post_type
+        if 'parents' in body:
+            if body['parents']:
+                filters['parents.id'] = body['parents']['id']
         # Obtener todos los recursos dado un tipo de contenido
-        resources = list(mongodb.get_all_records('resources', {'post_type': post_type}, limit=20, skip=0))
+        resources = list(mongodb.get_all_records('resources', filters, limit=20, skip=0))
         # Para cada recurso, obtener el formulario asociado y quitar los campos _id
         for resource in resources:
             resource['id'] = str(resource['_id'])
@@ -38,66 +47,120 @@ def get_all(post_type, body, user):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para crear un recurso
-def create(body, user):
+def create(body, user, files):
     try:
         print(body)
         # si el body tiene parents, verificar que el recurso sea jerarquico
-        if 'parents' in body:
-            hierarchical = is_hierarchical(body['post_type'])
-            if body['parents']:
-                parent = body['parents'][0]
-                # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
-                if parent['post_type'] == body['post_type'] and not hierarchical[0]:
-                    return {'msg': 'El tipo de contenido no es jerarquico'}, 400
-                # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
-                elif not has_parent_postType(body['post_type'], parent['post_type']):
-                    return {'msg': 'El recurso no tiene como padre al recurso padre'}, 400
-                
-                body['parents'] = [{'post_type': item['post_type'], 'id': item['id']} for item in body['parents']]
-                body['parents'] = [parent, *get_parents(parent['id'])]
-                body['parent'] = [parent]
-            else:
-                if hierarchical[0] and hierarchical[1]:
-                    return {'msg': 'El tipo de contenido es jerarquico y debe tener padre'}, 400
-                elif hierarchical[0] and not hierarchical[1]:
-                    return {'msg': 'El tipo de contenido debe tener un padre'}, 400
-                elif not hierarchical[0] and hierarchical[1]:
-                    return {'msg': 'El tipo de contenido debe tener un padre'}, 400
-        
+        body = validate_parent(body)
+        # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': 'El recurso debe tener metadata'}, 400
         # Agregar el campo status al body
         body['status'] = 'created'
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
-        # Iterar sobre los metadatos
-        for field in metadata['fields']:
-            try:
-                print(field)
-                if field['type'] != 'file' and field['type'] != 'separator':
-                    if field['destiny'] != 'ident':
-                        if field['type'] == 'text':
-                            validate_text(get_value_by_path(body, field['destiny']), field)
-            except Exception as e:
-                return {'msg': "Error al obtener el valor del campo " + field['label']}, 500
+
+        errors = {}
+        # Validar los campos de la metadata
+        validate_fields(body, metadata, errors)
+
+        if errors:
+            return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+        
         # Crear instancia de Resource con el body del request
         resource = Resource(**body)
+        
         # Insertar el recurso en la base de datos
         new_resource = mongodb.insert_record('resources', resource)
         body['_id'] = str(new_resource.inserted_id)
-        # # Registrar el log
+        # Registrar el log
         register_log(user, log_actions['resource_create'], {'resource': body})
-        # # agregar el recurso al tipo de contenido
+        # agregar el recurso al tipo de contenido
         add_resource(body['post_type'])
+        # crear el record
+        records = create_record(body['_id'], user, files)
+        
+        update = {
+            'files': records
+        }
+
+        update_ = ResourceUpdate(**update)
+
+        mongodb.update_record('resources', {'_id': ObjectId(body['_id'])}, update_)
+
         # limpiar la cache
         has_parent_postType.cache_clear()
         get_tree.cache_clear()
         get_children.cache_clear()
 
         # Retornar el resultado
-        return {'msg': 'Recurso creado exitosamente'}, 201
+        return {'msg': 'Recurso creado exitosamente'}, 400
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+def validate_parent(body):
+    if 'parents' in body:
+        hierarchical = is_hierarchical(body['post_type'])
+        if body['parents']:
+            parent = body['parents'][0]
+            # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
+            if parent['post_type'] == body['post_type'] and not hierarchical[0]:
+                raise Exception('El tipo de contenido no es jerarquico')
+            # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
+            elif not has_parent_postType(body['post_type'], parent['post_type']):
+                raise Exception('El recurso no tiene como padre al recurso padre')
+            
+            body['parents'] = [parent, *get_parents(parent['id'])]
+            body['parent'] = parent
+            return body
+        else:
+            if hierarchical[0] and hierarchical[1]:
+                raise Exception('El tipo de contenido es jerarquico y debe tener padre')
+            elif hierarchical[0] and not hierarchical[1]:
+                raise Exception('El tipo de contenido debe tener un padre')
+            elif not hierarchical[0] and hierarchical[1]:
+                raise Exception('El tipo de contenido debe tener un padre')
+    
+
+def validate_fields(body, metadata, errors):
+    for field in metadata['fields']:
+        try:
+            if field['type'] != 'file' and field['type'] != 'separator':
+                print(field)
+                if field['destiny'] != 'ident':
+                    if field['type'] == 'text':
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            validate_text(get_value_by_path(body, field['destiny']), field)
+                        elif field['required']:
+                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    if field['type'] == 'textarea':
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            validate_text(get_value_by_path(body, field['destiny']), field)
+                        elif field['required']:
+                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    if field['type'] == 'select':
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            validate_text(get_value_by_path(body, field['destiny']), field)
+                        elif field['required']:
+                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    if field['type'] == 'pattern':
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            validate_text_regex(get_value_by_path(body, field['destiny']), field)
+                        elif field['required']:
+                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    if field['type'] == 'select-multiple2':
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            validate_text_array(get_value_by_path(body, field['destiny']), field)
+                        elif field['required']:
+                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+
+        except Exception as e:
+            errors[field['destiny']] = str(e)
     
 # Nuevo servicio para obtener un recurso por su id
 def get_by_id(id, user):
@@ -116,34 +179,22 @@ def get_by_id(id, user):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para actualizar un recurso
-def update_by_id(id, body, user):
+def update_by_id(id, body, user, files):
     try:
-        print(body)
-        # si el body tiene parents, verificar que el recurso sea jerarquico
-        if 'parents' in body:
-            hierarchical = is_hierarchical(body['post_type'])
-            if body['parents']:
-                parent = body['parents'][0]
-                # si el id del padre es el mismo que el del hijo, retornar error
-                if parent['id'] == id:
-                    return {'msg': 'El recurso no puede ser su propio padre'}, 400
-                # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
-                if parent['post_type'] == body['post_type'] and not hierarchical[0]:
-                    return {'msg': 'El tipo de contenido no es jerarquico'}, 400
-                # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
-                elif not has_parent_postType(body['post_type'], parent['post_type']):
-                    return {'msg': 'El recurso no tiene como padre al recurso padre'}, 400
-                
-                body['parents'] = [parent, *get_parents(parent['id'])]
-                body['parent'] = parent
+        body = validate_parent(body)
 
-            else:
-                if hierarchical[0] and hierarchical[1]:
-                    return {'msg': 'El tipo de contenido es jerarquico y no tiene padre'}, 400
-                elif hierarchical[0] and not hierarchical[1]:
-                    return {'msg': 'El tipo de contenido es jerarquico y no tiene padre'}, 400
+        # Obtener los metadatos en función del tipo de contenido
+        metadata = get_metadata(body['post_type'])
+
+        errors = {}
+        # Validar los campos de la metadata
+        validate_fields(body, metadata, errors)
+
+        if errors:
+            return {'msg': 'Error al validar los campos', 'errors': errors}, 400
                 
         body['status'] = 'updated'
+
         # Crear instancia de ResourceUpdate con el body del request
         resource = ResourceUpdate(**body)
         # Actualizar el recurso en la base de datos

@@ -3,15 +3,16 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 # Modelo para el registro de un recurso
-class Resource(BaseModel):
+class Record(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
-    post_type: str
-    metadata: dict
+    mime: str = None
+    metadata: dict = None
     parents: list[dict] = None
-    parent: dict = None
-    files: list[str] = []
-    ident: str
-    status: str = 'created'
+    processing: dict = None
+    filepath: str
+    size: int
+    hash: str
+    name: str
 
     class Config:
         allow_population_by_field_name = True
@@ -31,13 +32,11 @@ class Resource(BaseModel):
         }
 
 # Modelo para la actualización de un recurso
-class ResourceUpdate(BaseModel):
-    post_type: Optional[str]
+class RecordUpdate(BaseModel):
     metadata: Optional[dict]
-    files: Optional[list[str]]
     parents: Optional[list[dict]]
-    parent: Optional[dict]
-    status: Optional[str]
+    processing: Optional[dict]
+    name: Optional[str]
 
     class Config:
         allow_population_by_field_name = True
