@@ -92,6 +92,7 @@ def create(body, user, files):
         has_parent_postType.cache_clear()
         get_tree.cache_clear()
         get_children.cache_clear()
+        get_resource.cache_clear()
 
         # Retornar el resultado
         return {'msg': 'Recurso creado exitosamente'}, 400
@@ -165,19 +166,48 @@ def validate_fields(body, metadata, errors):
 # Nuevo servicio para obtener un recurso por su id
 def get_by_id(id, user):
     try:
-        # Buscar el recurso en la base de datos
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
-        # Si el recurso no existe, retornar error
-        if not resource:
-            return {'msg': 'Recurso no existe'}, 404
-        # Registrar el log
+        resource = get_resource(id)
         register_log(user, log_actions['resource_open'], {'resource': id})
-        resource['_id'] = str(resource['_id'])
+
         # Retornar el recurso
         return jsonify(resource), 200
     except Exception as e:
         return {'msg': str(e)}, 500
+
+@lru_cache(maxsize=1000)
+def get_resource(id):
+    # Buscar el recurso en la base de datos
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+    # Si el recurso no existe, retornar error
+    if not resource:
+        return {'msg': 'Recurso no existe'}, 404
+    # Registrar el log
+    resource['_id'] = str(resource['_id'])
+
+    if 'parents' in resource:
+        if resource['parents']:
+            for r in resource['parents']:
+                r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])})
+                r['name'] = r_['metadata']['firstLevel']['title']
+                r['icon'] = get_icon(r_['post_type'])
     
+    resource['icon'] = get_icon(resource['post_type'])
+    resource['children'] = mongodb.distinct('resources', 'post_type', {'parents.id': id})
+
+    children = []
+    for c in resource['children']:
+        c_ = mongodb.get_record('post_types', {'slug': c})
+        obj = {
+            'post_type': c,
+            'name': c_['name'],
+            'icon': c_['icon']
+        }
+        children.append(obj)
+
+    resource['children'] = children
+
+    return resource
+
 # Nuevo servicio para actualizar un recurso
 def update_by_id(id, body, user, files):
     try:
@@ -205,6 +235,7 @@ def update_by_id(id, body, user, files):
         has_parent_postType.cache_clear()
         get_tree.cache_clear()
         get_children.cache_clear()
+        get_resource.cache_clear()
         # Retornar el resultado
         return {'msg': 'Recurso actualizado exitosamente'}, 200
     except Exception as e:
