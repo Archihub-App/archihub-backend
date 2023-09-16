@@ -200,11 +200,23 @@ def get_resource(id):
         obj = {
             'post_type': c,
             'name': c_['name'],
-            'icon': c_['icon']
+            'icon': c_['icon'],
+            'slug': c_['slug'],
         }
         children.append(obj)
 
     resource['children'] = children
+    resource['fields'] = get_metadata(resource['post_type'])['fields']
+
+    temp = []
+    for f in resource['fields']:
+        temp.append({
+            'label': f['label'],
+            'value': get_value_by_path(resource, f['destiny']),
+            'type': f['type']
+        })
+
+    resource['fields'] = temp
 
     return resource
 

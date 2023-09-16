@@ -11,6 +11,20 @@ from app.api.system.models import OptionUpdate
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
+def parse_result(result):
+    return json.loads(json_util.dumps(result))
+
+# Funcion para obtener todos los recursos de la coleccion system
+@lru_cache(maxsize=32)
+def get_all_settings():
+    try:
+        # Obtener todos los recursos de la coleccion system
+        resources = mongodb.get_all_records('system', {})
+        # Retornar el resultado
+        return {'settings': parse_result(resources)}
+    except Exception as e:
+        raise Exception('Error al obtener los recursos')
+
 # Funcion para actualizar el registro resources-schema en la colección system
 def update_resources_schema(schema):
     try:
