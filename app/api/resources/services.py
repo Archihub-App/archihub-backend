@@ -16,6 +16,7 @@ from app.api.system.services import validate_text
 from app.api.system.services import validate_text_array
 from app.api.system.services import validate_text_regex
 from app.api.system.services import get_value_by_path
+from app.api.system.services import get_default_visible_type
 from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
 import os
@@ -192,7 +193,9 @@ def get_resource(id):
                 r['icon'] = get_icon(r_['post_type'])
     
     resource['icon'] = get_icon(resource['post_type'])
-    resource['children'] = mongodb.distinct('resources', 'post_type', {'parents.id': id})
+
+    default_visible_type = get_default_visible_type()
+    resource['children'] = mongodb.distinct('resources', 'post_type', {'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
 
     children = []
     for c in resource['children']:

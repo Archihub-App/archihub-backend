@@ -1,5 +1,6 @@
 import uuid
 from typing import Optional
+from typing import Any
 from pydantic import BaseModel, Field
 
 # Modelo para el registro de opciones del sistema
@@ -22,7 +23,7 @@ class Option(BaseModel):
 
 # Modelo para la actualización de opciones del sistema
 class OptionUpdate(BaseModel):
-    data: Optional[dict]
+    data: Any
 
     class Config:
         allow_population_by_field_name = True

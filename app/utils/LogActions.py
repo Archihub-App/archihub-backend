@@ -16,4 +16,5 @@ log_actions = {
     'resource_delete': 'RESOURCE_DELETE',
     'resource_open': 'RESOURCE_OPEN',
     'record_create': 'RECORD_CREATE',
+    'system_update': 'SYSTEM_UPDATE'
 }

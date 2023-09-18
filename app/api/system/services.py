@@ -24,6 +24,63 @@ def get_all_settings():
         return {'settings': parse_result(resources)}
     except Exception as e:
         raise Exception('Error al obtener los recursos')
+    
+# Funcion para actualizar los ajustes del sistema
+def update_settings(settings, current_user):
+    try:
+        post_types_settings = mongodb.get_record('system', {'name': 'post_types_settings'})
+        for d in post_types_settings['data']:
+            if d['id'] in settings:
+                d['value'] = settings[d['id']]
+        update = OptionUpdate(**{'data': post_types_settings['data']})
+        mongodb.update_record('system', {'name': 'post_types_settings'}, update)
+
+        # Registrar log
+        register_log(current_user, log_actions['system_update'], {
+            'post_types_settings': post_types_settings['data']
+        })
+        # Limpiar la cache
+        get_all_settings.cache_clear()
+        get_default_cataloging_type.cache_clear()
+        # Llamar al servicio para obtener todos los ajustes del sistema
+        return {'msg': 'Ajustes del sistema actualizados exitosamente'}, 200
+    
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+# Funcion para obtener el tipo por defecto del modulo de catalogacion
+@lru_cache(maxsize=32)
+def get_default_cataloging_type():
+    try:
+        # Obtener el registro post_types_settings de la colección system
+        post_types_settings = mongodb.get_record('system', {'name': 'post_types_settings'})
+        # Si el registro no existe, retornar error
+        if not post_types_settings:
+            return {'msg': 'No existe el tipo por defecto del modulo de catalogacion'}, 404
+        
+        for d in post_types_settings['data']:
+            if d['id'] == 'tipo_defecto':
+                return {'value': d['value']}, 200
+            
+    except Exception as e:
+        raise Exception('Error al obtener el tipo por defecto del modulo de catalogacion')
+    
+# Funcion para obtener el tipo por defecto del modulo de catalogacion
+@lru_cache(maxsize=32)
+def get_default_visible_type():
+    try:
+        # Obtener el registro post_types_settings de la colección system
+        post_types_settings = mongodb.get_record('system', {'name': 'post_types_settings'})
+        # Si el registro no existe, retornar error
+        if not post_types_settings:
+            raise Exception('No existe el tipo por defecto del modulo de catalogacion')
+        
+        for d in post_types_settings['data']:
+            if d['id'] == 'tipos_vista_individual':
+                return {'value': d['value']}
+            
+    except Exception as e:
+        raise Exception('Error al obtener el tipo por defecto del modulo de catalogacion')
 
 # Funcion para actualizar el registro resources-schema en la colección system
 def update_resources_schema(schema):

@@ -33,6 +33,57 @@ def get_all():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para crear un tipo de contenido'}, 401
+        return {'msg': 'No tiene permisos para obtener los ajustes del sistema'}, 401
     # Llamar al servicio para obtener todos los ajustes del sistema
     return services.get_all_settings()
+
+# PUT para actualizar los ajustes del sistema
+@bp.route('', methods=['PUT'])
+@jwt_required()
+def update():
+    """
+    Actualizar los ajustes del sistema
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Ajustes del sistema actualizados exitosamente
+        401:
+            description: No tiene permisos para actualizar los ajustes del sistema
+        500:
+            description: Error al actualizar los ajustes del sistema
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para actualizar los ajustes del sistema'}, 401
+    # Obtener el body de la request
+    body = request.get_json()
+    # Llamar al servicio para actualizar los ajustes del sistema
+    return services.update_settings(body, current_user)
+
+# GET para obtener el tipo por defecto del modulo de catalogacion
+@bp.route('/default-cataloging-type', methods=['GET'])
+@jwt_required()
+def get_default_cataloging_type():
+    """
+    Obtener el tipo por defecto del modulo de catalogacion
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Tipo por defecto del modulo de catalogacion
+        404:
+            description: No existe el tipo por defecto del modulo de catalogacion
+        500:
+            description: Error al obtener el tipo por defecto del modulo de catalogacion
+    """
+    # Llamar al servicio para obtener el tipo por defecto del modulo de catalogacion
+    return services.get_default_cataloging_type()
