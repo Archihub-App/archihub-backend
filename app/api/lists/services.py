@@ -81,6 +81,24 @@ def get_by_id(id):
         return lista
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+# Nuevo servicio para obtener una opcion por su id
+@lru_cache(maxsize=100)
+def get_option_by_id(id):
+    try:
+        # Buscar la opcion en la base de datos
+        option = mongodb.get_record('options', {'_id': ObjectId(id)})
+        # Si la opcion no existe, retornar error
+        if not option:
+            return {'msg': 'Opcion no existe'}
+        
+        # Parsear el resultado
+        option = parse_result(option)
+
+        # Retornar el resultado
+        return option
+    except Exception as e:
+        raise Exception('Error al obtener la opcion')
 
 # Nuevo servicio para actualizar un listado
 def update_by_id(id, body, user):

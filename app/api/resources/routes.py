@@ -264,3 +264,32 @@ def get_tree():
     body = request.json
     # Llamar al servicio para obtener la estructura de arból
     return services.get_tree(body['root'],'|'.join(item['slug'] for item in body['tree']), current_user)
+
+# Nuevo endpoint para obtener los recursos de un recurso padre
+@bp.route('/<resource_id>/records', methods=['GET'])
+@jwt_required()
+def get_all_records(resource_id):
+    """
+    Obtener los recursos de un recurso padre
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+            name: resource_id
+            schema:
+                type: string
+    responses:
+        200:
+            description: Recursos obtenidos exitosamente
+        401:
+            description: No tiene permisos para obtener los recursos
+        500:
+            description: Error al obtener los recursos
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Llamar al servicio para obtener los recursos
+    return services.get_resource_files(resource_id, current_user)

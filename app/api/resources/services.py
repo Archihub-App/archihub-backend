@@ -17,6 +17,7 @@ from app.api.system.services import validate_text_array
 from app.api.system.services import validate_text_regex
 from app.api.system.services import get_value_by_path
 from app.api.system.services import get_default_visible_type
+from app.api.lists.services import get_option_by_id
 from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
 import os
@@ -50,7 +51,6 @@ def get_all(post_type, body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user, files):
     try:
-        print(body)
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
         # Si el body no tiene metadata, retornar error
@@ -68,6 +68,7 @@ def create(body, user, files):
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
         
+        body['files'] = []
         # Crear instancia de Resource con el body del request
         resource = Resource(**body)
         
@@ -76,8 +77,6 @@ def create(body, user, files):
         body['_id'] = str(new_resource.inserted_id)
         # Registrar el log
         register_log(user, log_actions['resource_create'], {'resource': body})
-        # agregar el recurso al tipo de contenido
-        add_resource(body['post_type'])
         # crear el record
         records = create_record(body['_id'], user, files)
         
@@ -128,7 +127,6 @@ def validate_fields(body, metadata, errors):
     for field in metadata['fields']:
         try:
             if field['type'] != 'file' and field['type'] != 'separator':
-                print(field)
                 if field['destiny'] != 'ident':
                     if field['type'] == 'text':
                         exists = get_value_by_path(body, field['destiny'])
@@ -209,24 +207,105 @@ def get_resource(id):
         children.append(obj)
 
     resource['children'] = children
+
+    if 'files' in resource:
+        if len(resource['files']) > 0:
+            resource['children'] = [{
+                'post_type': 'files',
+                'name': 'Archivos',
+                'icon': 'archivo',
+                'slug': 'files',
+            }, *resource['children']]
+
+            temp = []
+            for r in resource['files']:
+                r_ = mongodb.get_record('records', {'_id': ObjectId(r)})
+                temp.append({
+                    'name': r_['name'],
+                    'size': r_['size'],
+                    'id': str(r_['_id'])
+                })
+
+            resource['files'] = temp
+
     resource['fields'] = get_metadata(resource['post_type'])['fields']
 
     temp = []
     for f in resource['fields']:
-        temp.append({
-            'label': f['label'],
-            'value': get_value_by_path(resource, f['destiny']),
-            'type': f['type']
-        })
+        if f['type'] != 'file' and f['type'] != 'separator':
+            if f['type'] == 'text' or f['type'] == 'textarea':
+                value = get_value_by_path(resource, f['destiny'])
+                if value:
+                    temp.append({
+                        'label': f['label'],
+                        'value': value,
+                        'type': f['type']
+                    })
+            if f['type'] == 'select':
+                value = get_value_by_path(resource, f['destiny'])
+                value = get_option_by_id(value)
+                if value:
+                    temp.append({
+                        'label': value['term'],
+                        'value': [value['term']],
+                        'type': 'select'
+                    })
+            if f['type'] == 'pattern':
+                value = get_value_by_path(resource, f['destiny'])
+                if value:
+                    temp.append({
+                        'label': f['label'],
+                        'value': value,
+                        'type': 'text'
+                    })
+
+            if f['type'] == 'select-multiple2':
+                value = get_value_by_path(resource, f['destiny'])
+                if value:
+                    temp_ = []
+                    for v in value:
+                        v_ = get_option_by_id(v['id'])
+                        temp_.append(v_['term'])
+
+                    
+                    temp.append({
+                        'label': f['label'],
+                        'value': temp_,
+                        'type': 'select'
+                    })
 
     resource['fields'] = temp
 
     return resource
 
+def get_resource_files(id, user):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': 'Recurso no existe'}, 404
+        
+        temp = []
+        for r in resource['files']:
+            file = mongodb.get_record('records', {'_id': ObjectId(r)})
+            temp.append({
+                'name': file['name'],
+                'size': file['size'],
+                'id': str(file['_id']),
+                'url': file['filepath']
+            })
+
+        resource['files'] = temp
+        # Retornar el recurso
+        return jsonify(resource['files']), 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 # Nuevo servicio para actualizar un recurso
 def update_by_id(id, body, user, files):
     try:
         body = validate_parent(body)
+        has_new_parent = has_changed_parent(id, body)
 
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
@@ -240,10 +319,32 @@ def update_by_id(id, body, user, files):
                 
         body['status'] = 'updated'
 
+        temp = []
+        for f in body['files']:
+            if type(f) == str:
+                temp.append(f)
+
+        body['files'] = temp
         # Crear instancia de ResourceUpdate con el body del request
         resource = ResourceUpdate(**body)
+
         # Actualizar el recurso en la base de datos
         updated_resource = mongodb.update_record('resources', {'_id': ObjectId(id)}, resource)
+
+        if has_new_parent:
+            update_parents(id, body['post_type'])
+
+        records = create_record(id, user, files)
+        update = {
+            'files': [*body['files'], *records]
+        }
+        update['files'] = list(set(update['files']))
+
+        update_ = ResourceUpdate(**update)
+
+        
+        mongodb.update_record('resources', {'_id': ObjectId(body['_id'])}, update_)
+
         # Registrar el log
         register_log(user, log_actions['resource_update'], {'resource': body})
         # limpiar la cache
@@ -261,12 +362,16 @@ def delete_by_id(id, user):
     try:
         # Eliminar el recurso de la base de datos
         deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})
+        # Eliminar los hijos del recurso
+        delete_children(id)
         # Registrar el log
         register_log(user, log_actions['resource_delete'], {'resource': id})
         # limpiar la cache
         has_parent_postType.cache_clear()
         get_tree.cache_clear()
         get_children.cache_clear()
+        get_resource.cache_clear()
+
         # Retornar el resultado
         return {'msg': 'Recurso eliminado exitosamente'}, 200
     except Exception as e:
@@ -359,5 +464,89 @@ def get_parents(id):
                 return parents
             else:
                 return []
+    except Exception as e:
+        raise Exception(str(e))
+    
+@lru_cache(maxsize=1000)
+def get_parent(id):
+    try:
+        # Buscar el recurso en la base de datos
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': 'Recurso no existe'}, 404
+        # Si el recurso no tiene padre, retornar una lista vacia
+        if 'parent' not in resource:
+            return None
+        else:
+            if resource['parent']:
+                parent = resource['parent']
+                return parent['id']
+            else:
+                return []
+    except Exception as e:
+        raise Exception(str(e))
+    
+# Funcion para determinar si un recurso cambio de padre
+def has_changed_parent(id, body):
+    try:
+        # Obtener los padres del recurso
+        parent = get_parent(id)
+        if parent != body['parents'][0]['id']:
+            return True
+        else:
+            return False
+    except Exception as e:
+        raise Exception(str(e))
+    
+# Funcion para obtener los hijos directos de un recurso
+def get_direct_children(id):
+    try:
+        # Buscar los recursos en la base de datos con parent igual al id
+        resources = list(mongodb.get_all_records('resources', {'parent.id': id}))
+        
+        resources = [{'post_type': re['post_type'], 'id': str(re['_id'])} for re in resources]
+
+        return resources
+
+    except Exception as e:
+        raise Exception(str(e))
+    
+# Funcion para actualizar los padres recursivamente
+def update_parents(id, post_type):
+    try:
+        get_parents.cache_clear()
+        get_parent.cache_clear()
+        # Hijos directos del recurso
+        children = get_direct_children(id)
+        # Si el recurso tiene hijos directos, actualizar el parent de cada hijo
+        if children:
+            for child in children:
+                parents = [{
+                    'post_type': post_type,
+                    'id': id
+                }]
+                parents = [*parents, *get_parents(id)]
+                parent = {
+                    'post_type': post_type,
+                    'id': id
+                }
+                updata = ResourceUpdate(**{'parents': parents, 'parent': parent})
+                mongodb.update_record('resources', {'_id': ObjectId(child['id'])}, updata)
+                update_parents(child['id'], child['post_type'])
+
+    except Exception as e:
+        raise Exception(str(e))
+    
+    # Funcion para eliminar los hijos recursivamente
+def delete_children(id):
+    try:
+        # Hijos directos del recurso
+        children = get_direct_children(id)
+        # Si el recurso tiene hijos directos, eliminar cada hijo
+        if children:
+            for child in children:
+                mongodb.delete_record('resources', {'_id': ObjectId(child['id'])})
+                delete_children(child['id'])
     except Exception as e:
         raise Exception(str(e))

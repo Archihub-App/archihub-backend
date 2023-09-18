@@ -73,7 +73,7 @@ def get_by_slug(slug):
         if type(post_type['metadata']) == str and post_type['metadata'] != '':
             post_type['metadata'] = get_form_by_slug(post_type['metadata'])
             # dejar solo los campos name y slug del formulario
-            post_type['metadata'] = { 'name': post_type['metadata']['name'], 'fields': post_type['metadata']['fields'] }
+            post_type['metadata'] = { 'name': post_type['metadata']['name'], 'fields': post_type['metadata']['fields'], 'slug': post_type['metadata']['slug'] }
         else:
             post_type['metadata'] = None
         # Retornar el resultado

@@ -20,7 +20,15 @@ from werkzeug.utils import secure_filename
 import os
 import hashlib
 
-UPLOAD_FOLDER = os.path.abspath(os.path.dirname(__file__))
+# get path of root folder
+
+UPLOAD_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+# Make a folder for uploads if it doesn't exist
+if not os.path.exists(os.path.join(UPLOAD_FOLDER, 'uploads')):
+    os.makedirs(os.path.join(UPLOAD_FOLDER, 'uploads'))
+
+UPLOAD_FOLDER = os.path.join(UPLOAD_FOLDER, 'uploads')
+
 ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif',
                           'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'zip', 'rar', 'mp4',
                           'mp3', 'wav', 'avi', 'mkv', 'flv', 'mov', 'wmv'])
@@ -62,8 +70,6 @@ def create(resource_id, current_user, files):
         
         resp = []
 
-        print("HOLA MUNDO")
-        
         for f in files:
             filename = secure_filename(f.filename)
             if allowedFile(filename):
@@ -80,20 +86,11 @@ def create(resource_id, current_user, files):
                 record = mongodb.get_record('records', {'hash': hash.hexdigest()})
                 # si el record existe, se agrega el recurso como padre
                 if record:
-                    # si el recurso ya es padre del record, retornar error
-                    if resource_id in [parent['id'] for parent in record['parents']]:
-                        return {'msg': 'El recurso ya tiene este archivo'}, 400
-                    else:
-                        resp.append(str(record['_id']))
-                        # registrar el log
-                        register_log(current_user, log_actions['record_update'], {'record': {
-                            'name': record.name,
-                            'hash': record.hash,
-                            'size': record.size,
-                            'filepath': record.filepath
-                        }})
-                        # limpiar la cache
-                        get_all.cache_clear()
+                    resp.append(str(record['_id']))
+                    # registrar el log
+                    register_log(current_user, log_actions['record_update'], {'record': str(record['_id'])})
+                    # limpiar la cache
+                    get_all.cache_clear()
                 else:
                     # crear un nuevo record
                     record = FileRecord(**{
