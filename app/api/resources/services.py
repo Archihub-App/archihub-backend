@@ -95,7 +95,7 @@ def create(body, user, files):
         get_resource.cache_clear()
 
         # Retornar el resultado
-        return {'msg': 'Recurso creado exitosamente'}, 400
+        return {'msg': 'Recurso creado exitosamente'}, 201
     except Exception as e:
         return {'msg': str(e)}, 500
     
