@@ -114,7 +114,7 @@ def create():
         slug_exists = services.get_by_slug(body['slug'])
         # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
         if 'msg' in slug_exists:
-            if slug_exists['msg'] == 'Tipo de contenido no existe':
+            if slug_exists['msg'] == 'Tipo de post no existe':
                 # Llamar al servicio para crear un tipo de contenido
                 return services.create(body, current_user)
         else:

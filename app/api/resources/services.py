@@ -100,15 +100,20 @@ def create(body, user, files):
         return {'msg': str(e)}, 500
     
 def validate_parent(body):
+    print(body)
     if 'parents' in body:
         hierarchical = is_hierarchical(body['post_type'])
         if body['parents']:
             parent = body['parents'][0]
+            # si el padre es el mismo que el hijo, retornar error
+            if '_id' in body:
+                if parent['id'] == body['_id']:
+                    raise Exception('El recurso no puede ser su propio padre')
             # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
             if parent['post_type'] == body['post_type'] and not hierarchical[0]:
                 raise Exception('El tipo de contenido no es jerarquico')
             # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
-            elif not has_parent_postType(body['post_type'], parent['post_type']):
+            elif not has_parent_postType(body['post_type'], parent['post_type']) and not hierarchical[0]:
                 raise Exception('El recurso no tiene como padre al recurso padre')
             
             body['parents'] = [parent, *get_parents(parent['id'])]
@@ -118,7 +123,9 @@ def validate_parent(body):
             if hierarchical[0] and hierarchical[1]:
                 raise Exception('El tipo de contenido es jerarquico y debe tener padre')
             elif hierarchical[0] and not hierarchical[1]:
-                raise Exception('El tipo de contenido debe tener un padre')
+                body['parents'] = []
+                body['parent'] = None
+                return body
             elif not hierarchical[0] and hierarchical[1]:
                 raise Exception('El tipo de contenido debe tener un padre')
     
@@ -307,6 +314,8 @@ def update_by_id(id, body, user, files):
         body = validate_parent(body)
         has_new_parent = has_changed_parent(id, body)
 
+        print(has_new_parent, body)
+
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 
@@ -403,10 +412,11 @@ def get_children(id, available, resp = False):
 @lru_cache(maxsize=1000)
 def get_tree(root, available, user):
     try:
+        print(root, available, user)
         list_available = available.split('|')
         # Obtener los recursos del tipo de contenido
         if root == 'all':
-            resources = list(mongodb.get_all_records('resources', {'post_type': list_available[-1]}, sort=[('metadata.firstLevel.title', 1)]))
+            resources = list(mongodb.get_all_records('resources', {'post_type': list_available[-1], 'parent': None}, sort=[('metadata.firstLevel.title', 1)]))
         else:
             resources = list(mongodb.get_all_records('resources', {'post_type': {"$in": list_available},'parent.id': root}, sort=[('metadata.firstLevel.title', 1)]))
         # Obtener el icono del post type
@@ -490,6 +500,8 @@ def get_parent(id):
 # Funcion para determinar si un recurso cambio de padre
 def has_changed_parent(id, body):
     try:
+        if(len(body['parents']) == 0):
+            return False
         # Obtener los padres del recurso
         parent = get_parent(id)
         if parent != body['parents'][0]['id']:
