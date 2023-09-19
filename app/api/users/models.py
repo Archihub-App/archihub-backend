@@ -10,8 +10,8 @@ class User(BaseModel):
     password: str
     accessLevel: str = "Public"
     compromise: bool = False
-    photo: Optional[str] = None
-    roles: Optional[list[str]] = None
+    photo: str = None
+    roles: list[str] = None
 
     class Config:
         allow_population_by_field_name = True

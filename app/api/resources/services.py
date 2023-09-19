@@ -31,14 +31,17 @@ def parse_result(result):
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
 def get_all(post_type, body, user):
     try:
-        print(post_type, body, user)
         filters = {}
+        limit = 5
+        skip = 0
         filters['post_type'] = post_type
         if 'parents' in body:
             if body['parents']:
                 filters['parents.id'] = body['parents']['id']
+        if 'skip' in body:
+            skip = body['skip']
         # Obtener todos los recursos dado un tipo de contenido
-        resources = list(mongodb.get_all_records('resources', filters, limit=20, skip=0))
+        resources = list(mongodb.get_all_records('resources', filters, limit=limit, skip=skip, sort=[('metadata.firstLevel.title', 1)]))
         # Para cada recurso, obtener el formulario asociado y quitar los campos _id
         for resource in resources:
             resource['id'] = str(resource['_id'])
@@ -99,8 +102,8 @@ def create(body, user, files):
     except Exception as e:
         return {'msg': str(e)}, 500
     
+# Funcion para validar el padre de un recurso
 def validate_parent(body):
-    print(body)
     if 'parents' in body:
         hierarchical = is_hierarchical(body['post_type'])
         if body['parents']:
@@ -129,7 +132,7 @@ def validate_parent(body):
             elif not hierarchical[0] and hierarchical[1]:
                 raise Exception('El tipo de contenido debe tener un padre')
     
-
+# Funcion para validar los campos de la metadata
 def validate_fields(body, metadata, errors):
     for field in metadata['fields']:
         try:
@@ -385,7 +388,8 @@ def delete_by_id(id, user):
         return {'msg': 'Recurso eliminado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+# Funcion para obtener los hijos de un recurso
 @lru_cache(maxsize=1000)
 def get_children(id, available, resp = False):
     try:
@@ -409,6 +413,7 @@ def get_children(id, available, resp = False):
     except Exception as e:
         return {'msg': str(e)}, 500
 
+# Funcion para obtener los hijos de un recurso en forma de arbol
 @lru_cache(maxsize=1000)
 def get_tree(root, available, user):
     try:
@@ -431,7 +436,8 @@ def get_tree(root, available, user):
         return resources, 200
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+# Funcion para validar que el tipo del padre sea uno admitido por el hijo
 @lru_cache(maxsize=1000)
 def has_parent_postType(post_type, compare):
     try:
@@ -452,7 +458,8 @@ def has_parent_postType(post_type, compare):
         return False
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+# Funcion para obtener los padres de un recurso
 @lru_cache(maxsize=1000)
 def get_parents(id):
     try:
@@ -476,7 +483,8 @@ def get_parents(id):
                 return []
     except Exception as e:
         raise Exception(str(e))
-    
+
+# Funcion para obtener el padre directo de un recurso
 @lru_cache(maxsize=1000)
 def get_parent(id):
     try:
@@ -551,6 +559,7 @@ def update_parents(id, post_type):
         raise Exception(str(e))
     
     # Funcion para eliminar los hijos recursivamente
+
 def delete_children(id):
     try:
         # Hijos directos del recurso
