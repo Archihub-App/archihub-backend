@@ -44,3 +44,7 @@ class DatabaseHandler:
     # Esta función sirve para hacer un distinct en una colección
     def distinct(self, collection, field, filters={}):
         return self.mydb[collection].distinct(field, filters)
+    
+    # Esta función sirve para obtener el total de registros de una colección
+    def count(self, collection, filters={}):
+        return self.mydb[collection].count_documents(filters)

@@ -32,20 +32,23 @@ def parse_result(result):
 def get_all(post_type, body, user):
     try:
         filters = {}
-        limit = 5
+        limit = 20
         skip = 0
         filters['post_type'] = post_type
         if 'parents' in body:
             if body['parents']:
                 filters['parents.id'] = body['parents']['id']
-        if 'skip' in body:
-            skip = body['skip']
+        if 'page' in body:
+            skip = body['page'] * limit
         # Obtener todos los recursos dado un tipo de contenido
-        resources = list(mongodb.get_all_records('resources', filters, limit=limit, skip=skip, sort=[('metadata.firstLevel.title', 1)]))
+        resources = list(mongodb.get_all_records('resources', filters, limit=limit, skip=skip))
+        # Obtener el total de recursos dado un tipo de contenido
+        total = get_total(json.dumps(filters))
         # Para cada recurso, obtener el formulario asociado y quitar los campos _id
         for resource in resources:
             resource['id'] = str(resource['_id'])
             resource.pop('_id')
+            resource['total'] = total
         # Retornar los recursos
         return jsonify(resources), 200
     except Exception as e:
@@ -560,6 +563,7 @@ def update_parents(id, post_type):
     
     # Funcion para eliminar los hijos recursivamente
 
+# Funcion para eliminar los hijos recursivamente
 def delete_children(id):
     try:
         # Hijos directos del recurso
@@ -569,5 +573,18 @@ def delete_children(id):
             for child in children:
                 mongodb.delete_record('resources', {'_id': ObjectId(child['id'])})
                 delete_children(child['id'])
+    except Exception as e:
+        raise Exception(str(e))
+    
+# Funcion para obtener el total de recursos
+@lru_cache(maxsize=500)
+def get_total(obj):
+    try:
+        # convertir string a dict
+        obj = json.loads(obj)
+        # Obtener el total de recursos
+        total = mongodb.count('resources', obj)
+        # Retornar el total
+        return total
     except Exception as e:
         raise Exception(str(e))
