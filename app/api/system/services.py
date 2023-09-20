@@ -158,6 +158,34 @@ def validate_text_array(value, field):
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
     
+def validate_author_array(value, field):
+    try:
+        label = field['label']
+        # Si el valor no es de tipo array, retornar error
+        if not isinstance(value, list):
+            raise Exception(f'El campo {label} debe ser de tipo array')
+        # Si field.required entonces el valor no puede ser vacío o == []
+        if field['required'] and (value == [] or value == None):
+            raise Exception(f'El campo {label} es requerido')
+        for item in value:
+            if not isinstance(item, str):
+                raise Exception(f'El campo {label} debe ser de tipo string')
+            split = item.split(',')
+            if len(split) != 2:
+                split = item.split('|')
+                if len(split) != 2:
+                    raise Exception(f'Error {label}')
+                else:
+                    if split[0] == '' and split[1] == '':
+                        raise Exception(f'Error {label}')
+            else:
+                if split[0] == '' and split[1] == '':
+                    raise Exception(f'Error {label}')
+                
+        return value
+    except Exception as e:
+        raise Exception(f'Error al validar el campo {label}')
+    
 # Funcion para validar un text de acuerdo a un regex
 def validate_text_regex(value, field):
     print(value,field)

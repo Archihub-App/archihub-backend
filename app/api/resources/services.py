@@ -17,6 +17,7 @@ from app.api.system.services import validate_text_array
 from app.api.system.services import validate_text_regex
 from app.api.system.services import get_value_by_path
 from app.api.system.services import get_default_visible_type
+from app.api.system.services import validate_author_array
 from app.api.lists.services import get_option_by_id
 from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
@@ -169,6 +170,12 @@ def validate_fields(body, metadata, errors):
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text_array(get_value_by_path(body, field['destiny']), field)
+                        elif field['required']:
+                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    if field['type'] == 'author':
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            validate_author_array(get_value_by_path(body, field['destiny']), field)
                         elif field['required']:
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
 
