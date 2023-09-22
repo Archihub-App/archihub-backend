@@ -20,6 +20,7 @@ from app.api.system.services import get_default_visible_type
 from app.api.system.services import validate_author_array
 from app.api.lists.services import get_option_by_id
 from app.api.records.services import delete_parent
+from app.api.records.services import update_parent
 from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
 import os
@@ -394,6 +395,7 @@ def update_by_id(id, body, user, files):
 
         if has_new_parent:
             update_parents(id, body['post_type'])
+            update_records_parents(id, user)
 
         records = create_record(id, user, files)
 
@@ -610,7 +612,26 @@ def update_parents(id, post_type):
     except Exception as e:
         raise Exception(str(e))
     
-    # Funcion para eliminar los hijos recursivamente
+# Funcion para actualizar los padres recursivamente de los records
+def update_records_parents(id, user):
+    try:
+        # Hijos directos del recurso
+        children = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        children = children['files']
+        # Si el recurso tiene hijos directos, actualizar el parent de cada hijo
+        if children:
+            for child in children:
+                record = mongodb.get_record('records', {'_id': ObjectId(child)})
+                parents = record['parent']
+                temp = []
+
+                for p in parents:
+                    temp = [*temp, *get_parents(p['id'])]
+
+                update_parent(child, user, temp)
+
+    except Exception as e:
+        raise Exception(str(e))
 
 # Funcion para eliminar los hijos recursivamente
 def delete_children(id):

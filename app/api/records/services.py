@@ -9,14 +9,6 @@ from app.api.records.models import Record as FileRecord
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.api.types.services import add_resource
-from app.api.types.services import is_hierarchical
-from app.api.types.services import get_icon
-from app.api.types.services import get_metadata
-from app.api.system.services import validate_text
-from app.api.system.services import validate_text_array
-from app.api.system.services import validate_text_regex
-from app.api.system.services import get_value_by_path
 from werkzeug.utils import secure_filename
 import os
 import hashlib
@@ -136,9 +128,27 @@ def delete_parent(resource_id, parent_id, current_user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
+
+def update_parent(parent_id, current_user, parents):
+    unique_array_parents = set(x['id'] for x in parents)
+
+    new_list = [next(item for item in parents if item['id'] == id)
+                for id in unique_array_parents]
+
+    update = FileRecordUpdate(**{
+        'parents': new_list
+    })
+
+    mongodb.update_record('records', {'_id': ObjectId(parent_id)}, update)
+
+    # Registrar el log
+    register_log(current_user, log_actions['record_update'], {
+        'record': parent_id})
+    # Limpiar la cache
+    get_all.cache_clear()
+
+
 # Nuevo servicio para crear un record para un recurso
-
-
 def create(resource_id, current_user, files):
     try:
         # Buscar el recurso en la base de datos
