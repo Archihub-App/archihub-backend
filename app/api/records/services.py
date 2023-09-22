@@ -128,21 +128,18 @@ def create(resource_id, current_user, files):
         for f in files:
             filename = secure_filename(f.filename)
             if allowedFile(filename):
-                print("1")
                 # generar un nombre unico para el archivo
                 filename_new = str(uuid.uuid4()) + '.' + filename.rsplit('.', 1)[1].lower()
                 # coger la fecha actual y convertirla a string de la forma YYYY/MM/DD
                 date = datetime.datetime.now().strftime("%Y/%m/%d")
                 # hacer un path en base a la fecha actual
                 path = os.path.join(UPLOAD_FOLDER, date)
-                print("2")
                 # crear el directorio para guardar el archivo usando la ruta date
                 if not os.path.exists(path):
                     os.makedirs(path)
                 f.save(os.path.join(path, filename))
                 # renombrar el archivo
                 os.rename(os.path.join(path, filename), os.path.join(path, filename_new))
-                print("3")
                 # calcular el hash 256 del archivo
                 hash = hashlib.sha256()
                 with open(os.path.join(path, filename_new), 'rb') as f:
@@ -154,6 +151,9 @@ def create(resource_id, current_user, files):
                 record = mongodb.get_record('records', {'hash': hash.hexdigest()})
                 # si el record existe, se agrega el recurso como padre
                 if record:
+                    # eliminar el archivo que se subio
+                    os.remove(os.path.join(path, filename_new))
+
                     resp.append(str(record['_id']))
 
                     update_dict = {
@@ -171,6 +171,8 @@ def create(resource_id, current_user, files):
                                     update_dict['status'] = 'processed'
                                 else:
                                     update_dict['status'] = 'uploaded'
+                            else:
+                                update_dict['status'] = 'uploaded'
                         else:
                             update_dict['status'] = 'uploaded'
 
