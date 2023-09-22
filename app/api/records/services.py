@@ -86,9 +86,22 @@ def delete_parent(resource_id, parent_id, current_user):
         record['parent'] = [x for x in record['parent'] if x['id'] != resource_id]
 
         array_parents = [x['id'] for x in resource['parents']]
-        # Si el record tiene parents del recurso como parents, eliminarlos
-        # el parent es de tipo dict y tiene los campos id y post_type
-        record['parents'] = [x for x in record['parents'] if x['id'] not in array_parents]
+        
+        array_parents = []
+        # iterar sobre parent y en un nuevo array ir guardando los padres de cada parent
+        for p in array_parents:
+            r = mongodb.get_record('resources', {'_id': ObjectId(p)})
+            # se agregan los parents a array_parents si no estan ya en el array. Cada parent en el array_parents es del tipo {id: id, post_type: post_type}
+            for parent in r['parents']:
+                array_parents.append(parent)
+
+        # se eliminan los parents que esten duplicados. Cada parent es del tipo {id: id, post_type: post_type}. Se eliminan los duplicados por id
+        unique_array_parents = set(x['id'] for x in array_parents)
+
+        new_list = [next(item for item in array_parents if item['id'] == id) for id in unique_array_parents]
+        array_parents = new_list
+
+
 
         status = record['status']
         # Si el record no tiene parents, cambiar el status a deleted
@@ -98,7 +111,7 @@ def delete_parent(resource_id, parent_id, current_user):
         # Actualizar el record
         update = FileRecordUpdate(**{
             'parent': record['parent'],
-            'parents': record['parents'],
+            'parents': array_parents,
             'status': status
         })
         mongodb.update_record('records', {'_id': record['_id']}, update)

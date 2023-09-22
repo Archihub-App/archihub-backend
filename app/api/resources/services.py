@@ -19,6 +19,7 @@ from app.api.system.services import get_value_by_path
 from app.api.system.services import get_default_visible_type
 from app.api.system.services import validate_author_array
 from app.api.lists.services import get_option_by_id
+from app.api.records.services import delete_parent
 from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
 import os
@@ -395,6 +396,10 @@ def update_by_id(id, body, user, files):
             update_parents(id, body['post_type'])
 
         records = create_record(id, user, files)
+
+        print(body['deletedFiles'])
+        delete_records(body['deletedFiles'], id, user)
+
         update = {
             'files': [*body['files'], *records]
         }
@@ -621,6 +626,13 @@ def delete_children(id):
     except Exception as e:
         raise Exception(str(e))
     
+def delete_records(list, resource_id, user):
+    try:
+        for l in list:
+            delete_parent(resource_id, l, user)
+    except Exception as e:
+        raise Exception(str(e))
+
 # Funcion para obtener el total de recursos
 @lru_cache(maxsize=500)
 def get_total(obj):
