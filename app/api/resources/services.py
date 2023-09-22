@@ -397,7 +397,6 @@ def update_by_id(id, body, user, files):
 
         records = create_record(id, user, files)
 
-        print(body['deletedFiles'])
         delete_records(body['deletedFiles'], id, user)
 
         update = {
