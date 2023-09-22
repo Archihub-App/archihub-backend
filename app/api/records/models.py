@@ -8,11 +8,13 @@ class Record(BaseModel):
     mime: str = None
     metadata: dict = None
     parents: list[dict] = None
+    parent: list[dict] = None
     processing: dict = None
     filepath: str
     size: int
     hash: str
     name: str
+    status: str = 'uploaded'
 
     class Config:
         allow_population_by_field_name = True
@@ -37,6 +39,8 @@ class RecordUpdate(BaseModel):
     parents: Optional[list[dict]]
     processing: Optional[dict]
     name: Optional[str]
+    parent: Optional[list[dict]]
+    status: Optional[str]
 
     class Config:
         allow_population_by_field_name = True

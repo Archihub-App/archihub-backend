@@ -178,6 +178,13 @@ def validate_fields(body, metadata, errors):
                             validate_author_array(get_value_by_path(body, field['destiny']), field)
                         elif field['required']:
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    # if field['type'] == 'simple-date':
+                    #     exists = get_value_by_path(body, field['destiny'])
+                    #     if exists:
+                    #         print(get_value_by_path(body, field['destiny']))
+                    #         # raise Exception('Error')
+                    #     elif field['required']:
+                    #         errors[field['destiny']] = f'El campo {field["label"]} es requerido'
 
         except Exception as e:
             errors[field['destiny']] = str(e)
@@ -238,12 +245,17 @@ def get_resource(id):
             }, *resource['children']]
 
             temp = []
+
+            ids = []
             for r in resource['files']:
-                r_ = mongodb.get_record('records', {'_id': ObjectId(r)})
+                ids.append(r)
+
+            r_ = get_resource_records(json.dumps(ids))
+            for _ in r_:
                 temp.append({
-                    'name': r_['name'],
-                    'size': r_['size'],
-                    'id': str(r_['_id'])
+                    'name': _['name'],
+                    'size': _['size'],
+                    'id': str(_['_id'])
                 })
 
             resource['files'] = temp
@@ -279,6 +291,24 @@ def get_resource(id):
                         'type': 'text'
                     })
 
+            if f['type'] == 'author':
+                value = get_value_by_path(resource, f['destiny'])
+                if value:
+                    temp_ = []
+                    for v in value:
+                        # si v tiene el caracter | o ,
+                        if '|' in v:
+                            temp_.append(' '.join(v.split('|')))
+                        elif ',' in v:
+                            temp_.append(' '.join(v.split(',')))
+
+                    
+                    temp.append({
+                        'label': f['label'],
+                        'value': temp_,
+                        'type': 'author'
+                    })
+
             if f['type'] == 'select-multiple2':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
@@ -297,6 +327,17 @@ def get_resource(id):
     resource['fields'] = temp
 
     return resource
+
+def get_resource_records(ids):
+    ids = json.loads(ids)
+    for i in range(len(ids)):
+        ids[i] = ObjectId(ids[i])
+    try:
+        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}))
+        return r_
+    except Exception as e:
+        print(str(e))
+        raise Exception(str(e))
 
 def get_resource_files(id, user):
     try:
@@ -326,9 +367,6 @@ def update_by_id(id, body, user, files):
     try:
         body = validate_parent(body)
         has_new_parent = has_changed_parent(id, body)
-
-        print(has_new_parent, body)
-
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 

@@ -1,3 +1,4 @@
+import datetime
 from flask import jsonify, request
 from app.utils import DatabaseHandler
 from bson import json_util
@@ -213,4 +214,17 @@ def validate_text_regex(value, field):
         return value
     except Exception as e:
         print(str(e))
+        raise Exception(f'Error al validar el campo {label}')
+    
+def validate_simple_date(value, field):
+    try:
+        label = field['label']
+        # Si el valor no es de tipo string, retornar error
+        if not isinstance(value, datetime):
+            raise Exception(f'El campo {label} debe ser de tipo string')
+        # Si field.required entonces el valor no puede ser vacío o == ''
+        if field['required'] and (value == '' or value == None):
+            raise Exception(f'El campo {label} es requerido')
+        return value
+    except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
