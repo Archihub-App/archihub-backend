@@ -11,6 +11,8 @@ class User(BaseModel):
     accessLevel: str = "Public"
     compromise: bool = False
     photo: str = None
+    token: str = ""
+    adminToken: str = ""
     roles: list[str] = None
 
     class Config:
@@ -31,6 +33,8 @@ class UserUpdate(BaseModel):
     compromise: Optional[bool]
     photo: Optional[str] = None
     roles: Optional[list[str]] = None
+    token: Optional[str] = None
+    adminToken: Optional[str] = None
 
     class Config:
         allow_population_by_field_name = True

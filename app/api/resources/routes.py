@@ -278,9 +278,9 @@ def get_all_records(resource_id):
         - Recursos
     parameters:
         - in: path
-            name: resource_id
-            schema:
-                type: string
+          name: resource_id
+          schema:
+              type: string
     responses:
         200:
             description: Recursos obtenidos exitosamente

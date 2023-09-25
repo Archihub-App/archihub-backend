@@ -6,6 +6,7 @@ import json
 from app.api.users.models import User, UserUpdate
 from datetime import timedelta
 from flask_jwt_extended import create_access_token
+from cryptography.fernet import Fernet
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -49,7 +50,7 @@ def get_user(username):
 # Nuevo servicio para aceptar el compromiso de un usuario
 def accept_compromise(username):
     # Nueva instancia de UserUpdate con el compromiso aceptado
-    user_update = UserUpdate(compromise_accepted=True)
+    user_update = UserUpdate(compromise=True)
     # Actualizar usuario en la base de datos
     mongodb.update_record('users', {'username': username}, user_update)
     # Retornar mensaje de éxito
@@ -68,23 +69,29 @@ def has_role(username, role):
     return False
 
 # Nuevo servicio para generar un token de autenticación para usar la API publica
-def generate_token(username, password):
+def generate_token(username, password, admin = False):
     # Buscar el usuario en la base de datos
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
     if not user:
         return jsonify({'msg': 'Usuario no existe'}), 400
+    
     # Si la contraseña no coincide, retornar error
-    if not bcrypt.checkpw(password.encode('utf-8'), user['password']):
+    if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
         return jsonify({'msg': 'Contraseña incorrecta'}), 400
     # Si el usuario no ha aceptado el compromiso, retornar error
-    if not user['compromise_accepted']:
+    if not user['compromise']:
         return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
     
     # Crear el token de acceso para el usuario con el username y sin expiración
-    access_token = create_access_token(identity=username, expires_delta=False)
+    if not admin:
+        access_token = create_access_token(identity=username, expires_delta=False)
+        update = UserUpdate(token=access_token)
+    else:
+        access_token = create_access_token(identity=username, expires_delta=timedelta(days=2))
+        update = UserUpdate(adminToken=access_token)
 
-    update = UserUpdate(access_token=access_token)
+
     # guardar el token de acceso en la base de datos
     mongodb.update_record('users', {'username': username}, update)
 
@@ -99,7 +106,7 @@ def get_token(username):
     if not user:
         return jsonify({'msg': 'Usuario no existe'}), 400
     # Si el usuario no ha aceptado el compromiso, retornar error
-    if not user['compromise_accepted']:
+    if not user['compromise']:
         return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
     # Si el usuario no tiene token de acceso, retornar error
     if not user['access_token']:

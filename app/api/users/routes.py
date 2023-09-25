@@ -262,4 +262,4 @@ def generate_admin_token():
     # Obtener el username y password del body
     password = body.get('password')
     # Llamar al servicio para generar el token
-    return services.generate_token(current_user, password)
+    return services.generate_token(current_user, password, True)
