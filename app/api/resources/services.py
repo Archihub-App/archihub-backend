@@ -8,7 +8,6 @@ from app.api.resources.models import Resource
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.resources.models import ResourceUpdate
-from app.api.types.services import add_resource
 from app.api.types.services import is_hierarchical
 from app.api.types.services import get_icon
 from app.api.types.services import get_metadata
