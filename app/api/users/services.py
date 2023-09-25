@@ -67,7 +67,7 @@ def has_role(username, role):
     # Si el usuario no tiene el rol, retornar False
     return False
 
-# Nuevo servicio para generar un token de autenticación para usar la API
+# Nuevo servicio para generar un token de autenticación para usar la API publica
 def generate_token(username, password):
     # Buscar el usuario en la base de datos
     user = mongodb.get_record('users', {'username': username})
@@ -83,8 +83,10 @@ def generate_token(username, password):
     
     # Crear el token de acceso para el usuario con el username y sin expiración
     access_token = create_access_token(identity=username, expires_delta=False)
+
+    update = UserUpdate(access_token=access_token)
     # guardar el token de acceso en la base de datos
-    mongodb.update_record('users', {'username': username}, {'access_token': access_token})
+    mongodb.update_record('users', {'username': username}, update)
 
     # Retornar el token de acceso
     return jsonify({'access_token': access_token}), 200
