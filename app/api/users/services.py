@@ -7,12 +7,49 @@ from app.api.users.models import User, UserUpdate
 from datetime import timedelta
 from flask_jwt_extended import create_access_token
 from cryptography.fernet import Fernet
+from functools import lru_cache
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
     return json.loads(json_util.dumps(result))
+
+# Nuevo servicio para obtener todos los usuarios con filtros
+def get_all(body, current_user):
+    try:
+        # Obtener todos los usuarios de la coleccion users
+        users = list(mongodb.get_all_records(
+            'users', body['filters'], limit=20, skip=body['page'] * 20))
+        
+        if not users:
+            return {'msg': 'Recurso no existe'}, 404
+        
+        total = get_total(json.dumps(body['filters']))
+
+
+        for r in users:
+            r['id'] = str(r['_id'])
+            r.pop('_id')
+            r['total'] = total
+        # Retornar el resultado
+        return parse_result(users), 200
+    
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+# Funcion para obtener el total de recursos
+@lru_cache(maxsize=500)
+def get_total(obj):
+    try:
+        # convertir string a dict
+        obj = json.loads(obj)
+        # Obtener el total de recursos
+        total = mongodb.count('users', obj)
+        # Retornar el total
+        return total
+    except Exception as e:
+        raise Exception(str(e))
 
 # Nuevo servicio para registrar un usuario
 def register_user(username, password):

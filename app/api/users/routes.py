@@ -263,3 +263,44 @@ def generate_admin_token():
     password = body.get('password')
     # Llamar al servicio para generar el token
     return services.generate_token(current_user, password, True)
+
+# Nuevo endpoint para obtener todos los usuarios usando filtros
+@bp.route('', methods=['POST'])
+@jwt_required()
+def get_all():
+    """
+    Obtener todos los usuarios usando filtros
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                filters:
+                    type: object
+                sort:
+                    type: string
+                limit:
+                    type: integer
+                skip:
+                    type: integer
+    responses:
+        200:
+            description: Usuarios obtenidos exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Obtener el body del request
+    body = request.json
+    # Llamar al servicio para obtener los usuarios
+    return services.get_all(body, current_user)
