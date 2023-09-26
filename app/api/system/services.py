@@ -24,21 +24,25 @@ def get_all_settings():
         # Retornar el resultado
         return {'settings': parse_result(resources)}
     except Exception as e:
-        raise Exception('Error al obtener los recursos')
+        raise Exception('Error al obtener los recursos')\
+        
+def update_option(name, data):
+    options = mongodb.get_record('system', {'name': name})
+    for d in options['data']:
+        if d['id'] in data:
+            d['value'] = data[d['id']]
+    update = OptionUpdate(**{'data': options['data']})
+    mongodb.update_record('system', {'name': name}, update)
     
 # Funcion para actualizar los ajustes del sistema
 def update_settings(settings, current_user):
     try:
-        post_types_settings = mongodb.get_record('system', {'name': 'post_types_settings'})
-        for d in post_types_settings['data']:
-            if d['id'] in settings:
-                d['value'] = settings[d['id']]
-        update = OptionUpdate(**{'data': post_types_settings['data']})
-        mongodb.update_record('system', {'name': 'post_types_settings'}, update)
+        update_option('post_types_settings', settings)
+        update_option('access_rights', settings)
 
         # Registrar log
         register_log(current_user, log_actions['system_update'], {
-            'post_types_settings': post_types_settings['data']
+            'settings': settings
         })
         # Limpiar la cache
         get_all_settings.cache_clear()

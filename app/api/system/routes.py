@@ -63,6 +63,8 @@ def update():
         return {'msg': 'No tiene permisos para actualizar los ajustes del sistema'}, 401
     # Obtener el body de la request
     body = request.get_json()
+
+    print(body)
     # Llamar al servicio para actualizar los ajustes del sistema
     return services.update_settings(body, current_user)
 
