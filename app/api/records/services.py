@@ -59,6 +59,24 @@ def allowedFile(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+
+def get_by_filter(body, current_user):
+    try:
+        # Buscar el recurso en la base de datos
+        records = mongodb.get_all_records(
+            'records', body['filters'], limit=20, skip=body['page'] * 20)
+        # Si el recurso no existe, retornar error
+        if not records:
+            return {'msg': 'Recurso no existe'}, 404
+        # registrar el log
+        register_log(current_user, log_actions['record_get_all'], {
+                     'filters': body['filters']})
+        # retornar los records
+        return jsonify(records), 200
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 # Nuevo servicio para borrar un parent de un record
 
 
