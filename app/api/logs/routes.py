@@ -8,7 +8,7 @@ from flask_jwt_extended import get_jwt_identity
 # En este archivo se registran las rutas de la API para los logs
 
 # Nuevo POST endpoint para obtener los logs de acuerdo a un filtro
-@bp.route('/filter', methods=['POST'])
+@bp.route('/', methods=['POST'])
 @jwt_required()
 def filter():
     """
@@ -28,10 +28,6 @@ def filter():
                 type: string
               action:
                 type: string
-              from_date:
-                type: string
-              to_date:
-                type: string
     responses:
         200:
             description: Logs obtenidos exitosamente
@@ -46,6 +42,4 @@ def filter():
     if not services.is_admin(current_user):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 403
     # Llamar al servicio para obtener los logs de acuerdo a un filtro
-    logs = services.filter(body)
-
-    return logs
+    return services.filter(body)

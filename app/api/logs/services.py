@@ -5,6 +5,7 @@ import json
 from app.api.logs.models import Log
 from datetime import datetime
 from app.utils import LogActions
+from functools import lru_cache
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -14,7 +15,7 @@ def parse_result(result):
 
 # Funcion para obtener la fecha actual
 def get_current_date():
-    return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    return datetime.now()
 
 # Nuevo servicio para registrar un log
 def register_log(username, action, metadata=None):
@@ -26,3 +27,36 @@ def register_log(username, action, metadata=None):
     mongodb.insert_record('logs', log)
     # Retornar mensaje de éxito
     return jsonify({'msg': 'Log registrado exitosamente'}), 200
+
+# Nuevo servicio para obtener todos los logs de acuerdo a un filtro
+def filter(body):
+    try:
+        # Obtener todos los logs de la coleccion logs
+        logs = mongodb.get_all_records('logs', body['filters'], limit=20, skip=body['page'] * 20)
+        # Si no hay logs, retornar error
+        if not logs:
+            return {'msg': 'No se encontraron logs'}, 400
+        # Obtener el total de logs
+        total = get_total(json.dumps(body['filters']))
+        # Parsear el resultado
+        logs = parse_result(logs)
+        # Agregar el total al resultado
+        for r in logs:
+            r['total'] = total
+        # Retornar el resultado
+        return logs, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+# Funcion para obtener el total de recursos
+@lru_cache(maxsize=500)
+def get_total(obj):
+    try:
+        # convertir string a dict
+        obj = json.loads(obj)
+        # Obtener el total de recursos
+        total = mongodb.count('logs', obj)
+        # Retornar el total
+        return total
+    except Exception as e:
+        raise Exception(str(e))
