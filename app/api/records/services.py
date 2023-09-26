@@ -60,26 +60,46 @@ def allowedFile(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def get_by_filter(body, current_user):
+def get_by_filters(body, current_user):
     try:
         # Buscar el recurso en la base de datos
-        records = mongodb.get_all_records(
-            'records', body['filters'], limit=20, skip=body['page'] * 20)
+        records = list(mongodb.get_all_records(
+            'records', body['filters'], limit=20, skip=body['page'] * 20))
         # Si el recurso no existe, retornar error
         if not records:
             return {'msg': 'Recurso no existe'}, 404
+        
+        total = get_total(json.dumps(body['filters']))
+
+
+        for r in records:
+            r['id'] = str(r['_id'])
+            r.pop('_id')
+            r['total'] = total
+
         # registrar el log
         register_log(current_user, log_actions['record_get_all'], {
                      'filters': body['filters']})
         # retornar los records
-        return jsonify(records), 200
+        return parse_result(records), 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+# Funcion para obtener el total de recursos
+@lru_cache(maxsize=500)
+def get_total(obj):
+    try:
+        # convertir string a dict
+        obj = json.loads(obj)
+        # Obtener el total de recursos
+        total = mongodb.count('records', obj)
+        # Retornar el total
+        return total
+    except Exception as e:
+        raise Exception(str(e))
 
 # Nuevo servicio para borrar un parent de un record
-
-
 def delete_parent(resource_id, parent_id, current_user):
     try:
         # Buscar el recurso en la base de datos
