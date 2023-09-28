@@ -102,15 +102,9 @@ def get_total(obj):
 # Nuevo servicio para borrar un parent de un record
 def delete_parent(resource_id, parent_id, current_user):
     try:
-        # Buscar el recurso en la base de datos
-        resource = mongodb.get_record(
-            'resources', {'_id': ObjectId(resource_id)})
-        # Si el recurso no existe, retornar error
-        if not resource:
-            return {'msg': 'Recurso no existe'}, 404
-
         # Buscar el record en la base de datos
         record = mongodb.get_record('records', {'_id': ObjectId(parent_id)})
+
         # Si el record no existe, retornar error
         if not record:
             return {'msg': 'Record no existe'}, 404
@@ -123,16 +117,19 @@ def delete_parent(resource_id, parent_id, current_user):
         # el parent es de tipo dict y tiene los campos id y post_type
         record['parent'] = [x for x in record['parent']
                             if x['id'] != resource_id]
-
+        
         array_parents = set(x['id'] for x in record['parent'])
 
         array_parents_temp = []
         # iterar sobre parent y en un nuevo array ir guardando los padres de cada parent
         for p in array_parents:
             r = mongodb.get_record('resources', {'_id': ObjectId(p)})
-            # se agregan los parents a array_parents si no estan ya en el array. Cada parent en el array_parents es del tipo {id: id, post_type: post_type}
-            for parent in r['parents']:
-                array_parents_temp.append(parent)
+
+            if r:
+                # se agregan los parents a array_parents si no estan ya en el array. Cada parent en el array_parents es del tipo {id: id, post_type: post_type}
+                for parent in r['parents']:
+                    print(parent)
+                    array_parents_temp.append(parent)
 
         # se eliminan los parents que esten duplicados. Cada parent es del tipo {id: id, post_type: post_type}. Se eliminan los duplicados por id
         unique_array_parents = set(x['id'] for x in array_parents_temp)
@@ -152,11 +149,12 @@ def delete_parent(resource_id, parent_id, current_user):
             'parents': array_parents,
             'status': status
         })
-        mongodb.update_record('records', {'_id': record['_id']}, update)
+
+        mongodb.update_record('records', {'_id': ObjectId(parent_id)}, update)
 
         # Registrar el log
         register_log(current_user, log_actions['record_update'], {
-                     'record': str(record['_id'])})
+                     'record': parent_id})
         # Limpiar la cache
         get_all.cache_clear()
 
@@ -164,6 +162,7 @@ def delete_parent(resource_id, parent_id, current_user):
         return {'msg': 'Parent eliminado exitosamente'}, 200
 
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 

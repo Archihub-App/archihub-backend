@@ -425,10 +425,15 @@ def update_by_id(id, body, user, files):
 # Nuevo servicio para eliminar un recurso
 def delete_by_id(id, user):
     try:
-        # Eliminar el recurso de la base de datos
-        deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})
+        records_list = mongodb.get_record('resources', {'_id': ObjectId(id)})['files']
+
+        print(records_list)
+        delete_records(records_list, id, user)
         # Eliminar los hijos del recurso
-        delete_children(id)
+        # delete_children(id)
+        # Eliminar el recurso de la base de datos
+        # deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})
+        # Eliminar los hijos del recurso
         # Registrar el log
         register_log(user, log_actions['resource_delete'], {'resource': id})
         # limpiar la cache
@@ -640,8 +645,9 @@ def delete_children(id):
         # Si el recurso tiene hijos directos, eliminar cada hijo
         if children:
             for child in children:
-                mongodb.delete_record('resources', {'_id': ObjectId(child['id'])})
                 delete_children(child['id'])
+                mongodb.delete_record('resources', {'_id': ObjectId(child['id'])})
+                
     except Exception as e:
         raise Exception(str(e))
     
