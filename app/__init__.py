@@ -78,13 +78,16 @@ def create_app(config_class=config['development']):
     from app.api.system import bp as system_bp
     app.register_blueprint(system_bp, url_prefix='/system')
 
-    from app.plugins.filesProcessing import ExtendedPluginClass
-    from app.plugins.filesProcessing import plugin_info
-    plugin_bp = ExtendedPluginClass('filesProcessing', __name__, **plugin_info)
-    plugin_bp.add_route()
-    app.register_blueprint(plugin_bp, url_prefix='/filesprocessing')
+    register_plugin(app, 'filesProcessing', 'filesprocessing')
 
     return app
+
+# función para registrar plugins de forma dinámica
+def register_plugin(app, plugin_name, plugin_url_prefix):
+    plugin_module = __import__(f'app.plugins.{plugin_name}', fromlist=['ExtendedPluginClass', 'plugin_info'])
+    plugin_bp = plugin_module.ExtendedPluginClass(plugin_name, __name__, **plugin_module.plugin_info)
+    plugin_bp.add_route()
+    app.register_blueprint(plugin_bp, url_prefix=f'/{plugin_url_prefix}')
 
 # definiendo celery
 def celery_init_app(app: Flask) -> Celery:

@@ -94,7 +94,7 @@ def get_default_cataloging_type():
 
 # GET para obtener el listado de plugins en la carpeta plugins
 @bp.route('/plugins', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def get_plugins():
     """
     Obtener el listado de plugins en la carpeta plugins
@@ -111,13 +111,42 @@ def get_plugins():
         500:
             description: Error al obtener el listado de plugins en la carpeta plugins
     """
-    # # Obtener el usuario actual
-    # current_user = get_jwt_identity()
-    # # Verificar si el usuario tiene el rol de administrador
-    # if not user_services.has_role(current_user, 'admin'):
-    #     return {'msg': 'No tiene permisos para obtener el listado de plugins en la carpeta plugins'}, 401
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para obtener el listado de plugins en la carpeta plugins'}, 401
     # Llamar al servicio para obtener el listado de plugins en la carpeta plugins
     return services.get_plugins()
+
+# POST para instalar un plugin
+@bp.route('/plugins', methods=['POST'])
+@jwt_required()
+def install_plugin():
+    """
+    Instalar un plugin
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Plugin instalado exitosamente
+        401:
+            description: No tiene permisos para instalar un plugin
+        500:
+            description: Error al instalar un plugin
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para instalar un plugin'}, 401
+    # Obtener el body de la request
+    body = request.get_json()
+    # Llamar al servicio para instalar un plugin
+    return services.install_plugin(body, current_user)
 
 
 # GET para probar las tasks de celery

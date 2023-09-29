@@ -255,3 +255,11 @@ def get_plugins():
 
     except Exception as e:
         raise Exception(str(e))
+    
+def install_plugin(body, current_user):
+    try:
+        
+        # Retornar el resultado
+        return {'msg': 'Plugins instalados exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200
+    except Exception as e:
+        raise Exception(str(e))
