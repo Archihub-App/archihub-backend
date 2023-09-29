@@ -207,7 +207,7 @@ def get_resource(id):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
     # Si el recurso no existe, retornar error
     if not resource:
-        return {'msg': 'Recurso no existe'}, 404
+        raise Exception('Recurso no existe')
     # Registrar el log
     resource['_id'] = str(resource['_id'])
 
