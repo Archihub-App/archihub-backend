@@ -9,6 +9,8 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.system.models import Option
 from app.api.system.models import OptionUpdate
+import os
+import importlib
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -232,3 +234,24 @@ def validate_simple_date(value, field):
         return value
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
+    
+def get_plugins():
+    try:
+        # Obtener la ruta de la carpeta plugins
+        plugins_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../plugins')
+        # Obtener todas las carpetas en la carpeta ../../plugins
+        plugins = os.listdir(plugins_path)
+
+        resp = []
+        for plugin in plugins:
+            if os.path.isfile(f'{plugins_path}/{plugin}/__init__.py'):
+                plugin_module = importlib.import_module(f'app.plugins.{plugin}')
+                plugin_instance = plugin_module.plugin_info
+
+                resp.append(plugin_instance)
+
+        # Retornar el resultado
+        return {'plugins': resp}, 200
+
+    except Exception as e:
+        raise Exception(str(e))

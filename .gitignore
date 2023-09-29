@@ -2,3 +2,8 @@
 .env
 fix.py
 /uploads
+/webfiles
+
+/app/plugins/**/*
+!/app/plugins/filesProcessing
+!/app/plugins/inventoryMaker

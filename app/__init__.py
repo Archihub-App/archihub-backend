@@ -78,6 +78,12 @@ def create_app(config_class=config['development']):
     from app.api.system import bp as system_bp
     app.register_blueprint(system_bp, url_prefix='/system')
 
+    from app.plugins.filesProcessing import ExtendedPluginClass
+    from app.plugins.filesProcessing import plugin_info
+    plugin_bp = ExtendedPluginClass('filesProcessing', __name__, **plugin_info)
+    plugin_bp.add_route()
+    app.register_blueprint(plugin_bp, url_prefix='/filesprocessing')
+
     return app
 
 # definiendo celery

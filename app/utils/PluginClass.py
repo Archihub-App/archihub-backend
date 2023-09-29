@@ -1,12 +1,18 @@
-# Nueva clase PluginClass que sirve para definir los plugins
-#
-class PluginClass:
-    def __init__(self, name, description, version, author, category, icon, color, settings, actions):
+from flask import Blueprint
+
+class PluginClass(Blueprint):
+    def __init__(self, path, import_name, name, description, version, author):
+        super().__init__(path, import_name)
         self.name = name
         self.description = description
         self.version = version
         self.author = author
-        self.category = category
-        self.icon = icon
         
+    def get_info(self):
+        return {
+            'name': self.name,
+            'description': self.description,
+            'version': self.version,
+            'author': self.author
+        }
     
