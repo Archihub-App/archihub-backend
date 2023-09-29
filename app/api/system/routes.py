@@ -7,6 +7,8 @@ from flask import request
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 
+from app.tasks.tasks import add
+from celery.result import AsyncResult
 
 # En este archivo se registran las rutas de la API para los ajustes del sistema
 
@@ -89,3 +91,47 @@ def get_default_cataloging_type():
     """
     # Llamar al servicio para obtener el tipo por defecto del modulo de catalogacion
     return services.get_default_cataloging_type()
+
+# GET para probar las tasks de celery
+@bp.route('/test-celery', methods=['GET'])
+
+def test_celery():
+    """
+    Probar las tasks de celery
+    ---
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Task ejecutada exitosamente
+        500:
+            description: Error al ejecutar la task
+    """
+    # Llamar al servicio para probar las tasks de celery
+    task = add.delay(1, 2)
+    print(task.id)
+
+    return "ok"
+
+
+@bp.route('/test-celery-result/<id>', methods=['GET'])
+
+def test_celery_result(id):
+    """
+    Probar las tasks de celery
+    ---
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Task ejecutada exitosamente
+        500:
+            description: Error al ejecutar la task
+    """
+    # Llamar al servicio para probar las tasks de celery
+    result = AsyncResult(id)
+    return {
+        "ready": result.ready(),
+        "successful": result.successful(),
+        "value": result.result if result.ready() else None,
+    }

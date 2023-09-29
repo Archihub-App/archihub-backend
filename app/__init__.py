@@ -40,7 +40,7 @@ def create_app(config_class=config['development']):
         }
     }
 
-    celery_init_app(app)
+    
 
     # Registrar users blueprint
     from app.api.users import bp as users_bp
@@ -93,6 +93,9 @@ def celery_init_app(app: Flask) -> Celery:
     app.extensions["celery"] = celery_app
     return celery_app
 
+
+app = create_app()
+celery_app = celery_init_app(app)
+
 if __name__ == '__main__':
-    app = create_app()
     app.run()
