@@ -15,6 +15,8 @@ class Record(BaseModel):
     hash: str
     name: str
     status: str = 'uploaded'
+    displayName: str = None
+    accessRights: str = None
 
     class Config:
         allow_population_by_field_name = True
@@ -41,6 +43,8 @@ class RecordUpdate(BaseModel):
     name: Optional[str]
     parent: Optional[list[dict]]
     status: Optional[str]
+    displayName: Optional[str]
+    accessRights: Optional[str]
 
     class Config:
         allow_population_by_field_name = True

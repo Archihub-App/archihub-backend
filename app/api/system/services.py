@@ -9,6 +9,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.system.models import Option
 from app.api.system.models import OptionUpdate
+from app.api.lists.services import get_by_id
 import os
 import importlib
 
@@ -22,11 +23,11 @@ def parse_result(result):
 def get_all_settings():
     try:
         # Obtener todos los recursos de la coleccion system
-        resources = mongodb.get_all_records('system', {})
+        resources = mongodb.get_all_records('system', {"name": {"$ne": "active_plugins"}})
         # Retornar el resultado
         return {'settings': parse_result(resources)}
     except Exception as e:
-        raise Exception('Error al obtener los recursos')\
+        raise Exception('Error al obtener los recursos: ' + str(e))
         
 def update_option(name, data):
     options = mongodb.get_record('system', {'name': name})
@@ -50,6 +51,7 @@ def update_settings(settings, current_user):
         get_all_settings.cache_clear()
         get_default_cataloging_type.cache_clear()
         get_default_visible_type.cache_clear()
+        get_access_rights.cache_clear()
         # Llamar al servicio para obtener todos los ajustes del sistema
         return {'msg': 'Ajustes del sistema actualizados exitosamente'}, 200
     
@@ -89,6 +91,26 @@ def get_default_visible_type():
             
     except Exception as e:
         raise Exception('Error al obtener el tipo por defecto del modulo de catalogacion')
+    
+# Funcion para devolver los access rights
+@lru_cache(maxsize=32)
+def get_access_rights():
+    try:
+        # Obtener el registro access_rights de la colección system
+        access_rights = mongodb.get_record('system', {'name': 'access_rights'})
+        # Si el registro no existe, retornar error
+        if not access_rights:
+            raise Exception('No existe el registro access_rights')
+        
+        list_id = access_rights['data'][0]['value']
+
+        # Obtener el listado con list_id
+        list = get_by_id(list_id)
+
+        return list
+            
+    except Exception as e:
+        raise Exception('Error al obtener el registro access_rights')
 
 # Funcion para actualizar el registro resources-schema en la colección system
 def update_resources_schema(schema):
@@ -237,6 +259,8 @@ def validate_simple_date(value, field):
     
 def get_plugins():
     try:
+        # Obtener el registro active_plugins de la colección system
+        active_plugins = mongodb.get_record('system', {'name': 'active_plugins'})
         # Obtener la ruta de la carpeta plugins
         plugins_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../plugins')
         # Obtener todas las carpetas en la carpeta ../../plugins
@@ -247,6 +271,12 @@ def get_plugins():
             if os.path.isfile(f'{plugins_path}/{plugin}/__init__.py'):
                 plugin_module = importlib.import_module(f'app.plugins.{plugin}')
                 plugin_instance = plugin_module.plugin_info
+                plugin_instance['slug'] = plugin
+
+                if plugin in active_plugins['data']:
+                    plugin_instance['active'] = True
+                else:
+                    plugin_instance['active'] = False
 
                 resp.append(plugin_instance)
 
@@ -256,9 +286,21 @@ def get_plugins():
     except Exception as e:
         raise Exception(str(e))
     
-def install_plugin(body, current_user):
+def activate_plugin(body, current_user):
     try:
-        
+        # Obtener la ruta de la carpeta plugins
+        plugins_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../plugins')
+
+        temp = []
+
+        for p in body:
+            if os.path.isfile(f'{plugins_path}/{p}/__init__.py'):
+                temp.append(p)
+
+        update_dict = {'data': temp}
+        update_schema = OptionUpdate(**update_dict)
+        mongodb.update_record('system', {'name': 'active_plugins'}, update_schema)
+            
         # Retornar el resultado
         return {'msg': 'Plugins instalados exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200
     except Exception as e:

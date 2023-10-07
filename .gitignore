@@ -4,6 +4,8 @@ fix.py
 /uploads
 /webfiles
 
-/app/plugins/**/*
+# everything in the plugins folder
+/app/plugins/*
+
 !/app/plugins/filesProcessing
 !/app/plugins/inventoryMaker

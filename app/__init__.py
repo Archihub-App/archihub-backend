@@ -6,6 +6,7 @@ from flask_cors import CORS
 from celery import Celery
 from celery import Task
 from flask import Flask
+from app.api.system.services import get_plugins
 
 def create_app(config_class=config['development']):
     app = Flask(__name__)
@@ -77,8 +78,6 @@ def create_app(config_class=config['development']):
     # Registrar system blueprint
     from app.api.system import bp as system_bp
     app.register_blueprint(system_bp, url_prefix='/system')
-
-    register_plugin(app, 'filesProcessing', 'filesprocessing')
 
     return app
 

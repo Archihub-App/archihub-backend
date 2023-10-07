@@ -122,9 +122,9 @@ def get_plugins():
 # POST para instalar un plugin
 @bp.route('/plugins', methods=['POST'])
 @jwt_required()
-def install_plugin():
+def activate_plugin():
     """
-    Instalar un plugin
+    Activar plugins
     ---
     security:
         - JWT: []
@@ -132,21 +132,48 @@ def install_plugin():
         - Ajustes del sistema
     responses:
         200:
-            description: Plugin instalado exitosamente
+            description: Plugins activados exitosamente
         401:
-            description: No tiene permisos para instalar un plugin
+            description: No tiene permisos para activar los plugins
         500:
-            description: Error al instalar un plugin
+            description: Error al activar los plugins
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para instalar un plugin'}, 401
+        return {'msg': 'No tiene permisos para activar los plugins'}, 401
     # Obtener el body de la request
     body = request.get_json()
     # Llamar al servicio para instalar un plugin
-    return services.install_plugin(body, current_user)
+    return services.activate_plugin(body, current_user)
+
+# GET para obtener el listado de access rights
+@bp.route('/access-rights', methods=['GET'])
+@jwt_required()
+def get_access_rights():
+    """
+    Obtener el listado de access rights
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Listado de access rights
+        401:
+            description: No tiene permisos para obtener el listado de access rights
+        500:
+            description: Error al obtener el listado de access rights
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para obtener el listado de access rights'}, 401
+    # Llamar al servicio para obtener el listado de access rights
+    return services.get_access_rights()
 
 
 # GET para probar las tasks de celery

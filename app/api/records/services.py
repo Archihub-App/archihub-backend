@@ -98,6 +98,18 @@ def get_total(obj):
         return total
     except Exception as e:
         raise Exception(str(e))
+    
+# Nuevos servicio para actualizar los campos displayName y accessRights de un record
+def update_record(record, current_user):
+    try:
+        update = {
+            'displayName': record['displayName'],
+            'accessRights': record['accessRights']
+        }
+
+        mongodb.update_record('records', {'_id': ObjectId(record['id'])}, update)
+    except Exception as e:
+        raise Exception(str(e))
 
 # Nuevo servicio para borrar un parent de un record
 def delete_parent(resource_id, parent_id, current_user):

@@ -194,8 +194,11 @@ def update_by_id(id):
 
     files = request.files.getlist('files')
 
+
+    # print(data['updatedFiles'])
     # Llamar al servicio para crear el recurso
     return services.update_by_id(id, data, current_user, files)
+    # return 'ok'
 
 # Nuevo endpoint para eliminar un recurso por su id
 @bp.route('/<id>', methods=['DELETE'])

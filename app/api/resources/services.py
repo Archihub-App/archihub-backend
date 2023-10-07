@@ -20,6 +20,7 @@ from app.api.system.services import validate_author_array
 from app.api.lists.services import get_option_by_id
 from app.api.records.services import delete_parent
 from app.api.records.services import update_parent
+from app.api.records.services import update_record
 from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
 import os
@@ -334,7 +335,7 @@ def get_resource_records(ids):
     for i in range(len(ids)):
         ids[i] = ObjectId(ids[i])
     try:
-        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}))
+        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}, fields={'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1}))
         return r_
     except Exception as e:
         print(str(e))
@@ -386,6 +387,7 @@ def update_by_id(id, body, user, files):
                 temp.append(f)
 
         body['files'] = temp
+
         # Crear instancia de ResourceUpdate con el body del request
         resource = ResourceUpdate(**body)
 
@@ -399,6 +401,7 @@ def update_by_id(id, body, user, files):
         records = create_record(id, user, files)
 
         delete_records(body['deletedFiles'], id, user)
+        update_records(body['updatedFiles'], id, user)
 
         update = {
             'files': [*body['files'], *records]
@@ -655,6 +658,13 @@ def delete_records(list, resource_id, user):
     try:
         for l in list:
             delete_parent(resource_id, l, user)
+    except Exception as e:
+        raise Exception(str(e))
+    
+def update_records(list, user):
+    try:
+        for l in list:
+            update_record(l, user)
     except Exception as e:
         raise Exception(str(e))
 
