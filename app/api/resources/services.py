@@ -24,8 +24,8 @@ from app.api.records.services import update_record
 from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
 import os
-
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
+
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):

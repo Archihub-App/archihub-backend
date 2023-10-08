@@ -10,6 +10,8 @@ from app.api.logs.services import register_log
 from app.tasks.tasks import add
 from celery.result import AsyncResult
 
+from flask import current_app as app
+
 # En este archivo se registran las rutas de la API para los ajustes del sistema
 
 # GET para obtener todos los ajustes del sistema
@@ -192,11 +194,45 @@ def test_celery():
             description: Error al ejecutar la task
     """
     # Llamar al servicio para probar las tasks de celery
-    task = add.delay(1, 2)
+    task = add.delay("d9f7860cd4b6")
     print(task.id)
 
     return "ok"
 
+
+@bp.route('/test-celery-result', methods=['GET'])
+
+def test_celery_result_all():
+    """
+    Probar las tasks de celery
+    ---
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Task ejecutada exitosamente
+        500:
+            description: Error al ejecutar la task
+    """
+    # Llamar al servicio para probar las tasks de celery
+    i = app.celery_app.control.inspect()
+
+    # Inspeccionar las tasks activas y limitar a 10
+    active = i.active()[:10]
+    # Inspeccionar las tasks reservadas y limitar a 10
+    reserved = i.reserved()[:10]
+    # Inspeccionar las tasks completadas y limitar a 10
+    completed = i.completed()[:10]
+    # Inspeccionar las tasks fallidas y limitar a 10
+    failed = i.failed()[:10]
+
+    # Retornar el resultado
+    return {
+        "active": active,
+        "reserved": reserved,
+        "completed": completed,
+        "failed": failed,
+    }
 
 @bp.route('/test-celery-result/<id>', methods=['GET'])
 

@@ -97,6 +97,11 @@ def celery_init_app(app: Flask) -> Celery:
 
     celery_app = Celery(app.name, task_cls=FlaskTask)
     celery_app.config_from_object(app.config["CELERY"])
+    celery_app.conf.update(
+        CELERYD_CONCURRENCY=1,
+        CELERYD_PREFETCH_MULTIPLIER=1,
+        CELERY_ACKS_LATE=True
+    )
     celery_app.set_default()
     app.extensions["celery"] = celery_app
     return celery_app
@@ -104,7 +109,7 @@ def celery_init_app(app: Flask) -> Celery:
 
 app = create_app()
 celery_app = celery_init_app(app)
-
+app.celery_app = celery_app
 
 if __name__ == '__main__':
     app.run()
