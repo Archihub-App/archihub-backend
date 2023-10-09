@@ -35,6 +35,13 @@ def get_all():
 def create(body, user):
     # Crear instancia de List con el body del request
     try:
+        temp = []
+        for option in body['options']:
+            option = Option(**option)
+            resp = mongodb.insert_record('options', option)
+            temp.append(str(resp.inserted_id))
+        
+        body['options'] = temp
         lista = List(**body)
         # Insertar el estándar de metadatos en la base de datos
         new_list = mongodb.insert_record('lists', lista)
@@ -49,6 +56,36 @@ def create(body, user):
         # Retornar el resultado
         return {'msg': 'Listado creado exitosamente'}, 201
     
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+# Nuevo servicio para obtener un listado por su slug
+@lru_cache(maxsize=100)
+def get_by_slug(slug):
+    try:
+        # Buscar el listado en la base de datos
+        lista = mongodb.get_record('lists', {'slug': slug})
+        # a lista solo le dejamos los campos name, description, slug y options
+        lista = { 'name': lista['name'], 'description': lista['description'], 'options': lista['options'] }
+        # Si el listado no existe, retornar error
+        if not lista:
+            return {'msg': 'Listado no existe'}
+        
+        opts = []
+
+        records = mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(id) for id in lista['options']]}}, [('term', 1)])
+        
+        # opts es igual a un arreglo de diccionarios con los campos id y term
+        for record in records:
+            opts.append({'id': str(record['_id']), 'term': record['term']})
+
+        # agregamos los campos al listado
+        lista['options'] = opts
+        # Parsear el resultado
+        lista = parse_result(lista)
+
+        # Retornar el resultado
+        return lista
     except Exception as e:
         return {'msg': str(e)}, 500
 

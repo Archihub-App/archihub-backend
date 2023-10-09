@@ -75,41 +75,17 @@ def create():
     """
     # Obtener el body de la request
     body = request.json
+
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
-    # si el slug no está definido, crearlo
-    if 'slug' not in body or body['slug'] == '':
-        body['slug'] = body['name'].lower().replace(' ', '-')
-        # quitamos los caracteres especiales y las tildes pero dejamos los guiones
-        body['slug'] = ''.join(e for e in body['slug'] if e.isalnum() or e == '-')
-        # quitamos los guiones al inicio y al final
-        body['slug'] = body['slug'].strip('-')
-        # quitamos los guiones repetidos
-        body['slug'] = body['slug'].replace('--', '-')
-
-        # llamamos al servicio para verificar si el slug ya existe
-        slug_exists = services.get_by_slug(body['slug'])
-        # Mientras el slug exista, agregar un número al final
-        index = 1
-        while 'msg' not in slug_exists:
-            body['slug'] = body['slug'] + '-' + index
-            slug_exists = services.get_by_slug(body['slug'])
-            index += 1
-            
-        # Llamar al servicio para crear un listado
-        return services.create(body, current_user)
-    else:
-        slug_exists = services.get_by_slug(body['slug'])
-        # si el service.get_by_slug devuelve un error, entonces el listado no existe
-        if 'msg' in slug_exists:
-            if slug_exists['msg'] == 'Listado no existe':
-                # Llamar al servicio para crear un listado
-                return services.create(body, current_user)
-        else:
-            return {'msg': 'El slug ya existe'}, 400
+    
+    # Llamar al servicio para crear un listado nuevo
+    return services.create(body, current_user)
+    
+    return 'ok'
 
 # Nuevo endpoint para devolver un estándar por su slug
 @bp.route('/<id>', methods=['GET'])
@@ -208,7 +184,6 @@ def update_by_id(id):
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 400
-    print("hola")
     # Llamar al servicio para actualizar el estándar por su slug
     return services.update_by_id(id, body, current_user)
 

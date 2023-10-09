@@ -217,22 +217,10 @@ def test_celery_result_all():
     # Llamar al servicio para probar las tasks de celery
     i = app.celery_app.control.inspect()
 
-    # Inspeccionar las tasks activas y limitar a 10
-    active = i.active()[:10]
-    # Inspeccionar las tasks reservadas y limitar a 10
-    reserved = i.reserved()[:10]
-    # Inspeccionar las tasks completadas y limitar a 10
-    completed = i.completed()[:10]
-    # Inspeccionar las tasks fallidas y limitar a 10
-    failed = i.failed()[:10]
+    # Inspeccionar las tasks activas en los workers
+    active = i.active()
 
-    # Retornar el resultado
-    return {
-        "active": active,
-        "reserved": reserved,
-        "completed": completed,
-        "failed": failed,
-    }
+    return 'ok'
 
 @bp.route('/test-celery-result/<id>', methods=['GET'])
 
