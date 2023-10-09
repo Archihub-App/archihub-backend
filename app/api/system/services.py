@@ -53,6 +53,7 @@ def update_settings(settings, current_user):
         get_default_cataloging_type.cache_clear()
         get_default_visible_type.cache_clear()
         get_access_rights.cache_clear()
+        get_roles.cache_clear()
         # Llamar al servicio para obtener todos los ajustes del sistema
         return {'msg': 'Ajustes del sistema actualizados exitosamente'}, 200
     
@@ -94,38 +95,47 @@ def get_default_visible_type():
         raise Exception('Error al obtener el tipo por defecto del modulo de catalogacion')
     
 # Funcion para devolver los access rights
-@lru_cache(maxsize=32)
 def get_access_rights():
     try:
         # Obtener el registro access_rights de la colección system
         access_rights = mongodb.get_record('system', {'name': 'access_rights'})
         # Si el registro no existe, retornar error
         if not access_rights:
-            raise Exception('No existe el registro access_rights')
+            return {'msg': 'No existe el registro access_rights'}, 404
         
         list_id = access_rights['data'][0]['value']
 
         # Obtener el listado con list_id
         list = get_by_id(list_id)
 
-        return list
+        return list, 200
             
     except Exception as e:
         raise Exception('Error al obtener el registro access_rights')
     
 # Funcion para devolver los roles
-@lru_cache(maxsize=32)
 def get_roles():
     try:
         # Obtener el registro access_rights de la colección system
         access_rights = mongodb.get_record('system', {'name': 'access_rights'})
         # Si el registro no existe, retornar error
         if not access_rights:
-            raise Exception('No existe el registro access_rights')
+            return {'msg': 'No existe el registro access_rights'}, 404
         
         roles = access_rights['data'][1]['value']
 
-        return roles
+        # Obtener el listado con roles
+        list = get_by_id(roles)
+
+        # clonar list en una variable temporal
+        temp = [*list['options']]
+        # Agregar admin y editor a la lista
+        temp.append({'id': 'admin', 'term': 'admin'})
+        temp.append({'id': 'editor', 'term': 'editor'})
+
+        return {
+            'options': temp
+        }, 200
             
     except Exception as e:
         raise Exception('Error al obtener el registro access_rights')
@@ -204,7 +214,8 @@ def validate_text_array(value, field):
         return value
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
-    
+
+# Funcion para validar un valor de tipo autor
 def validate_author_array(value, field):
     try:
         label = field['label']
@@ -261,7 +272,8 @@ def validate_text_regex(value, field):
     except Exception as e:
         print(str(e))
         raise Exception(f'Error al validar el campo {label}')
-    
+
+# Funcion para validar un valor de fecha
 def validate_simple_date(value, field):
     try:
         label = field['label']

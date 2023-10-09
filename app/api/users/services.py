@@ -9,6 +9,8 @@ from flask_jwt_extended import create_access_token
 from cryptography.fernet import Fernet
 from functools import lru_cache
 from bson.objectid import ObjectId
+from app.api.lists.services import get_by_id as get_list_by_id
+
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -25,8 +27,10 @@ def get_by_id(id):
         # Si el usuario no existe, retornar error
         if not user:
             return {'msg': 'Recurso no existe'}, 404
+        
+        user['_id'] = str(user['_id'])
         # Retornar el resultado
-        return parse_result(user), 200
+        return user, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -37,16 +41,31 @@ def get_all(body, current_user):
         users = list(mongodb.get_all_records(
             'users', body['filters'], limit=20, skip=body['page'] * 20, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0}))
         
-        if not users:
-            return {'msg': 'Recurso no existe'}, 404
-        
         total = get_total(json.dumps(body['filters']))
 
+        rights = get_access_rights()['options']
+        roles = get_roles()['options']
 
         for r in users:
             r['id'] = str(r['_id'])
             r.pop('_id')
             r['total'] = total
+
+            rights_temp = []
+            for right in r['accessRights']:
+                _ = next((item for item in rights if item["id"] == right), None)
+                if _:
+                    rights_temp.append(_['term'])
+
+            roles_temp = []
+            for role in r['roles']:
+                _ = next((item for item in roles if item["id"] == role), None)
+                if _:
+                    roles_temp.append(_['term'])
+            
+            r['accessRights'] = rights_temp
+            r['roles'] = roles_temp
+
         # Retornar el resultado
         return parse_result(users), 200
     
@@ -66,6 +85,45 @@ def get_total(obj):
     except Exception as e:
         raise Exception(str(e))
 
+# Nuevo servicio para actualizar un usuario
+def update_user(body, current_user):
+    try:
+        print(body)
+        # Buscar el usuario en la base de datos
+        user = mongodb.get_record('users', {'_id': ObjectId(body['_id'])})
+        # Si el usuario no existe, retornar error
+        if not user:
+            return {'msg': 'Usuario no existe'}, 404
+        
+        if user['username'] != body['username']:
+            return {'msg': 'Error con la equivalencia del usuario'}, 400
+        
+        roles = get_roles()['options']
+        rights = get_access_rights()['options']
+
+        for role in body['roles']:
+            if role['id'] not in [r['id'] for r in roles]:
+                return {'msg': 'Rol no existe'}, 400
+            
+        for right in body['accessRights']:
+            if right['id'] not in [r['id'] for r in rights]:
+                return {'msg': 'Permiso no existe'}, 400
+            
+        body['roles'] = [role['id'] for role in body['roles']]
+        body['accessRights'] = [right['id'] for right in body['accessRights']]
+
+        # Crear instancia de UserUpdate con el body del request
+        user_update = UserUpdate(**body)
+
+        # Actualizar usuario en la base de datos
+        mongodb.update_record('users', {'_id': ObjectId(body['_id'])}, user_update)
+
+        
+        # Retornar mensaje de éxito
+        return {'msg': 'Usuario actualizado exitosamente'}, 400
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 # Nuevo servicio para registrar un usuario
 def register_user(username, password):
     # Verificar si el usuario ya existe
@@ -81,15 +139,6 @@ def register_user(username, password):
     mongodb.insert_record('users', user_new)
     # Retornar mensaje de éxito
     return jsonify({'msg': 'Usuario registrado exitosamente'}), 200
-
-# Nuevo servicio para actualizar un usuario
-def update_user(username, password):
-    # Encriptar contraseña
-    password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    # Actualizar usuario en la base de datos
-    mongodb.update_record('users', {'username': username}, {'password': password})
-    # Retornar mensaje de éxito
-    return jsonify({'msg': 'Usuario actualizado exitosamente'}), 200
 
 # Nuevo servicio para buscar un usuario por su username
 def get_user(username):
@@ -165,3 +214,46 @@ def get_token(username):
         return jsonify({'msg': 'Usuario no tiene token de acceso'}), 400
     # Retornar el token de acceso
     return jsonify({'access_token': user['access_token']}), 200
+
+def get_access_rights():
+    try:
+        # Obtener el registro access_rights de la colección system
+        access_rights = mongodb.get_record('system', {'name': 'access_rights'})
+        # Si el registro no existe, retornar error
+        if not access_rights:
+            raise Exception('No existe el registro access_rights')
+        
+        list_id = access_rights['data'][0]['value']
+
+        # Obtener el listado con list_id
+        list = get_list_by_id(list_id)
+
+        return list
+            
+    except Exception as e:
+        raise Exception('Error al obtener el registro access_rights')
+    
+def get_roles():
+    try:
+        # Obtener el registro access_rights de la colección system
+        access_rights = mongodb.get_record('system', {'name': 'access_rights'})
+        # Si el registro no existe, retornar error
+        if not access_rights:
+            raise Exception('No existe el registro access_rights')
+        
+        roles = access_rights['data'][1]['value']
+
+        # Obtener el listado con roles
+        list = get_list_by_id(roles)
+
+        temp = [*list['options']]
+        # Agregar admin y editor a la lista
+        temp.append({'id': 'admin', 'term': 'admin'})
+        temp.append({'id': 'editor', 'term': 'editor'})
+
+        return {
+            'options': temp
+        }
+            
+    except Exception as e:
+        raise Exception('Error al obtener el registro access_rights: ' + str(e))

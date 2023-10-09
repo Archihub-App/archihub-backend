@@ -89,13 +89,13 @@ def get_by_slug(slug):
     except Exception as e:
         return {'msg': str(e)}, 500
 
-# Nuevo servicio para devolver un listado por su slug
+# Nuevo servicio para devolver un listado por su id
 @lru_cache(maxsize=100)
 def get_by_id(id):
     try:
         # Buscar el listado en la base de datos
         lista = mongodb.get_record('lists', {'_id': ObjectId(id)})
-        # a lista solo le dejamos los campos name, description, slug y options
+        # a lista solo le dejamos los campos name, description, y options
         lista = { 'name': lista['name'], 'description': lista['description'], 'options': lista['options'] }
         # Si el listado no existe, retornar error
         if not lista:

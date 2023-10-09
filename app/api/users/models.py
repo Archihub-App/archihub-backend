@@ -6,14 +6,15 @@ from pydantic import BaseModel, Field
 class User(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
     name: str
+    username: str
     email: str
     password: str
-    accessLevel: str = "Public"
     compromise: bool = False
     photo: str = None
     token: str = ""
     adminToken: str = ""
     roles: list[str] = None
+    accessRights: list[str] = None
 
     class Config:
         allow_population_by_field_name = True
@@ -29,10 +30,10 @@ class UserUpdate(BaseModel):
     name: Optional[str]
     email: Optional[str]
     password: Optional[str]
-    accessLevel: Optional[str]
     compromise: Optional[bool]
     photo: Optional[str] = None
     roles: Optional[list[str]] = None
+    accessRights: Optional[list[str]] = None
     token: Optional[str] = None
     adminToken: Optional[str] = None
 

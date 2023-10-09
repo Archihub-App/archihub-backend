@@ -92,29 +92,28 @@ def update():
           schema:
             type: object
             properties:
-                username:
-                    type: string
-                password:
+                id:
                     type: string
             required:
-                - username
-                - password
+                - id
     responses:
         200:
             description: Usuario actualizado exitosamente
         400:
             description: Usuario no existe
+        401:
+            description: No tienes permisos para realizar esta acción
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
-    # Obtener username y password del request
-    username = request.json.get('username')
-    password = request.json.get('password')
+    
+    body = request.json
+
     # Llamar al servicio para actualizar el usuario
-    return services.update_user(username, password)
+    return services.update_user(body, current_user)
 
 # Nuevo endpoint para obtener el compromise de un usuario. Este compromise es el que el usuario acepta al iniciar sesión
 @bp.route('/compromise', methods=['GET'])
