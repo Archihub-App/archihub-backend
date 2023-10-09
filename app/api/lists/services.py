@@ -40,7 +40,7 @@ def create(body, user):
             option = Option(**option)
             resp = mongodb.insert_record('options', option)
             temp.append(str(resp.inserted_id))
-        
+
         body['options'] = temp
         lista = List(**body)
         # Insertar el estándar de metadatos en la base de datos
@@ -48,7 +48,7 @@ def create(body, user):
         # Registrar el log
         register_log(user, log_actions['list_create'], {'list': {
             'name': lista.name,
-            'slug': lista.slug,
+            'id': str(new_list.inserted_id),
         }})
         # Limpiar la cache
         get_by_id.cache_clear()
@@ -154,7 +154,6 @@ def update_by_id(id, body, user):
             for x in range(0, len(body['options'])):
                 option = body['options'][x]
                 if 'deleted' in option:
-                    print(option)
                     if option['deleted'] == True:
                         to_delete.append(x)
                         continue
@@ -175,8 +174,6 @@ def update_by_id(id, body, user):
             list_update = ListUpdate(**body)
 
             resp = mongodb.update_record('lists', {'_id': ObjectId(id)}, list_update)
-            print('Matched count:', resp.matched_count)
-            print('Modified count:', resp.modified_count)
             # Registrar el log
             register_log(user, log_actions['list_update'], {'list': body})
             # Limpiar la cache

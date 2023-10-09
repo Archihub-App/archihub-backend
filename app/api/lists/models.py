@@ -6,7 +6,6 @@ from pydantic import BaseModel, Field
 class List(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
     name: str
-    slug: str
     description: str
     options: list[str]
 

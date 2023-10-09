@@ -84,8 +84,6 @@ def create():
     
     # Llamar al servicio para crear un listado nuevo
     return services.create(body, current_user)
-    
-    return 'ok'
 
 # Nuevo endpoint para devolver un estándar por su slug
 @bp.route('/<id>', methods=['GET'])
@@ -188,9 +186,9 @@ def update_by_id(id):
     return services.update_by_id(id, body, current_user)
 
 # Nuevo endpoint para eliminar un listado por su slug
-@bp.route('/<slug>', methods=['DELETE'])
+@bp.route('/<id>', methods=['DELETE'])
 @jwt_required()
-def delete_by_slug(slug):
+def delete_by_id(id):
     """
     Eliminar un listado por su slug
     ---
@@ -220,4 +218,4 @@ def delete_by_slug(slug):
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para eliminar el listado por su slug
-    return services.delete_by_slug(slug, current_user)
+    return services.delete_by_id(id, current_user)
