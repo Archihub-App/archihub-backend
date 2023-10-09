@@ -8,6 +8,7 @@ from datetime import timedelta
 from flask_jwt_extended import create_access_token
 from cryptography.fernet import Fernet
 from functools import lru_cache
+from bson.objectid import ObjectId
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 
@@ -15,12 +16,26 @@ mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
+# Nueva funcion para devolver el usuario por su id
+def get_by_id(id):
+    try:
+        # Obtener el usuario de la coleccion users
+        user = mongodb.get_record('users', {'_id': ObjectId(id)}, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0})
+
+        # Si el usuario no existe, retornar error
+        if not user:
+            return {'msg': 'Recurso no existe'}, 404
+        # Retornar el resultado
+        return parse_result(user), 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 # Nuevo servicio para obtener todos los usuarios con filtros
 def get_all(body, current_user):
     try:
         # Obtener todos los usuarios de la coleccion users
         users = list(mongodb.get_all_records(
-            'users', body['filters'], limit=20, skip=body['page'] * 20))
+            'users', body['filters'], limit=20, skip=body['page'] * 20, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0}))
         
         if not users:
             return {'msg': 'Recurso no existe'}, 404

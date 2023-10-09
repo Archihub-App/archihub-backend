@@ -22,8 +22,8 @@ class DatabaseHandler:
             return self.mydb[collection].find(filters, fields).limit(limit).skip(skip)
     
     # Esta función sirve para obtener un registro de una colección
-    def get_record(self, collection, filters={}):
-        return self.mydb[collection].find_one(filters)
+    def get_record(self, collection, filters={}, fields={}):
+        return self.mydb[collection].find_one(filters, fields)
     
     # Esta función sirve para actualizar un registro de una colección dado un filtro y un modelo de actualización. El modelo de actualización debe ser un pydantic model
     def update_record(self, collection, filters, update_model):

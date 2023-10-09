@@ -69,6 +69,7 @@ def update():
     body = request.get_json()
 
     print(body)
+
     # Llamar al servicio para actualizar los ajustes del sistema
     return services.update_settings(body, current_user)
 
@@ -176,6 +177,33 @@ def get_access_rights():
         return {'msg': 'No tiene permisos para obtener el listado de access rights'}, 401
     # Llamar al servicio para obtener el listado de access rights
     return services.get_access_rights()
+
+# GET para obterner el listado de roles
+@bp.route('/roles', methods=['GET'])
+@jwt_required()
+def get_roles():
+    """
+    Obtener el listado de roles
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Listado de roles
+        401:
+            description: No tiene permisos para obtener el listado de roles
+        500:
+            description: Error al obtener el listado de roles
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para obtener el listado de roles'}, 401
+    # Llamar al servicio para obtener el listado de roles
+    return services.get_roles()
 
 
 # GET para probar las tasks de celery

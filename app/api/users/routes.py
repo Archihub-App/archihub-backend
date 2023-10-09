@@ -7,6 +7,33 @@ from flask_jwt_extended import get_jwt_identity
 
 # En este archivo se registran las rutas de la API para los usuarios
 
+# Nuevo endpoint para obtener un usuario por id
+@bp.route('/<id>', methods=['GET'])
+@jwt_required()
+def get_by_id(id):
+    """
+    Obtener un usuario por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    responses:
+        200:
+            description: Usuario obtenido exitosamente
+        400:
+            description: Usuario no existe
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Llamar al servicio para obtener el usuario
+    return services.get_by_id(id)
+
 # Nuevo endpoint para registrar un usuario
 @bp.route('/register', methods=['POST'])
 @jwt_required()

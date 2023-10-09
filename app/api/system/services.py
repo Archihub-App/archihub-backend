@@ -42,6 +42,7 @@ def update_settings(settings, current_user):
     try:
         update_option('post_types_settings', settings)
         update_option('access_rights', settings)
+        update_option('api_activation', settings)
 
         # Registrar log
         register_log(current_user, log_actions['system_update'], {
@@ -108,6 +109,23 @@ def get_access_rights():
         list = get_by_id(list_id)
 
         return list
+            
+    except Exception as e:
+        raise Exception('Error al obtener el registro access_rights')
+    
+# Funcion para devolver los roles
+@lru_cache(maxsize=32)
+def get_roles():
+    try:
+        # Obtener el registro access_rights de la colección system
+        access_rights = mongodb.get_record('system', {'name': 'access_rights'})
+        # Si el registro no existe, retornar error
+        if not access_rights:
+            raise Exception('No existe el registro access_rights')
+        
+        roles = access_rights['data'][1]['value']
+
+        return roles
             
     except Exception as e:
         raise Exception('Error al obtener el registro access_rights')
