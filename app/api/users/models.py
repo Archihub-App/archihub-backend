@@ -7,7 +7,6 @@ class User(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
     name: str
     username: str
-    email: str
     password: str
     compromise: bool = False
     photo: str = None
@@ -28,7 +27,6 @@ class User(BaseModel):
 # Modelo para la actualización de usuarios
 class UserUpdate(BaseModel):
     name: Optional[str]
-    email: Optional[str]
     password: Optional[str]
     compromise: Optional[bool]
     photo: Optional[str] = None

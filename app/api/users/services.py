@@ -10,6 +10,7 @@ from cryptography.fernet import Fernet
 from functools import lru_cache
 from bson.objectid import ObjectId
 from app.api.lists.services import get_by_id as get_list_by_id
+import re
 
 
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
@@ -120,25 +121,99 @@ def update_user(body, current_user):
 
         
         # Retornar mensaje de éxito
-        return {'msg': 'Usuario actualizado exitosamente'}, 400
+        return {'msg': 'Usuario actualizado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para registrar un usuario
-def register_user(username, password):
-    # Verificar si el usuario ya existe
-    user = mongodb.get_record('users', {'username': username})
-    # Si el usuario ya existe, retornar error
-    if user:
-        return jsonify({'msg': 'Usuario ya existe'}), 400
-    # Encriptar contraseña
-    password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    # Crear instancia de User con el username y la contraseña encriptada
-    user_new = User(username=username, password=password)
-    # Insertar usuario en la base de datos
-    mongodb.insert_record('users', user_new)
-    # Retornar mensaje de éxito
-    return jsonify({'msg': 'Usuario registrado exitosamente'}), 200
+def register_user(body, user):
+    try:
+        # Verificar si el usuario ya existe
+        user = mongodb.get_record('users', {'username': body['username']})
+        # Si el usuario ya existe, retornar error
+        if user:
+            return jsonify({'msg': 'Usuario ya existe'}), 400
+        
+        password = body['password']
+       
+        roles = get_roles()['options']
+        rights = get_access_rights()['options']
+
+        for role in body['roles']:
+            if role['id'] not in [r['id'] for r in roles]:
+                return {'msg': 'Rol no existe'}, 400
+            
+        for right in body['accessRights']:
+            if right['id'] not in [r['id'] for r in rights]:
+                return {'msg': 'Permiso no existe'}, 400
+            
+        body['roles'] = [role['id'] for role in body['roles']]
+        body['accessRights'] = [right['id'] for right in body['accessRights']]
+
+        errors = {}
+        validate_user_fields(body, errors)
+
+        if errors:
+            return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+
+        
+        # Encriptar contraseña
+        password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        body['password'] = password
+        # Crear instancia de User con el body del request
+        user = User(**body)
+
+        # Insertar usuario en la base de datos
+        mongodb.insert_record('users', user)
+    
+    
+        return jsonify({'msg': 'Usuario registrado exitosamente'}), 201
+
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500
+    
+# Funcion para validar los campos de un usuario
+def validate_user_fields(body, errors):
+    try:
+        value = body['name']
+        label = 'Nombre'
+        if not isinstance(value, str):
+            raise Exception(f'El campo {label} debe ser de tipo string')
+        # Si field.required entonces el valor no puede ser vacío o == ''
+        if value == '' or value == None:
+            raise Exception(f'El campo {label} es requerido')
+    except Exception as e:
+        errors['name'] = str(e)
+
+    try:
+        value = body['username']
+        label = 'Nombre'
+        if not isinstance(value, str):
+            raise Exception(f'El campo {label} debe ser de tipo string')
+        # Si field.required entonces el valor no puede ser vacío o == ''
+        if value == '' or value == None:
+            raise Exception(f'El campo {label} es requerido')
+    except Exception as e:
+        errors['username'] = str(e)
+
+    try:
+        value = body['username']
+        label = 'Email'
+        if not isinstance(value, str):
+            raise Exception(f'El campo {label} debe ser de tipo string')
+        # Si field.required entonces el valor no puede ser vacío o == ''
+        if value == '' or value == None:
+            raise Exception(f'El campo {label} es requerido')
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", value):
+            raise Exception(f'El campo {label} debe ser un email')
+    except Exception as e:
+        errors['username'] = str(e)
+
+    # validar si body['password'] es igual a body['confirmPassword']
+    if body['password'] != body['confirmPassword']:
+        errors['confirmPassword'] = 'Las contraseñas no coinciden'
+    
+    return errors
 
 # Nuevo servicio para buscar un usuario por su username
 def get_user(username):
@@ -250,6 +325,7 @@ def get_roles():
         # Agregar admin y editor a la lista
         temp.append({'id': 'admin', 'term': 'admin'})
         temp.append({'id': 'editor', 'term': 'editor'})
+        temp.append({'id': 'user', 'term': 'user'})
 
         return {
             'options': temp

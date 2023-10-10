@@ -131,6 +131,7 @@ def get_roles():
         temp = [*list['options']]
         # Agregar admin y editor a la lista
         temp.append({'id': 'admin', 'term': 'admin'})
+        temp.append({'id': 'user', 'term': 'user'})
         temp.append({'id': 'editor', 'term': 'editor'})
 
         return {
@@ -186,6 +187,23 @@ def validate_text(value, field):
         # Si field.required entonces el valor no puede ser vacío o == ''
         if field['required'] and (value == '' or value == None):
             raise Exception(f'El campo {label} es requerido')
+        return value
+    except Exception as e:
+        raise Exception(f'Error al validar el campo {label}')
+    
+# Funcion para validar el formato de una direccion de correo
+def validate_email(value, field):
+    try:
+        label = field['label']
+        # Si el valor no es de tipo string, retornar error
+        if not isinstance(value, str):
+            raise Exception(f'El campo {label} debe ser de tipo string')
+        # Si field.required entonces el valor no puede ser vacío o == ''
+        if field['required'] and (value == '' or value == None):
+            raise Exception(f'El campo {label} es requerido')
+        # Si el valor no es un email, retornar error
+        if not re.match(r"[^@]+@[^@]+\.[^@]+", value):
+            raise Exception(f'El campo {label} debe ser un email')
         return value
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')

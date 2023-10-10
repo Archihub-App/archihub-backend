@@ -69,11 +69,11 @@ def register():
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
-    # Obtener username y password del request
-    username = request.json.get('username')
-    password = request.json.get('password')
+    
+    body = request.json
+
     # Llamar al servicio para registrar el usuario
-    return services.register_user(username, password)
+    return services.register_user(body, current_user)
 
 # Nuevo endpoint para actualizar un usuario
 @bp.route('/update', methods=['PUT'])
@@ -142,7 +142,7 @@ def get_compromise():
     return user, 200
 
 # Nuevo endpoint para aceptar el compromise de un usuario
-@bp.route('/accept-compromise', methods=['POST'])
+@bp.route('/acceptcompromise', methods=['GET'])
 @jwt_required()
 def accept_compromise():
     """
