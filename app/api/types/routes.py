@@ -145,8 +145,8 @@ def get_by_slug(slug):
     """
     # se obtiene el usuario actual
     current_user = get_jwt_identity()
-    # se verifica si el usuario tiene el rol de administrador o catalogador_gestor
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'catalogador_gestor'):
+    # se verifica si el usuario tiene el rol de administrador o editor
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return {'msg': 'No tiene permisos para obtener un tipo de contenido'}, 401
     # Llamar al servicio para obtener un tipo de contenido por su slug
     slug_exists = services.get_by_slug(slug)
@@ -198,8 +198,8 @@ def update_by_slug(slug):
     """
     # se obtiene el usuario actual
     current_user = get_jwt_identity()
-    # se verifica si el usuario tiene el rol de administrador o catalogador_gestor
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'catalogador_gestor'):
+    # se verifica si el usuario tiene el rol de administrador o editor
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return {'msg': 'No tiene permisos para actualizar un tipo de contenido'}, 401
     # Obtener el body de la request
     body = request.json
@@ -232,8 +232,8 @@ def delete_by_slug(slug):
     """
     # se obtiene el usuario actual
     current_user = get_jwt_identity()
-    # se verifica si el usuario tiene el rol de administrador o catalogador_gestor
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'catalogador_gestor'):
+    # se verifica si el usuario tiene el rol de administrador o editor
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return {'msg': 'No tiene permisos para eliminar un tipo de contenido'}, 401
     # Llamar al servicio para eliminar un tipo de contenido por su slug
     return services.delete_by_slug(slug, current_user)

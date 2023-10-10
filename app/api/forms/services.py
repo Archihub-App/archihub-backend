@@ -104,6 +104,12 @@ def delete_by_slug(slug, user):
         # Si el formulario no existe, retornar error
         if not form:
             return {'msg': 'Formulario no existe'}, 404
+        # verificar que no existan tipos de post que usen el formulario
+        post_types = list(mongodb.get_all_records('post_types', {'metadata': slug}))
+
+        if(len(post_types) > 0):
+            return {'msg': 'No se puede eliminar el formulario porque existen tipos de post que lo usan'}, 400
+        
         # Eliminar el formulario de la base de datos
         mongodb.delete_record('forms', {'slug': slug})
         # Registrar el log
@@ -115,7 +121,7 @@ def delete_by_slug(slug, user):
         get_all.cache_clear()
         get_by_slug.cache_clear()
         # Retornar el resultado
-        return {'msg': 'Formulario eliminado exitosamente'}, 200
+        return {'msg': 'Formulario eliminado exitosamente'}, 204
     except Exception as e:
         return {'msg': str(e)}, 500
     

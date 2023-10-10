@@ -41,6 +41,10 @@ class DatabaseHandler:
     def delete_record(self, collection, filters):
         return self.mydb[collection].delete_one(filters)
     
+    # Esta funcion sirve para eliminar varios registros de una colección
+    def delete_records(self, collection, filters):
+        return self.mydb[collection].delete_many(filters)
+    
     # Esta función sirve para hacer un distinct en una colección
     def distinct(self, collection, field, filters={}):
         return self.mydb[collection].distinct(field, filters)

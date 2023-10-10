@@ -112,6 +112,8 @@ def delete_by_slug(slug, user):
         return {'msg': 'Tipo de post no existe'}, 404
     # Eliminar el tipo de post
     mongodb.delete_record('post_types', {'slug': slug})
+    # Eliminar todos los recursos del tipo de post
+    mongodb.delete_records('resources', {'post_type': slug})
     # Registrar el log
     register_log(user, log_actions['type_delete'], {'post_type': {
         'name': post_type['name'],
@@ -121,7 +123,7 @@ def delete_by_slug(slug, user):
     get_all.cache_clear()
     get_by_slug.cache_clear()
     # Retornar el resultado
-    return {'msg': 'Tipo de post eliminado exitosamente'}, 200
+    return {'msg': 'Tipo de post eliminado exitosamente'}, 204
 
 # Funcion que devuelve recursivamente los padres de un tipo de post
 def get_parents(post_type, first = True):
