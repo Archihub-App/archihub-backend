@@ -150,7 +150,7 @@ def validate_fields(body, metadata, errors):
                             validate_text(get_value_by_path(body, field['destiny']), field)
                         elif field['required']:
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'textarea':
+                    if field['type'] == 'text-area':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text(get_value_by_path(body, field['destiny']), field)
