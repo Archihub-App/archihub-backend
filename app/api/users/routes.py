@@ -161,6 +161,8 @@ def accept_compromise():
     current_user = get_jwt_identity()
     # Llamar al servicio para obtener el compromise del usuario
     user = services.get_user(current_user)
+    # quitar el campo password del usuario
+    user.pop('password')
     if not user:
         return jsonify({'msg': 'Usuario no existe'}), 400
     # Llamar al servicio para aceptar el compromise del usuario
@@ -330,3 +332,26 @@ def get_all():
     body = request.json
     # Llamar al servicio para obtener los usuarios
     return services.get_all(body, current_user)
+
+# Nuevo endpoint para obtener la cantidad de requests por usuario y el lastRequest
+@bp.route('/requests', methods=['GET'])
+@jwt_required()
+def get_requests():
+    """
+    Obtener la cantidad de requests por usuario y el lastRequest
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    responses:
+        200:
+            description: Requests obtenidos exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    
+    # Llamar al servicio para obtener los requests
+    return services.get_requests(current_user)

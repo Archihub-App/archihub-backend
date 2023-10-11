@@ -268,7 +268,7 @@ def validate_user_fields(body, errors):
 
 # Nuevo servicio para buscar un usuario por su username
 def get_user(username):
-    user = mongodb.get_record('users', {'username': username})
+    user = mongodb.get_record('users', {'username': username}, fields={'status': 0, 'photo': 0, 'requests': 0, 'lastRequest': 0})
     # retornar el resultado
     if not user:
         return None
@@ -406,11 +406,17 @@ def get_requests(username):
             # Si no existe lastRequest, establecer el valor de requests a 1
             user['requests'] = 0
             user['lastRequest'] = datetime.datetime.now()
+            user_update = UserUpdate(requests=user['requests'], lastRequest=user['lastRequest'])
+            # Actualizar el usuario
+            mongodb.update_record('users', {'username': username}, update_model=user_update)
         elif not isinstance(user['lastRequest'], datetime.datetime) or not is_date_in_current_week(user['lastRequest']):
             # Si no es una fecha o no es de la semana actual, establecer el valor de requests a 1
             user['requests'] = 0
             user['lastRequest'] = datetime.datetime.now()
-        
+            user_update = UserUpdate(requests=user['requests'], lastRequest=user['lastRequest'])
+            # Actualizar el usuario
+            mongodb.update_record('users', {'username': username}, update_model=user_update)
+
         # Retornar el resultado
         return user
     except Exception as e:

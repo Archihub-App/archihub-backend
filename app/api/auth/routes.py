@@ -36,7 +36,7 @@ def login():
         401:
             description: Usuario o contraseña inválidos
     """
-    
+    print(request.json)
     # Obtener username y password del request
     username = request.json.get('username')
     password = request.json.get('password')
