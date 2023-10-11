@@ -11,9 +11,13 @@ from functools import lru_cache
 from bson.objectid import ObjectId
 from app.api.lists.services import get_by_id as get_list_by_id
 import re
+from config import config
+import os
+import datetime
 
-
+fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
 mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
+fernet = Fernet(fernet_key)
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
@@ -34,6 +38,54 @@ def get_by_id(id):
         return user, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+# Nuevo servicio para obtener un usuario por su username
+def get_by_username(username):
+    try:
+        # Obtener el usuario de la coleccion users
+        user = mongodb.get_record('users', {'username': username}, fields={'token': 1, 'adminToken': 1, 'requests': 1, 'lastRequest': 1})
+
+        # Si el usuario no existe, retornar error
+        if not user:
+            return {'msg': 'Recurso no existe'}
+        
+        user['_id'] = str(user['_id'])
+        # Retornar el resultado
+        return user
+    except Exception as e:
+        raise Exception(str(e))
+    
+# Nuevo servicio para agregar una request y la fecha de la request
+def add_request(username):
+    try:
+        # Obtener el usuario de la coleccion users
+        user = mongodb.get_record('users', {'username': username}, fields={'requests': 1, 'lastRequest': 1})
+
+        # Si el usuario no existe, retornar error
+        if not user:
+            return {'msg': 'Usuario no existe'}
+        
+        # Verificar que lastRequest sea una fecha y que sea de la semana actual
+        if not 'lastRequest' in user:
+            # Si no existe lastRequest, establecer el valor de requests a 1
+            user['requests'] = 1
+            user['lastRequest'] = datetime.datetime.now()
+        elif not isinstance(user['lastRequest'], datetime.datetime) or not is_date_in_current_week(user['lastRequest']):
+            # Si no es una fecha o no es de la semana actual, establecer el valor de requests a 1
+            user['requests'] = 1
+            user['lastRequest'] = datetime.datetime.now()
+        elif user['requests'] < 2000 and is_date_in_current_week(user['lastRequest']):
+            user['requests'] += 1
+            user['lastRequest'] = datetime.datetime.now()
+        else:
+            raise Exception('Límite de requests excedido')
+        
+        user_update = UserUpdate(requests=user['requests'], lastRequest=user['lastRequest'])
+        # Actualizar el usuario
+        mongodb.update_record('users', {'username': username}, update_model=user_update)
+
+    except Exception as e:
+        raise Exception(str(e))
 
 # Nuevo servicio para obtener todos los usuarios con filtros
 def get_all(body, current_user):
@@ -115,7 +167,6 @@ def update_user(body, current_user):
 
         # Crear instancia de UserUpdate con el body del request
         user_update = UserUpdate(**body)
-
         # Actualizar usuario en la base de datos
         mongodb.update_record('users', {'_id': ObjectId(body['_id'])}, user_update)
 
@@ -262,10 +313,16 @@ def generate_token(username, password, admin = False):
     # Crear el token de acceso para el usuario con el username y sin expiración
     if not admin:
         access_token = create_access_token(identity=username, expires_delta=False)
-        update = UserUpdate(token=access_token)
+        # usamos Fernet para encriptar el token de acceso
+        cipher = fernet.encrypt(access_token.encode('utf-8'))
+
+        update = UserUpdate(token=cipher)
     else:
         access_token = create_access_token(identity=username, expires_delta=timedelta(days=2))
-        update = UserUpdate(adminToken=access_token)
+        # usamos Fernet para encriptar el token de acceso
+        cipher = fernet.encrypt(access_token.encode('utf-8'))
+
+        update = UserUpdate(adminToken=cipher)
 
 
     # guardar el token de acceso en la base de datos
@@ -333,3 +390,35 @@ def get_roles():
             
     except Exception as e:
         raise Exception('Error al obtener el registro access_rights: ' + str(e))
+    
+# Funcion para devolver las requests de un usuario, si lastRequest no es de la semana actual, se establece requests a 0
+def get_requests(username):
+    try:
+        # Obtener el usuario de la coleccion users
+        user = mongodb.get_record('users', {'username': username}, fields={'requests': 1, 'lastRequest': 1})
+
+        # Si el usuario no existe, retornar error
+        if not user:
+            return {'msg': 'Usuario no existe'}
+        
+        # Verificar que lastRequest sea una fecha y que sea de la semana actual
+        if not 'lastRequest' in user:
+            # Si no existe lastRequest, establecer el valor de requests a 1
+            user['requests'] = 0
+            user['lastRequest'] = datetime.datetime.now()
+        elif not isinstance(user['lastRequest'], datetime.datetime) or not is_date_in_current_week(user['lastRequest']):
+            # Si no es una fecha o no es de la semana actual, establecer el valor de requests a 1
+            user['requests'] = 0
+            user['lastRequest'] = datetime.datetime.now()
+        
+        # Retornar el resultado
+        return user
+    except Exception as e:
+        raise Exception(str(e))
+    
+# Funcion que verifica que una fecha este dentro de la semana actual
+def is_date_in_current_week(date):
+    today = datetime.date.today()
+    monday = today - datetime.timedelta(days=today.weekday())
+    sunday = monday + datetime.timedelta(days=6)
+    return monday <= date.date() <= sunday

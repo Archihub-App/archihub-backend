@@ -1,6 +1,7 @@
 import uuid
 from typing import Optional
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 # Modelo para el registro de usuarios
 class User(BaseModel):
@@ -14,6 +15,8 @@ class User(BaseModel):
     adminToken: str = ""
     roles: list[str] = None
     accessRights: list[str] = None
+    requests: int = 0
+    lastRequest: datetime = None
 
     class Config:
         allow_population_by_field_name = True
@@ -34,6 +37,8 @@ class UserUpdate(BaseModel):
     accessRights: Optional[list[str]] = None
     token: Optional[str] = None
     adminToken: Optional[str] = None
+    requests: Optional[int] = None
+    lastRequest: Optional[datetime] = None
 
     class Config:
         allow_population_by_field_name = True

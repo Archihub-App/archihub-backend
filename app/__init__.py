@@ -7,10 +7,10 @@ from celery import Celery
 from celery import Task
 from flask import Flask
 from app.api.system.services import get_plugins
+import os
 
-def create_app(config_class=config['development']):
+def create_app(config_class=config[os.environ['FLASK_ENV']]):
     app = Flask(__name__)
-    app.config.from_object(config_class)
 
     app.config.from_mapping(
         CELERY=dict(
@@ -19,6 +19,7 @@ def create_app(config_class=config['development']):
             task_ignore_result=True,
         ),
     )
+    app.config.from_object(config_class)
 
     # agregar CORS
     CORS(app)
@@ -40,8 +41,6 @@ def create_app(config_class=config['development']):
             'in': 'header'
         }
     }
-
-    
 
     # Registrar users blueprint
     from app.api.users import bp as users_bp
@@ -78,6 +77,10 @@ def create_app(config_class=config['development']):
     # Registrar system blueprint
     from app.api.system import bp as system_bp
     app.register_blueprint(system_bp, url_prefix='/system')
+
+    # Registrar publicApi blueprint
+    from app.api.publicApi import bp as publicApi_bp
+    app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
 
     return app
 
