@@ -13,7 +13,7 @@ from app.api.lists.services import get_by_id
 import os
 import importlib
 
-mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
+mongodb = DatabaseHandler.DatabaseHandler()
 
 def parse_result(result):
     return json.loads(json_util.dumps(result))

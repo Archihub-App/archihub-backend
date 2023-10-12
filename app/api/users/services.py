@@ -16,7 +16,7 @@ import os
 import datetime
 
 fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
-mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
+mongodb = DatabaseHandler.DatabaseHandler()
 fernet = Fernet(fernet_key)
 
 # Funcion para parsear el resultado de una consulta a la base de datos
@@ -418,7 +418,7 @@ def get_requests(username):
             mongodb.update_record('users', {'username': username}, update_model=user_update)
 
         # Retornar el resultado
-        return user
+        return parse_result(user)
     except Exception as e:
         raise Exception(str(e))
     

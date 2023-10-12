@@ -29,7 +29,7 @@ ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif',
                           'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'zip', 'rar', 'mp4',
                           'mp3', 'wav', 'avi', 'mkv', 'flv', 'mov', 'wmv'])
 
-mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
+mongodb = DatabaseHandler.DatabaseHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 

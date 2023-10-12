@@ -24,7 +24,7 @@ from app.api.records.services import update_record
 from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
 import os
-mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
+mongodb = DatabaseHandler.DatabaseHandler()
 
 
 # Funcion para parsear el resultado de una consulta a la base de datos
@@ -463,10 +463,11 @@ def update_by_id(id, body, user, files):
 
 def delete_by_id(id, user):
     try:
-        records_list = mongodb.get_record(
-            'resources', {'_id': ObjectId(id)})['files']
-
-        delete_records(records_list, id, user)
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        
+        if 'files' in resource:
+            records_list = resource['files']
+            delete_records(records_list, id, user)
         delete_children(id)
         # Eliminar el recurso de la base de datos
         deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})

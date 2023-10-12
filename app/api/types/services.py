@@ -10,7 +10,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.forms.services import get_by_slug as get_form_by_slug
 
-mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
+mongodb = DatabaseHandler.DatabaseHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):

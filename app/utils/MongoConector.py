@@ -12,13 +12,13 @@ MONGO_USER = 'MONGO_INITDB_ROOT_USERNAME'
 # Esta clase sirve para conectarse a la base de datos de MongoDB
 
 class MongoConector:
-    def __init__(self, database):
+    def __init__(self):
         self.ip_server= os.environ.get(MONGO_IP_SERVER, 'localhost').split(',')
         self.admin = os.environ.get(MONGO_ADMIN, '7bOS9*NkX41M')
         self.user = os.environ.get(MONGO_USER, 'admin')
         self.database = os.environ.get(MONGO_DATABASE, 'sim-backend-prod')
         self.port = os.environ.get(MONGO_PORT, '27017')
-        self.simpledatabase = database
+        self.simpledatabase = os.environ.get(MONGO_DATABASE, 'sim-backend-prod')
 
     def getMongoURI(self):
         mongourl = "mongodb://"

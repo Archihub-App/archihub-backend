@@ -1,15 +1,17 @@
 from . import MongoConector
+import os
 
 # Esta clase sirve para manejar la base de datos siguiendo un esquema definido para los registros
+database_name = os.environ.get('MONGO_DATABASE', 'sim-backend-prod')
 
 class DatabaseHandler:
     _instance = None
 
-    def __new__(cls, database_name):
+    def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.database_name = database_name
-            cls._instance.mongo_conector = MongoConector.MongoConector(database_name)
+            cls._instance.mongo_conector = MongoConector.MongoConector()
             cls._instance.myclient = cls._instance.mongo_conector.get_client()
             cls._instance.mydb = cls._instance.myclient[database_name]
         return cls._instance

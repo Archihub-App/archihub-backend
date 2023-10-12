@@ -7,7 +7,7 @@ from datetime import datetime
 from app.utils import LogActions
 from functools import lru_cache
 
-mongodb = DatabaseHandler.DatabaseHandler('sim-backend-prod')
+mongodb = DatabaseHandler.DatabaseHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
