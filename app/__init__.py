@@ -9,13 +9,16 @@ from flask import Flask
 from app.api.system.services import get_plugins
 import os
 
+
 def create_app(config_class=config[os.environ['FLASK_ENV']]):
     app = Flask(__name__)
 
     app.config.from_mapping(
         CELERY=dict(
-            broker_url="redis://localhost",
-            result_backend="redis://localhost",
+            broker_url=os.environ.get(
+                "CELERY_BROKER_URL", "redis://localhost"),
+            result_backend=os.environ.get(
+                "CELERY_BROKER_URL", "redis://localhost"),
             task_ignore_result=True,
         ),
     )
@@ -23,16 +26,11 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
 
     # agregar CORS
     CORS(app)
-    # agregar headers para que funcione el cors
-    app.config['CORS_HEADERS'] = 'Content-Type'
-
     # Inicializar JWT
     jwt = JWTManager(app)
-    # modificar la duración del token a 5 horas
-    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = 18000
     # Inicializar Swagger
     swagger = Swagger(app)
-    
+
     # agregar security definition para JWT Bearer type para que aparezca en la documentación la opción de agregar el token
     swagger.config['securityDefinitions'] = {
         'JWT': {
@@ -49,7 +47,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     # Registrar auth blueprint
     from app.api.auth import bp as auth_bp
     app.register_blueprint(auth_bp, url_prefix='/auth')
-    
+
     # Registrar types blueprint
     from app.api.types import bp as types_bp
     app.register_blueprint(types_bp, url_prefix='/types')
@@ -78,20 +76,22 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.system import bp as system_bp
     app.register_blueprint(system_bp, url_prefix='/system')
 
-    # Registrar publicApi blueprint
-    from app.api.publicApi import bp as publicApi_bp
-    app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
-
     return app
 
 # función para registrar plugins de forma dinámica
+
+
 def register_plugin(app, plugin_name, plugin_url_prefix):
-    plugin_module = __import__(f'app.plugins.{plugin_name}', fromlist=['ExtendedPluginClass', 'plugin_info'])
-    plugin_bp = plugin_module.ExtendedPluginClass(plugin_name, __name__, **plugin_module.plugin_info)
+    plugin_module = __import__(f'app.plugins.{plugin_name}', fromlist=[
+                               'ExtendedPluginClass', 'plugin_info'])
+    plugin_bp = plugin_module.ExtendedPluginClass(
+        plugin_name, __name__, **plugin_module.plugin_info)
     plugin_bp.add_route()
     app.register_blueprint(plugin_bp, url_prefix=f'/{plugin_url_prefix}')
 
 # definiendo celery
+
+
 def celery_init_app(app: Flask) -> Celery:
     class FlaskTask(Task):
         def __call__(self, *args: object, **kwargs: object) -> object:

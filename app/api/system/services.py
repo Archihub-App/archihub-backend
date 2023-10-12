@@ -52,8 +52,6 @@ def update_settings(settings, current_user):
         get_all_settings.cache_clear()
         get_default_cataloging_type.cache_clear()
         get_default_visible_type.cache_clear()
-        get_access_rights.cache_clear()
-        get_roles.cache_clear()
         # Llamar al servicio para obtener todos los ajustes del sistema
         return {'msg': 'Ajustes del sistema actualizados exitosamente'}, 200
     
