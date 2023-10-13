@@ -1,5 +1,5 @@
 from flask import Blueprint
 
-bp = Blueprint('public', __name__)
+bp = Blueprint('publicApi', __name__)
 
 from app.api.publicApi import routes

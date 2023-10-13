@@ -8,7 +8,13 @@ from celery import Task
 from flask import Flask
 from app.api.system.services import get_plugins
 import os
+from app.utils import DatabaseHandler
 
+# leer variables de entorno desde el archivo .env
+from dotenv import load_dotenv
+load_dotenv()
+
+mongodb = DatabaseHandler.DatabaseHandler()
 
 def create_app(config_class=config[os.environ['FLASK_ENV']]):
     app = Flask(__name__)
@@ -76,11 +82,21 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.system import bp as system_bp
     app.register_blueprint(system_bp, url_prefix='/system')
 
+    # verificar en la base de datos si la admin API está activa
+    admin_api = mongodb.get_record('system', {'name': 'api_activation'})
+
+    if(admin_api['data'][0]['value']):
+        from app.api.adminApi import bp as adminApi_bp
+        app.register_blueprint(adminApi_bp, url_prefix='/adminApi')
+
+    if(admin_api['data'][1]['value']):
+        from app.api.publicApi import bp as publicApi_bp
+        app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
+
+
     return app
 
 # función para registrar plugins de forma dinámica
-
-
 def register_plugin(app, plugin_name, plugin_url_prefix):
     plugin_module = __import__(f'app.plugins.{plugin_name}', fromlist=[
                                'ExtendedPluginClass', 'plugin_info'])
@@ -90,8 +106,6 @@ def register_plugin(app, plugin_name, plugin_url_prefix):
     app.register_blueprint(plugin_bp, url_prefix=f'/{plugin_url_prefix}')
 
 # definiendo celery
-
-
 def celery_init_app(app: Flask) -> Celery:
     class FlaskTask(Task):
         def __call__(self, *args: object, **kwargs: object) -> object:
@@ -108,7 +122,6 @@ def celery_init_app(app: Flask) -> Celery:
     celery_app.set_default()
     app.extensions["celery"] = celery_app
     return celery_app
-
 
 app = create_app()
 celery_app = celery_init_app(app)

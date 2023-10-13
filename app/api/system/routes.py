@@ -149,6 +149,40 @@ def activate_plugin():
     # Llamar al servicio para instalar un plugin
     return services.activate_plugin(body, current_user)
 
+# GET para cambiar activar/desactivar un plugin
+@bp.route('/plugins/<plugin_name>', methods=['GET'])
+@jwt_required()
+def change_plugin_status(plugin_name):
+    """
+    Activar/desactivar un plugin
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    parameters:
+        - in: path
+          name: plugin_name
+          schema:
+            type: string
+          required: true
+          description: Nombre del plugin
+    responses:
+        200:
+            description: Plugin activado/desactivado exitosamente
+        401:
+            description: No tiene permisos para activar/desactivar el plugin
+        500:
+            description: Error al activar/desactivar el plugin
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para activar/desactivar el plugin'}, 401
+    # Llamar al servicio para activar/desactivar un plugin
+    return services.change_plugin_status(plugin_name, current_user)
+
 # GET para obtener el listado de access rights
 @bp.route('/access-rights', methods=['GET'])
 @jwt_required()

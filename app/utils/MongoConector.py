@@ -2,9 +2,11 @@ import pymongo
 import sys
 import os
 from cryptography.fernet import Fernet
+from dotenv import load_dotenv
+load_dotenv()
 
 MONGO_ADMIN = 'MONGO_INITDB_ROOT_PASSWORD'
-MONGO_DATABASE = 'MONGO_INITDB_DATABASE'
+MONGO_DATABASE = 'MONGO_DATABASE'
 MONGO_IP_SERVER = 'MONGO_IP_SERVER'
 MONGO_PORT = 'MONGO_PORT'
 MONGO_USER = 'MONGO_INITDB_ROOT_USERNAME'

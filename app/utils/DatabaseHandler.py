@@ -1,6 +1,7 @@
 from . import MongoConector
 import os
-
+from dotenv import load_dotenv
+load_dotenv()
 # Esta clase sirve para manejar la base de datos siguiendo un esquema definido para los registros
 database_name = os.environ.get('MONGO_DATABASE', 'sim-backend-prod')
 

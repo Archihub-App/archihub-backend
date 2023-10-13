@@ -15,7 +15,7 @@ def filter():
     security:
         - JWT: []
     tags:
-        - Logs del sistema
+        - API pública
     parameters:
         - in: body
           name: body

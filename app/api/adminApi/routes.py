@@ -1,4 +1,4 @@
-from app.api.publicApi import bp
+from app.api.adminApi import bp
 from flask import jsonify
 from flask import request
 from app.utils.FernetAuth import fernetAuthenticate
@@ -8,12 +8,12 @@ from app.utils.FernetAuth import fernetAuthenticate
 @fernetAuthenticate
 def filter():
     """
-    Obtener los logs de acuerdo a un filtro
+    Endpoint de prueba
     ---
     security:
         - JWT: []
     tags:
-        - Logs del sistema
+        - API de administración
     parameters:
         - in: body
           name: body

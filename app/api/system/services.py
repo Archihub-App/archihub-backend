@@ -351,3 +351,29 @@ def activate_plugin(body, current_user):
         return {'msg': 'Plugins instalados exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200
     except Exception as e:
         raise Exception(str(e))
+    
+def change_plugin_status(plugin, user):
+    try:
+        # Obtener el registro active_plugins de la colección system
+        active_plugins = mongodb.get_record('system', {'name': 'active_plugins'})
+        # Verificar si el plugin existe
+        plugins_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../plugins')
+        # Obtener todas las carpetas en la carpeta ../../plugins
+        plugins = os.listdir(plugins_path)
+        if plugin not in plugins:
+            return {'msg': 'Plugin no existe'}, 404
+        
+        if plugin in active_plugins['data']:
+            active_plugins['data'].remove(plugin)
+        else:
+            active_plugins['data'].append(plugin)
+
+        update_dict = {'data': active_plugins['data']}
+        update_schema = OptionUpdate(**update_dict)
+        mongodb.update_record('system', {'name': 'active_plugins'}, update_schema)
+
+        # Retornar el resultado
+        return {'msg': 'Plugin actualizado exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
