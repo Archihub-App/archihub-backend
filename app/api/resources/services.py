@@ -283,11 +283,16 @@ def get_resource(id):
 
             r_ = get_resource_records(json.dumps(ids))
             for _ in r_:
-                temp.append({
+                obj = {
                     'name': _['name'],
                     'size': _['size'],
                     'id': str(_['_id'])
-                })
+                }
+
+                if 'displayName' in _: obj['displayName'] = _['displayName']
+                if 'accessRights' in _: obj['accessRights'] = _['accessRights']
+
+                temp.append(obj)
 
             resource['files'] = temp
 
@@ -365,6 +370,7 @@ def get_resource_records(ids):
     try:
         r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}, fields={
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1}))
+        
         return r_
     except Exception as e:
         print(str(e))
@@ -399,6 +405,7 @@ def get_resource_files(id, user):
 
 def update_by_id(id, body, user, files):
     try:
+        print(body)
         body = validate_parent(body)
         has_new_parent = has_changed_parent(id, body)
         # Obtener los metadatos en función del tipo de contenido
@@ -407,6 +414,7 @@ def update_by_id(id, body, user, files):
         errors = {}
         # Validar los campos de la metadata
         validate_fields(body, metadata, errors)
+
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
@@ -434,7 +442,7 @@ def update_by_id(id, body, user, files):
         records = create_record(id, user, files)
 
         delete_records(body['deletedFiles'], id, user)
-        update_records(body['updatedFiles'], id, user)
+        update_records(body['updatedFiles'], user)
 
         update = {
             'files': [*body['files'], *records]
@@ -550,7 +558,6 @@ def get_tree(root, available, user):
 @lru_cache(maxsize=1000)
 def has_parent_postType(post_type, compare):
     try:
-        print(post_type, compare)
         # Obtener el tipo de post
         post_type = mongodb.get_record('post_types', {'slug': post_type})
         # Si el tipo de post no existe, retornar error

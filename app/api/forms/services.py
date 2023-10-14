@@ -73,6 +73,7 @@ def get_by_slug(slug):
 def update_by_slug(slug, body, user):
     # Buscar el formulario en la base de datos
     try:
+        validate_form(body)
         # se verifica el arbol completo de metadatos de la herramienta
         update_main_schema(body)
 
@@ -124,6 +125,29 @@ def delete_by_slug(slug, user):
         return {'msg': 'Formulario eliminado exitosamente'}, 204
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+
+# Funcion que valida que el formulario tenga todos los campos requeridos
+def validate_form(form):
+    # verificar que no tenga dos fields de tipo file
+    files = 0
+    for field in form['fields']:
+        if field['type'] == 'file':
+            files += 1
+    if files > 1:
+        raise Exception("Error: el formulario no puede tener dos campos de tipo archivo")
+    
+    # verificar que no tenga un field con destiny igual a ident
+    for field in form['fields']:
+        if 'destiny' in field:
+            if field['destiny'] == 'ident':
+                raise Exception("Error: el formulario no puede tener un campo con destino igual a ident")
+    
+    # verificar que todos los campos tengan un destiny que inicien con metadata
+    for field in form['fields']:
+        if 'destiny' in field:
+            if not field['destiny'].startswith('metadata'):
+                raise Exception("Error: el formulario no puede tener un campo con destino que no inicie con metadata")
     
 # Funcion que itera entre todos los formularios y devuelve la estructura combinada de todos
 def update_main_schema(new_form = None):

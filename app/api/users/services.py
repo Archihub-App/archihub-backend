@@ -141,9 +141,8 @@ def get_total(obj):
 # Nuevo servicio para actualizar un usuario
 def update_user(body, current_user):
     try:
-        print(body)
         # Buscar el usuario en la base de datos
-        user = mongodb.get_record('users', {'_id': ObjectId(body['_id'])})
+        user = mongodb.get_record('users', {'_id': ObjectId(body['_id'])}, fields={'lastRequest': 0})
         # Si el usuario no existe, retornar error
         if not user:
             return {'msg': 'Usuario no existe'}, 404
@@ -164,6 +163,8 @@ def update_user(body, current_user):
             
         body['roles'] = [role['id'] for role in body['roles']]
         body['accessRights'] = [right['id'] for right in body['accessRights']]
+
+        body.pop('lastRequest')
 
         # Crear instancia de UserUpdate con el body del request
         user_update = UserUpdate(**body)
@@ -383,6 +384,7 @@ def get_roles():
         temp.append({'id': 'admin', 'term': 'admin'})
         temp.append({'id': 'editor', 'term': 'editor'})
         temp.append({'id': 'user', 'term': 'user'})
+        temp.append({'id': 'processing', 'term': 'processing'})
 
         return {
             'options': temp

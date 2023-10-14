@@ -161,6 +161,7 @@ def is_hierarchical(post_type_slug):
     # Si el tipo de post no existe, retornar error
     if not post_type:
         return {'msg': 'Tipo de post no existe'}, 404
+    
     # Retornar el resultado
     return (post_type['hierarchical'], post_type['parentType'] != '')
 

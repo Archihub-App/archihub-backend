@@ -102,10 +102,17 @@ def get_total(obj):
 # Nuevos servicio para actualizar los campos displayName y accessRights de un record
 def update_record(record, current_user):
     try:
-        update = {
-            'displayName': record['displayName'],
-            'accessRights': record['accessRights']
-        }
+        print(record)
+        update = {}
+        if 'displayName' in record:
+            update['displayName'] = record['displayName']
+        if 'accessRights' in record:
+            if record['accessRights'] != 'public':
+                update['accessRights'] = record['accessRights']
+            else:
+                update['accessRights'] = None
+
+        update = FileRecordUpdate(**update)
 
         mongodb.update_record('records', {'_id': ObjectId(record['id'])}, update)
     except Exception as e:

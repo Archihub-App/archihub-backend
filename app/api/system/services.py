@@ -131,6 +131,7 @@ def get_roles():
         temp.append({'id': 'admin', 'term': 'admin'})
         temp.append({'id': 'user', 'term': 'user'})
         temp.append({'id': 'editor', 'term': 'editor'})
+        temp.append({'id': 'processing', 'term': 'processing'})
 
         return {
             'options': temp

@@ -93,6 +93,11 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
         from app.api.publicApi import bp as publicApi_bp
         app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
 
+    # registrar plugins activos en la base de datos
+    plugins = mongodb.get_record('system', {'name': 'active_plugins'})
+    for p in plugins['data']:
+        register_plugin(app, p, p)
+
 
     return app
 

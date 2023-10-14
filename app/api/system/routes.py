@@ -7,7 +7,7 @@ from flask import request
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 
-from app.tasks.tasks import add
+# from app.tasks.tasks import add
 from celery.result import AsyncResult
 
 from flask import current_app as app
@@ -238,68 +238,68 @@ def get_roles():
     return services.get_roles()
 
 
-# GET para probar las tasks de celery
-@bp.route('/test-celery', methods=['GET'])
+# # GET para probar las tasks de celery
+# @bp.route('/test-celery', methods=['GET'])
 
-def test_celery():
-    """
-    Probar las tasks de celery
-    ---
-    tags:
-        - Ajustes del sistema
-    responses:
-        200:
-            description: Task ejecutada exitosamente
-        500:
-            description: Error al ejecutar la task
-    """
-    # Llamar al servicio para probar las tasks de celery
-    task = add.delay("d9f7860cd4b6")
-    print(task.id)
+# def test_celery():
+#     """
+#     Probar las tasks de celery
+#     ---
+#     tags:
+#         - Ajustes del sistema
+#     responses:
+#         200:
+#             description: Task ejecutada exitosamente
+#         500:
+#             description: Error al ejecutar la task
+#     """
+#     # Llamar al servicio para probar las tasks de celery
+#     task = add.delay("d9f7860cd4b6")
+#     print(task.id)
 
-    return "ok"
+#     return "ok"
 
 
-@bp.route('/test-celery-result', methods=['GET'])
+# @bp.route('/test-celery-result', methods=['GET'])
 
-def test_celery_result_all():
-    """
-    Probar las tasks de celery
-    ---
-    tags:
-        - Ajustes del sistema
-    responses:
-        200:
-            description: Task ejecutada exitosamente
-        500:
-            description: Error al ejecutar la task
-    """
-    # Llamar al servicio para probar las tasks de celery
-    i = app.celery_app.control.inspect()
+# def test_celery_result_all():
+#     """
+#     Probar las tasks de celery
+#     ---
+#     tags:
+#         - Ajustes del sistema
+#     responses:
+#         200:
+#             description: Task ejecutada exitosamente
+#         500:
+#             description: Error al ejecutar la task
+#     """
+#     # Llamar al servicio para probar las tasks de celery
+#     i = app.celery_app.control.inspect()
 
-    # Inspeccionar las tasks activas en los workers
-    active = i.active()
+#     # Inspeccionar las tasks activas en los workers
+#     active = i.active()
 
-    return 'ok'
+#     return 'ok'
 
-@bp.route('/test-celery-result/<id>', methods=['GET'])
+# @bp.route('/test-celery-result/<id>', methods=['GET'])
 
-def test_celery_result(id):
-    """
-    Probar las tasks de celery
-    ---
-    tags:
-        - Ajustes del sistema
-    responses:
-        200:
-            description: Task ejecutada exitosamente
-        500:
-            description: Error al ejecutar la task
-    """
-    # Llamar al servicio para probar las tasks de celery
-    result = AsyncResult(id)
-    return {
-        "ready": result.ready(),
-        "successful": result.successful(),
-        "value": result.result if result.ready() else None,
-    }
+# def test_celery_result(id):
+#     """
+#     Probar las tasks de celery
+#     ---
+#     tags:
+#         - Ajustes del sistema
+#     responses:
+#         200:
+#             description: Task ejecutada exitosamente
+#         500:
+#             description: Error al ejecutar la task
+#     """
+#     # Llamar al servicio para probar las tasks de celery
+#     result = AsyncResult(id)
+#     return {
+#         "ready": result.ready(),
+#         "successful": result.successful(),
+#         "value": result.result if result.ready() else None,
+#     }
