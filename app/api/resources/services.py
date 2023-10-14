@@ -239,7 +239,7 @@ def validate_fields(body, metadata, errors):
         access_rights = [a['id'] for a in access_rights]
 
         if body['accessRights'] not in access_rights and body['accessRights'] != None:
-            errors['accessRights'] = 'El recurso debe tener derechos de acceso validos'
+            errors['accessRights'] = 'El recurso debe tener derechos de acceso válidos'
 
     return body
 
@@ -551,7 +551,6 @@ def get_children(id, available, resp=False):
 @lru_cache(maxsize=1000)
 def get_tree(root, available, user):
     try:
-        print(root, available, user)
         list_available = available.split('|')
         # Obtener los recursos del tipo de contenido
         if root == 'all':

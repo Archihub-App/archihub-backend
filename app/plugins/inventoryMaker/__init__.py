@@ -1,5 +1,5 @@
 from app.utils.PluginClass import PluginClass
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from celery import shared_task
 
 class ExtendedPluginClass(PluginClass):
@@ -7,12 +7,13 @@ class ExtendedPluginClass(PluginClass):
         super().__init__(path, import_name, name, description, version, author)
 
     def add_route(self):
-        @self.route('/<id>', methods=['GET'])
-        # @jwt_required()
-        def index(id):
-            task = self.add.delay(1, 2)
-            print(task.id)
-            return f'Hello, World! ID: {id}'
+        @self.route('', methods=['POST'])
+        @jwt_required()
+        def create_inventory():
+            # get the current user
+            current_user = get_jwt_identity()
+            
+
         
     @shared_task(ignore_result=False)
     def add(x, y):

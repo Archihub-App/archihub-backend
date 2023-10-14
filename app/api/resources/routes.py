@@ -94,10 +94,8 @@ def create():
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
-    # Obtener el body del request
-    # body = request.json
 
-    # read the form data from the request, the value has been save in a FormData object
+    # Obtener el body del request
     body = request.form.to_dict()
     data = body['data']
     # convertir data una cadena de texto JSON stringify a un diccionario
@@ -261,10 +259,12 @@ def get_tree():
         500:
             description: Error al obtener la estructura de arból
     """
+    print('get_tree')
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Obtener el body del request
     body = request.json
+    print(body)
     # Llamar al servicio para obtener la estructura de arból
     return services.get_tree(body['root'],'|'.join(item['slug'] for item in body['tree']), current_user)
 
