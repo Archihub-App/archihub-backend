@@ -23,6 +23,7 @@ from app.api.records.services import update_parent
 from app.api.records.services import update_record
 from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
+from app.api.system.services import get_access_rights
 import os
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -32,8 +33,6 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
-
-
 def get_all(post_type, body, user):
     try:
         filters = {}
@@ -76,8 +75,12 @@ def create(body, user, files):
         metadata = get_metadata(body['post_type'])
 
         errors = {}
+        print(body)
         # Validar los campos de la metadata
-        validate_fields(body, metadata, errors)
+        body = validate_fields(body, metadata, errors)
+
+        # agregamos el ident a la metadata
+        body['ident'] = 'ident'
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
@@ -147,6 +150,10 @@ def validate_parent(body):
                 return body
             elif not hierarchical[0] and hierarchical[1]:
                 raise Exception('El tipo de contenido debe tener un padre')
+            elif not hierarchical[0] and not hierarchical[1]:
+                body['parents'] = []
+                body['parent'] = None
+                return body
 
 # Funcion para validar los campos de la metadata
 
@@ -177,7 +184,7 @@ def validate_fields(body, metadata, errors):
                         if exists:
                             validate_text(get_value_by_path(
                                 body, field['destiny']), field)
-                        elif field['required']:
+                        elif field['required'] and field['destiny'] != 'accessRights':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                     if field['type'] == 'pattern':
@@ -214,6 +221,24 @@ def validate_fields(body, metadata, errors):
 
         except Exception as e:
             errors[field['destiny']] = str(e)
+
+    print(body)
+    if 'accessRights' not in body:
+        body['accessRights'] = None
+    else:
+        if body['accessRights'] == '':
+            errors['accessRights'] = 'El recurso debe tener derechos de acceso'
+        
+        if body['accessRights'] == 'public':
+            body['accessRights'] = None
+
+        access_rights = get_access_rights()[0]['options']
+        access_rights = [a['id'] for a in access_rights]
+
+        if body['accessRights'] not in access_rights and body['accessRights'] != None:
+            errors['accessRights'] = 'El recurso debe tener derechos de acceso validos'
+
+    return body
 
 # Nuevo servicio para obtener un recurso por su id
 
@@ -376,7 +401,6 @@ def get_resource_records(ids):
         print(str(e))
         raise Exception(str(e))
 
-
 def get_resource_files(id, user):
     try:
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
@@ -401,11 +425,8 @@ def get_resource_files(id, user):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para actualizar un recurso
-
-
 def update_by_id(id, body, user, files):
     try:
-        print(body)
         body = validate_parent(body)
         has_new_parent = has_changed_parent(id, body)
         # Obtener los metadatos en función del tipo de contenido
@@ -413,8 +434,7 @@ def update_by_id(id, body, user, files):
 
         errors = {}
         # Validar los campos de la metadata
-        validate_fields(body, metadata, errors)
-
+        body = validate_fields(body, metadata, errors)
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
@@ -747,8 +767,6 @@ def update_records(list, user):
         raise Exception(str(e))
 
 # Funcion para obtener el total de recursos
-
-
 @lru_cache(maxsize=500)
 def get_total(obj):
     try:

@@ -8,6 +8,7 @@ from app.api.forms.models import FormUpdate
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.system.services import update_resources_schema
+from app.api.system.services import get_access_rights_id
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -60,6 +61,16 @@ def get_by_slug(slug):
         # Si el formulario no existe, retornar error
         if not form:
             return {'msg': 'Formulario no existe'}
+        
+        # Agregamos un nuevo campo al inicio del arreglo de fields, que es el campo de accessRights
+        form['fields'].insert(0, {
+            'name': 'accessRights',
+            'label': 'Derechos de acceso',
+            'required': True,
+            'destiny': 'accessRights',
+            'list': get_access_rights_id(),
+            'type': 'select'
+        })
         # quitamos el id del formulario
         form.pop('_id')
         # Parsear el resultado

@@ -189,5 +189,6 @@ def get_metadata(post_type_slug):
         post_type['metadata'] = get_form_by_slug(post_type['metadata'])
     else:
         post_type['metadata'] = None
+
     # Retornar el resultado
     return post_type['metadata']

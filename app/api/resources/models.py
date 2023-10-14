@@ -12,6 +12,7 @@ class Resource(BaseModel):
     files: list[str] = []
     ident: str
     status: str = 'created'
+    accessRights: str = None
 
     class Config:
         allow_population_by_field_name = True
@@ -38,6 +39,7 @@ class ResourceUpdate(BaseModel):
     parents: Optional[list[dict]]
     parent: Optional[dict]
     status: Optional[str]
+    accessRights: Optional[str]
 
     class Config:
         allow_population_by_field_name = True

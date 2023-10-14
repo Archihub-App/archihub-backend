@@ -94,6 +94,17 @@ def get_default_visible_type():
     
 # Funcion para devolver los access rights
 def get_access_rights():
+    try:        
+        list_id = get_access_rights_id()
+        # Obtener el listado con list_id
+        list = get_by_id(list_id)
+
+        return list, 200
+            
+    except Exception as e:
+        raise Exception('Error al obtener el registro access_rights')
+    
+def get_access_rights_id():
     try:
         # Obtener el registro access_rights de la colección system
         access_rights = mongodb.get_record('system', {'name': 'access_rights'})
@@ -103,10 +114,7 @@ def get_access_rights():
         
         list_id = access_rights['data'][0]['value']
 
-        # Obtener el listado con list_id
-        list = get_by_id(list_id)
-
-        return list, 200
+        return list_id
             
     except Exception as e:
         raise Exception('Error al obtener el registro access_rights')
