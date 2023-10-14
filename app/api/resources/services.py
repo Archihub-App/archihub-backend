@@ -39,14 +39,17 @@ def get_all(post_type, body, user):
         limit = 20
         skip = 0
         filters['post_type'] = post_type
+
         if 'parents' in body:
             if body['parents']:
                 filters['parents.id'] = body['parents']['id']
+
         if 'page' in body:
             skip = body['page'] * limit
+
         # Obtener todos los recursos dado un tipo de contenido
         resources = list(mongodb.get_all_records(
-            'resources', filters, limit=limit, skip=skip))
+            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1}))
         # Obtener el total de recursos dado un tipo de contenido
         total = get_total(json.dumps(filters))
         # Para cada recurso, obtener el formulario asociado y quitar los campos _id
