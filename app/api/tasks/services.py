@@ -9,9 +9,24 @@ from app.api.tasks.models import TaskUpdate
 mongodb = DatabaseHandler.DatabaseHandler()
 
 # Nuevo servicio para agregar una tarea a la base de datos asignandola a un usuario
-def add_task(task, user_id):
-    # Obtener el usuario
-    user = mongodb.get_user_by_id(user_id)
+def add_task(taskId, taskName, user, resultType):
+
     # Verificar si el usuario existe
+    user = mongodb.get_record('users', {'username': user})
     if not user:
         return {'msg': 'El usuario no existe'}, 404
+
+    new_task = {
+        "taskId": taskId,
+        "user": user['username'],
+        "status": "pending",
+        "name": taskName,
+        "resultType": resultType,
+    }
+
+    task = Task(**new_task)
+
+    # Guardar la tarea en la base de datos
+    mongodb.insert_record('tasks', task)
+    
+    

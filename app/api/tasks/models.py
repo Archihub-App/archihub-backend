@@ -11,14 +11,15 @@ class Task(BaseModel):
     user: str
     status: str
     resultType: str
-    result: str
+    result: str = None
 
     class Config:
         allow_population_by_field_name = True
 
 # Modelo para la actualización de opciones del sistema
 class TaskUpdate(BaseModel):
-    status: str
+    status: Optional[str]
+    result: Optional[str]
 
     class Config:
         allow_population_by_field_name = True

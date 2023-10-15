@@ -19,5 +19,5 @@ class PluginClass(Blueprint):
             'type': self.type
         }
     
-    def add_task_to_user(self, taskId, user):
+    def add_task_to_user(self, taskId, taskName, user):
         print(f'Adding task {taskId} to user {user}')
