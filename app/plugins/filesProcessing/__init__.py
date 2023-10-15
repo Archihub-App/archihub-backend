@@ -3,8 +3,8 @@ from flask_jwt_extended import jwt_required
 from celery import shared_task
 
 class ExtendedPluginClass(PluginClass):
-    def __init__(self, path, import_name, name, description, version, author):
-        super().__init__(path, import_name, name, description, version, author)
+    def __init__(self, path, import_name, name, description, version, author, type):
+        super().__init__(path, import_name, name, description, version, author, type)
 
     def add_route(self):
         @self.route('/<id>', methods=['GET'])
@@ -24,5 +24,6 @@ plugin_info = {
     'name': 'Procesamiento de archivos',
     'description': 'Plugin para procesar archivos y generar versiones para consulta en el gestor documental',
     'version': '0.1',
-    'author': 'Néstor Andrés Peña'
+    'author': 'Néstor Andrés Peña',
+    'type': ['bulk']
 }
