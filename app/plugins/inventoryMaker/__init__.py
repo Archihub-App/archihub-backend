@@ -9,9 +9,9 @@ mongodb = DatabaseHandler.DatabaseHandler()
 
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type):
-        super().__init__(path, import_name, name, description, version, author, type)
+        super().__init__(path, __file__, import_name, name, description, version, author, type)
 
-    def add_route(self):
+    def add_routes(self):
         @self.route('', methods=['POST'])
         @jwt_required()
         def create_inventory():
@@ -21,19 +21,19 @@ class ExtendedPluginClass(PluginClass):
             body = request.get_json()
 
             # get the mongodb instance
-            task = self.add.delay(4,2)
+            task = self.add.delay(body, current_user)
 
-            self.add_task_to_user(task.id, 'current_user')
+            self.add_task_to_user(task.id, 'inventoryMaker.create_inventory', current_user, 'file_download')
 
             return 'ok'
             
         
     @shared_task(ignore_result=False, name='inventoryMaker.create_inventory')
-    def add( x, y):
+    def add(body, user):
         # buscamos los recursos con los filtros especificados
         resources = mongodb.get_all_records('resources', {})
 
-        return x + y
+        return 'ok'
         
     
 plugin_info = {

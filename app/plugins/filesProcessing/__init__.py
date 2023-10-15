@@ -4,9 +4,9 @@ from celery import shared_task
 
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type):
-        super().__init__(path, import_name, name, description, version, author, type)
+        super().__init__(path, __file__, import_name, name, description, version, author, type)
 
-    def add_route(self):
+    def add_routes(self):
         @self.route('/<id>', methods=['GET'])
         # @jwt_required()
         def index(id):

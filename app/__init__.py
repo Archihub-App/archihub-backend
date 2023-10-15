@@ -107,7 +107,8 @@ def register_plugin(app, plugin_name, plugin_url_prefix):
                                'ExtendedPluginClass', 'plugin_info'])
     plugin_bp = plugin_module.ExtendedPluginClass(
         plugin_name, __name__, **plugin_module.plugin_info)
-    plugin_bp.add_route()
+    plugin_bp.add_routes()
+    plugin_bp.get_image()
     app.register_blueprint(plugin_bp, url_prefix=f'/{plugin_url_prefix}')
 
 # definiendo celery
