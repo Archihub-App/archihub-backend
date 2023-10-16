@@ -22,11 +22,10 @@ def add_task(taskId, taskName, user, resultType):
         "status": "pending",
         "name": taskName,
         "resultType": resultType,
+        "date": None,
     }
 
     task = Task(**new_task)
 
     # Guardar la tarea en la base de datos
     mongodb.insert_record('tasks', task)
-    
-    

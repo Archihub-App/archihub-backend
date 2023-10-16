@@ -8,15 +8,18 @@ mongodb = DatabaseHandler.DatabaseHandler()
 
 
 class ExtendedPluginClass(PluginClass):
-    def __init__(self, path, import_name, name, description, version, author, type):
-        super().__init__(path, __file__, import_name, name, description, version, author, type)
+    def __init__(self, path, import_name, name, description, version, author, type, settings):
+        super().__init__(path, __file__, import_name, name, description, version, author, type, settings)
 
     def add_routes(self):
-        @self.route('', methods=['POST'])
+        @self.route('/bulk', methods=['POST'])
         @jwt_required()
         def create_inventory():
             # get the current user
             current_user = get_jwt_identity()
+
+            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
+                return {'msg': 'No tiene permisos suficientes'}, 401
             # get the request body
             body = request.get_json()
 
@@ -41,5 +44,13 @@ plugin_info = {
     'description': 'Plugin para exportar inventarios del gestor documental',
     'version': '0.1',
     'author': 'Néstor Andrés Peña',
-    'type': ['bulk']
+    'type': ['bulk'],
+    'settings': [
+        {
+            'name': 'bulk_settings',
+            'fields': [
+
+            ]
+        }
+    ]
 }

@@ -14,6 +14,10 @@ class ExtendedPluginClass(PluginClass):
             print(task.id)
             return f'Hello, World! ID: {id}'
         
+    @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
+    def auto_bulk(self, params):
+        return 'ok'
+        
     @shared_task(ignore_result=False)
     def add(x, y):
         print(x + y)

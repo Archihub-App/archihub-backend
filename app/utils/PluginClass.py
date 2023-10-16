@@ -5,7 +5,7 @@ from app.api.users.services import has_role
 import os.path
 
 class PluginClass(Blueprint):
-    def __init__(self, path, filePath, import_name, name, description, version, author, type):
+    def __init__(self, path, filePath, import_name, name, description, version, author, type, settings=None):
         super().__init__(path, import_name)
         self.name = name
         self.description = description
@@ -13,6 +13,7 @@ class PluginClass(Blueprint):
         self.author = author
         self.type = type
         self.filePath = filePath
+        self.settings = settings
         
     def get_info(self):
         return {
@@ -23,6 +24,9 @@ class PluginClass(Blueprint):
             'type': self.type
         }
     
+    def has_role(self, role, user):
+        return has_role(user, role)
+    
     def add_task_to_user(self, taskId, taskName, user, resultType):
         add_task(taskId, taskName, user, resultType)
 
@@ -32,10 +36,21 @@ class PluginClass(Blueprint):
         def get_img():
             current_user = get_jwt_identity()
 
-            if not has_role(current_user, 'admin'):
+            if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
                 return {'msg': 'No tiene permisos suficientes'}, 401
             
             path = os.path.dirname(os.path.abspath(self.filePath)) + '/static/image.png'
             return send_file(path, mimetype='image/png')
+        
+    def get_settings(self):
+        @self.route('/settings', methods=['GET'])
+        @jwt_required()
+        def get_settings():
+            current_user = get_jwt_identity()
+
+            if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
+                return {'msg': 'No tiene permisos suficientes'}, 401
+            
+            return self.settings
 
     
