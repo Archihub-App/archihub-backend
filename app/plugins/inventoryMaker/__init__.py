@@ -20,19 +20,17 @@ class ExtendedPluginClass(PluginClass):
 
             if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
-            # get the request body
+            
             body = request.get_json()
-
-            # get the mongodb instance
-            task = self.add.delay(body, current_user)
+            task = self.create.delay(body, current_user)
 
             self.add_task_to_user(task.id, 'inventoryMaker.create_inventory', current_user, 'file_download')
 
-            return 'ok'
+            return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
             
         
     @shared_task(ignore_result=False, name='inventoryMaker.create_inventory')
-    def add(body, user):
+    def create(body, user):
         # buscamos los recursos con los filtros especificados
         resources = mongodb.get_all_records('resources', {})
 
@@ -45,12 +43,13 @@ plugin_info = {
     'version': '0.1',
     'author': 'Néstor Andrés Peña',
     'type': ['bulk'],
-    'settings': [
-        {
-            'name': 'bulk_settings',
-            'fields': [
-
-            ]
-        }
-    ]
+    'settings': {
+        'settings_bulk': [
+            {
+                'type':  'instructions',
+                'title': 'Instrucciones',
+                'text': 'Este plugin permite generar inventarios en archivo excel del contenido del gestor documental. Para ello, puede especificar el tipo de contenido sobre el cual quiere generar el inventario y los filtros que desea aplicar. El archivo se encontrará en su perfil para su descarga una vez se haya terminado de generar. Es importante notar que el proceso de generación de inventarios puede tardar varios minutos, dependiendo de la cantidad de recursos que se encuentren en el gestor documental.',
+            }
+        ]
+    }
 }

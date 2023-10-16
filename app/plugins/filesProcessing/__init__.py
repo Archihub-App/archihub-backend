@@ -3,8 +3,8 @@ from flask_jwt_extended import jwt_required
 from celery import shared_task
 
 class ExtendedPluginClass(PluginClass):
-    def __init__(self, path, import_name, name, description, version, author, type):
-        super().__init__(path, __file__, import_name, name, description, version, author, type)
+    def __init__(self, path, import_name, name, description, version, author, type, settings):
+        super().__init__(path, __file__, import_name, name, description, version, author, type, settings)
 
     def add_routes(self):
         @self.route('/<id>', methods=['GET'])
@@ -29,5 +29,17 @@ plugin_info = {
     'description': 'Plugin para procesar archivos y generar versiones para consulta en el gestor documental',
     'version': '0.1',
     'author': 'Néstor Andrés Peña',
-    'type': ['bulk']
+    'type': ['bulk', 'settings'],
+    'settings': {
+        'settings': [
+
+        ],
+        'settings_bulk': [
+            {
+                'type':  'instructions',
+                'title': 'Instrucciones',
+                'text': 'Este plugin permite procesar archivos y generar versiones para consulta en el gestor documental. Para ello, puede especificar el tipo de contenido sobre el cual quiere generar las versiones y los filtros que desea aplicar. Es importante notar que el proceso de generación de versiones puede tardar varios minutos, dependiendo de la cantidad de recursos que se encuentren en el gestor documental y el tamaño original de los archivos.',
+            }
+        ]
+    }
 }

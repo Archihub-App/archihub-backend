@@ -5,6 +5,7 @@ from functools import lru_cache
 import json
 from app.api.tasks.models import Task
 from app.api.tasks.models import TaskUpdate
+from datetime import datetime
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -22,7 +23,7 @@ def add_task(taskId, taskName, user, resultType):
         "status": "pending",
         "name": taskName,
         "resultType": resultType,
-        "date": None,
+        "date": datetime.now(),
     }
 
     task = Task(**new_task)

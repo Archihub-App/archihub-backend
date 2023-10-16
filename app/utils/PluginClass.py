@@ -34,23 +34,29 @@ class PluginClass(Blueprint):
         @self.route('/image', methods=['GET'])
         @jwt_required()
         def get_img():
-            current_user = get_jwt_identity()
+            try:
+                current_user = get_jwt_identity()
 
-            if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                return {'msg': 'No tiene permisos suficientes'}, 401
-            
-            path = os.path.dirname(os.path.abspath(self.filePath)) + '/static/image.png'
-            return send_file(path, mimetype='image/png')
+                if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
+                    return {'msg': 'No tiene permisos suficientes'}, 401
+                
+                path = os.path.dirname(os.path.abspath(self.filePath)) + '/static/image.png'
+                return send_file(path, mimetype='image/png')
+            except Exception as e:
+                    return {'msg': str(e)}, 500
         
     def get_settings(self):
-        @self.route('/settings', methods=['GET'])
+        @self.route('/settings/<type>', methods=['GET'])
         @jwt_required()
-        def get_settings():
-            current_user = get_jwt_identity()
+        def get_settings(type):
+            try:
+                current_user = get_jwt_identity()
 
-            if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                return {'msg': 'No tiene permisos suficientes'}, 401
-            
-            return self.settings
+                if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
+                    return {'msg': 'No tiene permisos suficientes'}, 401
+                
+                return self.settings['settings_' + type]
+            except Exception as e:
+                return {'msg': str(e)}, 500
 
     

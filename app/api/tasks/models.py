@@ -2,6 +2,7 @@ import uuid
 from typing import Optional
 from typing import Any
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 # Modelo para el registro de opciones del sistema
 class Task(BaseModel):
@@ -12,6 +13,7 @@ class Task(BaseModel):
     status: str
     resultType: str
     result: str = None
+    date: datetime
 
     class Config:
         allow_population_by_field_name = True
