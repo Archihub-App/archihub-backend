@@ -134,6 +134,9 @@ def get_by_id(id):
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
+    # Si el tipo de post no es publico y el usuario no tiene permisos, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener el recurso
     return services.get_by_id(id, current_user)
 

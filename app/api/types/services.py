@@ -192,3 +192,14 @@ def get_metadata(post_type_slug):
 
     # Retornar el resultado
     return post_type['metadata']
+
+@lru_cache(maxsize=1000)
+def get_edit_roles(slug):
+    # Buscar el tipo de post en la base de datos
+    post_type = mongodb.get_record('post_types', {'slug': slug}, fields={'edit_roles': 1})
+    # Si el tipo de post no existe, retornar error
+    if not post_type:
+        return {'msg': 'Tipo de post no existe'}, 404
+    
+    return post_type['edit_roles']
+    

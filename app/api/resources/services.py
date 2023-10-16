@@ -57,6 +57,11 @@ def get_all(post_type, body, user):
             resource['id'] = str(resource['_id'])
             resource.pop('_id')
             resource['total'] = total
+            resource['accessRights'] = get_option_by_id(resource['accessRights'])
+            if 'term' in resource['accessRights']:
+                resource['accessRights'] = resource['accessRights']['term']
+            else:
+                resource['accessRights'] = None
         # Retornar los recursos
         return jsonify(resources), 200
     except Exception as e:
@@ -225,7 +230,6 @@ def validate_fields(body, metadata, errors):
         except Exception as e:
             errors[field['destiny']] = str(e)
 
-    print(body)
     if 'accessRights' not in body:
         body['accessRights'] = None
     else:
@@ -387,6 +391,7 @@ def get_resource(id):
                     })
 
     resource['fields'] = temp
+    resource['accessRights'] = get_option_by_id(resource['accessRights'])
 
     return resource
 

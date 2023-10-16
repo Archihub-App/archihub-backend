@@ -3,6 +3,7 @@
 fix.py
 /uploads
 /webfiles
+/userfiles
 
 # everything in the plugins folder
 /app/plugins/*
