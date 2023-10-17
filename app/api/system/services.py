@@ -93,6 +93,7 @@ def get_default_visible_type():
         raise Exception('Error al obtener el tipo por defecto del modulo de catalogacion')
     
 # Funcion para devolver los access rights
+@lru_cache(maxsize=32)
 def get_access_rights():
     try:        
         list_id = get_access_rights_id()

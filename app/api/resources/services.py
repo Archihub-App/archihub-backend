@@ -118,10 +118,7 @@ def create(body, user, files):
             'resources', {'_id': ObjectId(body['_id'])}, update_)
 
         # limpiar la cache
-        has_parent_postType.cache_clear()
-        get_tree.cache_clear()
-        get_children.cache_clear()
-        get_resource.cache_clear()
+        update_cache()
 
         # Retornar el resultado
         return {'msg': 'Recurso creado exitosamente'}, 201
@@ -257,6 +254,7 @@ def get_by_id(id, user):
     try:
         # Obtener los accessRights del recurso
         accessRights = get_accessRights(id)
+        print(accessRights)
         if accessRights:
             if not has_right(user, accessRights['id']):
                 return {'msg': 'No tiene permisos para acceder al recurso'}, 401
@@ -532,10 +530,7 @@ def update_by_id(id, body, user, files):
         # Registrar el log
         register_log(user, log_actions['resource_update'], {'resource': body})
         # limpiar la cache
-        has_parent_postType.cache_clear()
-        get_tree.cache_clear()
-        get_children.cache_clear()
-        get_resource.cache_clear()
+        update_cache()
         # Retornar el resultado
         return {'msg': 'Recurso actualizado exitosamente'}, 200
     except Exception as e:
@@ -558,10 +553,7 @@ def delete_by_id(id, user):
         # Registrar el log
         register_log(user, log_actions['resource_delete'], {'resource': id})
         # limpiar la cache
-        has_parent_postType.cache_clear()
-        get_tree.cache_clear()
-        get_children.cache_clear()
-        get_resource.cache_clear()
+        update_cache()
 
         # Retornar el resultado
         return {'msg': 'Recurso eliminado exitosamente'}, 200
@@ -834,3 +826,13 @@ def get_total(obj):
         return total
     except Exception as e:
         raise Exception(str(e))
+
+def update_cache():
+    get_access_rights.cache_clear()
+    get_resource.cache_clear()
+    get_children.cache_clear()
+    get_tree.cache_clear()
+    has_parent_postType.cache_clear()
+    get_parents.cache_clear()
+    get_parent.cache_clear()
+    get_total.cache_clear()
