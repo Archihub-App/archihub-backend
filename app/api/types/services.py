@@ -202,4 +202,14 @@ def get_edit_roles(slug):
         return {'msg': 'Tipo de post no existe'}, 404
     
     return post_type['edit_roles']
+
+@lru_cache(maxsize=1000)
+def get_view_roles(slug):
+    # Buscar el tipo de post en la base de datos
+    post_type = mongodb.get_record('post_types', {'slug': slug}, fields={'view_roles': 1})
+    # Si el tipo de post no existe, retornar error
+    if not post_type:
+        return {'msg': 'Tipo de post no existe'}, 404
+    
+    return post_type['view_roles']
     

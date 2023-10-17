@@ -206,126 +206,128 @@ def update_parent(parent_id, current_user, parents):
 
 # Nuevo servicio para crear un record para un recurso
 def create(resource_id, current_user, files):
-    try:
-        # Buscar el recurso en la base de datos
-        resource = mongodb.get_record(
-            'resources', {'_id': ObjectId(resource_id)})
-        # Si el recurso no existe, retornar error
-        if not resource:
-            return {'msg': 'Recurso no existe'}, 404
+    # Buscar el recurso en la base de datos
+    resource = mongodb.get_record('resources', {'_id': ObjectId(resource_id)}, fields={'parents': 1, 'post_type': 1})
+    # Si el recurso no existe, retornar error
+    if not resource:
+        raise Exception('Recurso no existe')
+    
+    resp = []
 
-        resp = []
+    for f in files:
+        filename = secure_filename(f.filename)
+        if allowedFile(filename):
+            # generar un nombre unico para el archivo
+            filename_new = str(uuid.uuid4()) + '.' + \
+                filename.rsplit('.', 1)[1].lower()
+            # coger la fecha actual y convertirla a string de la forma YYYY/MM/DD
+            date = datetime.datetime.now().strftime("%Y/%m/%d")
+            # hacer un path en base a la fecha actual
+            path = os.path.join(UPLOAD_FOLDER, date)
+            # crear el directorio para guardar el archivo usando la ruta date
+            if not os.path.exists(path):
+                os.makedirs(path)
 
-        for f in files:
-            filename = secure_filename(f.filename)
-            if allowedFile(filename):
-                # generar un nombre unico para el archivo
-                filename_new = str(uuid.uuid4()) + '.' + \
-                    filename.rsplit('.', 1)[1].lower()
-                # coger la fecha actual y convertirla a string de la forma YYYY/MM/DD
-                date = datetime.datetime.now().strftime("%Y/%m/%d")
-                # hacer un path en base a la fecha actual
-                path = os.path.join(UPLOAD_FOLDER, date)
-                # crear el directorio para guardar el archivo usando la ruta date
-                if not os.path.exists(path):
-                    os.makedirs(path)
-                f.save(os.path.join(path, filename))
-                # renombrar el archivo
-                os.rename(os.path.join(path, filename),
-                          os.path.join(path, filename_new))
-                # calcular el hash 256 del archivo
-                hash = hashlib.sha256()
-                with open(os.path.join(path, filename_new), 'rb') as f:
-                    for chunk in iter(lambda: f.read(4096), b""):
-                        hash.update(chunk)
+            f.save(os.path.join(path, filename))
 
-                # se verifica si el hash del archivo ya existe en la base de datos
-                record = mongodb.get_record(
-                    'records', {'hash': hash.hexdigest()})
-                # si el record existe, se agrega el recurso como padre
-                if record:
-                    # eliminar el archivo que se subio
-                    os.remove(os.path.join(path, filename_new))
+            f.flush()
+            os.fsync(f.fileno())
 
-                    resp.append(str(record['_id']))
+            # renombrar el archivo
+            os.rename(os.path.join(path, filename),
+                        os.path.join(path, filename_new))
+            # calcular el hash 256 del archivo
+            hash = hashlib.sha256()
+            with open(os.path.join(path, filename_new), 'rb') as f:
+                for chunk in iter(lambda: f.read(4096), b""):
+                    hash.update(chunk)
 
-                    new_parent = [{
-                        'id': resource_id,
-                        'post_type': resource['post_type']
-                    }, *record['parent']]
+            # se verifica si el hash del archivo ya existe en la base de datos
+            record = mongodb.get_record(
+                'records', {'hash': str(hash.hexdigest())})
+            
+            # si el record existe, se agrega el recurso como padre
+            if record:
+                # eliminar el archivo que se subio
+                os.remove(os.path.join(path, filename_new))
 
-                    new_parents = [*resource['parents'], *record['parents']]
-                    unique_array_parents = set(x['id'] for x in new_parents)
-                    new_list = [next(item for item in new_parents if item['id'] == id)
-                                for id in unique_array_parents]
-                    new_parents = new_list
+                resp.append(str(record['_id']))
 
-                    update_dict = {
-                        'parent': new_parent,
-                        'parents': new_parents
-                    }
+                new_parent = [{
+                    'id': resource_id,
+                    'post_type': resource['post_type']
+                }, *record['parent']]
 
-                    if record['status'] == 'deleted':
-                        if 'processing' in record:
-                            if 'files' in record['processing']:
-                                if len(record['processing']['files']) > 0:
-                                    update_dict['status'] = 'processed'
-                                else:
-                                    update_dict['status'] = 'uploaded'
+                new_parents = [*resource['parents'], *record['parents']]
+                unique_array_parents = set(x['id'] for x in new_parents)
+                new_list = [next(item for item in new_parents if item['id'] == id)
+                            for id in unique_array_parents]
+                new_parents = new_list
+
+                update_dict = {
+                    'parent': new_parent,
+                    'parents': new_parents
+                }
+
+                if record['status'] == 'deleted':
+                    if 'processing' in record:
+                        if 'files' in record['processing']:
+                            if len(record['processing']['files']) > 0:
+                                update_dict['status'] = 'processed'
                             else:
                                 update_dict['status'] = 'uploaded'
                         else:
                             update_dict['status'] = 'uploaded'
+                    else:
+                        update_dict['status'] = 'uploaded'
 
-                    # actualizar el record
-                    update = FileRecordUpdate(**update_dict)
-                    mongodb.update_record(
-                        'records', {'_id': record['_id']}, update)
+                # actualizar el record
+                update = FileRecordUpdate(**update_dict)
+                mongodb.update_record(
+                    'records', {'_id': record['_id']}, update)
 
-                    # registrar el log
-                    register_log(current_user, log_actions['record_update'], {
-                                 'record': str(record['_id'])})
-                    # limpiar la cache
-                    get_all.cache_clear()
-                else:
-                    # obtener el tamaño del archivo
-                    size = os.path.getsize(os.path.join(path, filename_new))
-
-                    # usar magic para obtener el tipo de archivo
-                    mime = magic.from_file(os.path.join(
-                        path, filename_new), mime=True)
-
-                    # crear un nuevo record
-                    record = FileRecord(**{
-                        'name': filename,
-                        'hash': str(hash.hexdigest()),
-                        'size': size,
-                        'filepath': str(os.path.join(path, filename_new)),
-                        'mime': mime,
-                        'parent': [{
-                            'id': resource_id,
-                            'post_type': resource['post_type']
-                        }],
-                        'parents': resource['parents'],
-                        'status': 'uploaded'
-                    })
-                    # insertar el record en la base de datos
-                    new_record = mongodb.insert_record('records', record)
-                    resp.append(str(new_record.inserted_id))
-                    # registrar el log
-                    register_log(current_user, log_actions['record_create'], {'record': {
-                        'name': record.name,
-                        'hash': record.hash,
-                        'size': record.size,
-                        'filepath': record.filepath
-                    }})
-                    # limpiar la cache
-                    get_all.cache_clear()
+                # registrar el log
+                register_log(current_user, log_actions['record_update'], {
+                                'record': str(record['_id'])})
+                # limpiar la cache
+                get_all.cache_clear()
             else:
-                return jsonify({'message': 'File type not allowed'}), 400
+                # obtener el tamaño del archivo
+                size = os.path.getsize(os.path.join(path, filename_new))
 
-        # retornar el resultado
-        return resp
+                # usar magic para obtener el tipo de archivo
+                mime = magic.from_file(os.path.join(
+                    path, filename_new), mime=True)
 
-    except Exception as e:
-        return {'msg': str(e)}, 500
+                # crear un nuevo record
+                record = FileRecord(**{
+                    'name': filename,
+                    'hash': str(hash.hexdigest()),
+                    'size': size,
+                    'filepath': str(os.path.join(path, filename_new)),
+                    'mime': mime,
+                    'parent': [{
+                        'id': resource_id,
+                        'post_type': resource['post_type']
+                    }],
+                    'parents': resource['parents'],
+                    'status': 'uploaded'
+                })
+                # insertar el record en la base de datos
+                new_record = mongodb.insert_record('records', record)
+                resp.append(str(new_record.inserted_id))
+                # registrar el log
+                register_log(current_user, log_actions['record_create'], {'record': {
+                    'name': record.name,
+                    'hash': record.hash,
+                    'size': record.size,
+                    'filepath': record.filepath
+                }})
+                # limpiar la cache
+                get_all.cache_clear()
+        else:
+            print("nono")
+            raise Exception('Tipo de archivo no permitido')
+
+    # retornar el resultado
+    return resp

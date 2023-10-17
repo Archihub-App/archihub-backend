@@ -23,7 +23,15 @@ fernet = Fernet(fernet_key)
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
+def update_cache():
+    has_right.cache_clear()
+    has_role.cache_clear()
+    get_by_username.cache_clear()
+    get_total.cache_clear()
+    get_user.cache_clear()
+
 # Nueva funcion para devolver el usuario por su id
+@lru_cache(maxsize=1000)
 def get_by_id(id):
     try:
         # Obtener el usuario de la coleccion users
@@ -40,6 +48,7 @@ def get_by_id(id):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para obtener un usuario por su username
+@lru_cache(maxsize=1000)
 def get_by_username(username):
     try:
         # Obtener el usuario de la coleccion users
@@ -126,7 +135,7 @@ def get_all(body, current_user):
         return {'msg': str(e)}, 500
     
 # Funcion para obtener el total de recursos
-@lru_cache(maxsize=500)
+@lru_cache(maxsize=100)
 def get_total(obj):
     try:
         # convertir string a dict
@@ -171,7 +180,7 @@ def update_user(body, current_user):
         # Actualizar usuario en la base de datos
         mongodb.update_record('users', {'_id': ObjectId(body['_id'])}, user_update)
 
-        
+        update_cache()
         # Retornar mensaje de éxito
         return {'msg': 'Usuario actualizado exitosamente'}, 200
     except Exception as e:
@@ -268,6 +277,7 @@ def validate_user_fields(body, errors):
     return errors
 
 # Nuevo servicio para buscar un usuario por su username
+@lru_cache(maxsize=1000)
 def get_user(username):
     user = mongodb.get_record('users', {'username': username}, fields={'status': 0, 'photo': 0, 'requests': 0, 'lastRequest': 0})
     # retornar el resultado
@@ -285,6 +295,7 @@ def accept_compromise(username):
     return jsonify({'msg': 'Compromiso aceptado exitosamente'}), 200
 
 # Nuevo servicio para verificar si el usuario tiene un rol específico
+@lru_cache(maxsize=1000)
 def has_role(username, role):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
@@ -292,6 +303,18 @@ def has_role(username, role):
         return jsonify({'msg': 'Usuario no existe'}), 400
     # Si el usuario tiene el rol, retornar True
     if role in user['roles']:
+        return True
+    # Si el usuario no tiene el rol, retornar False
+    return False
+
+@lru_cache(maxsize=1000)
+def has_right(username, right):
+    user = mongodb.get_record('users', {'username': username})
+    # Si el usuario no existe, retornar error
+    if not user:
+        return jsonify({'msg': 'Usuario no existe'}), 400
+    # Si el usuario tiene el rol, retornar True
+    if right in user['accessRights']:
         return True
     # Si el usuario no tiene el rol, retornar False
     return False

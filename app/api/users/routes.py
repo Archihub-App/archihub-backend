@@ -135,8 +135,7 @@ def get_compromise():
     current_user = get_jwt_identity()
     # Llamar al servicio para obtener el compromise del usuario
     user = services.get_user(current_user)
-    # quitar el campo password del usuario
-    user.pop('password')
+
     if not user:
         return jsonify({'msg': 'Usuario no existe'}), 400
     return user, 200
@@ -161,8 +160,7 @@ def accept_compromise():
     current_user = get_jwt_identity()
     # Llamar al servicio para obtener el compromise del usuario
     user = services.get_user(current_user)
-    # quitar el campo password del usuario
-    user.pop('password')
+    
     if not user:
         return jsonify({'msg': 'Usuario no existe'}), 400
     # Llamar al servicio para aceptar el compromise del usuario

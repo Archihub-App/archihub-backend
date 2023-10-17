@@ -130,7 +130,10 @@ def get_option_by_id(id):
             return {'msg': 'Opcion no existe'}
         
         # Parsear el resultado
-        option = parse_result(option)
+        option = {
+            '_id': id,
+            'term': option['term'],
+        }
 
         # Retornar el resultado
         return option

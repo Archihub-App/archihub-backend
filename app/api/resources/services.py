@@ -24,6 +24,7 @@ from app.api.records.services import update_record
 from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
 from app.api.system.services import get_access_rights
+from app.api.users.services import has_right
 import os
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -83,7 +84,6 @@ def create(body, user, files):
         metadata = get_metadata(body['post_type'])
 
         errors = {}
-        print(body)
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
@@ -103,7 +103,10 @@ def create(body, user, files):
         # Registrar el log
         register_log(user, log_actions['resource_create'], {'resource': body})
         # crear el record
-        records = create_record(body['_id'], user, files)
+        try:
+            records = create_record(body['_id'], user, files)
+        except Exception as e:
+            return {'msg': str(e)}, 500
 
         update = {
             'files': records
@@ -252,6 +255,12 @@ def validate_fields(body, metadata, errors):
 
 def get_by_id(id, user):
     try:
+        # Obtener los accessRights del recurso
+        accessRights = get_accessRights(id)
+        if accessRights:
+            if not has_right(user, accessRights['id']):
+                return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+        # Obtener los accessRights del recurso
         resource = get_resource(id)
         register_log(user, log_actions['resource_open'], {'resource': id})
 
@@ -260,6 +269,35 @@ def get_by_id(id, user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
+@lru_cache(maxsize=1000)
+def get_accessRights(id):
+    # Buscar el recurso en la base de datos
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'accessRights': 1, 'parents': 1})
+    # Si el recurso no existe, retornar error
+    if not resource:
+        raise Exception('Recurso no existe')
+    
+    if 'accessRights' in resource:
+        if resource['accessRights']:
+            temp = get_option_by_id(resource['accessRights'])
+            return {
+                'id': resource['accessRights'],
+                'term': temp['term']
+            }
+        else:
+            parents = [ObjectId(item['id']) for item in resource['parents']]
+            parents_resources = list(mongodb.get_all_records('resources', {'_id': {'$in': parents}}, fields={'accessRights': 1}))
+            
+            for r in parents_resources:
+                if r['accessRights']:
+                    temp = get_option_by_id(r['accessRights'])
+                    return {
+                        'id': r['accessRights'],
+                        'term': temp['term']
+                    }
+                
+        
+    return None
 
 @lru_cache(maxsize=1000)
 def get_resource(id):
@@ -392,6 +430,10 @@ def get_resource(id):
 
     resource['fields'] = temp
     resource['accessRights'] = get_option_by_id(resource['accessRights'])
+    if 'term' in resource['accessRights']:
+        resource['accessRights'] = str(resource['accessRights']['_id'])
+    else:
+        resource['accessRights'] = None
 
     return resource
 
@@ -467,7 +509,11 @@ def update_by_id(id, body, user, files):
             update_parents(id, body['post_type'])
             update_records_parents(id, user)
 
-        records = create_record(id, user, files)
+        try:
+            records = create_record(id, user, files)
+        except Exception as e:
+            print(str(e))
+            return {'msg': str(e)}, 500
 
         delete_records(body['deletedFiles'], id, user)
         update_records(body['updatedFiles'], user)
