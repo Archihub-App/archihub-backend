@@ -10,7 +10,7 @@ from app.api.logs.services import register_log
 from app.api.system.models import Option
 from app.api.system.models import OptionUpdate
 from app.api.lists.services import get_by_id
-from app.utils.functions import get_roles as get_roles_func
+from app.utils.functions import get_access_rights_id, get_roles_id, get_access_rights, get_roles
 import os
 import importlib
 
@@ -53,6 +53,11 @@ def update_settings(settings, current_user):
         get_all_settings.cache_clear()
         get_default_cataloging_type.cache_clear()
         get_default_visible_type.cache_clear()
+        get_roles.cache_clear()
+        get_access_rights.cache_clear()
+        get_roles_id.cache_clear()
+        get_access_rights_id.cache_clear()
+
         # Llamar al servicio para obtener todos los ajustes del sistema
         return {'msg': 'Ajustes del sistema actualizados exitosamente'}, 200
     
@@ -92,42 +97,6 @@ def get_default_visible_type():
             
     except Exception as e:
         raise Exception('Error al obtener el tipo por defecto del modulo de catalogacion')
-    
-# Funcion para devolver los access rights
-@lru_cache(maxsize=32)
-def get_access_rights():
-    try:        
-        list_id = get_access_rights_id()
-        # Obtener el listado con list_id
-        list = get_by_id(list_id)
-
-        return list, 200
-            
-    except Exception as e:
-        raise Exception('Error al obtener el registro access_rights')
-    
-def get_access_rights_id():
-    try:
-        # Obtener el registro access_rights de la colección system
-        access_rights = mongodb.get_record('system', {'name': 'access_rights'})
-        # Si el registro no existe, retornar error
-        if not access_rights:
-            raise Exception('No existe el registro access_rights')
-        
-        list_id = access_rights['data'][0]['value']
-
-        return list_id
-            
-    except Exception as e:
-        raise Exception('Error al obtener el registro access_rights')
-    
-# Funcion para devolver los roles
-def get_roles():
-    try:
-        return get_roles_func()
-            
-    except Exception as e:
-        raise Exception('Error al obtener el registro access_rights')
 
 # Funcion para actualizar el registro resources-schema en la colección system
 def update_resources_schema(schema):

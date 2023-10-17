@@ -93,7 +93,6 @@ def verify_accessright_exists(compare):
 
     return [role['id'] for role in access_rights]
 
-
 def get_list_by_id(id):
     try:
         # Buscar el listado en la base de datos
