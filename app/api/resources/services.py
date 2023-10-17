@@ -508,6 +508,7 @@ def update_by_id(id, body, user, files):
         if has_new_parent:
             update_parents(id, body['post_type'])
             update_records_parents(id, user)
+            print('3')
 
         try:
             records = create_record(id, user, files)
@@ -658,7 +659,7 @@ def get_parents(id):
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         # Si el recurso no existe, retornar error
         if not resource:
-            return {'msg': 'Recurso no existe'}, 404
+            return []
         # Si el recurso no tiene padre, retornar una lista vacia
         if 'parents' not in resource:
             return []
@@ -779,7 +780,9 @@ def update_records_parents(id, user):
                 temp = []
 
                 for p in parents:
+                    print(p)
                     temp = [*temp, *get_parents(p['id'])]
+                    print(temp)
 
                 update_parent(child, user, temp)
 

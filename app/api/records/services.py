@@ -102,7 +102,6 @@ def get_total(obj):
 # Nuevos servicio para actualizar los campos displayName y accessRights de un record
 def update_record(record, current_user):
     try:
-        print(record)
         update = {}
         if 'displayName' in record:
             update['displayName'] = record['displayName']
@@ -243,8 +242,7 @@ def create(resource_id, current_user, files):
                     hash.update(chunk)
 
             # se verifica si el hash del archivo ya existe en la base de datos
-            record = mongodb.get_record(
-                'records', {'hash': str(hash.hexdigest())})
+            record = get_hash(str(hash.hexdigest()))
             
             # si el record existe, se agrega el recurso como padre
             if record:
@@ -331,3 +329,17 @@ def create(resource_id, current_user, files):
 
     # retornar el resultado
     return resp
+
+@lru_cache(maxsize=1000)
+def get_hash(hash):
+    try:
+        # Buscar el recurso en la base de datos
+        record = mongodb.get_record('records', {'hash': hash})
+        # Si el recurso no existe, retornar error
+        if not record:
+            return {'msg': 'Record no existe'}, 404
+        # retornar los records
+        return record
+
+    except Exception as e:
+        raise Exception(str(e))
