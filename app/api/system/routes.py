@@ -6,6 +6,7 @@ from app.api.users import services as user_services
 from flask import request
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
+from app.utils.functions import get_roles
 
 # from app.tasks.tasks import add
 from celery.result import AsyncResult

@@ -13,6 +13,8 @@ class PostType(BaseModel):
     icon: str = None
     hierarchical: bool = False
     parentType: str = None
+    editRoles: list[str] = None
+    viewRoles: list[str] = None
 
     class Config:
         allow_population_by_field_name = True
@@ -31,6 +33,8 @@ class PostTypeUpdate(BaseModel):
     hierarchical: Optional[bool]
     parentType: Optional[str]
     metadata: Optional[str]
+    editRoles: Optional[list[str]]
+    viewRoles: Optional[list[str]]
 
     class Config:
         allow_population_by_field_name = True

@@ -9,12 +9,18 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.system.services import update_resources_schema
 from app.api.system.services import get_access_rights_id
+from app.api.types.services import get_by_slug as get_type_by_slug
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
     return json.loads(json_util.dumps(result))
+
+def update_cache():
+    get_all.cache_clear()
+    get_by_slug.cache_clear()
+    get_type_by_slug.cache_clear()
 
 # Nuevo servicio para obtener todos los estándares de metadatos
 @lru_cache(maxsize=1)
@@ -101,8 +107,7 @@ def update_by_slug(slug, body, user):
         # Registrar el log
         register_log(user, log_actions['form_update'], {'form': body})
         # Limpiar la cache
-        get_all.cache_clear()
-        get_by_slug.cache_clear()
+        update_cache()
         # Retornar el resultado
         return {'msg': 'Formulario actualizado exitosamente'}, 200
     except Exception as e:

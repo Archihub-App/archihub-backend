@@ -8,7 +8,7 @@ from app.api.types.models import PostTypeUpdate
 from flask import request
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
-from app.api.forms.services import get_by_slug as get_form_by_slug
+from app.api.system.services import get_access_rights_id
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -50,7 +50,7 @@ def create(body, user):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para obtener un tipo de post por su slug
-@lru_cache(maxsize=30)
+@lru_cache(maxsize=50)
 def get_by_slug(slug):
     try:
         # Buscar el tipo de post en la base de datos
@@ -76,6 +76,8 @@ def get_by_slug(slug):
             post_type['metadata'] = { 'name': post_type['metadata']['name'], 'fields': post_type['metadata']['fields'], 'slug': post_type['metadata']['slug'] }
         else:
             post_type['metadata'] = None
+
+        print(post_type)
         # Retornar el resultado
         return post_type
     except Exception as e:
@@ -86,6 +88,7 @@ def update_by_slug(slug, body, user):
     # Buscar el tipo de post en la base de datos
     post_type = mongodb.get_record('post_types', {'slug': slug})
     try:
+        print(body)
         # crear instancia de PostTypeUpdate con el body del request
         post_type_update = PostTypeUpdate(**body)
         # Si el tipo de post no existe, retornar error
@@ -213,3 +216,29 @@ def get_view_roles(slug):
     
     return post_type['view_roles']
     
+@lru_cache(maxsize=30)
+def get_form_by_slug(slug):
+    try:
+        # Buscar el formulario en la base de datos
+        form = mongodb.get_record('forms', {'slug': slug})
+        # Si el formulario no existe, retornar error
+        if not form:
+            return {'msg': 'Formulario no existe'}
+        
+        # Agregamos un nuevo campo al inicio del arreglo de fields, que es el campo de accessRights
+        form['fields'].insert(0, {
+            'name': 'accessRights',
+            'label': 'Derechos de acceso',
+            'required': True,
+            'destiny': 'accessRights',
+            'list': get_access_rights_id(),
+            'type': 'select'
+        })
+        # quitamos el id del formulario
+        form.pop('_id')
+        # Parsear el resultado
+        form = parse_result(form)
+        # Retornar el resultado
+        return form
+    except Exception as e:
+        return {'msg': str(e)}, 500

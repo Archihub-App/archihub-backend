@@ -9,11 +9,11 @@ from flask_jwt_extended import create_access_token
 from cryptography.fernet import Fernet
 from functools import lru_cache
 from bson.objectid import ObjectId
-from app.api.lists.services import get_by_id as get_list_by_id
 import re
 from config import config
 import os
 import datetime
+from app.utils.functions import get_access_rights, get_roles, verify_accessright_exists, verify_role_exists
 
 fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -158,20 +158,9 @@ def update_user(body, current_user):
         
         if user['username'] != body['username']:
             return {'msg': 'Error con la equivalencia del usuario'}, 400
-        
-        roles = get_roles()['options']
-        rights = get_access_rights()['options']
-
-        for role in body['roles']:
-            if role['id'] not in [r['id'] for r in roles]:
-                return {'msg': 'Rol no existe'}, 400
             
-        for right in body['accessRights']:
-            if right['id'] not in [r['id'] for r in rights]:
-                return {'msg': 'Permiso no existe'}, 400
-            
-        body['roles'] = [role['id'] for role in body['roles']]
-        body['accessRights'] = [right['id'] for right in body['accessRights']]
+        body['roles'] = verify_role_exists(body['roles'])
+        body['accessRights'] = verify_accessright_exists(body['accessRights'])
 
         body.pop('lastRequest')
 
@@ -370,51 +359,6 @@ def get_token(username):
         return jsonify({'msg': 'Usuario no tiene token de acceso'}), 400
     # Retornar el token de acceso
     return jsonify({'access_token': user['access_token']}), 200
-
-def get_access_rights():
-    try:
-        # Obtener el registro access_rights de la colección system
-        access_rights = mongodb.get_record('system', {'name': 'access_rights'})
-        # Si el registro no existe, retornar error
-        if not access_rights:
-            raise Exception('No existe el registro access_rights')
-        
-        list_id = access_rights['data'][0]['value']
-
-        # Obtener el listado con list_id
-        list = get_list_by_id(list_id)
-
-        return list
-            
-    except Exception as e:
-        raise Exception('Error al obtener el registro access_rights')
-    
-def get_roles():
-    try:
-        # Obtener el registro access_rights de la colección system
-        access_rights = mongodb.get_record('system', {'name': 'access_rights'})
-        # Si el registro no existe, retornar error
-        if not access_rights:
-            raise Exception('No existe el registro access_rights')
-        
-        roles = access_rights['data'][1]['value']
-
-        # Obtener el listado con roles
-        list = get_list_by_id(roles)
-
-        temp = [*list['options']]
-        # Agregar admin y editor a la lista
-        temp.append({'id': 'admin', 'term': 'admin'})
-        temp.append({'id': 'editor', 'term': 'editor'})
-        temp.append({'id': 'user', 'term': 'user'})
-        temp.append({'id': 'processing', 'term': 'processing'})
-
-        return {
-            'options': temp
-        }
-            
-    except Exception as e:
-        raise Exception('Error al obtener el registro access_rights: ' + str(e))
     
 # Funcion para devolver las requests de un usuario, si lastRequest no es de la semana actual, se establece requests a 0
 def get_requests(username):

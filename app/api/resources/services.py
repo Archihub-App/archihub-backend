@@ -254,12 +254,11 @@ def get_by_id(id, user):
     try:
         # Obtener los accessRights del recurso
         accessRights = get_accessRights(id)
-        print(accessRights)
         if accessRights:
             if not has_right(user, accessRights['id']):
                 return {'msg': 'No tiene permisos para acceder al recurso'}, 401
         # Obtener los accessRights del recurso
-        resource = get_resource(id)
+        resource = get_resource(id, user)
         register_log(user, log_actions['resource_open'], {'resource': id})
 
         # Retornar el recurso
@@ -298,7 +297,7 @@ def get_accessRights(id):
     return None
 
 @lru_cache(maxsize=1000)
-def get_resource(id):
+def get_resource(id, user):
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
     # Si el recurso no existe, retornar error

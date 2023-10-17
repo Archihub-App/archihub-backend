@@ -10,6 +10,7 @@ from app.api.logs.services import register_log
 from app.api.system.models import Option
 from app.api.system.models import OptionUpdate
 from app.api.lists.services import get_by_id
+from app.utils.functions import get_roles as get_roles_func
 import os
 import importlib
 
@@ -111,7 +112,7 @@ def get_access_rights_id():
         access_rights = mongodb.get_record('system', {'name': 'access_rights'})
         # Si el registro no existe, retornar error
         if not access_rights:
-            return {'msg': 'No existe el registro access_rights'}, 404
+            raise Exception('No existe el registro access_rights')
         
         list_id = access_rights['data'][0]['value']
 
@@ -123,28 +124,7 @@ def get_access_rights_id():
 # Funcion para devolver los roles
 def get_roles():
     try:
-        # Obtener el registro access_rights de la colección system
-        access_rights = mongodb.get_record('system', {'name': 'access_rights'})
-        # Si el registro no existe, retornar error
-        if not access_rights:
-            return {'msg': 'No existe el registro access_rights'}, 404
-        
-        roles = access_rights['data'][1]['value']
-
-        # Obtener el listado con roles
-        list = get_by_id(roles)
-
-        # clonar list en una variable temporal
-        temp = [*list['options']]
-        # Agregar admin y editor a la lista
-        temp.append({'id': 'admin', 'term': 'admin'})
-        temp.append({'id': 'user', 'term': 'user'})
-        temp.append({'id': 'editor', 'term': 'editor'})
-        temp.append({'id': 'processing', 'term': 'processing'})
-
-        return {
-            'options': temp
-        }, 200
+        return get_roles_func()
             
     except Exception as e:
         raise Exception('Error al obtener el registro access_rights')

@@ -243,6 +243,8 @@ def create(resource_id, current_user, files):
 
             # se verifica si el hash del archivo ya existe en la base de datos
             record = get_hash(str(hash.hexdigest()))
+
+            print(record)
             
             # si el record existe, se agrega el recurso como padre
             if record:
@@ -337,7 +339,7 @@ def get_hash(hash):
         record = mongodb.get_record('records', {'hash': hash})
         # Si el recurso no existe, retornar error
         if not record:
-            return {'msg': 'Record no existe'}, 404
+            return None
         # retornar los records
         return record
 
