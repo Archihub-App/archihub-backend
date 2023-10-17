@@ -835,3 +835,4 @@ def update_cache():
     get_parents.cache_clear()
     get_parent.cache_clear()
     get_total.cache_clear()
+    get_accessRights.cache_clear()

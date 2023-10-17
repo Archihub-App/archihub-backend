@@ -10,12 +10,17 @@ from app.api.lists.models import OptionUpdate
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from bson.objectid import ObjectId
+from app.utils.functions import get_roles, get_access_rights, get_roles_id, get_access_rights_id
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
     return json.loads(json_util.dumps(result))
+
+def update_cache():
+    get_by_id.cache_clear()
+    get_all.cache_clear()
 
 # Nuevo servicio para obtener todos los listados
 @lru_cache(maxsize=1)
@@ -51,8 +56,7 @@ def create(body, user):
             'id': str(new_list.inserted_id),
         }})
         # Limpiar la cache
-        get_by_id.cache_clear()
-        get_all.cache_clear()
+        update_cache()
         # Retornar el resultado
         return {'msg': 'Listado creado exitosamente'}, 201
     
@@ -180,8 +184,12 @@ def update_by_id(id, body, user):
             # Registrar el log
             register_log(user, log_actions['list_update'], {'list': body})
             # Limpiar la cache
-            get_by_id.cache_clear()
-            get_all.cache_clear()
+            update_cache()
+            if(id == get_access_rights_id()):
+                get_access_rights.cache_clear()
+            if(id == get_roles_id()):
+                get_roles.cache_clear()
+                
             # Retornar el resultado
             return {'msg': 'Listado actualizado exitosamente'}, 200
     
