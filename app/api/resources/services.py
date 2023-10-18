@@ -239,7 +239,7 @@ def validate_fields(body, metadata, errors):
         if body['accessRights'] == 'public':
             body['accessRights'] = None
 
-        access_rights = get_access_rights()[0]['options']
+        access_rights = get_access_rights()
         access_rights = [a['id'] for a in access_rights]
 
         if body['accessRights'] not in access_rights and body['accessRights'] != None:
@@ -480,6 +480,7 @@ def update_by_id(id, body, user, files):
         metadata = get_metadata(body['post_type'])
 
         errors = {}
+
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
@@ -495,6 +496,7 @@ def update_by_id(id, body, user, files):
 
         body['files'] = temp
 
+
         # Crear instancia de ResourceUpdate con el body del request
         resource = ResourceUpdate(**body)
 
@@ -505,7 +507,6 @@ def update_by_id(id, body, user, files):
         if has_new_parent:
             update_parents(id, body['post_type'])
             update_records_parents(id, user)
-            print('3')
 
         try:
             records = create_record(id, user, files)

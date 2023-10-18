@@ -66,7 +66,6 @@ def get_access_rights():
     try:
         # Obtener el listado con list_id
         list = get_list_by_id(get_access_rights_id())
-
         return list
 
     except Exception as e:
@@ -75,23 +74,27 @@ def get_access_rights():
 
 def verify_role_exists(compare):
     roles = get_roles()['options']
+    temp = []
 
     for role in compare:
         if role['id'] not in [r['id'] for r in roles]:
             raise Exception('El rol ' + role['id'] + ' no existe')
+        temp.append(role['id'])
 
-    return [role['id'] for role in roles]
+    return temp
 
 
 def verify_accessright_exists(compare):
     access_rights = get_access_rights()['options']
+    temp = []
 
     for access_right in compare:
         if access_right['id'] not in [r['id'] for r in access_rights]:
             raise Exception('El derecho de acceso ' +
                             access_right['id'] + ' no existe')
+        temp.append(access_right['id'])
 
-    return [role['id'] for role in access_rights]
+    return temp
 
 def get_list_by_id(id):
     try:

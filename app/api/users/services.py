@@ -150,6 +150,7 @@ def get_total(obj):
 # Nuevo servicio para actualizar un usuario
 def update_user(body, current_user):
     try:
+        print(body)
         # Buscar el usuario en la base de datos
         user = mongodb.get_record('users', {'_id': ObjectId(body['_id'])}, fields={'lastRequest': 0})
         # Si el usuario no existe, retornar error

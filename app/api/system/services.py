@@ -221,7 +221,6 @@ def validate_author_array(value, field):
     
 # Funcion para validar un text de acuerdo a un regex
 def validate_text_regex(value, field):
-    print(value,field)
     try:
         label = field['label']
         # Si el valor no es de tipo string, retornar error
