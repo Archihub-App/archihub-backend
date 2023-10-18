@@ -3,9 +3,13 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from celery import shared_task
 from flask import request
 from app.utils import DatabaseHandler
+import os
+# leer variables de entorno desde el archivo .env
+from dotenv import load_dotenv
+load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
-
+USER_FILES_PATH = os.environ.get('USER_FILES_PATH', '')
 
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type, settings):
@@ -22,6 +26,7 @@ class ExtendedPluginClass(PluginClass):
                 return {'msg': 'No tiene permisos suficientes'}, 401
             
             body = request.get_json()
+
             if 'post_type' not in body:
                 return {'msg': 'No se especificó el tipo de contenido'}, 400
             
@@ -34,8 +39,14 @@ class ExtendedPluginClass(PluginClass):
         
     @shared_task(ignore_result=False, name='inventoryMaker.create_inventory')
     def create(body, user):
+        filters = {
+            'post_type': body['post_type']
+        }
+
+        if 'parent' in body:
+            filters['parents.id'] = body['parent']
         # buscamos los recursos con los filtros especificados
-        resources = mongodb.get_all_records('resources', {})
+        resources = mongodb.get_all_records('resources', filters)
 
         return 'ok'
         

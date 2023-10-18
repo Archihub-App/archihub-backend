@@ -15,19 +15,20 @@ from flask import current_app as app
 # En este archivo se registran las rutas de la API para los ajustes del sistema
 
 
-@bp.route('/test-celery-result', methods=['GET'])
 
+@bp.route('/tasks', methods=['GET'])
+@jwt_required()
 def test_celery_result_all():
     """
-    Probar las tasks de celery
+    Devuelve las tasks actualmente en ejecución
     ---
     tags:
         - Ajustes del sistema
     responses:
         200:
-            description: Task ejecutada exitosamente
+            description: Listado de tasks
         500:
-            description: Error al ejecutar la task
+            description: Error al recuperar las tasks
     """
     # Llamar al servicio para probar las tasks de celery
     i = app.celery_app.control.inspect()
@@ -37,19 +38,19 @@ def test_celery_result_all():
 
     return 'ok'
 
-@bp.route('/test-celery-result/<id>', methods=['GET'])
-
+@bp.route('/task-result/<id>', methods=['GET'])
+@jwt_required()
 def test_celery_result(id):
     """
-    Probar las tasks de celery
+    Devuelve el estado de una task
     ---
     tags:
         - Ajustes del sistema
     responses:
         200:
-            description: Task ejecutada exitosamente
+            description: Estado de la task
         500:
-            description: Error al ejecutar la task
+            description: Error al recuperar el estado de la task
     """
     # Llamar al servicio para probar las tasks de celery
     result = AsyncResult(id)

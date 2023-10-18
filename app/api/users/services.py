@@ -42,6 +42,7 @@ def get_by_id(id):
             return {'msg': 'Recurso no existe'}, 404
         
         user['_id'] = str(user['_id'])
+
         # Retornar el resultado
         return user, 200
     except Exception as e:

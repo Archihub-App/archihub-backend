@@ -9,6 +9,7 @@ from flask import request
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.system.services import get_access_rights_id
+from app.utils.functions import verify_role_exists
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -77,7 +78,6 @@ def get_by_slug(slug):
         else:
             post_type['metadata'] = None
 
-        print(post_type)
         # Retornar el resultado
         return post_type
     except Exception as e:
@@ -88,7 +88,11 @@ def update_by_slug(slug, body, user):
     # Buscar el tipo de post en la base de datos
     post_type = mongodb.get_record('post_types', {'slug': slug})
     try:
-        print(body)
+        if 'editRoles' in body:
+            body['editRoles'] = verify_role_exists(body['editRoles'])
+        
+        if 'viewRoles' in body:
+            body['viewRoles'] = verify_role_exists(body['viewRoles'])
         # crear instancia de PostTypeUpdate con el body del request
         post_type_update = PostTypeUpdate(**body)
         # Si el tipo de post no existe, retornar error
