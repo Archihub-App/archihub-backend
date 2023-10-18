@@ -82,6 +82,10 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.system import bp as system_bp
     app.register_blueprint(system_bp, url_prefix='/system')
 
+    # Registrar tasks blueprint
+    from app.api.tasks import bp as tasks_bp
+    app.register_blueprint(tasks_bp, url_prefix='/tasks')
+
     # verificar en la base de datos si la admin API está activa
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 

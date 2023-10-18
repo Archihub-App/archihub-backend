@@ -9,9 +9,24 @@ from datetime import datetime
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
+# Funcion para parsear el resultado de una consulta a la base de datos
+def parse_result(result):
+    return json.loads(json_util.dumps(result))
+
+# Nuevo servicio para recuperar las tasks de un usuario
+def get_tasks(user):
+    try:
+        # Obtener las tasks de un usuario
+        tasks = mongodb.get_all_records('tasks', {'user': user}, sort=[('date', -1)], fields={'_id': 0, 'user': 0})
+        # Parsear el resultado
+        tasks = parse_result(tasks)
+        # Retornar las tasks
+        return jsonify(tasks), 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 # Nuevo servicio para agregar una tarea a la base de datos asignandola a un usuario
 def add_task(taskId, taskName, user, resultType):
-
     # Verificar si el usuario existe
     user = mongodb.get_record('users', {'username': user})
     if not user:

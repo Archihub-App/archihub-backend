@@ -12,18 +12,36 @@ from celery.result import AsyncResult
 
 from flask import current_app as app
 
-# En este archivo se registran las rutas de la API para los ajustes del sistema
+@bp.route('/<user>', methods=['GET'])
+@jwt_required()
+def get_tasks(user):
+    """
+    Obtener las tasks de un usuario
+    ---
+    tags:
+        - Tareas de procesamiento
+    responses:
+        200:
+            description: Lista de tasks
+        500:
+            description: Error al obtener las tasks
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not user_services.has_role(current_user, 'admin') or current_user != user:
+        return {'msg': 'No tiene permisos para obtener las tasks'}, 401
 
+    return services.get_tasks(user)
 
-
-@bp.route('/tasks', methods=['GET'])
+@bp.route('', methods=['GET'])
 @jwt_required()
 def test_celery_result_all():
     """
     Devuelve las tasks actualmente en ejecución
     ---
     tags:
-        - Ajustes del sistema
+        - Tareas de procesamiento
     responses:
         200:
             description: Listado de tasks
@@ -36,16 +54,16 @@ def test_celery_result_all():
     # Inspeccionar las tasks activas en los workers
     active = i.active()
 
-    return 'ok'
+    return active
 
-@bp.route('/task-result/<id>', methods=['GET'])
+@bp.route('/result/<id>', methods=['GET'])
 @jwt_required()
 def test_celery_result(id):
     """
     Devuelve el estado de una task
     ---
     tags:
-        - Ajustes del sistema
+        - Tareas de procesamiento
     responses:
         200:
             description: Estado de la task
@@ -54,6 +72,7 @@ def test_celery_result(id):
     """
     # Llamar al servicio para probar las tasks de celery
     result = AsyncResult(id)
+
     return {
         "ready": result.ready(),
         "successful": result.successful(),
