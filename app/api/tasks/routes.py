@@ -48,6 +48,11 @@ def test_celery_result_all():
         500:
             description: Error al recuperar las tasks
     """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para obtener las tasks'}, 401
     # Llamar al servicio para probar las tasks de celery
     i = app.celery_app.control.inspect()
 
@@ -56,25 +61,3 @@ def test_celery_result_all():
 
     return active
 
-@bp.route('/result/<id>', methods=['GET'])
-@jwt_required()
-def test_celery_result(id):
-    """
-    Devuelve el estado de una task
-    ---
-    tags:
-        - Tareas de procesamiento
-    responses:
-        200:
-            description: Estado de la task
-        500:
-            description: Error al recuperar el estado de la task
-    """
-    # Llamar al servicio para probar las tasks de celery
-    result = AsyncResult(id)
-
-    return {
-        "ready": result.ready(),
-        "successful": result.successful(),
-        "value": result.result if result.ready() else None,
-    }

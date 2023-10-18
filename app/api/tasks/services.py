@@ -15,7 +15,6 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para recuperar las tasks de un usuario
-@lru_cache(maxsize=1000)
 def get_tasks(user):
     try:
         # Obtener las tasks de un usuario
@@ -68,3 +67,13 @@ def add_task(taskId, taskName, user, resultType):
 
     # limpiar cache
     get_tasks.cache_clear()
+
+@lru_cache(maxsize=1000)
+def get_tasks_total(user):
+    try:
+        # Obtener el total de tasks de un usuario
+        total = mongodb.count('tasks', {'user': user})
+        # Retornar el total
+        return jsonify(total), 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
