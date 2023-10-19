@@ -82,28 +82,3 @@ def test_celery_result_all():
     active = i.active()
 
     return active
-
-@bp.route('/filedownload/<task_id>', methods=['GET'])
-@jwt_required()
-def download_file(task_id):
-    """
-    Descargar el archivo de una tarea
-    ---
-    tags:
-        - Tareas de procesamiento
-    responses:
-        200:
-            description: Archivo descargado exitosamente
-        400:
-            description: No se puede descargar el archivo
-        401:
-            description: No tiene permisos para descargar el archivo
-        404:
-            description: Tarea no existe
-        500:
-            description: Error al descargar el archivo
-    """
-    # Obtener el usuario actual
-    current_user = get_jwt_identity()
-    # Llamar al servicio para descargar el archivo
-    return services.downloadFilePlugin(task_id, current_user)

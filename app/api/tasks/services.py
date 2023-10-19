@@ -90,31 +90,3 @@ def get_tasks_total(user):
         return jsonify(total), 200
     except Exception as e:
         return {'msg': str(e)}, 500
-    
-def downloadFilePlugin(taskId, user_):
-    # Verificar si el usuario existe
-    user = mongodb.get_record('users', {'username': user_})
-    if not user:
-        return {'msg': 'El usuario no existe'}, 404
-
-    # Buscar la tarea en la base de datos
-    task = mongodb.get_record('tasks', {'taskId': taskId})
-    # Si la tarea no existe, retornar error
-    if not task:
-        return {'msg': 'Tarea no existe'}, 404
-    
-    if task['user'] != user_:
-        return {'msg': 'No tiene permisos para obtener la tarea'}, 401
-
-    if task['status'] == 'pending':
-        return {'msg': 'Tarea en proceso'}, 400
-
-    if task['status'] == 'failed':
-        return {'msg': 'Tarea fallida'}, 400
-
-    if task['status'] == 'completed':
-        if task['resultType'] != 'file_download':
-            return {'msg': 'Tarea no es de tipo file_download'}, 400
-        
-        path = USER_FILES_PATH + task['result']
-        return send_file(path, as_attachment=True)

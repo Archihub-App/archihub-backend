@@ -1,7 +1,7 @@
 from app.utils.PluginClass import PluginClass
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from celery import shared_task
-from flask import request
+from flask import request, send_file
 from app.utils import DatabaseHandler
 from app.api.types.services import get_by_slug
 from app.api.resources.services import get_value_by_path
@@ -39,6 +39,38 @@ class ExtendedPluginClass(PluginClass):
             self.add_task_to_user(task.id, 'inventoryMaker.create_inventory', current_user, 'file_download')
 
             return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
+        
+        @self.route('/filedownload/<taskId>', methods=['GET'])
+        @jwt_required()
+        def file_download(taskId):
+            current_user = get_jwt_identity()
+
+            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
+                return {'msg': 'No tiene permisos suficientes'}, 401
+            
+            # Buscar la tarea en la base de datos
+            task = mongodb.get_record('tasks', {'taskId': taskId})
+            # Si la tarea no existe, retornar error
+            if not task:
+                return {'msg': 'Tarea no existe'}, 404
+            
+            if task['user'] != current_user and not self.has_role('admin', current_user):
+                return {'msg': 'No tiene permisos para obtener la tarea'}, 401
+
+            if task['status'] == 'pending':
+                return {'msg': 'Tarea en proceso'}, 400
+
+            if task['status'] == 'failed':
+                return {'msg': 'Tarea fallida'}, 400
+
+            if task['status'] == 'completed':
+                if task['resultType'] != 'file_download':
+                    return {'msg': 'Tarea no es de tipo file_download'}, 400
+                
+            path = USER_FILES_PATH + task['result']
+            print(path)
+            return send_file(path, as_attachment=True)
+
             
         
     @shared_task(ignore_result=False, name='inventoryMaker.create_inventory')
@@ -86,6 +118,7 @@ class ExtendedPluginClass(PluginClass):
             df.to_excel(writer, sheet_name='Recursos', index=False)
 
         return '/' + user + '/inventoryMaker/' + file_id + '.xlsx'
+
         
     
 plugin_info = {
