@@ -34,6 +34,28 @@ def get_tasks(user):
 
     return services.get_tasks(user)
 
+@bp.route('/total/<user>', methods=['GET'])
+@jwt_required()
+def get_tasks_total(user):
+    """
+    Obtener el total de tasks de un usuario
+    ---
+    tags:
+        - Tareas de procesamiento
+    responses:
+        200:
+            description: Total de tasks
+        500:
+            description: Error al obtener el total de tasks
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not user_services.has_role(current_user, 'admin') or current_user != user:
+        return {'msg': 'No tiene permisos para obtener las tasks'}, 401
+
+    return services.get_tasks_total(user)
+
 @bp.route('', methods=['GET'])
 @jwt_required()
 def test_celery_result_all():

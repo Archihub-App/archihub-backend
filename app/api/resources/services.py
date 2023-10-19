@@ -21,7 +21,6 @@ from app.api.lists.services import get_option_by_id
 from app.api.records.services import delete_parent
 from app.api.records.services import update_parent
 from app.api.records.services import update_record
-from werkzeug.utils import secure_filename
 from app.api.records.services import create as create_record
 from app.api.system.services import get_access_rights
 from app.api.users.services import has_right

@@ -3,9 +3,13 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from celery import shared_task
 from flask import request
 from app.utils import DatabaseHandler
+from app.api.types.services import get_by_slug
+from app.api.resources.services import get_value_by_path
 import os
+import uuid
 # leer variables de entorno desde el archivo .env
 from dotenv import load_dotenv
+import pandas as pd
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -43,12 +47,45 @@ class ExtendedPluginClass(PluginClass):
             'post_type': body['post_type']
         }
 
-        if 'parent' in body:
-            filters['parents.id'] = body['parent']
-        # buscamos los recursos con los filtros especificados
-        resources = mongodb.get_all_records('resources', filters)
+        type = get_by_slug(body['post_type'])
+        type_metadata = type['metadata']
+        type_metadata_name = type['name']
 
-        return 'ok'
+        resources_df = []
+        records_df = []
+
+        if 'parent' in body:
+            if body['parent']:
+                filters['parents.id'] = body['parent']
+
+        # buscamos los recursos con los filtros especificados
+        resources = list(mongodb.get_all_records('resources', filters))
+
+        # si no hay recursos, retornamos un error
+        if len(resources) == 0:
+            raise Exception('No se encontraron recursos con los filtros especificados')
+        
+        # si hay recursos, iteramos
+        for r in resources:
+            obj = {}
+            
+            for f in type_metadata['fields']:
+                if f['type'] == 'text' or f['type'] == 'text-area':
+                    obj[f['label']] = get_value_by_path(r, f['destiny'])
+
+            resources_df.append(obj)
+
+        folder_path = USER_FILES_PATH + '/' + user + '/inventoryMaker'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        file_id = str(uuid.uuid4())
+
+        with pd.ExcelWriter(folder_path + '/' + file_id + '.xlsx') as writer:
+            df = pd.DataFrame(resources_df)
+            df.to_excel(writer, sheet_name='Recursos', index=False)
+
+        return '/' + user + '/inventoryMaker/' + file_id + '.xlsx'
         
     
 plugin_info = {

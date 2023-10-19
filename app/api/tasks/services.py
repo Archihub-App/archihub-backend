@@ -39,6 +39,19 @@ def get_tasks(user):
                     t['status'] = 'completed'
                     t['result'] = result.result
 
+                elif not result.successful():
+                    update = {
+                        'status': 'failed',
+                        'result': '',
+                    }
+
+                    task = TaskUpdate(**update)
+
+                    mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
+
+                    t['status'] = 'failed'
+                    t['result'] = ''
+
         # Retornar las tasks
         return jsonify(tasks), 200
     except Exception as e:
@@ -64,9 +77,7 @@ def add_task(taskId, taskName, user, resultType):
 
     # Guardar la tarea en la base de datos
     mongodb.insert_record('tasks', task)
-
-    # limpiar cache
-    get_tasks.cache_clear()
+    get_tasks_total.cache_clear()
 
 @lru_cache(maxsize=1000)
 def get_tasks_total(user):
