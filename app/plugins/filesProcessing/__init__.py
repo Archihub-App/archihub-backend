@@ -1,6 +1,7 @@
 from app.utils.PluginClass import PluginClass
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.utils import DatabaseHandler
+from flask import request
 from celery import shared_task
 from dotenv import load_dotenv
 import os
@@ -18,6 +19,13 @@ class ExtendedPluginClass(PluginClass):
         @self.route('/bulk', methods=['POST'])
         @jwt_required()
         def process_files():
+            current_user = get_jwt_identity()
+            body = request.get_json()
+
+            if 'post_type' not in body:
+                return {'msg': 'No se especificó el tipo de contenido'}, 400
+
+            task = self.bulk.delay(body, current_user)
             
             return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
         
@@ -31,10 +39,18 @@ class ExtendedPluginClass(PluginClass):
             'post_type': body['post_type']
         }
 
-        # buscamos los recursos con los filtros especificados
-        resources = list(mongodb.get_all_records('resources', filters))
-        
-        return x + y
+        if 'parent' in body:
+            if body['parent']:
+                filters['parents.id'] = body['parent']
+
+        # obtenemos los recursos
+        resources = list(mongodb.get_all_records('resources', filters, fields={'_id': 1}))
+        resources = [str(resource['_id']) for resource in resources]
+        records = list(mongodb.get_all_records('records', {'parent.id': {'$in': resources}}, fields={'_id': 1}))
+
+        print(records)
+
+        return 'ok'
         
     
 plugin_info = {

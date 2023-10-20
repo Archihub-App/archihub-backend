@@ -244,8 +244,6 @@ def create(resource_id, current_user, files):
             # se verifica si el hash del archivo ya existe en la base de datos
             record = get_hash(str(hash.hexdigest()))
 
-            print(record)
-            
             # si el record existe, se agrega el recurso como padre
             if record:
                 # eliminar el archivo que se subio
@@ -304,7 +302,7 @@ def create(resource_id, current_user, files):
                     'name': filename,
                     'hash': str(hash.hexdigest()),
                     'size': size,
-                    'filepath': str(os.path.join(path, filename_new)),
+                    'filepath': str(os.path.join(date, filename_new)),
                     'mime': mime,
                     'parent': [{
                         'id': resource_id,
