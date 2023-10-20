@@ -4,8 +4,6 @@ import os
 
 def convert_to_pdf_with_libreoffice(input_file, output_dir):
     subprocess.run(['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', os.path.dirname(input_file), input_file])
-    subprocess.run(['mv', f'{input_file.split(".")[0]}.pdf', output_dir + '.pdf'])  # Rename the output file
-
 
 def main(filepath, output_pdf, output):
     try:

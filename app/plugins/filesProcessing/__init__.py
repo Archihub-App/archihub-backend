@@ -10,6 +10,7 @@ from .utils import VideoProcessing
 from .utils import ImageProcessing
 from .utils import PDFprocessing
 from .utils import DocumentProcessing
+from .utils import DatabaseProcessing
 from app.api.records.models import RecordUpdate
 
 load_dotenv()
@@ -158,8 +159,35 @@ class ExtendedPluginClass(PluginClass):
                     update = RecordUpdate(**update)
                     mongodb.update_record('records', {'_id': file['_id']}, update)
             
-            elif ('text' in file['mime'] and get_filename_extension(file['filepath']) == '.csv') or 'sheet' in file['mime']:
-                print('csv or sheet')
+            elif 'text' in file['mime'] and get_filename_extension(file['filepath']) == '.csv':
+                result = DatabaseProcessing.main_csv(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+
+                if result:
+                    update = {
+                        'processing': {
+                            'fileProcessing': {
+                                'type': 'database',
+                                'path': os.path.join(path_dir, filename),
+                            }
+                        }
+                    }
+                    update = RecordUpdate(**update)
+                    mongodb.update_record('records', {'_id': file['_id']}, update)
+
+            elif 'sheet' in file['mime']:
+                result = DatabaseProcessing.main_excel(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+
+                if result:
+                    update = {
+                        'processing': {
+                            'fileProcessing': {
+                                'type': 'database',
+                                'path': os.path.join(path_dir, filename),
+                            }
+                        }
+                    }
+                    update = RecordUpdate(**update)
+                    mongodb.update_record('records', {'_id': file['_id']}, update)
 
         return 'Se procesaron ' + str(size) + ' archivos'
     
