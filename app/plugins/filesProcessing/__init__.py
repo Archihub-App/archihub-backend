@@ -9,6 +9,7 @@ from .utils import AudioProcessing
 from .utils import VideoProcessing
 from .utils import ImageProcessing
 from .utils import PDFprocessing
+from .utils import DocumentProcessing
 from app.api.records.models import RecordUpdate
 
 load_dotenv()
@@ -127,7 +128,19 @@ class ExtendedPluginClass(PluginClass):
                     update = RecordUpdate(**update)
                     mongodb.update_record('records', {'_id': file['_id']}, update)
             elif 'word' in file['mime'] or ('text' in file['mime'] and get_filename_extension(file['filepath']) != '.csv'):
-                print('text')
+                result = DocumentProcessing.main(path, os.path.join(ORIGINAL_FILES_PATH, path_dir, filename), os.path.join(WEB_FILES_PATH, path_dir, filename))
+
+                if result:
+                    update = {
+                        'processing': {
+                            'fileProcessing': {
+                                'type': 'document',
+                                'path': os.path.join(path_dir, filename),
+                            }
+                        }
+                    }
+                    update = RecordUpdate(**update)
+                    mongodb.update_record('records', {'_id': file['_id']}, update)
 
             elif 'application/pdf' in file['mime']:
                 result = PDFprocessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
