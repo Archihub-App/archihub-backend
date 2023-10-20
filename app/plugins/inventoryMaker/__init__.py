@@ -7,9 +7,8 @@ from app.api.types.services import get_by_slug
 from app.api.resources.services import get_value_by_path
 import os
 import uuid
-# leer variables de entorno desde el archivo .env
-from dotenv import load_dotenv
 import pandas as pd
+from dotenv import load_dotenv
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -68,7 +67,6 @@ class ExtendedPluginClass(PluginClass):
                     return {'msg': 'Tarea no es de tipo file_download'}, 400
                 
             path = USER_FILES_PATH + task['result']
-            print(path)
             return send_file(path, as_attachment=True)
 
             

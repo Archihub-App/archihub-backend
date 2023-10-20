@@ -19,15 +19,21 @@ class ExtendedPluginClass(PluginClass):
         @jwt_required()
         def process_files():
             
-            return 'ok', 201
+            return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
         
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile.auto')
     def auto_bulk(self, params):
         return 'ok'
         
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
-    def bulk(x, y):
-        print(x + y)
+    def bulk(body, user):
+        filters = {
+            'post_type': body['post_type']
+        }
+
+        # buscamos los recursos con los filtros especificados
+        resources = list(mongodb.get_all_records('resources', filters))
+        
         return x + y
         
     

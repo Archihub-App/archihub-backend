@@ -55,3 +55,7 @@ class DatabaseHandler:
     # Esta función sirve para obtener el total de registros de una colección
     def count(self, collection, filters={}):
         return self.mydb[collection].count_documents(filters)
+    
+    # Esta función permite hacer una agregación en una colección
+    def aggregate(self, collection, pipeline):
+        return self.mydb[collection].aggregate(pipeline)

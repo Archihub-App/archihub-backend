@@ -238,7 +238,7 @@ def validate_fields(body, metadata, errors):
         if body['accessRights'] == 'public':
             body['accessRights'] = None
 
-        access_rights = get_access_rights()
+        access_rights = get_access_rights()['options']
         access_rights = [a['id'] for a in access_rights]
 
         if body['accessRights'] not in access_rights and body['accessRights'] != None:
