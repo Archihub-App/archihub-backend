@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 import os
 from .utils import AudioProcessing
 from .utils import VideoProcessing
+from .utils import ImageProcessing
+from .utils import PDFprocessing
 from app.api.records.models import RecordUpdate
 
 load_dotenv()
@@ -41,6 +43,15 @@ class ExtendedPluginClass(PluginClass):
         
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
     def bulk(body, user):
+        def get_filename_extension(filename):
+            if '.' not in filename:
+                return None
+            if len(filename.split('.')) != 2:
+                return None
+            ext = os.path.splitext(filename)[1]
+            ext = ext.lower()
+            return ext
+    
         filters = {
             'post_type': body['post_type']
         }
@@ -89,21 +100,55 @@ class ExtendedPluginClass(PluginClass):
                     mongodb.update_record('records', {'_id': file['_id']}, update)
 
             elif 'video' in file['mime']:
-                result = VideoProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
-                if result:
+                result_audio, result_video = VideoProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+                if result_video or result_audio:
+                    type = 'video' if result_video else 'audio' if result_audio else None
                     update = {
                         'processing': {
                             'fileProcessing': {
-                                'type': 'video',
+                                'type': type,
                                 'path': os.path.join(path_dir, filename),
                             }
                         }
                     }
                     update = RecordUpdate(**update)
                     mongodb.update_record('records', {'_id': file['_id']}, update)
+            elif 'image' in file['mime']:
+                result = ImageProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+                if result:
+                    update = {
+                        'processing': {
+                            'fileProcessing': {
+                                'type': 'image',
+                                'path': os.path.join(path_dir, filename),
+                            }
+                        }
+                    }
+                    update = RecordUpdate(**update)
+                    mongodb.update_record('records', {'_id': file['_id']}, update)
+            elif 'word' in file['mime'] or ('text' in file['mime'] and get_filename_extension(file['filepath']) != '.csv'):
+                print('text')
+
+            elif 'application/pdf' in file['mime']:
+                result = PDFprocessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+                folder_path = os.path.join(path_dir, filename).split('.')[0]
+
+                if result:
+                    update = {
+                        'processing': {
+                            'fileProcessing': {
+                                'type': 'pdf',
+                                'path': folder_path,
+                            }
+                        }
+                    }
+                    update = RecordUpdate(**update)
+                    mongodb.update_record('records', {'_id': file['_id']}, update)
+            
+            elif ('text' in file['mime'] and get_filename_extension(file['filepath']) == '.csv') or 'sheet' in file['mime']:
+                print('csv or sheet')
 
         return 'Se procesaron ' + str(size) + ' archivos'
-        
     
 plugin_info = {
     'name': 'Procesamiento de archivos',
@@ -125,7 +170,7 @@ plugin_info = {
                 'type': 'checkbox',
                 'label': 'Sobreescribir archivos existentes',
                 'id': 'overwrite',
-                'instructions': 'Los archivos existentes serán sobrescritos con nuevas versiones. Si no se selecciona esta opción, los archivos existentes no serán procesados nuevamente.',
+                'instructions': 'Sobreescribir archivos ya procesados. Si esta opción está desactivada, el plugin solo procesará los archivos que no tengan una versión procesada.',
                 'default': False,
                 'required': False,
             }

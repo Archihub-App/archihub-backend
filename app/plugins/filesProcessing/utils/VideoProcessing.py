@@ -52,6 +52,6 @@ def main(filepath, output):
                 .run()
             )
 
-        return True
+        return audio, video
     except Exception as e:
         raise Exception('Error al convertir el archivo: ' + str(e))
