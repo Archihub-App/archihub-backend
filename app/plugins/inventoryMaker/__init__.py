@@ -34,7 +34,6 @@ class ExtendedPluginClass(PluginClass):
                 return {'msg': 'No se especificó el tipo de contenido'}, 400
             
             task = self.create.delay(body, current_user)
-
             self.add_task_to_user(task.id, 'inventoryMaker.create_inventory', current_user, 'file_download')
 
             return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201

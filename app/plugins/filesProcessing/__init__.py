@@ -5,11 +5,15 @@ from flask import request
 from celery import shared_task
 from dotenv import load_dotenv
 import os
+from .utils import AudioProcessing
+from .utils import VideoProcessing
+
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
 USER_FILES_PATH = os.environ.get('USER_FILES_PATH', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
+ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
 
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type, settings):
@@ -26,6 +30,7 @@ class ExtendedPluginClass(PluginClass):
                 return {'msg': 'No se especificó el tipo de contenido'}, 400
 
             task = self.bulk.delay(body, current_user)
+            self.add_task_to_user(task.id, 'filesProcessing.create_webfile', current_user, 'msg')
             
             return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
         
@@ -46,11 +51,25 @@ class ExtendedPluginClass(PluginClass):
         # obtenemos los recursos
         resources = list(mongodb.get_all_records('resources', filters, fields={'_id': 1}))
         resources = [str(resource['_id']) for resource in resources]
-        records = list(mongodb.get_all_records('records', {'parent.id': {'$in': resources}}, fields={'_id': 1}))
+        records = list(mongodb.get_all_records('records', {'parent.id': {'$in': resources}}, fields={'_id': 1, 'mime': 1, 'filepath': 1}))
 
-        print(records)
+        size = len(records)
+        for file in records:
+            path = os.path.join(ORIGINAL_FILES_PATH, file['filepath'])
+            # quitar el nombre del archivo de la ruta
+            path_dir = os.path.dirname(file['filepath'])
+            # obtener el nombre del archivo sin la extensión
+            filename = os.path.splitext(os.path.basename(file['filepath']))[0]
+            
+            if not os.path.exists(os.path.join(WEB_FILES_PATH, path_dir)):
+                os.makedirs(os.path.join(WEB_FILES_PATH, path_dir))
 
-        return 'ok'
+            if 'audio' in file['mime']:
+                AudioProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+            elif 'video' in file['mime']:
+                VideoProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+
+        return 'Se procesaron ' + str(size) + ' archivos'
         
     
 plugin_info = {
