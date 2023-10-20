@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import os
 from .utils import AudioProcessing
 from .utils import VideoProcessing
+from app.api.records.models import RecordUpdate
 
 load_dotenv()
 
@@ -51,7 +52,16 @@ class ExtendedPluginClass(PluginClass):
         # obtenemos los recursos
         resources = list(mongodb.get_all_records('resources', filters, fields={'_id': 1}))
         resources = [str(resource['_id']) for resource in resources]
-        records = list(mongodb.get_all_records('records', {'parent.id': {'$in': resources}}, fields={'_id': 1, 'mime': 1, 'filepath': 1}))
+
+        records_filters = {
+            'parent.id': {'$in': resources}
+        }
+        if body['overwrite']:
+            records_filters['processing.fileProcessing'] = {'$exists': True}
+        else:
+            records_filters['processing.fileProcessing'] = {'$exists': False}
+
+        records = list(mongodb.get_all_records('records', records_filters, fields={'_id': 1, 'mime': 1, 'filepath': 1}))
 
         size = len(records)
         for file in records:
@@ -65,9 +75,32 @@ class ExtendedPluginClass(PluginClass):
                 os.makedirs(os.path.join(WEB_FILES_PATH, path_dir))
 
             if 'audio' in file['mime']:
-                AudioProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+                result = AudioProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+                if result:
+                    update = {
+                        'processing': {
+                            'fileProcessing': {
+                                'type': 'audio',
+                                'path': os.path.join(path_dir, filename),
+                            }
+                        }
+                    }
+                    update = RecordUpdate(**update)
+                    mongodb.update_record('records', {'_id': file['_id']}, update)
+
             elif 'video' in file['mime']:
-                VideoProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+                result = VideoProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+                if result:
+                    update = {
+                        'processing': {
+                            'fileProcessing': {
+                                'type': 'video',
+                                'path': os.path.join(path_dir, filename),
+                            }
+                        }
+                    }
+                    update = RecordUpdate(**update)
+                    mongodb.update_record('records', {'_id': file['_id']}, update)
 
         return 'Se procesaron ' + str(size) + ' archivos'
         
@@ -87,6 +120,14 @@ plugin_info = {
                 'type':  'instructions',
                 'title': 'Instrucciones',
                 'text': 'Este plugin permite procesar archivos y generar versiones para consulta en el gestor documental. Para ello, puede especificar el tipo de contenido sobre el cual quiere generar las versiones y los filtros que desea aplicar. Es importante notar que el proceso de generación de versiones puede tardar varios minutos, dependiendo de la cantidad de recursos que se encuentren en el gestor documental y el tamaño original de los archivos.',
+            },
+            {
+                'type': 'checkbox',
+                'label': 'Sobreescribir archivos existentes',
+                'id': 'overwrite',
+                'instructions': 'Los archivos existentes serán sobrescritos con nuevas versiones. Si no se selecciona esta opción, los archivos existentes no serán procesados nuevamente.',
+                'default': False,
+                'required': False,
             }
         ]
     }
