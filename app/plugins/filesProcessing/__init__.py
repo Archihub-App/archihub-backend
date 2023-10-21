@@ -196,7 +196,7 @@ plugin_info = {
     'description': 'Plugin para procesar archivos y generar versiones para consulta en el gestor documental',
     'version': '0.1',
     'author': 'Néstor Andrés Peña',
-    'type': ['bulk', 'settings'],
+    'type': ['bulk'],
     'settings': {
         'settings': [
 

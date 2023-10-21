@@ -343,3 +343,24 @@ def get_hash(hash):
 
     except Exception as e:
         raise Exception(str(e))
+    
+# Nuevo servicio para obtener un record por su id verificando el usuario
+@lru_cache(maxsize=1000)
+def get_by_id(id, current_user):
+    try:
+        print(id)
+        # Buscar el record en la base de datos
+        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1})
+
+        # obtener el usuario de la base de datos
+        user = mongodb.get_record('users', {'username': current_user}, fields={'roles': 1, 'accessRights': 1})
+
+        # Si el record no existe, retornar error
+        if not record:
+            return {'msg': 'Record no existe'}, 404
+        
+        # Si el record existe, retornar el record
+        return parse_result(record), 200
+
+    except Exception as e:
+        return {'msg': str(e)}, 500

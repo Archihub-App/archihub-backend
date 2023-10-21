@@ -25,7 +25,7 @@ def get_tasks(user):
         tasks = parse_result(tasks)
 
         for t in tasks:
-            if t['status'] == 'pending':
+            if t['status'] == 'pending' or t['status'] == 'failed':
                 result = AsyncResult(t['taskId'])
 
                 if result.successful() and result.ready():
@@ -41,7 +41,7 @@ def get_tasks(user):
                     t['status'] = 'completed'
                     t['result'] = result.result
 
-                elif not result.successful():
+                elif not result.successful() and result.ready():
                     update = {
                         'status': 'failed',
                         'result': '',

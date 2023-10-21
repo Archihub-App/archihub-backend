@@ -51,3 +51,39 @@ def get_all():
     body = request.json
     # Llamar al servicio para obtener los records
     return services.get_by_filters(body, current_user)
+
+# Nuevo endpoint para obtener un record por su id
+@bp.route('/<id>', methods=['GET'])
+@jwt_required()
+def get_by_id(id):
+    """
+    Obtener un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            required: true
+            description: id del record a obtener
+    responses:
+        200:
+            description: Record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    
+    # Llamar al servicio para obtener un record por su id
+    resp = services.get_by_id(id, current_user)
+    
+    return resp
