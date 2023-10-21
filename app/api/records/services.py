@@ -1,5 +1,5 @@
 import datetime
-from flask import jsonify, request
+from flask import jsonify, send_file
 from app.utils import DatabaseHandler
 from bson import json_util
 import json
@@ -9,21 +9,23 @@ from app.api.records.models import Record as FileRecord
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.records.models import RecordUpdate as FileRecordUpdate
+from app.utils.functions import get_roles, cache_get_record_stream
 from werkzeug.utils import secure_filename
 import os
 import hashlib
 import magic
 import uuid
+from dotenv import load_dotenv
+load_dotenv()
 
-# get path of root folder
+ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
+WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
+UPLOAD_FOLDER = os.path.join(ORIGINAL_FILES_PATH, 'uploads')
 
-UPLOAD_FOLDER = os.path.abspath(os.path.join(
-    os.path.dirname(__file__), '..', '..', '..'))
 # Make a folder for uploads if it doesn't exist
-if not os.path.exists(os.path.join(UPLOAD_FOLDER, 'uploads')):
-    os.makedirs(os.path.join(UPLOAD_FOLDER, 'uploads'))
+if not os.path.exists(ORIGINAL_FILES_PATH):
+    os.makedirs(ORIGINAL_FILES_PATH)
 
-UPLOAD_FOLDER = os.path.join(UPLOAD_FOLDER, 'uploads')
 
 ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif',
                           'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'zip', 'rar', 'mp4',
@@ -364,3 +366,17 @@ def get_by_id(id, current_user):
 
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+# Nuevo servicio para devolver un stream de un archivo por su id
+def get_stream(id, user):
+    try:
+        path = cache_get_record_stream(id)
+        path = os.path.join(WEB_FILES_PATH, path)
+        path = path + '.mp3'
+
+        # retornar el archivo
+        return send_file(path, as_attachment=False)
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    

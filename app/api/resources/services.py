@@ -24,6 +24,7 @@ from app.api.records.services import update_record
 from app.api.records.services import create as create_record
 from app.api.system.services import get_access_rights
 from app.api.users.services import has_right
+from app.utils.functions import get_resource_records
 import os
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -350,13 +351,14 @@ def get_resource(id, user):
             r_ = get_resource_records(json.dumps(ids))
             for _ in r_:
                 obj = {
-                    'name': _['name'],
-                    'size': _['size'],
-                    'id': str(_['_id'])
+                    'id': str(_['_id']),
+                    'hash': _['hash'],
                 }
 
                 if 'displayName' in _: obj['displayName'] = _['displayName']
+                else : obj['displayName'] = _['name']
                 if 'accessRights' in _: obj['accessRights'] = _['accessRights']
+                if 'processing' in _: obj['processing'] = _['processing']
 
                 temp.append(obj)
 
@@ -433,19 +435,6 @@ def get_resource(id, user):
 
     return resource
 
-
-def get_resource_records(ids):
-    ids = json.loads(ids)
-    for i in range(len(ids)):
-        ids[i] = ObjectId(ids[i])
-    try:
-        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}, fields={
-                  'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1}))
-        
-        return r_
-    except Exception as e:
-        print(str(e))
-        raise Exception(str(e))
 
 def get_resource_files(id, user):
     try:

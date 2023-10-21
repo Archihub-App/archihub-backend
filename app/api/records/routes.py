@@ -87,3 +87,39 @@ def get_by_id(id):
     resp = services.get_by_id(id, current_user)
     
     return resp
+
+# Nuevo endpoint para obtener el stream de un record por su id
+@bp.route('/<id>/stream', methods=['GET'])
+@jwt_required()
+def get_stream_by_id(id):
+    """
+    Obtener el stream de un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            required: true
+            description: id del record a obtener
+    responses:
+        200:
+            description: Record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    
+    # Llamar al servicio para obtener un record por su id
+    resp = services.get_stream(id, current_user)
+    
+    return resp

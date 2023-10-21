@@ -126,3 +126,51 @@ def get_list_by_id(id):
     
 def parse_result(result):
     return json.loads(json_util.dumps(result))
+
+@lru_cache(maxsize=1000)
+def get_resource_records(ids) :
+    ids = json.loads(ids)
+    for i in range(len(ids)):
+        ids[i] = ObjectId(ids[i])
+
+    try:
+        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}, fields={
+                  'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}))
+        
+        pro_dict = {}
+        
+        for r in r_:
+            if 'processing' in r:
+                if 'fileProcessing' in r['processing']:
+                    pro_dict['fileProcessing'] = {
+                        'type': r['processing']['fileProcessing']['type'],
+                    }
+
+            r['processing'] = pro_dict
+
+        return r_
+    
+    except Exception as e:
+        raise Exception(str(e))
+    
+@lru_cache(maxsize=1000)
+def cache_get_record_stream(id):
+    # Buscar el record en la base de datos
+    record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'filepath': 1, 'processing': 1})
+
+    # Si el record no existe, retornar error
+    if not record:
+        return {'msg': 'Record no existe'}, 404
+    # si el record no se ha procesado, retornar error
+    if 'processing' not in record:
+        if 'fileProcessing' not in record['processing']:
+            return {'msg': 'Record no ha sido procesado'}, 404
+        
+    # si el record no es de tipo audio o video, retornar error
+    if record['processing']['fileProcessing']['type'] != 'audio' and record['processing']['fileProcessing']['type'] != 'video':
+        return {'msg': 'Record no es de tipo audio o video'}, 404
+
+    # obtener el path del archivo
+    path = record['processing']['fileProcessing']['path']
+
+    return path
