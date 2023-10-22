@@ -123,3 +123,40 @@ def get_stream_by_id(id):
     resp = services.get_stream(id, current_user)
     
     return resp
+
+@bp.route('/<id>/transcription', methods=['POST'])
+@jwt_required()
+def get_transcription_by_id(id):
+    """
+    Obtener la transcripción de un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            required: true
+            description: id del record a obtener
+    responses:
+        200:
+            description: Record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    body = request.json
+    
+    # Llamar al servicio para obtener un record por su id
+    resp = services.get_transcription(id, body['slug'], current_user)
+    
+    return resp

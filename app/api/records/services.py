@@ -9,7 +9,7 @@ from app.api.records.models import Record as FileRecord
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import get_roles, cache_get_record_stream
+from app.utils.functions import get_roles, cache_get_record_stream, cache_get_record_transcription
 from werkzeug.utils import secure_filename
 import os
 import hashlib
@@ -20,7 +20,6 @@ load_dotenv()
 
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
-UPLOAD_FOLDER = os.path.join(ORIGINAL_FILES_PATH, 'uploads')
 
 # Make a folder for uploads if it doesn't exist
 if not os.path.exists(ORIGINAL_FILES_PATH):
@@ -224,7 +223,7 @@ def create(resource_id, current_user, files):
             # coger la fecha actual y convertirla a string de la forma YYYY/MM/DD
             date = datetime.datetime.now().strftime("%Y/%m/%d")
             # hacer un path en base a la fecha actual
-            path = os.path.join(UPLOAD_FOLDER, date)
+            path = os.path.join(ORIGINAL_FILES_PATH, date)
             # crear el directorio para guardar el archivo usando la ruta date
             if not os.path.exists(path):
                 os.makedirs(path)
@@ -326,7 +325,6 @@ def create(resource_id, current_user, files):
                 # limpiar la cache
                 get_all.cache_clear()
         else:
-            print("nono")
             raise Exception('Tipo de archivo no permitido')
 
     # retornar el resultado
@@ -361,6 +359,19 @@ def get_by_id(id, current_user):
         if not record:
             return {'msg': 'Record no existe'}, 404
         
+        # get keys from record['processing']
+        keys = {}
+        fileProcessing = None
+        if 'processing' in record:
+            # iterate over processing keys in record['processing']
+            for key in record['processing']:
+                keys[key] = {}
+                keys[key]['type'] = record['processing'][key]['type']
+
+        record['processing'] = keys
+
+        print(record)
+
         # Si el record existe, retornar el record
         return parse_result(record), 200
 
@@ -370,9 +381,13 @@ def get_by_id(id, current_user):
 # Nuevo servicio para devolver un stream de un archivo por su id
 def get_stream(id, user):
     try:
-        path = cache_get_record_stream(id)
+        path, type = cache_get_record_stream(id)
         path = os.path.join(WEB_FILES_PATH, path)
-        path = path + '.mp3'
+
+        if type == 'video':
+            path = path + '.mp4'
+        elif type == 'audio':
+            path = path + '.mp3'
 
         # retornar el archivo
         return send_file(path, as_attachment=False)
@@ -380,3 +395,13 @@ def get_stream(id, user):
     except Exception as e:
         return {'msg': str(e)}, 500
     
+# Nuevo servicio para devolver la transcripcion de un plugin
+def get_transcription(id, slug, user):
+    try:
+        resp = cache_get_record_transcription(id, slug)
+        
+        # Si el record existe, retornar el record
+        return resp, 200
+
+    except Exception as e:
+        return {'msg': str(e)}, 500

@@ -45,6 +45,7 @@ def get_roles():
         raise Exception(
             'Error al obtener el registro access_rights: ' + str(e))
 
+
 @lru_cache(maxsize=1)
 def get_access_rights_id():
     try:
@@ -60,6 +61,7 @@ def get_access_rights_id():
 
     except Exception as e:
         raise Exception('Error al obtener el registro access_rights')
+
 
 @lru_cache(maxsize=1)
 def get_access_rights():
@@ -96,20 +98,23 @@ def verify_accessright_exists(compare):
 
     return temp
 
+
 def get_list_by_id(id):
     try:
         # Buscar el listado en la base de datos
         lista = mongodb.get_record('lists', {'_id': ObjectId(id)})
         # a lista solo le dejamos los campos name, description, y options
-        lista = { 'name': lista['name'], 'description': lista['description'], 'options': lista['options'] }
+        lista = {
+            'name': lista['name'], 'description': lista['description'], 'options': lista['options']}
         # Si el listado no existe, retornar error
         if not lista:
             return {'msg': 'Listado no existe'}
-        
+
         opts = []
 
-        records = mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(id) for id in lista['options']]}}, [('term', 1)])
-        
+        records = mongodb.get_all_records('options', {
+                                          '_id': {'$in': [ObjectId(id) for id in lista['options']]}}, [('term', 1)])
+
         # opts es igual a un arreglo de diccionarios con los campos id y term
         for record in records:
             opts.append({'id': str(record['_id']), 'term': record['term']})
@@ -123,12 +128,14 @@ def get_list_by_id(id):
         return lista
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
+
 @lru_cache(maxsize=1000)
-def get_resource_records(ids) :
+def get_resource_records(ids):
     ids = json.loads(ids)
     for i in range(len(ids)):
         ids[i] = ObjectId(ids[i])
@@ -136,9 +143,9 @@ def get_resource_records(ids) :
     try:
         r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}, fields={
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}))
-        
+
         pro_dict = {}
-        
+
         for r in r_:
             if 'processing' in r:
                 if 'fileProcessing' in r['processing']:
@@ -149,28 +156,66 @@ def get_resource_records(ids) :
             r['processing'] = pro_dict
 
         return r_
-    
+
     except Exception as e:
         raise Exception(str(e))
-    
+
+
 @lru_cache(maxsize=1000)
 def cache_get_record_stream(id):
     # Buscar el record en la base de datos
-    record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'filepath': 1, 'processing': 1})
+    record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={
+                                'filepath': 1, 'processing': 1})
 
     # Si el record no existe, retornar error
     if not record:
-        return {'msg': 'Record no existe'}, 404
+        raise Exception('Record no existe')
     # si el record no se ha procesado, retornar error
     if 'processing' not in record:
         if 'fileProcessing' not in record['processing']:
-            return {'msg': 'Record no ha sido procesado'}, 404
-        
+            raise Exception('Record no ha sido procesado')
+
     # si el record no es de tipo audio o video, retornar error
     if record['processing']['fileProcessing']['type'] != 'audio' and record['processing']['fileProcessing']['type'] != 'video':
-        return {'msg': 'Record no es de tipo audio o video'}, 404
+        raise Exception('Record no es de tipo audio o video')
 
     # obtener el path del archivo
     path = record['processing']['fileProcessing']['path']
+    type = record['processing']['fileProcessing']['type']
 
-    return path
+    return path, type
+
+
+@lru_cache(maxsize=1000)
+def cache_get_record_transcription(id, slug):
+    # Buscar el record en la base de datos
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
+
+    # Si el record no existe, retornar error
+    if not record:
+        raise Exception('Record no existe')
+    # si el record no se ha procesado, retornar error
+    if slug not in record['processing']:
+        raise Exception('Record no ha sido procesado')
+    if record['processing'][slug]['type'] != 'av_transcribe':
+        raise Exception('Record no ha sido procesado con el slug ' + slug)
+
+    resp = {
+        'text': record['processing'][slug]['result']['text'],
+        'segments': record['processing'][slug]['result']['segments']
+    }
+
+    for s in resp['segments']:
+        obj = {
+            'text': s['text'],
+            'start': s['start'],
+            'end': s['end'],
+        }
+
+        s = obj
+
+    # obtener el path del archivo
+    transcription = resp
+
+    return transcription
