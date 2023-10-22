@@ -12,7 +12,7 @@ from celery.result import AsyncResult
 
 from flask import current_app as app
 
-@bp.route('/<user>', methods=['GET'])
+@bp.route('/<user>', methods=['POST'])
 @jwt_required()
 def get_tasks(user):
     """
@@ -28,11 +28,13 @@ def get_tasks(user):
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
+    
+    body = request.json
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin') or current_user != user:
         return {'msg': 'No tiene permisos para obtener las tasks'}, 401
 
-    return services.get_tasks(user)
+    return services.get_tasks(user, body)
 
 @bp.route('/total/<user>', methods=['GET'])
 @jwt_required()

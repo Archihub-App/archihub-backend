@@ -17,10 +17,15 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para recuperar las tasks de un usuario
-def get_tasks(user):
+def get_tasks(user, body):
     try:
+        limit = 20
+        skip = 0
+        if 'page' in body:
+            skip = body['page'] * limit
+
         # Obtener las tasks de un usuario
-        tasks = mongodb.get_all_records('tasks', {'user': user}, sort=[('date', -1)], fields={'_id': 0, 'user': 0})
+        tasks = mongodb.get_all_records('tasks', {'user': user}, sort=[('date', -1)], fields={'_id': 0, 'user': 0}, limit=limit, skip=skip)
         # Parsear el resultado
         tasks = parse_result(tasks)
 
