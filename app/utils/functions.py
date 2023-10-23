@@ -5,6 +5,7 @@ import json
 from bson.objectid import ObjectId
 import os
 from dotenv import load_dotenv
+from PIL import Image
 load_dotenv()
 
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
@@ -251,6 +252,14 @@ def cache_get_record_lowres_document(id):
     if len(files) == 0:
         raise Exception('Record no tiene archivos')
     
+    # get the first file in the directory and get the dimensions of the image
+    file = files[0]
+    file = os.path.join(path_small, file)
+    img = Image.open(file)
+    width, height = img.size
+    aspect_ratio = width / height
+    
     return {
-        'pages': len(files)
+        'pages': len(files),
+        'aspect_ratio': aspect_ratio
     }
