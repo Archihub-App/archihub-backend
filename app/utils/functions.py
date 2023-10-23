@@ -3,6 +3,11 @@ from functools import lru_cache
 from bson import json_util
 import json
 from bson.objectid import ObjectId
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -220,7 +225,9 @@ def cache_get_record_transcription(id, slug):
 
     return transcription
 
-def get_record_lowres_document(id):
+
+@lru_cache(maxsize=1000)
+def cache_get_record_lowres_document(id):
     # Buscar el record en la base de datos
     record = mongodb.get_record(
         'records', {'_id': ObjectId(id)}, fields={'processing': 1})
@@ -229,10 +236,21 @@ def get_record_lowres_document(id):
     if not record:
         raise Exception('Record no existe')
     # si el record no se ha procesado, retornar error
+    if 'processing' not in record:
+        raise Exception('Record no ha sido procesado')
     if 'fileProcessing' not in record['processing']:
         raise Exception('Record no ha sido procesado')
-    if record['processing']['fileProcessing']['type'] != 'document':
+    if record['processing']['fileProcessing']['type'] != 'pdf' and record['processing']['fileProcessing']['type'] != 'document':
         raise Exception('Record no es de tipo documento')
+    
+    path = record['processing']['fileProcessing']['path']
+    path_small = os.path.join(WEB_FILES_PATH, path, 'web/small/')
+    path = os.path.join(WEB_FILES_PATH, path)
 
-
-    return 'ok'
+    files = os.listdir(path_small)
+    if len(files) == 0:
+        raise Exception('Record no tiene archivos')
+    
+    return {
+        'pages': len(files)
+    }

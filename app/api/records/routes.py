@@ -160,3 +160,36 @@ def get_transcription_by_id(id):
     resp = services.get_transcription(id, body['slug'], current_user)
     
     return resp
+
+@bp.route('/<id>/document', methods=['GET'])
+@jwt_required()
+def get_document_by_id(id):
+    """
+    Obtener el documento de un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            required: true
+            description: id del record a obtener
+    responses:
+        200:
+            description: Record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    # Llamar al servicio para obtener un record por su id
+    return services.get_document(id, current_user)

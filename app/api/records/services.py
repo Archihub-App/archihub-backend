@@ -9,7 +9,7 @@ from app.api.records.models import Record as FileRecord
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import get_roles, cache_get_record_stream, cache_get_record_transcription
+from app.utils.functions import get_roles, cache_get_record_stream, cache_get_record_transcription, cache_get_record_lowres_document
 from werkzeug.utils import secure_filename
 import os
 import hashlib
@@ -409,7 +409,7 @@ def get_transcription(id, slug, user):
 # Nuevo servicio para devolver las paginas en baja de un documento por su id
 def get_document(id, user):
     try:
-        return 'ok'
+        return cache_get_record_lowres_document(id)
 
     except Exception as e:
         return {'msg': str(e)}, 500
