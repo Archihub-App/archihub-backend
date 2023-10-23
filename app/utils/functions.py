@@ -219,3 +219,20 @@ def cache_get_record_transcription(id, slug):
     transcription = resp
 
     return transcription
+
+def get_record_lowres_document(id):
+    # Buscar el record en la base de datos
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
+
+    # Si el record no existe, retornar error
+    if not record:
+        raise Exception('Record no existe')
+    # si el record no se ha procesado, retornar error
+    if 'fileProcessing' not in record['processing']:
+        raise Exception('Record no ha sido procesado')
+    if record['processing']['fileProcessing']['type'] != 'document':
+        raise Exception('Record no es de tipo documento')
+
+
+    return 'ok'

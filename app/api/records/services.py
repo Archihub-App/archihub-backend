@@ -405,3 +405,11 @@ def get_transcription(id, slug, user):
 
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+# Nuevo servicio para devolver las paginas en baja de un documento por su id
+def get_document(id, user):
+    try:
+        return 'ok'
+
+    except Exception as e:
+        return {'msg': str(e)}, 500

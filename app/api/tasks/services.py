@@ -19,7 +19,7 @@ def parse_result(result):
 # Nuevo servicio para recuperar las tasks de un usuario
 def get_tasks(user, body):
     try:
-        limit = 20
+        limit = 10
         skip = 0
         if 'page' in body:
             skip = body['page'] * limit
