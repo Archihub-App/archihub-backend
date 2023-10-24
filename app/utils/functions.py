@@ -6,6 +6,8 @@ from bson.objectid import ObjectId
 import os
 from dotenv import load_dotenv
 from PIL import Image
+from flask import Response
+import base64
 load_dotenv()
 
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
@@ -228,7 +230,7 @@ def cache_get_record_transcription(id, slug):
 
 
 @lru_cache(maxsize=1000)
-def cache_get_record_lowres_document(id):
+def cache_get_record_document_detail(id):
     # Buscar el record en la base de datos
     record = mongodb.get_record(
         'records', {'_id': ObjectId(id)}, fields={'processing': 1})
@@ -263,3 +265,47 @@ def cache_get_record_lowres_document(id):
         'pages': len(files),
         'aspect_ratio': aspect_ratio
     }
+
+@lru_cache(maxsize=5000)
+def cache_get_pages_by_id(id, pages, size):
+    pages = json.loads(pages)
+    # Buscar el record en la base de datos
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
+
+    # Si el record no existe, retornar error
+    if not record:
+        raise Exception('Record no existe')
+    # si el record no se ha procesado, retornar error
+    if 'processing' not in record:
+        raise Exception('Record no ha sido procesado')
+    if 'fileProcessing' not in record['processing']:
+        raise Exception('Record no ha sido procesado')
+    if record['processing']['fileProcessing']['type'] != 'pdf' and record['processing']['fileProcessing']['type'] != 'document':
+        raise Exception('Record no es de tipo documento')
+    
+    path = record['processing']['fileProcessing']['path']
+    path_files = os.path.join(WEB_FILES_PATH, path, 'web/' + size + '/')
+    path = os.path.join(WEB_FILES_PATH, path)
+
+
+    files = os.listdir(path_files)
+
+    response = []
+    for x in pages:
+        if x >= len(files):
+            raise Exception('Record no tiene tantas páginas')
+        
+        # verificar si el archivo existe
+        file = files[x]
+        file = os.path.join(path_files, file)
+        if not os.path.exists(file):
+            raise Exception('No existe el archivo')
+        
+        with open(file, 'rb') as f:
+            data = f.read()
+            encoded_data = base64.b64encode(data).decode('utf-8')
+            response.append({'filename': os.path.basename(file), 'data': encoded_data})
+        
+    json_response = json.dumps(response).encode('utf-8')
+    return Response(json_response, mimetype='application/json', direct_passthrough=False)

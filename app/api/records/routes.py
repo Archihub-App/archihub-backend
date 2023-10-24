@@ -193,3 +193,51 @@ def get_document_by_id(id):
 
     # Llamar al servicio para obtener un record por su id
     return services.get_document(id, current_user)
+
+@bp.route('/<id>/pages', methods=['POST'])
+@jwt_required()
+def get_page_by_id(id):
+    """
+    Obtener una página de un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            required: true
+            description: id del record a obtener
+        - in: query
+            name: pages
+            schema:
+                type: array
+                required: true
+                description: número de páginas a obtener
+            name: size
+            schema:
+                type: string
+                required: true
+                description: tamaño de la página a obtener small/large
+    responses:
+        200:
+            description: Imagen de la página
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    body = request.json
+
+    print(body)
+
+    # Llamar al servicio para obtener un record por su id
+    return services.get_document_pages(id, body['pages'], body['size'], current_user)
