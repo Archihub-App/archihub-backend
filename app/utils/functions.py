@@ -243,28 +243,43 @@ def cache_get_record_document_detail(id):
         raise Exception('Record no ha sido procesado')
     if 'fileProcessing' not in record['processing']:
         raise Exception('Record no ha sido procesado')
-    if record['processing']['fileProcessing']['type'] != 'pdf' and record['processing']['fileProcessing']['type'] != 'document':
-        raise Exception('Record no es de tipo documento')
     
-    path = record['processing']['fileProcessing']['path']
-    path_small = os.path.join(WEB_FILES_PATH, path, 'web/small/')
-    path = os.path.join(WEB_FILES_PATH, path)
 
-    files = os.listdir(path_small)
-    if len(files) == 0:
-        raise Exception('Record no tiene archivos')
-    
-    # get the first file in the directory and get the dimensions of the image
-    file = files[0]
-    file = os.path.join(path_small, file)
-    img = Image.open(file)
-    width, height = img.size
-    aspect_ratio = width / height
-    
-    return {
-        'pages': len(files),
-        'aspect_ratio': aspect_ratio
-    }
+    if record['processing']['fileProcessing']['type'] == 'document':
+        path = record['processing']['fileProcessing']['path']
+        path_small = os.path.join(WEB_FILES_PATH, path, 'web/small/')
+
+        files = os.listdir(path_small)
+        if len(files) == 0:
+            raise Exception('Record no tiene archivos')
+        
+        # get the first file in the directory and get the dimensions of the image
+        file = files[0]
+        file = os.path.join(path_small, file)
+        img = Image.open(file)
+        width, height = img.size
+        aspect_ratio = width / height
+        
+        return {
+            'pages': len(files),
+            'aspect_ratio': aspect_ratio
+        }
+    elif record['processing']['fileProcessing']['type'] == 'image':
+        path = record['processing']['fileProcessing']['path']
+        path_small = os.path.join(WEB_FILES_PATH, path)
+        path_small = path_small + '_small.jpg'
+
+        if not os.path.exists(path_small):
+            raise Exception('Record no tiene archivos')
+        
+        img = Image.open(path_small)
+        width, height = img.size
+        aspect_ratio = width / height
+        
+        return {
+            'pages': 1,
+            'aspect_ratio': aspect_ratio
+        }
 
 @lru_cache(maxsize=5000)
 def cache_get_pages_by_id(id, pages, size):
@@ -281,31 +296,55 @@ def cache_get_pages_by_id(id, pages, size):
         raise Exception('Record no ha sido procesado')
     if 'fileProcessing' not in record['processing']:
         raise Exception('Record no ha sido procesado')
-    if record['processing']['fileProcessing']['type'] != 'pdf' and record['processing']['fileProcessing']['type'] != 'document':
-        raise Exception('Record no es de tipo documento')
     
-    path = record['processing']['fileProcessing']['path']
-    path_files = os.path.join(WEB_FILES_PATH, path, 'web/' + size + '/')
-    path = os.path.join(WEB_FILES_PATH, path)
+    
+    if record['processing']['fileProcessing']['type'] == 'document':
+        path = record['processing']['fileProcessing']['path']
+        path_files = os.path.join(WEB_FILES_PATH, path, 'web/' + size + '/')
+        path = os.path.join(WEB_FILES_PATH, path)
 
 
-    files = os.listdir(path_files)
+        files = os.listdir(path_files)
 
-    response = []
-    for x in pages:
-        if x >= len(files):
-            raise Exception('Record no tiene tantas páginas')
-        
-        # verificar si el archivo existe
-        file = files[x]
-        file = os.path.join(path_files, file)
-        if not os.path.exists(file):
+        response = []
+        for x in pages:
+            if x >= len(files):
+                raise Exception('Record no tiene tantas páginas')
+            
+            # verificar si el archivo existe
+            file = files[x]
+            file = os.path.join(path_files, file)
+            if not os.path.exists(file):
+                raise Exception('No existe el archivo')
+            
+            with open(file, 'rb') as f:
+                data = f.read()
+                encoded_data = base64.b64encode(data).decode('utf-8')
+                response.append({'filename': os.path.basename(file), 'data': encoded_data})
+            
+        json_response = json.dumps(response).encode('utf-8')
+        return Response(json_response, mimetype='application/json', direct_passthrough=False)
+    
+    elif record['processing']['fileProcessing']['type'] == 'image':
+        path = record['processing']['fileProcessing']['path']
+        path_img = os.path.join(WEB_FILES_PATH, path)
+        if size == 'big': size = 'large'
+        path_img = path_img + '_' + size + '.jpg'
+
+        if not os.path.exists(path_img):
             raise Exception('No existe el archivo')
         
-        with open(file, 'rb') as f:
+        response = {}
+        img = Image.open(path_img)
+        width, height = img.size
+        aspect_ratio = width / height
+
+        with open(path_img, 'rb') as f:
             data = f.read()
             encoded_data = base64.b64encode(data).decode('utf-8')
-            response.append({'filename': os.path.basename(file), 'data': encoded_data})
+            response = [{'filename': os.path.basename(path_img), 'data': encoded_data, 'aspect_ratio': aspect_ratio}]
+
+        json_response = json.dumps(response).encode('utf-8')
+        return Response(json_response, mimetype='application/json', direct_passthrough=False)
         
-    json_response = json.dumps(response).encode('utf-8')
-    return Response(json_response, mimetype='application/json', direct_passthrough=False)
+        

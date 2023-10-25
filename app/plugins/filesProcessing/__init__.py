@@ -151,7 +151,7 @@ class ExtendedPluginClass(PluginClass):
                     update = {
                         'processing': {
                             'fileProcessing': {
-                                'type': 'pdf',
+                                'type': 'document',
                                 'path': folder_path,
                             }
                         }
