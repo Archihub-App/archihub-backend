@@ -825,3 +825,4 @@ def update_cache():
     get_parent.cache_clear()
     get_total.cache_clear()
     get_accessRights.cache_clear()
+    get_resource_records.cache_clear()

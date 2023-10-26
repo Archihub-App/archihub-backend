@@ -189,6 +189,9 @@ class ExtendedPluginClass(PluginClass):
                     update = RecordUpdate(**update)
                     mongodb.update_record('records', {'_id': file['_id']}, update)
 
+        super().update_cache('records')
+        super().update_cache('resources')
+
         return 'Se procesaron ' + str(size) + ' archivos'
     
 plugin_info = {

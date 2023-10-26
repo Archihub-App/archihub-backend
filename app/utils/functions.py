@@ -152,9 +152,9 @@ def get_resource_records(ids):
         r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}, fields={
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}))
 
-        pro_dict = {}
 
         for r in r_:
+            pro_dict = {}
             if 'processing' in r:
                 if 'fileProcessing' in r['processing']:
                     pro_dict['fileProcessing'] = {

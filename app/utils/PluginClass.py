@@ -2,7 +2,12 @@ from flask import Blueprint, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api.tasks.services import add_task
 from app.api.users.services import has_role
+from app.api.resources.services import update_cache
+from app.api.records.services import update_cache as update_cache_records
+from app.utils import DatabaseHandler
 import os.path
+
+mongodb = DatabaseHandler.DatabaseHandler()
 
 class PluginClass(Blueprint):
     def __init__(self, path, filePath, import_name, name, description, version, author, type, settings=None):
@@ -29,6 +34,12 @@ class PluginClass(Blueprint):
     
     def add_task_to_user(self, taskId, taskName, user, resultType):
         add_task(taskId, taskName, user, resultType)
+
+    def update_cache(self, type):
+        if type == 'resources':
+            update_cache()
+        elif type == 'records':
+            update_cache_records()
 
     def get_image(self):
         @self.route('/image', methods=['GET'])

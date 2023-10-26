@@ -34,6 +34,11 @@ mongodb = DatabaseHandler.DatabaseHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 
+def update_cache():
+    get_all.cache_clear()
+    get_hash.cache_clear()
+    get_by_id.cache_clear()
+
 
 def parse_result(result):
     return json.loads(json_util.dumps(result))
@@ -348,7 +353,6 @@ def get_hash(hash):
 @lru_cache(maxsize=1000)
 def get_by_id(id, current_user):
     try:
-        print(id)
         # Buscar el record en la base de datos
         record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1})
 
