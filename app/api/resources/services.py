@@ -369,8 +369,9 @@ def get_resource(id, user):
     temp = []
     for f in resource['fields']:
         if f['type'] != 'file' and f['type'] != 'separator':
-            if f['type'] == 'text' or f['type'] == 'textarea':
+            if f['type'] == 'text' or f['type'] == 'text-area':
                 value = get_value_by_path(resource, f['destiny'])
+
                 if value:
                     temp.append({
                         'label': f['label'],

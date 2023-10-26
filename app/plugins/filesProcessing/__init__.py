@@ -13,6 +13,9 @@ from .utils import DocumentProcessing
 from .utils import DatabaseProcessing
 from app.api.records.models import RecordUpdate
 
+from app.api.resources.services import update_cache as update_cache_resources
+from app.api.records.services import update_cache as update_cache_records
+
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -189,9 +192,9 @@ class ExtendedPluginClass(PluginClass):
                     update = RecordUpdate(**update)
                     mongodb.update_record('records', {'_id': file['_id']}, update)
 
-        super().update_cache('records')
-        super().update_cache('resources')
-
+        
+        update_cache_records()
+        update_cache_resources()
         return 'Se procesaron ' + str(size) + ' archivos'
     
 plugin_info = {

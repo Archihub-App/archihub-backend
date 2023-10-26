@@ -44,8 +44,6 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para obtener todos los records para un recurso
-
-
 @lru_cache(maxsize=1000)
 def get_all(resource_id, current_user):
     try:
