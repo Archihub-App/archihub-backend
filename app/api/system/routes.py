@@ -116,10 +116,12 @@ def get_plugins():
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
-    if not user_services.has_role(current_user, 'admin'):
+    if user_services.has_role(current_user, 'processing') or user_services.has_role(current_user, 'admin'):
+        # Llamar al servicio para obtener el listado de plugins en la carpeta plugins
+        return services.get_plugins()
+    
+    else:
         return {'msg': 'No tiene permisos para obtener el listado de plugins en la carpeta plugins'}, 401
-    # Llamar al servicio para obtener el listado de plugins en la carpeta plugins
-    return services.get_plugins()
 
 # POST para instalar un plugin
 @bp.route('/plugins', methods=['POST'])
