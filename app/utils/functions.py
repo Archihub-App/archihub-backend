@@ -347,4 +347,30 @@ def cache_get_pages_by_id(id, pages, size):
         json_response = json.dumps(response).encode('utf-8')
         return Response(json_response, mimetype='application/json', direct_passthrough=False)
         
+@lru_cache(maxsize=1000)
+def cache_type_roles(slug):
+    try:
+        # Obtener el tipo de contenido por su slug
+        type = mongodb.get_record('post_types', {'slug': slug}, fields={'editRoles': 1, 'viewRoles': 1})
+
+        # Si el tipo de contenido no existe, retornar error
+        if not type:
+            raise Exception('Tipo de contenido no existe')
         
+        roles = {
+            'editRoles': None,
+            'viewRoles': None
+        }
+
+        if 'editRoles' in type:
+            if len(type['editRoles']) > 0:
+                roles['editRoles'] = type['editRoles']
+
+        if 'viewRoles' in type:
+            if len(type['viewRoles']) > 0:
+                roles['viewRoles'] = type['viewRoles']
+
+        return roles
+    except Exception as e:
+        raise Exception(
+            'Error al obtener el registro access_rights: ' + str(e))

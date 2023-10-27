@@ -10,6 +10,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.system.services import get_access_rights_id
 from app.utils.functions import verify_role_exists
+from app.utils.functions import cache_type_roles
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -20,6 +21,8 @@ def parse_result(result):
 def update_cache():
     get_all.cache_clear()
     get_by_slug.cache_clear()
+    cache_type_roles().cache_clear()
+    get_metadata.cache_clear()
 
 # Nuevo servicio para obtener todos los tipos de 
 @lru_cache(maxsize=1)
@@ -106,8 +109,7 @@ def update_by_slug(slug, body, user):
         # Registrar el log
         register_log(user, log_actions['type_update'], {'post_type': body})
         # Limpiar la cache
-        get_all.cache_clear()
-        get_by_slug.cache_clear()
+        update_cache()
         # Retornar el resultado
         return {'msg': 'Tipo de post actualizado exitosamente'}, 200
     except Exception as e:
@@ -130,8 +132,7 @@ def delete_by_slug(slug, user):
         'slug': post_type['slug'],
     }})
     # Limpiar la cache
-    get_all.cache_clear()
-    get_by_slug.cache_clear()
+    update_cache()
     # Retornar el resultado
     return {'msg': 'Tipo de post eliminado exitosamente'}, 204
 
@@ -202,26 +203,6 @@ def get_metadata(post_type_slug):
 
     # Retornar el resultado
     return post_type['metadata']
-
-@lru_cache(maxsize=1000)
-def get_edit_roles(slug):
-    # Buscar el tipo de post en la base de datos
-    post_type = mongodb.get_record('post_types', {'slug': slug}, fields={'edit_roles': 1})
-    # Si el tipo de post no existe, retornar error
-    if not post_type:
-        return {'msg': 'Tipo de post no existe'}, 404
-    
-    return post_type['edit_roles']
-
-@lru_cache(maxsize=1000)
-def get_view_roles(slug):
-    # Buscar el tipo de post en la base de datos
-    post_type = mongodb.get_record('post_types', {'slug': slug}, fields={'view_roles': 1})
-    # Si el tipo de post no existe, retornar error
-    if not post_type:
-        return {'msg': 'Tipo de post no existe'}, 404
-    
-    return post_type['view_roles']
     
 @lru_cache(maxsize=30)
 def get_form_by_slug(slug):

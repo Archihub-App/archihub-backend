@@ -5,6 +5,7 @@ from app.api.resources import services
 from app.api.users import services as user_services
 from flask import request, jsonify
 import json
+from app.utils.functions import cache_type_roles
 
 # En este archivo se registran las rutas de la API para los recursos
 
@@ -258,14 +259,24 @@ def get_tree():
         500:
             description: Error al obtener la estructura de arból
     """
-    print('get_tree')
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Obtener el body del request
     body = request.json
-    print(body)
+
+    slugs = [item['slug'] for item in body['tree']]
+
+    return_slugs = []
+
+    for s in slugs:
+        roles = cache_type_roles(s)
+        if roles['viewRoles']:
+            if user_services.has_role(current_user, roles['viewRoles'][0]) or user_services.has_role(current_user, 'admin'):
+                return_slugs.append(s)
+        else:
+            return_slugs.append(s)
     # Llamar al servicio para obtener la estructura de arból
-    return services.get_tree(body['root'],'|'.join(item['slug'] for item in body['tree']), current_user)
+    return services.get_tree(body['root'],'|'.join(return_slugs), current_user)
 
 # Nuevo endpoint para obtener los recursos de un recurso padre
 @bp.route('/<resource_id>/records', methods=['GET'])

@@ -6,6 +6,7 @@ from app.api.users import services as user_services
 from flask import request
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
+from app.utils.functions import cache_type_roles
 
 
 # En este archivo se registran las rutas de la API para los tipos de contenido
@@ -148,6 +149,12 @@ def get_by_slug(slug):
     # se verifica si el usuario tiene el rol de administrador o editor
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return {'msg': 'No tiene permisos para obtener un tipo de contenido'}, 401
+    
+    roles = cache_type_roles(slug)
+    if roles['viewRoles']:
+        if not user_services.has_role(current_user, roles['viewRoles'][0]) and not user_services.has_role(current_user, 'admin'):
+            return {'msg': 'No tiene permisos para obtener un tipo de contenido'}, 401
+            
     # Llamar al servicio para obtener un tipo de contenido por su slug
     slug_exists = services.get_by_slug(slug)
     # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
