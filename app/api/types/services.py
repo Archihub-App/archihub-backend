@@ -17,6 +17,10 @@ mongodb = DatabaseHandler.DatabaseHandler()
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
+def update_cache():
+    get_all.cache_clear()
+    get_by_slug.cache_clear()
+
 # Nuevo servicio para obtener todos los tipos de 
 @lru_cache(maxsize=1)
 def get_all():
@@ -43,8 +47,7 @@ def create(body, user):
             'slug': post_type.slug,
         }})
         # Limpiar la cache
-        get_all.cache_clear()
-        get_by_slug.cache_clear()
+        update_cache()
         # Retornar el resultado
         return {'msg': 'Tipo de post creado exitosamente'}, 201
     except Exception as e:
