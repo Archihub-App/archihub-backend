@@ -257,7 +257,9 @@ def get_by_id(id, user):
         if accessRights:
             if not has_right(user, accessRights['id']):
                 return {'msg': 'No tiene permisos para acceder al recurso'}, 401
-        # Obtener los accessRights del recurso
+            
+        post_type = get_resource_type(id)
+
         resource = get_resource(id, user)
         register_log(user, log_actions['resource_open'], {'resource': id})
 
@@ -265,6 +267,13 @@ def get_by_id(id, user):
         return jsonify(resource), 200
     except Exception as e:
         return {'msg': str(e)}, 500
+
+@lru_cache(maxsize=1000)
+def get_resource_type(id):
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'post_type': 1})
+    if not resource:
+        raise Exception('Recurso no existe')
+    return resource['post_type']
 
 @lru_cache(maxsize=1000)
 def get_accessRights(id):
@@ -435,7 +444,6 @@ def get_resource(id, user):
         resource['accessRights'] = None
 
     return resource
-
 
 def get_resource_files(id, user):
     try:
@@ -827,3 +835,4 @@ def update_cache():
     get_total.cache_clear()
     get_accessRights.cache_clear()
     get_resource_records.cache_clear()
+    get_resource_type.cache_clear()
