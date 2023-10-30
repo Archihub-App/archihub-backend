@@ -102,6 +102,12 @@ def create():
     # convertir data una cadena de texto JSON stringify a un diccionario
     data = json.loads(data)
 
+    post_type = data['post_type']
+    post_type_roles = cache_type_roles(post_type)
+    if post_type_roles['editRoles']:
+        if not user_services.has_role(current_user, post_type_roles['editRoles'][0]):
+            return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+
     files = request.files.getlist('files')
 
     # Llamar al servicio para crear el recurso
@@ -135,7 +141,6 @@ def get_by_id(id):
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
-    
     # Llamar al servicio para obtener el recurso
     return services.get_by_id(id, current_user)
 
@@ -271,8 +276,9 @@ def get_tree():
     for s in slugs:
         roles = cache_type_roles(s)
         if roles['viewRoles']:
-            if user_services.has_role(current_user, roles['viewRoles'][0]) or user_services.has_role(current_user, 'admin'):
-                return_slugs.append(s)
+            for r in roles['viewRoles']:
+                if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
+                    return_slugs.append(s)
         else:
             return_slugs.append(s)
     # Llamar al servicio para obtener la estructura de arból

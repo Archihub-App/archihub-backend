@@ -152,7 +152,12 @@ def get_by_slug(slug):
     
     roles = cache_type_roles(slug)
     if roles['viewRoles']:
-        if not user_services.has_role(current_user, roles['viewRoles'][0]) and not user_services.has_role(current_user, 'admin'):
+        canView = False
+        for r in roles['viewRoles']:
+            if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
+                canView = True
+                break
+        if not canView:
             return {'msg': 'No tiene permisos para obtener un tipo de contenido'}, 401
             
     # Llamar al servicio para obtener un tipo de contenido por su slug

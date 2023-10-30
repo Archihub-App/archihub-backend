@@ -36,6 +36,16 @@ def parse_result(result):
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
 def get_all(post_type, body, user):
     try:
+        post_type_roles = cache_type_roles(post_type)
+        if post_type_roles['viewRoles']:
+            canView = False
+            for r in post_type_roles['viewRoles']:
+                if has_role(user, r) or has_role(user, 'admin'):
+                    canView = True
+                    break
+            if not canView:
+                return {'msg': 'No tiene permisos para obtener los recursos'}, 401
+
         filters = {}
         limit = 20
         skip = 0
@@ -50,7 +60,7 @@ def get_all(post_type, body, user):
 
         # Obtener todos los recursos dado un tipo de contenido
         resources = list(mongodb.get_all_records(
-            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1}))
+            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1}, sort=[('metadata.firstLevel.title', 1)]))
         # Obtener el total de recursos dado un tipo de contenido
         total = get_total(json.dumps(filters))
         # Para cada recurso, obtener el formulario asociado y quitar los campos _id
@@ -69,8 +79,6 @@ def get_all(post_type, body, user):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para crear un recurso
-
-
 def create(body, user, files):
     try:
         # si el body tiene parents, verificar que el recurso sea jerarquico
@@ -260,8 +268,14 @@ def get_by_id(id, user):
             
         post_type = get_resource_type(id)
         post_type_roles = cache_type_roles(post_type)
+
         if post_type_roles['viewRoles']:
-            if not has_role(user, post_type_roles['viewRoles'][0]) and not has_role(user, 'admin'):
+            canView = False
+            for r in post_type_roles['viewRoles']:
+                if has_role(user, r) or has_role(user, 'admin'):
+                    canView = True
+                    break
+            if not canView:
                 return {'msg': 'No tiene permisos para obtener un recurso'}, 401
 
         resource = get_resource(id, user)
