@@ -44,6 +44,8 @@ def login():
     # Buscar usuario en la base de datos
     user = get_user(username)
 
+    print(user)
+
     # Verificar que el usuario exista
     if not user:
         return jsonify({'msg': 'Usuario inválido'}), 401

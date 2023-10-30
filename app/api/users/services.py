@@ -28,7 +28,6 @@ def update_cache():
     has_role.cache_clear()
     get_by_username.cache_clear()
     get_total.cache_clear()
-    get_user.cache_clear()
 
 # Nueva funcion para devolver el usuario por su id
 @lru_cache(maxsize=1000)
@@ -268,7 +267,6 @@ def validate_user_fields(body, errors):
     return errors
 
 # Nuevo servicio para buscar un usuario por su username
-@lru_cache(maxsize=1000)
 def get_user(username):
     user = mongodb.get_record('users', {'username': username}, fields={'status': 0, 'photo': 0, 'requests': 0, 'lastRequest': 0})
     # retornar el resultado
