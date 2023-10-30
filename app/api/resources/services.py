@@ -23,8 +23,8 @@ from app.api.records.services import update_parent
 from app.api.records.services import update_record
 from app.api.records.services import create as create_record
 from app.api.system.services import get_access_rights
-from app.api.users.services import has_right
-from app.utils.functions import get_resource_records
+from app.api.users.services import has_right, has_role
+from app.utils.functions import get_resource_records, cache_type_roles
 import os
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -259,6 +259,10 @@ def get_by_id(id, user):
                 return {'msg': 'No tiene permisos para acceder al recurso'}, 401
             
         post_type = get_resource_type(id)
+        post_type_roles = cache_type_roles(post_type)
+        if post_type_roles['viewRoles']:
+            if not has_role(user, post_type_roles['viewRoles'][0]) and not has_role(user, 'admin'):
+                return {'msg': 'No tiene permisos para obtener un recurso'}, 401
 
         resource = get_resource(id, user)
         register_log(user, log_actions['resource_open'], {'resource': id})
