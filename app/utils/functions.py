@@ -6,7 +6,7 @@ from bson.objectid import ObjectId
 import os
 from dotenv import load_dotenv
 from PIL import Image
-from flask import Response
+from flask import Response, jsonify
 import base64
 load_dotenv()
 
@@ -143,7 +143,7 @@ def parse_result(result):
 
 
 @lru_cache(maxsize=1000)
-def get_resource_records(ids):
+def get_resource_records(ids, user):
     ids = json.loads(ids)
     for i in range(len(ids)):
         ids[i] = ObjectId(ids[i])
@@ -151,9 +151,14 @@ def get_resource_records(ids):
     try:
         r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}, fields={
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}))
-
-
+        
         for r in r_:
+            if 'accessRights' in r:
+                if not has_right(user, r['accessRights']) and not has_role(user, 'admin'):
+                    r['name'] = 'No tiene permisos para ver este archivo'
+                    r['displayName'] = 'No tiene permisos para ver este archivo'
+                    r['_id'] = None
+
             pro_dict = {}
             if 'processing' in r:
                 if 'fileProcessing' in r['processing']:
@@ -374,3 +379,27 @@ def cache_type_roles(slug):
     except Exception as e:
         raise Exception(
             'Error al obtener el registro access_rights: ' + str(e))
+    
+@lru_cache(maxsize=1000)
+def has_right(username, right):
+    user = mongodb.get_record('users', {'username': username})
+    # Si el usuario no existe, retornar error
+    if not user:
+        return jsonify({'msg': 'Usuario no existe'}), 400
+    # Si el usuario tiene el rol, retornar True
+    if right in user['accessRights']:
+        return True
+    # Si el usuario no tiene el rol, retornar False
+    return False
+
+@lru_cache(maxsize=1000)
+def has_role(username, role):
+    user = mongodb.get_record('users', {'username': username})
+    # Si el usuario no existe, retornar error
+    if not user:
+        return jsonify({'msg': 'Usuario no existe'}), 400
+    # Si el usuario tiene el rol, retornar True
+    if role in user['roles']:
+        return True
+    # Si el usuario no tiene el rol, retornar False
+    return False

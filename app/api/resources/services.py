@@ -375,7 +375,7 @@ def get_resource(id, user):
             for r in resource['files']:
                 ids.append(r)
 
-            r_ = get_resource_records(json.dumps(ids))
+            r_ = get_resource_records(json.dumps(ids), user)
             for _ in r_:
                 obj = {
                     'id': str(_['_id']),
