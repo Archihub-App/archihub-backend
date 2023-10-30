@@ -154,10 +154,11 @@ def get_resource_records(ids, user):
         
         for r in r_:
             if 'accessRights' in r:
-                if not has_right(user, r['accessRights']) and not has_role(user, 'admin'):
-                    r['name'] = 'No tiene permisos para ver este archivo'
-                    r['displayName'] = 'No tiene permisos para ver este archivo'
-                    r['_id'] = None
+                if r['accessRights']:
+                    if not has_right(user, r['accessRights']) and not has_role(user, 'admin'):
+                        r['name'] = 'No tiene permisos para ver este archivo'
+                        r['displayName'] = 'No tiene permisos para ver este archivo'
+                        r['_id'] = None
 
             pro_dict = {}
             if 'processing' in r:

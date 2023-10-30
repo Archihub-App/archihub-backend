@@ -8,6 +8,7 @@ from bson.objectid import ObjectId
 from app.api.records.models import Record as FileRecord
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
+from app.api.users.services import has_right
 from app.api.records.models import RecordUpdate as FileRecordUpdate
 from app.utils.functions import get_roles, cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id
 from werkzeug.utils import secure_filename
@@ -354,12 +355,14 @@ def get_by_id(id, current_user):
         # Buscar el record en la base de datos
         record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1})
 
-        # obtener el usuario de la base de datos
-        user = mongodb.get_record('users', {'username': current_user}, fields={'roles': 1, 'accessRights': 1})
-
         # Si el record no existe, retornar error
         if not record:
             return {'msg': 'Record no existe'}, 404
+        
+        if 'accessRights' in record:
+            if record['accessRights']:
+                if not has_right(current_user, record['accessRights']) and not has_right(current_user, 'admin'):
+                    return {'msg': 'No tiene permisos para acceder a este recurso'}, 401
         
         # get keys from record['processing']
         keys = {}
@@ -372,8 +375,6 @@ def get_by_id(id, current_user):
 
         record['processing'] = keys
 
-        print(record)
-
         # Si el record existe, retornar el record
         return parse_result(record), 200
 
@@ -381,8 +382,11 @@ def get_by_id(id, current_user):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para devolver un stream de un archivo por su id
-def get_stream(id, user):
+def get_stream(id, current_user):
     try:
+        resp_, status = get_by_id(id, current_user)
+        if status != 200:
+            raise Exception(resp_['msg'])
         path, type = cache_get_record_stream(id)
         path = os.path.join(WEB_FILES_PATH, path)
 
@@ -398,8 +402,11 @@ def get_stream(id, user):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para devolver la transcripcion de un plugin
-def get_transcription(id, slug, user):
+def get_transcription(id, slug, current_user):
     try:
+        resp_, status = get_by_id(id, current_user)
+        if status != 200:
+            raise Exception(resp_['msg'])
         resp = cache_get_record_transcription(id, slug)
         
         # Si el record existe, retornar el record
@@ -409,15 +416,21 @@ def get_transcription(id, slug, user):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para devolver las paginas en baja de un documento por su id
-def get_document(id, user):
+def get_document(id, current_user):
     try:
+        resp_, status = get_by_id(id, current_user)
+        if status != 200:
+            raise Exception(resp_['msg'])
         return cache_get_record_document_detail(id)
 
     except Exception as e:
         return {'msg': str(e)}, 500
 
-def get_document_pages(id, pages, size, user):
+def get_document_pages(id, pages, size, current_user):
     try:
+        resp_, status = get_by_id(id, current_user)
+        if status != 200:
+            raise Exception(resp_['msg'])
         pages = json.dumps(pages)
         return cache_get_pages_by_id(id, pages, size)
     except Exception as e:

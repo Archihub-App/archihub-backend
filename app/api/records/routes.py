@@ -84,9 +84,7 @@ def get_by_id(id):
     current_user = get_jwt_identity()
     
     # Llamar al servicio para obtener un record por su id
-    resp = services.get_by_id(id, current_user)
-    
-    return resp
+    return services.get_by_id(id, current_user)
 
 # Nuevo endpoint para obtener el stream de un record por su id
 @bp.route('/<id>/stream', methods=['GET'])
@@ -236,8 +234,6 @@ def get_page_by_id(id):
     current_user = get_jwt_identity()
 
     body = request.json
-
-    print(body)
 
     # Llamar al servicio para obtener un record por su id
     return services.get_document_pages(id, body['pages'], body['size'], current_user)
