@@ -556,11 +556,33 @@ def update_by_id(id, body, user, files):
 
 def delete_by_id(id, user):
     try:
+        post_type = get_resource_type(id)
+        post_type_roles = cache_type_roles(post_type)
+
+        if post_type_roles['editRoles']:
+            canEdit = False
+            for r in post_type_roles['editRoles']:
+                if has_role(user, r) or has_role(user, 'admin'):
+                    canEdit = True
+                    break
+            if not canEdit:
+                return {'msg': 'No tiene permisos para eliminar un recurso'}, 401
+        
+        if post_type_roles['viewRoles']:
+            canView = False
+            for r in post_type_roles['viewRoles']:
+                if has_role(user, r) or has_role(user, 'admin'):
+                    canView = True
+                    break
+            if not canView:
+                return {'msg': 'No tiene permisos para eliminar un recurso'}, 401
+
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         
         if 'files' in resource:
             records_list = resource['files']
             delete_records(records_list, id, user)
+
         delete_children(id)
         # Eliminar el recurso de la base de datos
         deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})

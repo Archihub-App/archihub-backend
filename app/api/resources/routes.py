@@ -105,7 +105,11 @@ def create():
     post_type = data['post_type']
     post_type_roles = cache_type_roles(post_type)
     if post_type_roles['editRoles']:
-        if not user_services.has_role(current_user, post_type_roles['editRoles'][0]):
+        canEdit = False
+        for r in post_type_roles['editRoles']:
+            if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
+                canEdit = True
+        if not canEdit:
             return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
 
     files = request.files.getlist('files')
@@ -197,6 +201,16 @@ def update_by_id(id):
     # convertir data una cadena de texto JSON stringify a un diccionario
     data = json.loads(data)
 
+    post_type = data['post_type']
+    post_type_roles = cache_type_roles(post_type)
+    if post_type_roles['editRoles']:
+        canEdit = False
+        for r in post_type_roles['editRoles']:
+            if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
+                canEdit = True
+        if not canEdit:
+            return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+
     files = request.files.getlist('files')
 
     # Llamar al servicio para crear el recurso
@@ -230,7 +244,7 @@ def delete_by_id(id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
-    if not user_services.has_role(current_user, 'admin'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para eliminar el recurso
     return services.delete_by_id(id, current_user)
