@@ -105,10 +105,11 @@ def create():
         # Mientras el slug exista, agregar un número al final
         index = 1
         while 'msg' not in slug_exists:
-            body['slug'] = body['slug'] + '-' + index
+            body['slug'] = body['slug'] + '-' + str(index)
             slug_exists = services.get_by_slug(body['slug'])
             index += 1
 
+        print(body)
         # Llamar al servicio para crear un tipo de contenido
         return services.create(body, current_user)
     else:

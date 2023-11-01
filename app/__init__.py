@@ -1,3 +1,10 @@
+'''
+ARCHIHUB herramienta de gestión documental
+Versión 0.1
+Autor: Néstor Andrés Peña
+
+'''
+
 from flask import Flask
 from flasgger import Swagger
 from config import config

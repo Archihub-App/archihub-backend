@@ -14,6 +14,9 @@ WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
+def clear_cache():
+    cache_type_roles.cache_clear()
+    get_resource_records.cache_clear()
 
 @lru_cache(maxsize=1)
 def get_roles_id():
@@ -28,17 +31,20 @@ def get_roles_id():
 
         return roles
     except Exception as e:
-        raise Exception(
-            'Error al obtener el registro access_rights: ' + str(e))
+        return None
 
 
 @lru_cache(maxsize=1)
 def get_roles():
     try:
-        # Obtener el listado con roles
-        list = get_list_by_id(get_roles_id())
+        id_roles = get_roles_id()
+        if id_roles:
+            # Obtener el listado con roles
+            list = get_list_by_id(get_roles_id())
 
-        temp = [*list['options']]
+            temp = [*list['options']]
+        else:
+            temp = []
         # Agregar admin y editor a la lista
         temp.append({'id': 'admin', 'term': 'admin'})
         temp.append({'id': 'editor', 'term': 'editor'})
@@ -68,14 +74,21 @@ def get_access_rights_id():
         return list_id
 
     except Exception as e:
-        raise Exception('Error al obtener el registro access_rights')
+        return None
 
 
 @lru_cache(maxsize=1)
 def get_access_rights():
     try:
+        access_id = get_access_rights_id()
+        if access_id:
+            # Obtener el listado con access_rights
+            list = get_list_by_id(get_access_rights_id())
+
+            temp = [*list['options']]
+        else:
+            temp = []
         # Obtener el listado con list_id
-        list = get_list_by_id(get_access_rights_id())
         return list
 
     except Exception as e:

@@ -24,7 +24,7 @@ from app.api.records.services import update_record
 from app.api.records.services import create as create_record
 from app.api.system.services import get_access_rights
 from app.api.users.services import has_right, has_role
-from app.utils.functions import get_resource_records, cache_type_roles
+from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
 import os
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -263,7 +263,7 @@ def get_by_id(id, user):
         # Obtener los accessRights del recurso
         accessRights = get_accessRights(id)
         if accessRights:
-            if not has_right(user, accessRights['id']):
+            if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
                 return {'msg': 'No tiene permisos para acceder al recurso'}, 401
             
         post_type = get_resource_type(id)
@@ -874,5 +874,5 @@ def update_cache():
     get_parent.cache_clear()
     get_total.cache_clear()
     get_accessRights.cache_clear()
-    get_resource_records.cache_clear()
     get_resource_type.cache_clear()
+    clear_cache()

@@ -10,7 +10,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.system.services import get_access_rights_id
 from app.utils.functions import verify_role_exists
-from app.utils.functions import cache_type_roles
+from app.utils.functions import clear_cache
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -21,8 +21,8 @@ def parse_result(result):
 def update_cache():
     get_all.cache_clear()
     get_by_slug.cache_clear()
-    cache_type_roles().cache_clear()
     get_metadata.cache_clear()
+    clear_cache()
 
 # Nuevo servicio para obtener todos los tipos de 
 @lru_cache(maxsize=1)
