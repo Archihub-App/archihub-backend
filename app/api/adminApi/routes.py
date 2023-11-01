@@ -1,34 +1,48 @@
 from app.api.adminApi import bp
 from flask import jsonify
 from flask import request
+from app.api.adminApi import services
 from app.utils.FernetAuth import fernetAuthenticate
 
-# Nuevo POST endpoint para obtener los logs de acuerdo a un filtro
-@bp.route('', methods=['GET'])
+# Nuevo POST endpoint para crear nuevos recursos
+@bp.route('/create', methods=['POST'])
 @fernetAuthenticate
-def filter():
+def new_resource(username):
     """
-    Endpoint de prueba
+    Crear un nuevo recurso
     ---
-    security:
-        - JWT: []
     tags:
-        - API de administración
+        - Recursos
     parameters:
         - in: body
           name: body
           schema:
             type: object
             properties:
-              username:
-                type: string
-              action:
-                type: string
+                name:
+                    type: string
+                description:
+                    type: string
+                metadata:
+                    type: array
+                    items:
+                        type: object
+                icon:
+                    type: string
+                hierarchical:
+                    type: boolean
+                parentType:
+                    type: string
     responses:
         200:
-            description: Logs obtenidos exitosamente
-        400:
-            description: No se encontraron logs
+            description: Recurso creado exitosamente
+        401:
+            description: No tiene permisos para crear un recurso
+        500:
+            description: Error al crear el recurso
     """
-    
-    return 'ok'
+    # Obtener el body del request
+    body = request.json
+
+    # Llamar al servicio para crear el recurso
+    return services.create(body, username)

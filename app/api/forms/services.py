@@ -162,7 +162,7 @@ def validate_form(form):
     # verificar que todos los campos tengan un destiny que inicien con metadata
     for field in form['fields']:
         if 'destiny' in field:
-            if not field['destiny'].startswith('metadata'):
+            if not field['destiny'].startswith('metadata') and not field['destiny'] == 'file':
                 raise Exception("Error: el formulario no puede tener un campo con destino que no inicie con metadata")
     
 # Funcion que itera entre todos los formularios y devuelve la estructura combinada de todos
