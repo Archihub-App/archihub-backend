@@ -109,7 +109,6 @@ def create():
             slug_exists = services.get_by_slug(body['slug'])
             index += 1
 
-        print(body)
         # Llamar al servicio para crear un tipo de contenido
         return services.create(body, current_user)
     else:

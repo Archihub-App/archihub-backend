@@ -27,28 +27,22 @@ def fernetAuthenticate(func):
             # se desencripta el token
             token = fernet.decrypt(auth_header.encode()).decode()
 
-            print(token)
-
             decoded_token = jwt.decode(token, jwt_secret_key, algorithms=['HS256'])
 
             username = decoded_token['sub']
             isAdmin = False
 
-            print(decoded_token)
-
             # verificar si el token tiene fecha de expiración
             if 'exp' in decoded_token:
                 expiracion = decoded_token['exp']
-                isAdmin = True
-                
                 if expiracion < time.time():
                     return jsonify({'msg': 'El token ha expirado'}), 401
 
             
             # obtener el usuario actual
             current_user = get_by_username(username)
-
-            print(current_user)
+            if has_role(username, 'admin'):
+                isAdmin = True
 
             # verificar si el usuario existe
             if 'msg' in current_user:
@@ -76,7 +70,7 @@ def fernetAuthenticate(func):
         except Exception as e:
             return jsonify({'msg': str(e)}), 401
         
-        return func(username, *arg, **kwargs)
+        return func(username, isAdmin, *arg, **kwargs)
         
     return wrapper
         

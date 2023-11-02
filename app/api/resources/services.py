@@ -88,6 +88,8 @@ def create(body, user, files):
             return {'msg': 'El recurso debe tener metadata'}, 400
         # Agregar el campo status al body
         body['status'] = 'created'
+        print('het')
+
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 
@@ -110,20 +112,22 @@ def create(body, user, files):
         body['_id'] = str(new_resource.inserted_id)
         # Registrar el log
         register_log(user, log_actions['resource_create'], {'resource': body})
+
+        if files:
         # crear el record
-        try:
-            records = create_record(body['_id'], user, files)
-        except Exception as e:
-            return {'msg': str(e)}, 500
+            try:
+                records = create_record(body['_id'], user, files)
+            except Exception as e:
+                return {'msg': str(e)}, 500
 
-        update = {
-            'files': records
-        }
+            update = {
+                'files': records
+            }
 
-        update_ = ResourceUpdate(**update)
+            update_ = ResourceUpdate(**update)
 
-        mongodb.update_record(
-            'resources', {'_id': ObjectId(body['_id'])}, update_)
+            mongodb.update_record(
+                'resources', {'_id': ObjectId(body['_id'])}, update_)
 
         # limpiar la cache
         update_cache()
@@ -170,6 +174,10 @@ def validate_parent(body):
                 body['parents'] = []
                 body['parent'] = None
                 return body
+    else:
+        body['parents'] = []
+        body['parent'] = None
+        return body
 
 # Funcion para validar los campos de la metadata
 
