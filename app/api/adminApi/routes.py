@@ -78,6 +78,6 @@ def get_resource_id(username, isAdmin):
         return jsonify({'msg': 'No tiene permisos para obtener el id del recurso'}), 401
     # Obtener el body del request
     body = request.json
-
+    
     # Llamar al servicio para obtener el id del recurso
     return services.get_id(body, username)

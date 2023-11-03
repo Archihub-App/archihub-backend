@@ -16,15 +16,19 @@ from flask import Flask
 from app.api.system.services import get_plugins
 import os
 from app.utils import DatabaseHandler
+from app.utils import IndexHandler
 
 # leer variables de entorno desde el archivo .env
 from dotenv import load_dotenv
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
+index_handler = IndexHandler.IndexHandler()
 
 def create_app(config_class=config[os.environ['FLASK_ENV']]):
     app = Flask(__name__)
+
+    index_handler.start()
 
     app.config.from_mapping(
         CELERY=dict(

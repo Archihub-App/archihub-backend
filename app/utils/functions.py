@@ -87,7 +87,8 @@ def get_access_rights():
 
             temp = [*list['options']]
         else:
-            temp = []
+
+            list = []
         # Obtener el listado con list_id
         return list
 

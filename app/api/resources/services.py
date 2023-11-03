@@ -88,7 +88,6 @@ def create(body, user, files):
             return {'msg': 'El recurso debe tener metadata'}, 400
         # Agregar el campo status al body
         body['status'] = 'created'
-        print('het')
 
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
@@ -252,14 +251,18 @@ def validate_fields(body, metadata, errors):
         if body['accessRights'] == '':
             errors['accessRights'] = 'El recurso debe tener derechos de acceso'
         
-        if body['accessRights'] == 'public':
+        elif body['accessRights'] == 'public':
             body['accessRights'] = None
+        else:
+            access_rights = get_access_rights()
+            if 'options' in access_rights:
+                access_rights = access_rights['options']
+                access_rights = [a['id'] for a in access_rights]
 
-        access_rights = get_access_rights()['options']
-        access_rights = [a['id'] for a in access_rights]
-
-        if body['accessRights'] not in access_rights and body['accessRights'] != None:
-            errors['accessRights'] = 'El recurso debe tener derechos de acceso válidos'
+                if body['accessRights'] not in access_rights and body['accessRights'] != None:
+                    errors['accessRights'] = 'El recurso debe tener derechos de acceso válidos'
+            else:
+                errors['accessRights'] = 'El recurso debe tener derechos de acceso válidos'
 
     return body
 

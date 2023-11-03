@@ -105,8 +105,13 @@ def get_all(body, current_user):
         
         total = get_total(json.dumps(body['filters']))
 
-        rights = get_access_rights()['options']
-        roles = get_roles()['options']
+        rights = get_access_rights()
+        if rights:
+            rights = rights['options']
+        
+        roles = get_roles()
+        if roles:
+            roles = roles['options']
 
         for r in users:
             r['id'] = str(r['_id'])
