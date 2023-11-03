@@ -40,7 +40,7 @@ def create(body, user):
     # Crear instancia de Form con el body del request
     try:
         # se verifica el arbol completo de metadatos de la herramienta
-        update_main_schema(body)
+        update_main_schema(new_form=body)
 
         form = Form(**body)
         # Insertar el estándar de metadatos en la base de datos
@@ -92,7 +92,7 @@ def update_by_slug(slug, body, user):
     try:
         validate_form(body)
         # se verifica el arbol completo de metadatos de la herramienta
-        update_main_schema(body)
+        update_main_schema(updated_form=body)
 
         form = mongodb.get_record('forms', {'slug': slug})
         # Si el formulario no existe, retornar error
@@ -100,8 +100,6 @@ def update_by_slug(slug, body, user):
             return {'msg': 'Formulario no existe'}, 404
         # Crear instancia de FormUpdate con el body del request
         form_update = FormUpdate(**body)
-
-        print(form_update.dict())
         # Actualizar el formulario en la base de datos
         mongodb.update_record('forms', {'slug': slug}, form_update)
         # Registrar el log
@@ -166,7 +164,7 @@ def validate_form(form):
                 raise Exception("Error: el formulario no puede tener un campo con destino que no inicie con metadata")
     
 # Funcion que itera entre todos los formularios y devuelve la estructura combinada de todos
-def update_main_schema(new_form = None):
+def update_main_schema(new_form = None, updated_form = None):
     try:
         # diccionario que contiene la estructura de todos los formularios
         resp = {}
@@ -176,7 +174,11 @@ def update_main_schema(new_form = None):
             'select-multiple2',
         ]
         # Obtener todos los formularios
-        forms = mongodb.get_all_records('forms', {}, [('name', 1)])
+        filters = {}
+        if updated_form:
+            filters['slug'] = {'$ne': updated_form['slug']}
+        
+        forms = mongodb.get_all_records('forms', filters, [('name', 1)])
         # Iterar entre todos los formularios
         for form in forms:
             # Iterar el campo fields del formulario

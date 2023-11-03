@@ -27,7 +27,6 @@ class IndexHandler:
         return cls._instance
 
     def start(self):
-        print(self.get_aliases())
         # get all the keys in the dictionary
         keys = self.get_aliases().keys()
         if len(keys) == 0:
