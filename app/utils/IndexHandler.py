@@ -34,6 +34,9 @@ class IndexHandler:
             from .index.spanish_settings import settings
             self.create_index(index_name, settings=settings)
             self.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', index_name)
+        else:
+            for k in self.get_aliases():
+                print(k)
 
     def get_aliases(self):
         url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'

@@ -28,8 +28,6 @@ index_handler = IndexHandler.IndexHandler()
 def create_app(config_class=config[os.environ['FLASK_ENV']]):
     app = Flask(__name__)
 
-    index_handler.start()
-
     app.config.from_mapping(
         CELERY=dict(
             broker_url=os.environ.get(
@@ -107,6 +105,10 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     if(admin_api['data'][1]['value']):
         from app.api.publicApi import bp as publicApi_bp
         app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
+
+    index_management = mongodb.get_record('system', {'name': 'index_management'})
+    if index_management['data'][0]['value']:
+        index_handler.start()
 
     # registrar plugins activos en la base de datos
     plugins = mongodb.get_record('system', {'name': 'active_plugins'})

@@ -107,7 +107,7 @@ def update_by_slug(slug, body, user):
         # Limpiar la cache
         update_cache()
         # Retornar el resultado
-        return {'msg': 'Formulario actualizado exitosamente'}, 200
+        return {'msg': 'Formulario actualizado exitosamente. Si se agregaron nuevos campos o se cambió el tipo de alguno de los campos existentes, es importante volver a generar el índice desde la opción en los ajustes del sistema.'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -196,8 +196,19 @@ def update_main_schema(new_form = None, updated_form = None):
                         resp[field['destiny']] = tipo
 
         # si se agrego un nuevo formulario, se itera entre los campos del formulario y se agregan al diccionario resp
-        if(new_form):
+        if new_form:
             for field in new_form['fields']:
+                tipo = field['type']
+                if 'destiny' in field:
+                    if(field['destiny'] in resp):
+                        if(resp[field['destiny']] != tipo):
+                            if(tipo not in same_types and resp[field['destiny']] not in same_types):
+                                raise Exception("Error: el campo " + field['destiny'] + " tiene dos tipos diferentes")
+                    else:
+                        resp[field['destiny']] = tipo
+
+        if updated_form:
+            for field in updated_form['fields']:
                 tipo = field['type']
                 if 'destiny' in field:
                     if(field['destiny'] in resp):

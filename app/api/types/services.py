@@ -111,7 +111,7 @@ def update_by_slug(slug, body, user):
         # Limpiar la cache
         update_cache()
         # Retornar el resultado
-        return {'msg': 'Tipo de post actualizado exitosamente'}, 200
+        return {'msg': 'Tipo de post actualizado exitosamente.'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 

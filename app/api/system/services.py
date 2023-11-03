@@ -44,6 +44,7 @@ def update_settings(settings, current_user):
         update_option('post_types_settings', settings)
         update_option('access_rights', settings)
         update_option('api_activation', settings)
+        update_option('index_management', settings)
 
         # Registrar log
         register_log(current_user, log_actions['system_update'], {
@@ -332,6 +333,26 @@ def change_plugin_status(plugin, user):
 
         # Retornar el resultado
         return {'msg': 'Plugin actualizado exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def regenerate_index():
+    try:
+        # Obtener el registro index_management de la colección system
+        index_management = mongodb.get_record('system', {'name': 'index_management'})
+        # Si el registro no existe, retornar error
+        if not index_management:
+            return {'msg': 'No existe el registro index_management'}, 404
+        
+        if not index_management['data'][0]['value']:
+            return {'msg': 'Indexación no está activada'}, 400
+        
+        # Obtener el registro resources-schema de la colección system
+        resources_schema = mongodb.get_record('system', {'name': 'resources-schema'})
+
+        # Retornar el resultado
+        return {'msg': 'Indexación iniciada exitosamente'}, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
