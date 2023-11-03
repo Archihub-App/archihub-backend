@@ -13,23 +13,33 @@ from app.api.lists.services import get_by_id
 from app.utils.functions import get_access_rights_id, get_roles_id, get_access_rights, get_roles
 import os
 import importlib
+from app.utils import IndexHandler
+from app.utils.index.spanish_settings import settings as spanish_settings
 
 mongodb = DatabaseHandler.DatabaseHandler()
+index_handler = IndexHandler.IndexHandler()
+
+ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
+
 
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Funcion para obtener todos los recursos de la coleccion system
+
+
 @lru_cache(maxsize=32)
 def get_all_settings():
     try:
         # Obtener todos los recursos de la coleccion system
-        resources = mongodb.get_all_records('system', {"name": {"$ne": "active_plugins"}})
+        resources = mongodb.get_all_records(
+            'system', {"name": {"$ne": "active_plugins"}})
         # Retornar el resultado
         return {'settings': parse_result(resources)}
     except Exception as e:
         raise Exception('Error al obtener los recursos: ' + str(e))
-        
+
+
 def update_option(name, data):
     options = mongodb.get_record('system', {'name': name})
     for d in options['data']:
@@ -37,8 +47,10 @@ def update_option(name, data):
             d['value'] = data[d['id']]
     update = OptionUpdate(**{'data': options['data']})
     mongodb.update_record('system', {'name': name}, update)
-    
+
 # Funcion para actualizar los ajustes del sistema
+
+
 def update_settings(settings, current_user):
     try:
         update_option('post_types_settings', settings)
@@ -61,49 +73,61 @@ def update_settings(settings, current_user):
 
         # Llamar al servicio para obtener todos los ajustes del sistema
         return {'msg': 'Ajustes del sistema actualizados exitosamente'}, 200
-    
+
     except Exception as e:
         return {'msg': str(e)}, 500
 
 # Funcion para obtener el tipo por defecto del modulo de catalogacion
+
+
 @lru_cache(maxsize=32)
 def get_default_cataloging_type():
     try:
         # Obtener el registro post_types_settings de la colección system
-        post_types_settings = mongodb.get_record('system', {'name': 'post_types_settings'})
+        post_types_settings = mongodb.get_record(
+            'system', {'name': 'post_types_settings'})
         # Si el registro no existe, retornar error
         if not post_types_settings:
             return {'msg': 'No existe el tipo por defecto del modulo de catalogacion'}, 404
-        
+
         for d in post_types_settings['data']:
             if d['id'] == 'tipo_defecto':
                 return {'value': d['value']}, 200
-            
+
     except Exception as e:
-        raise Exception('Error al obtener el tipo por defecto del modulo de catalogacion')
-    
+        raise Exception(
+            'Error al obtener el tipo por defecto del modulo de catalogacion')
+
 # Funcion para obtener el tipo por defecto del modulo de catalogacion
+
+
 @lru_cache(maxsize=32)
 def get_default_visible_type():
     try:
         # Obtener el registro post_types_settings de la colección system
-        post_types_settings = mongodb.get_record('system', {'name': 'post_types_settings'})
+        post_types_settings = mongodb.get_record(
+            'system', {'name': 'post_types_settings'})
         # Si el registro no existe, retornar error
         if not post_types_settings:
-            raise Exception('No existe el tipo por defecto del modulo de catalogacion')
-        
+            raise Exception(
+                'No existe el tipo por defecto del modulo de catalogacion')
+
         for d in post_types_settings['data']:
             if d['id'] == 'tipos_vista_individual':
                 return {'value': d['value']}
-            
+
     except Exception as e:
-        raise Exception('Error al obtener el tipo por defecto del modulo de catalogacion')
+        raise Exception(
+            'Error al obtener el tipo por defecto del modulo de catalogacion')
 
 # Funcion para actualizar el registro resources-schema en la colección system
+
+
 def update_resources_schema(schema):
     try:
         # Obtener el registro resources-schema de la colección system
-        resources_schema = mongodb.get_record('system', {'name': 'resources-schema'})
+        resources_schema = mongodb.get_record(
+            'system', {'name': 'resources-schema'})
         # Si el registro no existe, crearlo
         if not resources_schema:
             new = Option(**{'name': 'resources-schema', 'data': schema})
@@ -111,14 +135,17 @@ def update_resources_schema(schema):
         # Si el registro existe, actualizarlo
         else:
             update = OptionUpdate(**{'data': schema})
-            mongodb.update_record('system', {'name': 'resources-schema'}, update)
+            mongodb.update_record(
+                'system', {'name': 'resources-schema'}, update)
 
         # Retornar el resultado
         return {'msg': 'Schema actualizado exitosamente'}
     except Exception as e:
         raise Exception('Error al actualizar el schema de los recursos')
-    
+
 # Funcion para obtener el valor de un dict dado un path
+
+
 def get_value_by_path(dict, path):
     try:
         keys = path.split('.')
@@ -131,11 +158,13 @@ def get_value_by_path(dict, path):
                 break
 
         return value
-    
+
     except Exception as e:
         raise Exception(f'Error al obtener el valor del campo {key}')
-    
+
 # Funcion para validar un valor de texto
+
+
 def validate_text(value, field):
     try:
         label = field['label']
@@ -148,8 +177,10 @@ def validate_text(value, field):
         return value
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
-    
+
 # Funcion para validar el formato de una direccion de correo
+
+
 def validate_email(value, field):
     try:
         label = field['label']
@@ -165,8 +196,10 @@ def validate_email(value, field):
         return value
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
-    
+
 # Funcion para validar un array de textos
+
+
 def validate_text_array(value, field):
     try:
         label = field['label']
@@ -178,20 +211,25 @@ def validate_text_array(value, field):
             raise Exception(f'El campo {label} es requerido')
         # Si el campo tiene min_items, validar que el array tenga al menos min_items items
         if 'min_items' in field and len(value) < field['min_items']:
-            raise Exception(f'El campo {label} debe tener al menos {field["min_items"]} items')
+            raise Exception(
+                f'El campo {label} debe tener al menos {field["min_items"]} items')
         # Si el campo tiene max_items, validar que el array tenga como máximo max_items items
         if 'max_items' in field and len(value) > field['max_items']:
-            raise Exception(f'El campo {label} debe tener como máximo {field["max_items"]} items')
+            raise Exception(
+                f'El campo {label} debe tener como máximo {field["max_items"]} items')
         # Si el campo tiene items, validar que todos los items del array sean de tipo string
         if 'items' in field:
             for item in value:
                 if not isinstance(item, str):
-                    raise Exception(f'El campo {label} debe ser de tipo string')
+                    raise Exception(
+                        f'El campo {label} debe ser de tipo string')
         return value
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
 
 # Funcion para validar un valor de tipo autor
+
+
 def validate_author_array(value, field):
     try:
         label = field['label']
@@ -215,12 +253,14 @@ def validate_author_array(value, field):
             else:
                 if split[0] == '' and split[1] == '':
                     raise Exception(f'Error {label}')
-                
+
         return value
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
-    
+
 # Funcion para validar un text de acuerdo a un regex
+
+
 def validate_text_regex(value, field):
     try:
         label = field['label']
@@ -230,12 +270,11 @@ def validate_text_regex(value, field):
         # Si field.required entonces el valor no puede ser vacío o == ''
         if field['required'] and (value == '' or value == None):
             raise Exception(f'El campo {label} es requerido')
-        
 
         # Si el campo tiene regex, validar que el valor cumpla con el regex
         if 'pattern' in field:
             print("1", field['pattern'])
-            
+
             # regex para validar una url
             regex = field['pattern']
 
@@ -249,6 +288,8 @@ def validate_text_regex(value, field):
         raise Exception(f'Error al validar el campo {label}')
 
 # Funcion para validar un valor de fecha
+
+
 def validate_simple_date(value, field):
     try:
         label = field['label']
@@ -261,20 +302,24 @@ def validate_simple_date(value, field):
         return value
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
-    
+
+
 def get_plugins():
     try:
         # Obtener el registro active_plugins de la colección system
-        active_plugins = mongodb.get_record('system', {'name': 'active_plugins'})
+        active_plugins = mongodb.get_record(
+            'system', {'name': 'active_plugins'})
         # Obtener la ruta de la carpeta plugins
-        plugins_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../plugins')
+        plugins_path = os.path.join(os.path.dirname(
+            os.path.abspath(__file__)), '../../plugins')
         # Obtener todas las carpetas en la carpeta ../../plugins
         plugins = os.listdir(plugins_path)
 
         resp = []
         for plugin in plugins:
             if os.path.isfile(f'{plugins_path}/{plugin}/__init__.py'):
-                plugin_module = importlib.import_module(f'app.plugins.{plugin}')
+                plugin_module = importlib.import_module(
+                    f'app.plugins.{plugin}')
                 plugin_instance = plugin_module.plugin_info
                 plugin_instance['slug'] = plugin
 
@@ -290,11 +335,13 @@ def get_plugins():
 
     except Exception as e:
         raise Exception(str(e))
-    
+
+
 def activate_plugin(body, current_user):
     try:
         # Obtener la ruta de la carpeta plugins
-        plugins_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../plugins')
+        plugins_path = os.path.join(os.path.dirname(
+            os.path.abspath(__file__)), '../../plugins')
 
         temp = []
 
@@ -304,24 +351,28 @@ def activate_plugin(body, current_user):
 
         update_dict = {'data': temp}
         update_schema = OptionUpdate(**update_dict)
-        mongodb.update_record('system', {'name': 'active_plugins'}, update_schema)
-            
+        mongodb.update_record(
+            'system', {'name': 'active_plugins'}, update_schema)
+
         # Retornar el resultado
         return {'msg': 'Plugins instalados exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200
     except Exception as e:
         raise Exception(str(e))
-    
+
+
 def change_plugin_status(plugin, user):
     try:
         # Obtener el registro active_plugins de la colección system
-        active_plugins = mongodb.get_record('system', {'name': 'active_plugins'})
+        active_plugins = mongodb.get_record(
+            'system', {'name': 'active_plugins'})
         # Verificar si el plugin existe
-        plugins_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../plugins')
+        plugins_path = os.path.join(os.path.dirname(
+            os.path.abspath(__file__)), '../../plugins')
         # Obtener todas las carpetas en la carpeta ../../plugins
         plugins = os.listdir(plugins_path)
         if plugin not in plugins:
             return {'msg': 'Plugin no existe'}, 404
-        
+
         if plugin in active_plugins['data']:
             active_plugins['data'].remove(plugin)
         else:
@@ -329,30 +380,125 @@ def change_plugin_status(plugin, user):
 
         update_dict = {'data': active_plugins['data']}
         update_schema = OptionUpdate(**update_dict)
-        mongodb.update_record('system', {'name': 'active_plugins'}, update_schema)
+        mongodb.update_record(
+            'system', {'name': 'active_plugins'}, update_schema)
 
         # Retornar el resultado
         return {'msg': 'Plugin actualizado exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
-    
-def regenerate_index():
+
+
+def regenerate_index(user):
     try:
         # Obtener el registro index_management de la colección system
-        index_management = mongodb.get_record('system', {'name': 'index_management'})
+        index_management = mongodb.get_record(
+            'system', {'name': 'index_management'})
         # Si el registro no existe, retornar error
         if not index_management:
             return {'msg': 'No existe el registro index_management'}, 404
-        
+
         if not index_management['data'][0]['value']:
             return {'msg': 'Indexación no está activada'}, 400
-        
+
         # Obtener el registro resources-schema de la colección system
-        resources_schema = mongodb.get_record('system', {'name': 'resources-schema'})
+        resources_schema = mongodb.get_record(
+            'system', {'name': 'resources-schema'})
+
+        mapping = transform_dict_to_mapping(resources_schema['data'])
+        mapping.pop('file', None)
+
+        mapping['post_type'] = {
+            'type': 'keyword'
+        }
+
+        mapping['parents'] = {
+            'type': 'object',
+            'properties': {
+                'id': {
+                    'type': 'keyword'
+                },
+                'post_type': {
+                    'type': 'keyword'
+                }
+            }
+        }
+
+        mapping['parent'] = {
+            'type': 'object',
+            'properties': {
+                'id': {
+                    'type': 'keyword'
+                },
+                'post_type': {
+                    'type': 'keyword'
+                }
+            }
+        }
+
+        mapping['ident'] = {
+            'type': 'keyword'
+        }
+
+        mapping['status'] = {
+            'type': 'keyword'
+        }
+
+        mapping = {
+            'properties': mapping
+        }
+
+        # print(index_handler.get_alias_indexes('archidoc-prod-resources'))
+        keys = index_handler.get_alias_indexes('archidoc-prod-resources').keys()
+
+        if len(keys) == 1:
+            name = list(keys)[0]
+            number = name.split('_')[1]
+            number = int(number) + 1
+            new_name = ELASTIC_INDEX_PREFIX + '-resources_' + str(number)
+            index_handler.create_index(new_name, mapping=mapping, settings=spanish_settings)
+            index_handler.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', new_name)
+            index_handler.reindex(name, new_name)
+            index_handler.remove_from_alias(ELASTIC_INDEX_PREFIX + '-resources', name)
+            index_handler.delete_index(name)
+        else:
+            return {'msg': 'Hay un problema de configuración del alias'}, 404
 
         # Retornar el resultado
-        return {'msg': 'Indexación iniciada exitosamente'}, 200
+        return {'msg': 'Indexación finalizada exitosamente'}, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
+
+
+def transform_dict_to_mapping(dict_input):
+    try:
+        mapping = {}
+        for key in dict_input:
+            if isinstance(dict_input[key], dict):
+                if 'type' not in dict_input[key]:
+                    mapping[key] = {
+                        'properties': transform_dict_to_mapping(dict_input[key])
+                    }
+                else:
+                    mapping[key] = dict_input[key]
+                    if mapping[key]['type'] == 'text':
+                        mapping[key]['fields'] = {
+                            'keyword': {
+                                'type': 'keyword',
+                                'ignore_above': 256
+                            }
+                        }
+                        mapping[key]['analyzer'] = 'analyzer_spanish'
+                    elif mapping[key]['type'] == 'text-area':
+                        mapping[key]['type'] = 'text'
+                        mapping[key]['analyzer'] = 'analyzer_spanish'
+                    elif mapping[key]['type'] == 'simple-date':
+                        mapping[key]['type'] = 'date'
+            else:
+                mapping[key] = dict_input[key]
+
+        return mapping
+    except Exception as e:
+        raise Exception(str(e))

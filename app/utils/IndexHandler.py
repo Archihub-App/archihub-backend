@@ -43,6 +43,12 @@ class IndexHandler:
         response = requests.get(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
+    
+    def get_alias_indexes(self, alias):
+        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_alias/' + alias
+        response = requests.get(url, auth=HTTPBasicAuth(
+            ELASTIC_USER, ELASTIC_PASSWORD))
+        return response.json()
 
     def create_index(self, index, settings=None, mapping=None):
         url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index
@@ -85,6 +91,26 @@ class IndexHandler:
                     }
                 }
             ]
+        }
+        response = requests.post(url, json=body, auth=HTTPBasicAuth(
+            ELASTIC_USER, ELASTIC_PASSWORD))
+        return response.json()
+    
+    def delete_index(self, index):
+        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index
+        response = requests.delete(url, auth=HTTPBasicAuth(
+            ELASTIC_USER, ELASTIC_PASSWORD))
+        return response.json()
+    
+    def reindex(self, source, dest):
+        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_reindex'
+        body = {
+            'source': {
+                'index': source
+            },
+            'dest': {
+                'index': dest
+            }
         }
         response = requests.post(url, json=body, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
