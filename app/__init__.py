@@ -108,6 +108,8 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
 
     index_management = mongodb.get_record('system', {'name': 'index_management'})
     if index_management['data'][0]['value']:
+        from app.api.search import bp as search_bp
+        app.register_blueprint(search_bp, url_prefix='/search')
         index_handler.start()
 
     # registrar plugins activos en la base de datos

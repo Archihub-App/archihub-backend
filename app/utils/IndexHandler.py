@@ -128,4 +128,4 @@ class IndexHandler:
             ELASTIC_PORT + '/' + index + '/_doc/' + id
         response = requests.put(url, json=document, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
-        return response.json()
+        return response.status_code

@@ -571,14 +571,20 @@ def index_resources_task(user):
                     destiny = f['destiny']
                     if destiny != '':
                         value = get_value_by_path(resource, destiny)
-                        # convertir fecha a formato YYYY-MM-DD
                         if value != None:
                             value = value.strftime('%Y-%m-%d')
                             change_value(document, f['destiny'], value)
+                            
             document['post_type'] = post_type
             document['parents'] = resource['parents']
             document['parent'] = resource['parent']
             document['ident'] = resource['ident']
 
+            status = index_handler.index_document(ELASTIC_INDEX_PREFIX + '-resources', str(resource['_id']), document)
+            if status != 201 or status != 200:
+                raise Exception('Error al indexar el recurso ' + str(resource['_id']))
+
         skip += 1000
         resources = list(mongodb.get_all_records('resources', {}, limit=1000, skip=skip))
+
+    return 'ok'
