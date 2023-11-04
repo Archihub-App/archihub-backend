@@ -17,6 +17,7 @@ from app.api.system.services import validate_text_regex
 from app.api.system.services import get_value_by_path
 from app.api.system.services import get_default_visible_type
 from app.api.system.services import validate_author_array
+from app.api.system.services import validate_simple_date
 from app.api.lists.services import get_option_by_id
 from app.api.records.services import delete_parent
 from app.api.records.services import update_parent
@@ -26,8 +27,19 @@ from app.api.system.services import get_access_rights
 from app.api.users.services import has_right, has_role
 from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
 import os
+from datetime import datetime
 mongodb = DatabaseHandler.DatabaseHandler()
 
+# function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado
+def change_value(body, route, value):
+    route = route.split('.')
+    temp = body
+    for i in range(len(route)):
+        if i == len(route) - 1:
+            temp[route[i]] = value
+        else:
+            temp = temp[route[i]]
+    return body
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
@@ -234,13 +246,17 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    # if field['type'] == 'simple-date':
-                    #     exists = get_value_by_path(body, field['destiny'])
-                    #     if exists:
-                    #         print(get_value_by_path(body, field['destiny']))
-                    #         # raise Exception('Error')
-                    #     elif field['required']:
-                    #         errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    if field['type'] == 'simple-date':
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            value = get_value_by_path(body, field['destiny'])
+                            value = value.replace('"', '')
+                            value = datetime.fromisoformat(value)
+                            value = value
+                            validate_simple_date(value, field)
+                            body = change_value(body, field['destiny'], value)
+                        elif field['required']:
+                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
 
         except Exception as e:
             errors[field['destiny']] = str(e)

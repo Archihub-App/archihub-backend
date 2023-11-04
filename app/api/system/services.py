@@ -15,6 +15,9 @@ import os
 import importlib
 from app.utils import IndexHandler
 from app.utils.index.spanish_settings import settings as spanish_settings
+from celery import shared_task
+from app.api.tasks.services import add_task
+
 
 mongodb = DatabaseHandler.DatabaseHandler()
 index_handler = IndexHandler.IndexHandler()
@@ -294,8 +297,8 @@ def validate_simple_date(value, field):
     try:
         label = field['label']
         # Si el valor no es de tipo string, retornar error
-        if not isinstance(value, datetime):
-            raise Exception(f'El campo {label} debe ser de tipo string')
+        if not isinstance(value, datetime.date):
+            raise Exception(f'El campo {label} debe ser de tipo fecha')
         # Si field.required entonces el valor no puede ser vacío o == ''
         if field['required'] and (value == '' or value == None):
             raise Exception(f'El campo {label} es requerido')
@@ -449,21 +452,8 @@ def regenerate_index(user):
             'properties': mapping
         }
 
-        # print(index_handler.get_alias_indexes('archidoc-prod-resources'))
-        keys = index_handler.get_alias_indexes('archidoc-prod-resources').keys()
-
-        if len(keys) == 1:
-            name = list(keys)[0]
-            number = name.split('_')[1]
-            number = int(number) + 1
-            new_name = ELASTIC_INDEX_PREFIX + '-resources_' + str(number)
-            index_handler.create_index(new_name, mapping=mapping, settings=spanish_settings)
-            index_handler.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', new_name)
-            index_handler.reindex(name, new_name)
-            index_handler.remove_from_alias(ELASTIC_INDEX_PREFIX + '-resources', name)
-            index_handler.delete_index(name)
-        else:
-            return {'msg': 'Hay un problema de configuración del alias'}, 404
+        task = regenerate_index_task.delay(mapping, user)
+        add_task(task.id, 'system.regenerate_index', user, 'msg')
 
         # Retornar el resultado
         return {'msg': 'Indexación finalizada exitosamente'}, 200
@@ -502,3 +492,43 @@ def transform_dict_to_mapping(dict_input):
         return mapping
     except Exception as e:
         raise Exception(str(e))
+
+
+def index_resources(user):
+    try:
+        # Obtener el registro index_management de la colección system
+        index_management = mongodb.get_record(
+            'system', {'name': 'index_management'})
+        # Si el registro no existe, retornar error
+        if not index_management:
+            return {'msg': 'No existe el registro index_management'}, 404
+
+        if not index_management['data'][0]['value']:
+            return {'msg': 'Indexación no está activada'}, 400
+
+        
+
+        # Retornar el resultado
+        return {'msg': 'Indexación finalizada exitosamente'}, 200
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+@shared_task(ignore_result=False, name='system.regenerate_index')
+def regenerate_index_task(mapping, user):
+    keys = index_handler.get_alias_indexes('archidoc-prod-resources').keys()
+
+    if len(keys) == 1:
+        name = list(keys)[0]
+        number = name.split('_')[1]
+        number = int(number) + 1
+        new_name = ELASTIC_INDEX_PREFIX + '-resources_' + str(number)
+        index_handler.create_index(new_name, mapping=mapping, settings=spanish_settings)
+        index_handler.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', new_name)
+        index_handler.reindex(name, new_name)
+        index_handler.remove_from_alias(ELASTIC_INDEX_PREFIX + '-resources', name)
+        index_handler.delete_index(name)
+
+        return 'ok'
+    else:
+        raise Exception('Hay un problema en la configuración de los índices')
