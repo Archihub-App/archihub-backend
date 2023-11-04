@@ -59,7 +59,7 @@ def get_tasks_total(user):
     return services.get_tasks_total(user)
 
 @bp.route('', methods=['GET'])
-# @jwt_required()
+@jwt_required()
 def test_celery_result_all():
     """
     Devuelve las tasks actualmente en ejecución
@@ -73,10 +73,10 @@ def test_celery_result_all():
             description: Error al recuperar las tasks
     """
     # Obtener el usuario actual
-    # current_user = get_jwt_identity()
+    current_user = get_jwt_identity()
     # # Verificar si el usuario tiene el rol de administrador
-    # if not user_services.has_role(current_user, 'admin'):
-    #     return {'msg': 'No tiene permisos para obtener las tasks'}, 401
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para obtener las tasks'}, 401
     # Llamar al servicio para probar las tasks de celery
     i = app.celery_app.control.inspect()
 

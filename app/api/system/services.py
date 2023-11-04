@@ -17,6 +17,7 @@ from app.utils import IndexHandler
 from app.utils.index.spanish_settings import settings as spanish_settings
 from celery import shared_task
 from app.api.tasks.services import add_task
+from app.api.types.services import get_metadata
 
 
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -24,6 +25,21 @@ index_handler = IndexHandler.IndexHandler()
 
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
+# function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado. Si el valor no existe, lo crea
+def change_value(body, path, value):
+    try:
+        keys = path.split('.')
+        temp = body
+        for key in keys:
+            if key not in temp:
+                temp[key] = {}
+            if key == keys[-1]:
+                temp[key] = value
+            else:
+                temp = temp[key]
+        return body
+    except Exception as e:
+        raise Exception(f'Error al cambiar el valor del campo {key}')
 
 def parse_result(result):
     return json.loads(json_util.dumps(result))
@@ -297,7 +313,7 @@ def validate_simple_date(value, field):
     try:
         label = field['label']
         # Si el valor no es de tipo string, retornar error
-        if not isinstance(value, datetime.date):
+        if not isinstance(value, datetime.datetime):
             raise Exception(f'El campo {label} debe ser de tipo fecha')
         # Si field.required entonces el valor no puede ser vacío o == ''
         if field['required'] and (value == '' or value == None):
@@ -506,7 +522,8 @@ def index_resources(user):
         if not index_management['data'][0]['value']:
             return {'msg': 'Indexación no está activada'}, 400
 
-        
+        task = index_resources_task.delay(user)
+        add_task(task.id, 'system.index_resources', user, 'msg')
 
         # Retornar el resultado
         return {'msg': 'Indexación finalizada exitosamente'}, 200
@@ -516,7 +533,7 @@ def index_resources(user):
 
 @shared_task(ignore_result=False, name='system.regenerate_index')
 def regenerate_index_task(mapping, user):
-    keys = index_handler.get_alias_indexes('archidoc-prod-resources').keys()
+    keys = index_handler.get_alias_indexes(ELASTIC_INDEX_PREFIX + '-resources').keys()
 
     if len(keys) == 1:
         name = list(keys)[0]
@@ -532,3 +549,36 @@ def regenerate_index_task(mapping, user):
         return 'ok'
     else:
         raise Exception('Hay un problema en la configuración de los índices')
+    
+@shared_task(ignore_result=False, name='system.index_resources')
+def index_resources_task(user):
+    skip = 0
+    resources = list(mongodb.get_all_records('resources', {}, limit=1000, skip=skip))
+    while len(resources) > 0:
+        for resource in resources:
+            document = {}
+            post_type = resource['post_type']
+            fields = get_metadata(post_type)['fields']
+            for f in fields:
+                # print(f)
+                if f['type'] != 'file' and f['type'] != 'simple-date':
+                    destiny = f['destiny']
+                    if destiny != '':
+                        value = get_value_by_path(resource, destiny)
+                        if value != None:
+                            document = change_value(document, f['destiny'], value)
+                elif f['type'] == 'simple-date':
+                    destiny = f['destiny']
+                    if destiny != '':
+                        value = get_value_by_path(resource, destiny)
+                        # convertir fecha a formato YYYY-MM-DD
+                        if value != None:
+                            value = value.strftime('%Y-%m-%d')
+                            change_value(document, f['destiny'], value)
+            document['post_type'] = post_type
+            document['parents'] = resource['parents']
+            document['parent'] = resource['parent']
+            document['ident'] = resource['ident']
+
+        skip += 1000
+        resources = list(mongodb.get_all_records('resources', {}, limit=1000, skip=skip))

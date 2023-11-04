@@ -122,3 +122,10 @@ class IndexHandler:
         response = requests.put(url, json=mapping, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
+    
+    def index_document(self, index, id, document):
+        url = 'http://' + ELASTIC_DOMAIN + ':' + \
+            ELASTIC_PORT + '/' + index + '/_doc/' + id
+        response = requests.put(url, json=document, auth=HTTPBasicAuth(
+            ELASTIC_USER, ELASTIC_PASSWORD))
+        return response.json()

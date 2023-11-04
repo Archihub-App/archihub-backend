@@ -191,7 +191,6 @@ def get_icon(post_type_slug):
 @lru_cache(maxsize=1000)
 def get_metadata(post_type_slug):
     # Buscar el tipo de post en la base de datos
-    print('holaaaa')
     post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
     # Si el tipo de post no existe, retornar error
     if not post_type:
