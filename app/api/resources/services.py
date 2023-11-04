@@ -261,6 +261,7 @@ def validate_fields(body, metadata, errors):
         except Exception as e:
             errors[field['destiny']] = str(e)
 
+    print(body['accessRights'])
     if 'accessRights' not in body:
         body['accessRights'] = None
     else:
@@ -277,8 +278,6 @@ def validate_fields(body, metadata, errors):
 
                 if body['accessRights'] not in access_rights and body['accessRights'] != None:
                     errors['accessRights'] = 'El recurso debe tener derechos de acceso válidos'
-            else:
-                errors['accessRights'] = 'El recurso debe tener derechos de acceso válidos'
 
     return body
 
