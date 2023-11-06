@@ -101,7 +101,6 @@ def create():
     data = body['data']
     # convertir data una cadena de texto JSON stringify a un diccionario
     data = json.loads(data)
-    print(body)
 
     post_type = data['post_type']
     post_type_roles = cache_type_roles(post_type)
