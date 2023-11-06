@@ -79,14 +79,18 @@ def get_all(post_type, body, user):
         for resource in resources:
             resource['id'] = str(resource['_id'])
             resource.pop('_id')
-            resource['total'] = total
             resource['accessRights'] = get_option_by_id(resource['accessRights'])
             if 'term' in resource['accessRights']:
                 resource['accessRights'] = resource['accessRights']['term']
             else:
                 resource['accessRights'] = None
+
+        response = {
+            'total': total,
+            'resources': resources
+        }
         # Retornar los recursos
-        return jsonify(resources), 200
+        return jsonify(response), 200
     except Exception as e:
         return {'msg': str(e)}, 500
 

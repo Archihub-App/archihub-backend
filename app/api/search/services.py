@@ -27,21 +27,25 @@ def get_resources_by_filters(body, user):
                 ]
             }
         },
-        'size': 1
+        'size': 20,
+        '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id']
     }
 
     response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
+    response = clean_elastic_response(response)
+
+    return jsonify(response), 200
+
+def clean_elastic_response(response):
     response = response['hits']
 
     resources = []
     for r in response['hits']:
-        resources.append(r['_source'])
+        resources.append({**r['_source'], 'id': r['_id']})
 
     response = {
-        'total': response['total'],
+        'total': response['total']['value'],
         'resources': resources
     }
 
-    print(response)
-
-    return jsonify({'msg': 'ok'}), 200
+    return response
