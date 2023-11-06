@@ -664,12 +664,14 @@ def get_tree(root, available, user):
     try:
         list_available = available.split('|')
         # Obtener los recursos del tipo de contenido
+
+        fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
         if root == 'all':
             resources = list(mongodb.get_all_records('resources', {
-                             'post_type': list_available[-1], 'parent': None}, sort=[('metadata.firstLevel.title', 1)]))
+                             'post_type': list_available[-1], 'parent': None}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         else:
             resources = list(mongodb.get_all_records('resources', {'post_type': {
-                             "$in": list_available}, 'parent.id': root}, sort=[('metadata.firstLevel.title', 1)]))
+                             "$in": list_available}, 'parent.id': root}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         # Obtener el icono del post type
         icon = mongodb.get_record(
             'post_types', {'slug': list_available[-1]})['icon']
