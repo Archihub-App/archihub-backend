@@ -36,15 +36,12 @@ def login():
         401:
             description: Usuario o contraseña inválidos
     """
-    print(request.json)
     # Obtener username y password del request
     username = request.json.get('username')
     password = request.json.get('password')
     
     # Buscar usuario en la base de datos
     user = get_user(username)
-
-    print(user)
 
     # Verificar que el usuario exista
     if not user:

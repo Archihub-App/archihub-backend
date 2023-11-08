@@ -2,7 +2,8 @@ from flask import jsonify, request
 from app.utils import IndexHandler
 from app.api.users.services import has_right, has_role
 from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
-from app.api.resources.services import get_accessRights, get_resource_type
+from app.api.resources.services import get_accessRights, get_resource_type, get_children
+from app.api.types.services import get_icon
 import os
 
 index_handler = IndexHandler.IndexHandler()
@@ -10,60 +11,118 @@ ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
 
 def get_resources_by_filters(body, user):
-    post_type_roles = cache_type_roles(body['post_type'])
-    if post_type_roles['viewRoles']:
-        canView = False
-        for r in post_type_roles['viewRoles']:
-            if has_role(user, r) or has_role(user, 'admin'):
-                canView = True
-                break
-        if not canView:
-            return {'msg': 'No tiene permisos para obtener los recursos'}, 401
-        
-    query = {
-        'query': {
-            'bool': {
-                'filter': [
-                    {
-                        'term': {
-                            'post_type': body['post_type']
+    try:
+        post_type_roles = cache_type_roles(body['post_type'])
+        if post_type_roles['viewRoles']:
+            canView = False
+            for r in post_type_roles['viewRoles']:
+                if has_role(user, r) or has_role(user, 'admin'):
+                    canView = True
+                    break
+            if not canView:
+                return {'msg': 'No tiene permisos para obtener los recursos'}, 401
+            
+        query = {
+            'query': {
+                'bool': {
+                    'filter': [
+                        {
+                            'term': {
+                                'post_type': body['post_type']
+                            }
                         }
-                    }
-                ],
-                'must': [
-                    {
-                        'query_string': {
-                            'query': body['keyword'],
-                            'default_operator': 'AND'
+                    ],
+                    'must': [
+                        {
+                            'query_string': {
+                                'query': body['keyword'],
+                                'default_operator': 'AND'
+                            }
                         }
-                    }
-                ]
-            }
-        },
-        'size': 20,
-        '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id']
-    }
+                    ]
+                }
+            },
+            'size': 20,
+            '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id']
+        }
 
-    response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
-    response = clean_elastic_response(response)
+        response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
+        response = clean_elastic_response(response)
 
-    return jsonify(response), 200
+        return jsonify(response), 200
+    except Exception as e:
+        return {'msg': str(e)}, 500 
 
-def get_tree_by_query(root, available, user):
-    list_available = available.split('|')
+def get_tree_by_query(body, root, available, user):
+    try:
+        list_available = available.split('|')
 
-    return 'ok'
+        query = {
+            'query': {
+                'bool': {
+                    'filter': [],
+                    'must_not': [],
+                    'must': [
+                        {
+                            'query_string': {
+                                'query': body['keyword'],
+                                'default_operator': 'AND'
+                            }
+                        }
+                    ]
+                }
+            },
+            'size': 20,
+            '_source': ['post_type', 'metadata.firstLevel.title', 'parent', '_id']
+        }
+
+        if root == 'all':
+            query['query']['bool']['filter'].append({
+                'terms': {
+                    'post_type': list_available
+                }
+            })
+        else:
+            query['query']['bool']['filter'].append({
+                'terms': {
+                    'post_type': list_available
+                },
+                'term': {
+                    'parent.id': root
+                }
+            })
+
+        response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
+        response = clean_elastic_response(response)
+
+        resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
+                re['id'])} for re in response['resources']]
+
+        for r in resources:
+            r['icon'] = get_icon(r['post_type'])
+            r['children'] = get_children(r['id'], available)
+
+        return resources, 200
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
 
 def clean_elastic_response(response):
-    response = response['hits']
+    if 'hits' in response:
+        response = response['hits']
 
-    resources = []
-    for r in response['hits']:
-        resources.append({**r['_source'], 'id': r['_id']})
+        resources = []
+        for r in response['hits']:
+            resources.append({**r['_source'], 'id': r['_id']})
 
-    response = {
-        'total': response['total']['value'],
-        'resources': resources
-    }
+        response = {
+            'total': response['total']['value'],
+            'resources': resources
+        }
 
-    return response
+        return response
+    else:
+        return {
+            'total': 0,
+            'resources': []
+        }

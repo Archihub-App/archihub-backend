@@ -78,6 +78,39 @@ def get_resource_id(username, isAdmin):
         return jsonify({'msg': 'No tiene permisos para obtener el id del recurso'}), 401
     # Obtener el body del request
     body = request.json
-    
+
     # Llamar al servicio para obtener el id del recurso
     return services.get_id(body, username)
+
+# Nuevo POST endpoint para obtener el id de un recurso por su nombre
+@bp.route('/get_opts_id', methods=['POST'])
+@fernetAuthenticate
+def get_opts_id(username, isAdmin):
+    """
+    Obtener el id de un recurso por su nombre
+    ---
+    tags:
+        - Recursos
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                name:
+                    type: string
+    responses:
+        200:
+            description: Id del recurso obtenido exitosamente
+        401:
+            description: No tiene permisos para obtener el id del recurso
+        500:
+            description: Error al obtener el id del recurso
+    """
+    if not isAdmin:
+        return jsonify({'msg': 'No tiene permisos para obtener el id del recurso'}), 401
+    # Obtener el body del request
+    body = request.json
+
+    # Llamar al servicio para obtener el id del recurso
+    return services.get_opts_id(body, username)

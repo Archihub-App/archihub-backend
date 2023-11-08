@@ -112,14 +112,22 @@ def create(body, user, files):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
-        # agregamos el ident a la metadata
-        body['ident'] = 'ident'
+        if 'ident' not in body:
+            body['ident'] = 'ident'
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
 
+        array_files = False
+        temp_files = []
+
+        if 'files' in body:
+            array_files = True
+            temp_files = body['files']
+        
         body['files'] = []
         # Crear instancia de Resource con el body del request
+
         resource = Resource(**body)
 
         # Insertar el recurso en la base de datos
@@ -131,7 +139,11 @@ def create(body, user, files):
         if files:
         # crear el record
             try:
-                records = create_record(body['_id'], user, files)
+                # si files es una lista
+                if not array_files:
+                    records = create_record(body['_id'], user, files)
+                else:
+                    records = create_record(body['_id'], user, temp_files, False)
             except Exception as e:
                 return {'msg': str(e)}, 500
 
@@ -265,7 +277,6 @@ def validate_fields(body, metadata, errors):
         except Exception as e:
             errors[field['destiny']] = str(e)
 
-    print(body['accessRights'])
     if 'accessRights' not in body:
         body['accessRights'] = None
     else:
@@ -673,11 +684,11 @@ def get_tree(root, available, user):
             resources = list(mongodb.get_all_records('resources', {'post_type': {
                              "$in": list_available}, 'parent.id': root}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         # Obtener el icono del post type
-        icon = mongodb.get_record(
-            'post_types', {'slug': list_available[-1]})['icon']
+        # icon = mongodb.get_record(
+            # 'post_types', {'slug': list_available[-1]})['icon']
         # Devolver solo los campos necesarios
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
-            re['_id']), 'icon': icon} for re in resources]
+            re['_id'])} for re in resources]
 
         for resource in resources:
             resource['children'] = get_children(resource['id'], available)

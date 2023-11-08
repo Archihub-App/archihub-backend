@@ -5,13 +5,13 @@ from pydantic import BaseModel, Field
 # Modelo para el registro de un recurso
 class Record(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
-    mime: str = None
+    mime: Optional[str] = None
     metadata: dict = None
     parents: list[dict] = None
     parent: list[dict] = None
     processing: dict = None
     filepath: str
-    size: int
+    size: Optional[int] = None
     hash: str
     name: str
     status: str = 'uploaded'
