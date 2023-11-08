@@ -8,8 +8,17 @@ def create(body, user):
 
 def get_id(body, user):
     resource = mongodb.get_record('resources', {'metadata.firstLevel.title': body['title']}, {'_id': 1, 'post_type': 1})
+
+    if resource is None:
+        return {'msg': 'No existe ese recurso'}, 400
+
     return {'id': str(resource['_id']), 'post_type': resource['post_type']}, 200
 
 def get_opts_id(body, user):
     options = mongodb.get_record('options', {'term': body['term']}, {'_id': 1})
+
+    if options is None:
+        return {'msg': 'No existe esa opción'}, 400
+    
+
     return {'id': str(options['_id'])}, 200
