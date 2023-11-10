@@ -29,7 +29,7 @@ if not os.path.exists(ORIGINAL_FILES_PATH):
 
 ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif',
                           'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'zip', 'rar', 'mp4',
-                          'mp3', 'wav', 'avi', 'mkv', 'flv', 'mov', 'wmv', 'm4a', 'mxf', 'cr2', 'arw', 'mts', 'nef'])
+                          'mp3', 'wav', 'avi', 'mkv', 'flv', 'mov', 'wmv', 'm4a', 'mxf', 'cr2', 'arw', 'mts', 'nef', 'json'])
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -151,7 +151,6 @@ def delete_parent(resource_id, parent_id, current_user):
             if r:
                 # se agregan los parents a array_parents si no estan ya en el array. Cada parent en el array_parents es del tipo {id: id, post_type: post_type}
                 for parent in r['parents']:
-                    print(parent)
                     array_parents_temp.append(parent)
 
         # se eliminan los parents que esten duplicados. Cada parent es del tipo {id: id, post_type: post_type}. Se eliminan los duplicados por id
