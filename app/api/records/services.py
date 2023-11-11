@@ -10,7 +10,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.users.services import has_right
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import get_roles, cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id
+from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id
 from werkzeug.utils import secure_filename
 import os
 import hashlib
@@ -22,7 +22,6 @@ load_dotenv()
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
-# Make a folder for uploads if it doesn't exist
 if not os.path.exists(ORIGINAL_FILES_PATH):
     os.makedirs(ORIGINAL_FILES_PATH)
 
@@ -32,8 +31,6 @@ ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif',
                           'mp3', 'wav', 'avi', 'mkv', 'flv', 'mov', 'wmv', 'm4a', 'mxf', 'cr2', 'arw', 'mts', 'nef', 'json', 'html', 'wma', 'aac', 'flac'])
 
 mongodb = DatabaseHandler.DatabaseHandler()
-
-# Funcion para parsear el resultado de una consulta a la base de datos
 
 def update_cache():
     get_all.cache_clear()

@@ -405,7 +405,7 @@ def get_resource(id, user):
         if len(resource['files']) > 0:
             resource['children'] = [{
                 'post_type': 'files',
-                'name': 'Archivos',
+                'name': 'Archivos asociados',
                 'icon': 'archivo',
                 'slug': 'files',
             }, *resource['children']]

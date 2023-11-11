@@ -534,7 +534,6 @@ def index_resources(user):
 @shared_task(ignore_result=False, name='system.regenerate_index')
 def regenerate_index_task(mapping, user):
     keys = index_handler.get_alias_indexes(ELASTIC_INDEX_PREFIX + '-resources').keys()
-
     if len(keys) == 1:
         name = list(keys)[0]
         number = name.split('_')[1]
@@ -548,7 +547,8 @@ def regenerate_index_task(mapping, user):
 
         return 'ok'
     else:
-        raise Exception('Hay un problema en la configuración de los índices')
+        index_handler.start_new_index()
+        return 'ok'
     
 @shared_task(ignore_result=False, name='system.index_resources')
 def index_resources_task(user):

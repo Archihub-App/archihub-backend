@@ -30,13 +30,16 @@ class IndexHandler:
         # get all the keys in the dictionary
         keys = self.get_aliases().keys()
         if len(keys) == 0:
-            index_name = self.elastic_index_prefix + '-resources_1'
-            from .index.spanish_settings import settings
-            self.create_index(index_name, settings=settings)
-            self.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', index_name)
+            self.start_new_index()
         else:
             for k in self.get_aliases():
                 print(k)
+
+    def start_new_index(self):
+        index_name = self.elastic_index_prefix + '-resources_1'
+        from .index.spanish_settings import settings
+        self.create_index(index_name, settings=settings)
+        self.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', index_name)
 
     def get_aliases(self):
         url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'
