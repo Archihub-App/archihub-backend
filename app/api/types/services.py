@@ -266,11 +266,13 @@ def get_types_info():
     try:
         # Obtener todos los tipos de post en orden alfabetico ascendente por el campo name
         post_types = list(mongodb.get_all_records(
-            'post_types', {'viewRoles': {'$exists': True, '$eq': []}}, [('name', 1)]))
+            'post_types',  {'$or': [{'viewRoles': {'$exists': False}}, {'viewRoles': {'$eq': []}}]}, [('name', 1)]))
 
         # Quitar todos los campos menos el nombre y la descripción
         post_types = [{'name': post_type['name'], 'slug': post_type['slug']}
                       for post_type in post_types]
+        
+        print(post_types)
 
         for p in post_types:
             p['count'] = get_count(p['slug'])
