@@ -249,3 +249,18 @@ def delete_by_slug(slug):
         return {'msg': 'No tiene permisos para eliminar un tipo de contenido'}, 401
     # Llamar al servicio para eliminar un tipo de contenido por su slug
     return services.delete_by_slug(slug, current_user)
+
+@bp.route('/info', methods=['GET'])
+def get_types_info():
+    """
+    Obtener información de los tipos de contenido
+    ---
+    tags:
+        - Tipos de contenido
+    responses:
+        200:
+            description: Información de los tipos de contenido
+        500:
+            description: Error al obtener la información de los tipos de contenido
+    """
+    return services.get_types_info()

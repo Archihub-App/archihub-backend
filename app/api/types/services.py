@@ -15,29 +15,39 @@ from app.utils.functions import clear_cache
 mongodb = DatabaseHandler.DatabaseHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
+
+
 def parse_result(result):
     return json.loads(json_util.dumps(result))
+
 
 def update_cache():
     get_all.cache_clear()
     get_by_slug.cache_clear()
     get_metadata.cache_clear()
+    get_types_info.cache_clear()
+    get_count.cache_clear()
     clear_cache()
 
-# Nuevo servicio para obtener todos los tipos de 
+# Nuevo servicio para obtener todos los tipos de
+
+
 @lru_cache(maxsize=1)
 def get_all():
     try:
         # Obtener todos los tipos de post en orden alfabetico ascendente por el campo name
         post_types = mongodb.get_all_records('post_types', {}, [('name', 1)])
         # Quitar todos los campos menos el nombre y la descripción
-        post_types = [{ 'name': post_type['name'], 'description': post_type['description'], 'slug': post_type['slug']} for post_type in post_types]
+        post_types = [{'name': post_type['name'], 'description': post_type['description'],
+                       'slug': post_type['slug']} for post_type in post_types]
         # Retornar post_types
         return jsonify(post_types), 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para crear un tipo de post
+
+
 def create(body, user):
     try:
         # Crear instancia de PostType con el body del request
@@ -57,6 +67,8 @@ def create(body, user):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para obtener un tipo de post por su slug
+
+
 @lru_cache(maxsize=50)
 def get_by_slug(slug):
     try:
@@ -73,14 +85,16 @@ def get_by_slug(slug):
         parents = get_parents(post_type)
         # si es jerarquico, agregar campo a los padres
         if post_type['hierarchical']:
-            parents = [{'name': post_type['name'], 'slug': post_type['slug'], 'icon': post_type['icon'], 'direct': True}] + parents
+            parents = [{'name': post_type['name'], 'slug': post_type['slug'],
+                        'icon': post_type['icon'], 'direct': True}] + parents
         # Agregar los padres al tipo de post
         post_type['parentsTypes'] = parents
         # Si el campo metadata es un string y es distinto a '', recuperar el formulario con ese slug
         if type(post_type['metadata']) == str and post_type['metadata'] != '':
             post_type['metadata'] = get_form_by_slug(post_type['metadata'])
             # dejar solo los campos name y slug del formulario
-            post_type['metadata'] = { 'name': post_type['metadata']['name'], 'fields': post_type['metadata']['fields'], 'slug': post_type['metadata']['slug'] }
+            post_type['metadata'] = {'name': post_type['metadata']['name'],
+                                     'fields': post_type['metadata']['fields'], 'slug': post_type['metadata']['slug']}
         else:
             post_type['metadata'] = None
 
@@ -90,13 +104,15 @@ def get_by_slug(slug):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para actualizar un tipo de post
+
+
 def update_by_slug(slug, body, user):
     # Buscar el tipo de post en la base de datos
     post_type = mongodb.get_record('post_types', {'slug': slug})
     try:
         if 'editRoles' in body:
             body['editRoles'] = verify_role_exists(body['editRoles'])
-        
+
         if 'viewRoles' in body:
             body['viewRoles'] = verify_role_exists(body['viewRoles'])
         # crear instancia de PostTypeUpdate con el body del request
@@ -116,6 +132,8 @@ def update_by_slug(slug, body, user):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para eliminar un tipo de post
+
+
 def delete_by_slug(slug, user):
     # Buscar el tipo de post en la base de datos
     post_type = mongodb.get_record('post_types', {'slug': slug})
@@ -137,12 +155,15 @@ def delete_by_slug(slug, user):
     return {'msg': 'Tipo de post eliminado exitosamente'}, 204
 
 # Funcion que devuelve recursivamente los padres de un tipo de post
-def get_parents(post_type, first = True):
+
+
+def get_parents(post_type, first=True):
     # Si el tipo de post no tiene padre, retornar una lista vacia
     if post_type['parentType'] == '':
         return []
     # Buscar el padre del tipo de post
-    parent = mongodb.get_record('post_types', {'slug': post_type['parentType']})
+    parent = mongodb.get_record(
+        'post_types', {'slug': post_type['parentType']})
     # Si el padre no existe, retornar una lista vacia
     if not parent and not parent['hierarchical']:
         return []
@@ -155,6 +176,8 @@ def get_parents(post_type, first = True):
     }] + get_parents(parent, False)
 
 # Funcion para agregar al contador de recursos de un tipo de post
+
+
 def add_resource(post_type_slug, increment=1):
     # Buscar el tipo de post en la base de datos
     post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
@@ -162,7 +185,8 @@ def add_resource(post_type_slug, increment=1):
     if not post_type:
         return {'msg': 'Tipo de post no existe'}, 404
     # Incrementar el contador de recursos del tipo de post
-    mongodb.increment_record('post_types', {'slug': post_type_slug}, 'resourcesCount', increment)
+    mongodb.increment_record(
+        'post_types', {'slug': post_type_slug}, 'resourcesCount', increment)
 
 
 # Funcion para devolver si el tipo de post es jerarquico y si tiene padres
@@ -172,11 +196,13 @@ def is_hierarchical(post_type_slug):
     # Si el tipo de post no existe, retornar error
     if not post_type:
         return {'msg': 'Tipo de post no existe'}, 404
-    
+
     # Retornar el resultado
     return (post_type['hierarchical'], post_type['parentType'] != '')
 
 # Funcion para devolver el icono de un tipo de post
+
+
 @lru_cache(maxsize=1000)
 def get_icon(post_type_slug):
     # Buscar el tipo de post en la base de datos
@@ -188,6 +214,8 @@ def get_icon(post_type_slug):
     return post_type['icon']
 
 # Funcion para devolver los campos del metadato de un tipo de post
+
+
 @lru_cache(maxsize=1000)
 def get_metadata(post_type_slug):
     # Buscar el tipo de post en la base de datos
@@ -203,7 +231,8 @@ def get_metadata(post_type_slug):
 
     # Retornar el resultado
     return post_type['metadata']
-    
+
+
 @lru_cache(maxsize=30)
 def get_form_by_slug(slug):
     try:
@@ -212,7 +241,7 @@ def get_form_by_slug(slug):
         # Si el formulario no existe, retornar error
         if not form:
             return {'msg': 'Formulario no existe'}
-        
+
         # Agregamos un nuevo campo al inicio del arreglo de fields, que es el campo de accessRights
         form['fields'].insert(0, {
             'name': 'accessRights',
@@ -230,3 +259,61 @@ def get_form_by_slug(slug):
         return form
     except Exception as e:
         return {'msg': str(e)}, 500
+
+
+@lru_cache(maxsize=1000)
+def get_types_info():
+    try:
+        # Obtener todos los tipos de post en orden alfabetico ascendente por el campo name
+        post_types = list(mongodb.get_all_records(
+            'post_types', {'viewRoles': {'$exists': True, '$eq': []}}, [('name', 1)]))
+
+        # Quitar todos los campos menos el nombre y la descripción
+        post_types = [{'name': post_type['name'], 'slug': post_type['slug']}
+                      for post_type in post_types]
+
+        for p in post_types:
+            p['count'] = get_count(p['slug'])
+
+        # order post_types by count
+        post_types = sorted(
+            post_types, key=lambda k: k['count'], reverse=False)
+        # get last item of post_types
+        last = post_types[-1]
+
+        for p in post_types:
+            p['percent'] = round((p['count'] / last['count']) * 100)
+
+        # records count
+        records_count = mongodb.count(
+            'records', {'viewRoles': {'$exists': True, '$ne': []}})
+
+        records_types = list(mongodb.aggregate('records', [
+            {'$group': {'_id': '$processing.fileProcessing.type', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}}
+        ]))
+
+        resp = {
+            'types': post_types,
+            'files': {
+                'total': records_count,
+                'data': records_types
+            }
+        }
+        # Retornar post_types
+        return jsonify(resp), 200
+    except Exception as e:
+        print(str(e))
+        return {'msg': str(e)}, 500
+
+
+@lru_cache(maxsize=1000)
+def get_count(type):
+    try:
+        # Obtener todos los tipos de post en orden alfabetico ascendente por el campo name
+        count = mongodb.count('resources', {'post_type': type})
+
+        # Retornar post_types
+        return count
+    except Exception as e:
+        raise Exception(str(e))
