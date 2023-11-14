@@ -272,8 +272,6 @@ def get_types_info():
         post_types = [{'name': post_type['name'], 'slug': post_type['slug']}
                       for post_type in post_types]
         
-        print(post_types)
-
         for p in post_types:
             p['count'] = get_count(p['slug'])
 

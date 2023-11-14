@@ -10,7 +10,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.users.services import has_right
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id
+from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id
 from werkzeug.utils import secure_filename
 import os
 import hashlib
@@ -416,7 +416,7 @@ def get_stream(id, current_user):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
-            raise Exception(resp_['msg'])
+            return {'msg': resp_['msg']}, 500
         path, type = cache_get_record_stream(id)
         path = os.path.join(WEB_FILES_PATH, path)
 
@@ -436,7 +436,7 @@ def get_transcription(id, slug, current_user):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
-            raise Exception(resp_['msg'])
+            return {'msg': resp_['msg']}, 500
         resp = cache_get_record_transcription(id, slug)
         
         # Si el record existe, retornar el record
@@ -450,7 +450,7 @@ def get_document(id, current_user):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
-            raise Exception(resp_['msg'])
+            return {'msg': resp_['msg']}, 500
         return cache_get_record_document_detail(id)
 
     except Exception as e:
@@ -460,8 +460,18 @@ def get_document_pages(id, pages, size, current_user):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
-            raise Exception(resp_['msg'])
+            return {'msg': resp_['msg']}, 500
         pages = json.dumps(pages)
         return cache_get_pages_by_id(id, pages, size)
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def get_document_block_by_page(current_user, id, page, slug, block=None):
+    try:
+        resp_, status = get_by_id(id, current_user)
+        if status != 200:
+            return {'msg': resp_['msg']}, 500
+        
+        return cache_get_block_by_page_id(id, page, slug, block)
     except Exception as e:
         return {'msg': str(e)}, 500

@@ -237,3 +237,48 @@ def get_page_by_id(id):
 
     # Llamar al servicio para obtener un record por su id
     return services.get_document_pages(id, body['pages'], body['size'], current_user)
+
+@bp.route('/<id>/blocks', methods=['POST'])
+@jwt_required()
+def get_blocks_by_id(id):
+    """
+    Obtener los bloques de un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            required: true
+            description: id del record a obtener
+        - in: query
+            name: blocks
+            schema:
+                type: array
+                required: true
+                description: número de bloques a obtener
+    responses:
+        200:
+            description: Bloques del record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    body = request.json
+    if 'page' not in body:
+        return {'msg': 'Debe especificar una página'}, 500
+    if 'block' not in body:
+        return {'msg': 'Debe especificar un bloque'}, 500
+    
+    # Llamar al servicio para obtener un record por su id
+    return services.get_document_block_by_page(current_user, id, body['page'], '', body['block'])

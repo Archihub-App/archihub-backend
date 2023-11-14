@@ -300,6 +300,60 @@ def cache_get_record_document_detail(id):
             'pages': 1,
             'aspect_ratio': aspect_ratio
         }
+    
+@lru_cache(maxsize=5000)
+def cache_get_block_by_page_id(id, page, slug, block=None):
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
+    
+    # Si el record no existe, retornar error
+    if not record:
+        raise Exception('Record no existe')
+    # si el record no se ha procesado, retornar error
+    if 'processing' not in record:
+        raise Exception('Record no ha sido procesado')
+    if 'fileProcessing' not in record['processing']:
+        raise Exception('Record no ha sido procesado')
+    
+    # get path of the file and calculate aspect ratio
+    if record['processing']['fileProcessing']['type'] == 'document':
+        path = record['processing']['fileProcessing']['path']
+        path_files = os.path.join(WEB_FILES_PATH, path, 'web/big/')
+        path = os.path.join(WEB_FILES_PATH, path)
+        
+        files = os.listdir(path_files)
+        
+        if page >= len(files):
+            raise Exception('Record no tiene tantas páginas')
+        
+        # verificar si el archivo existe
+        file = files[page]
+        file = os.path.join(path_files, file)
+        if not os.path.exists(file):
+            raise Exception('No existe el archivo')
+        
+        # get the dimensions of the image
+        img = Image.open(file)
+        width, height = img.size
+
+        resp = record['processing']['ocrProcessing']['result'][page - 1]
+
+        for b in resp['blocks']:
+            if 'bbox' in b:
+                b['bbox'] = {
+                    'x': b['bbox']['x'] / width,
+                    'y': b['bbox']['y'] / height,
+                    'width': b['bbox']['width'] / width,
+                    'height': b['bbox']['height'] / height
+                }
+
+
+        resp['aspect_ratio'] = width / height
+    
+        return resp, 200
+    else:
+        return {'msg': 'Record no es de tipo document'}, 400    
+
 
 @lru_cache(maxsize=5000)
 def cache_get_pages_by_id(id, pages, size):
