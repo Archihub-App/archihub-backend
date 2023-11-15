@@ -331,24 +331,25 @@ def cache_get_block_by_page_id(id, page, slug, block=None):
         file = os.path.join(path_files, file)
         if not os.path.exists(file):
             raise Exception('No existe el archivo')
-        
-        # get the dimensions of the image
-        img = Image.open(file)
-        width, height = img.size
 
         resp = record['processing']['ocrProcessing']['result'][page - 1]
 
-        for b in resp['blocks']:
-            if 'bbox' in b:
-                b['bbox'] = {
-                    'x': b['bbox']['x'] / width,
-                    'y': b['bbox']['y'] / height,
-                    'width': b['bbox']['width'] / width,
-                    'height': b['bbox']['height'] / height
-                }
+        if block == 'blocks':
+            for b in resp['blocks']:
+                if 'words' in b:
+                    del b['words']
+        elif block == 'words':
+            resp_ = {
+                'page': page,
+                'words': []
+            }
+            for b in resp['blocks']:
+                if 'words' in b:
+                    resp_['words'] += b['words']
 
-
-        resp['aspect_ratio'] = width / height
+            resp = resp_
+        else:
+            return {'msg': 'Record no tiene bloques o palabras'}, 400
     
         return resp, 200
     else:

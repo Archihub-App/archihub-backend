@@ -122,8 +122,10 @@ def create(body, user, files):
         temp_files = []
 
         if 'files' in body:
-            array_files = True
-            temp_files = body['files']
+            if len(body['files']) > 0:
+                if 'filename' in body['files'][0]:
+                    array_files = True
+                    temp_files = body['files']
         
         body['files'] = []
         # Crear instancia de Resource con el body del request
