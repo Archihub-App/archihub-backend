@@ -279,6 +279,8 @@ def get_blocks_by_id(id):
         return {'msg': 'Debe especificar una página'}, 500
     if 'block' not in body:
         return {'msg': 'Debe especificar un bloque'}, 500
+    if 'slug' not in body:
+        return {'msg': 'Debe especificar un slug'}, 500
     
     # Llamar al servicio para obtener un record por su id
-    return services.get_document_block_by_page(current_user, id, body['page'], '', body['block'])
+    return services.get_document_block_by_page(current_user, id, body['page'], body['slug'], body['block'])

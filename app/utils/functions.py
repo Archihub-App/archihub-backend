@@ -332,7 +332,8 @@ def cache_get_block_by_page_id(id, page, slug, block=None):
         if not os.path.exists(file):
             raise Exception('No existe el archivo')
 
-        resp = record['processing']['ocrProcessing']['result'][page - 1]
+        print(slug)
+        resp = record['processing'][slug]['result'][page - 1]
 
         if block == 'blocks':
             for b in resp['blocks']:
