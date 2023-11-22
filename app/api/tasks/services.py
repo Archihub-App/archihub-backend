@@ -34,17 +34,30 @@ def get_tasks(user, body):
                 result = AsyncResult(t['taskId'])
 
                 if result.successful() and result.ready():
-                    update = {
-                        'status': 'completed',
-                        'result': result.result,
-                    }
+                    if type(result.result) == str:
+                        update = {
+                            'status': 'completed',
+                            'result': result.result,
+                        }
 
-                    task = TaskUpdate(**update)
+                        task = TaskUpdate(**update)
 
-                    mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
+                        mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
 
-                    t['status'] = 'completed'
-                    t['result'] = result.result
+                        t['status'] = 'completed'
+                        t['result'] = result.result
+                    else:
+                        update = {
+                            'status': 'failed',
+                            'result': '',
+                        }
+
+                        task = TaskUpdate(**update)
+
+                        mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
+
+                        t['status'] = 'failed'
+                        t['result'] = ''
 
                 elif not result.successful() and result.ready():
                     update = {

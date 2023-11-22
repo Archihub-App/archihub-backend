@@ -104,6 +104,26 @@ class ExtendedPluginClass(PluginClass):
 
             resources_df.append(obj)
 
+        resources = [str(resource['_id']) for resource in resources]
+
+        records_filters = {
+            'parent.id': {'$in': resources},
+        }
+
+        records = list(mongodb.get_all_records('records', records_filters, fields={
+            '_id': 1, 'mime': 1, 'filepath': 1, 'hash': 1, 'size': 1}))
+        
+        for r in records:
+            obj = {
+                'id': str(r['_id']),
+                'mime': r['mime'],
+                'filepath': r['filepath'],
+                'hash': r['hash'],
+                'size': r['size']
+            }
+
+            records_df.append(obj)
+
         folder_path = USER_FILES_PATH + '/' + user + '/inventoryMaker'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
@@ -113,6 +133,8 @@ class ExtendedPluginClass(PluginClass):
         with pd.ExcelWriter(folder_path + '/' + file_id + '.xlsx') as writer:
             df = pd.DataFrame(resources_df)
             df.to_excel(writer, sheet_name='Recursos', index=False)
+            df = pd.DataFrame(records_df)
+            df.to_excel(writer, sheet_name='Archivos', index=False)
 
         return '/' + user + '/inventoryMaker/' + file_id + '.xlsx'
 
