@@ -28,6 +28,7 @@ from app.api.users.services import has_right, has_role
 from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
 import os
 from datetime import datetime
+from dateutil import parser
 mongodb = DatabaseHandler.DatabaseHandler()
 
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado
@@ -269,7 +270,7 @@ def validate_fields(body, metadata, errors):
                         if exists:
                             value = get_value_by_path(body, field['destiny'])
                             value = value.replace('"', '')
-                            value = datetime.fromisoformat(value)
+                            value = parser.isoparse(value)
                             value = value
                             validate_simple_date(value, field)
                             body = change_value(body, field['destiny'], value)
@@ -277,6 +278,7 @@ def validate_fields(body, metadata, errors):
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
 
         except Exception as e:
+            print(str(e))
             errors[field['destiny']] = str(e)
 
     if 'accessRights' not in body:
@@ -495,6 +497,15 @@ def get_resource(id, user):
                         'label': f['label'],
                         'value': temp_,
                         'type': 'select'
+                    })
+
+            if f['type'] == 'simple-date':
+                value = get_value_by_path(resource, f['destiny'])
+                if value:
+                    temp.append({
+                        'label': f['label'],
+                        'value': value,
+                        'type': 'simple-date'
                     })
 
     resource['fields'] = temp
