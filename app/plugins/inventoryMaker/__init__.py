@@ -101,6 +101,10 @@ class ExtendedPluginClass(PluginClass):
             for f in type_metadata['fields']:
                 if f['type'] == 'text' or f['type'] == 'text-area':
                     obj[f['label']] = get_value_by_path(r, f['destiny'])
+                elif f['type'] == 'select':
+                    obj[f['label']] = get_value_by_path(r, f['destiny'])['label']
+                elif f['type'] == 'simple-date':
+                    obj[f['label']] = get_value_by_path(r, f['destiny'])['date']
 
             resources_df.append(obj)
 
