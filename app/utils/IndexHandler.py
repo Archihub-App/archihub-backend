@@ -105,6 +105,17 @@ class IndexHandler:
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
+    def delete_all_documents(self, index):
+        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index + '/_delete_by_query'
+        body = {
+            'query': {
+                'match_all': {}
+            }
+        }
+        response = requests.post(url, json=body, auth=HTTPBasicAuth(
+            ELASTIC_USER, ELASTIC_PASSWORD))
+        return response.json()
+    
     def reindex(self, source, dest):
         url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_reindex'
         body = {

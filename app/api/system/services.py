@@ -554,6 +554,9 @@ def regenerate_index_task(mapping, user):
 def index_resources_task(user):
     skip = 0
     resources = list(mongodb.get_all_records('resources', {}, limit=1000, skip=skip))
+    # delete all documents from index
+    index_handler.delete_all_documents(ELASTIC_INDEX_PREFIX + '-resources')
+    
     while len(resources) > 0:
         for resource in resources:
             document = {}
