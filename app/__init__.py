@@ -13,17 +13,18 @@ from flask_cors import CORS
 from celery import Celery
 from celery import Task
 from flask import Flask
-from app.api.system.services import get_plugins
 import os
 from app.utils import DatabaseHandler
 from app.utils import IndexHandler
+from app.api.system.services import update_option
 
 # leer variables de entorno desde el archivo .env
 from dotenv import load_dotenv
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
-index_handler = IndexHandler.IndexHandler()
+
+
 
 def create_app(config_class=config[os.environ['FLASK_ENV']]):
     app = Flask(__name__)
@@ -106,11 +107,20 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
         from app.api.publicApi import bp as publicApi_bp
         app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
 
+    
     index_management = mongodb.get_record('system', {'name': 'index_management'})
+
     if index_management['data'][0]['value']:
-        from app.api.search import bp as search_bp
-        app.register_blueprint(search_bp, url_prefix='/search')
-        index_handler.start()
+        try:
+            index_handler = IndexHandler.IndexHandler()
+            from app.api.search import bp as search_bp
+            app.register_blueprint(search_bp, url_prefix='/search')
+            index_handler.start()
+        except:
+            print('No se pudo iniciar el indexador de documentos')
+            index_management['data'][0]['value'] = False
+            update_option('index_management', {'index_activation': False})
+
 
     # registrar plugins activos en la base de datos
     plugins = mongodb.get_record('system', {'name': 'active_plugins'})

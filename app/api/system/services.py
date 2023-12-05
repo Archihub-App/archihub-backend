@@ -408,7 +408,6 @@ def change_plugin_status(plugin, user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
-
 def regenerate_index(user):
     try:
         # Obtener el registro index_management de la colección system

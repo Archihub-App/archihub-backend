@@ -102,9 +102,11 @@ class ExtendedPluginClass(PluginClass):
                 if f['type'] == 'text' or f['type'] == 'text-area':
                     obj[f['label']] = get_value_by_path(r, f['destiny'])
                 elif f['type'] == 'select':
-                    obj[f['label']] = get_value_by_path(r, f['destiny'])['label']
+                    obj[f['label']] = get_value_by_path(r, f['destiny'])
                 elif f['type'] == 'simple-date':
-                    obj[f['label']] = get_value_by_path(r, f['destiny'])['date']
+                    value = get_value_by_path(r, f['destiny'])
+                    print(value)
+                    obj[f['label']] = get_value_by_path(r, f['destiny'])
 
             resources_df.append(obj)
 
