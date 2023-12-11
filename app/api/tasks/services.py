@@ -108,3 +108,38 @@ def get_tasks_total(user):
         return jsonify(total), 200
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+# funcion para detener una tarea dado su id
+def stop_task(taskId, user):
+    try:
+        # Obtener la tarea
+        task = mongodb.get_record('tasks', {'taskId': taskId})
+        # Verificar si la tarea existe
+        if not task:
+            return {'msg': 'La tarea no existe'}, 404
+        
+        # verificar que el usuario sea el dueño de la tarea
+        if task['user'] != user:
+            return {'msg': 'No tiene permisos para detener la tarea'}, 401
+
+        # Obtener el resultado de la tarea
+        result = AsyncResult(taskId)
+        # Verificar si la tarea esta en estado pending
+        if task['status'] == 'pending':
+            # Detener la tarea
+            result.revoke(terminate=True)
+            # Actualizar el estado de la tarea
+            update = {
+                'status': 'failed',
+                'result': '',
+            }
+
+            task = TaskUpdate(**update)
+
+            mongodb.update_record('tasks', {'taskId': taskId}, task)
+
+            return {'msg': 'La tarea se detuvo correctamente'}, 200
+        else:
+            return {'msg': 'La tarea no se puede detener'}, 400
+    except Exception as e:
+        return {'msg': str(e)}, 500

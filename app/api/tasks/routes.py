@@ -84,3 +84,26 @@ def test_celery_result_all():
     active = i.active()
 
     return active
+
+# delete_task
+@bp.route('/<taskId>', methods=['DELETE'])
+@jwt_required()
+def delete_task(user, taskId):
+    """
+    Elimina una task
+    ---
+    tags:
+        - Tareas de procesamiento
+    responses:
+        200:
+            description: Task eliminada
+        500:
+            description: Error al eliminar la task
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para eliminar la task'}, 401
+
+    return services.stop_task(taskId, current_user)
