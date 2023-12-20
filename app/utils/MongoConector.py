@@ -31,11 +31,9 @@ class MongoConector:
                 mongourl = mongourl + "admin:"+self.admin+"@"+self.ip_server[x]+":" + self.port
             elif self.user != '':
                 mongourl = mongourl + self.user + ":"+self.admin+"@"+self.ip_server[x]+":" + self.port
-        self.simpledatabase = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&appname=MongoDB%20Compass&ssl=false"
 
         if len(self.ip_server) > 1:
-            mongourl = mongourl + "/?authSource=admin&retryWrites=true&w=majority&replicaSet=mongo-cluster"
-
+            mongourl = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&retryWrites=true&w=majority&replicaSet=mongo-cluster&ssl=false"
         else:
             mongourl = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&appname=MongoDB%20Compass&ssl=false"
 
