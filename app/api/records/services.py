@@ -475,3 +475,28 @@ def get_document_block_by_page(current_user, id, page, slug, block=None):
         return cache_get_block_by_page_id(id, page, slug, block)
     except Exception as e:
         return {'msg': str(e)}, 500
+
+def updateLabelDocument(current_user, obj):
+    try:
+        # get record with body['id']
+        record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
+        # if record exists
+        if record:
+            # get record['processing'] and update it
+            processing = record['processing']
+            processing[obj['slug']]['result'][obj['page']]['blocks'][obj['index']]['text'] = obj['text']
+            processing[obj['slug']]['result'][obj['page']]['blocks'][obj['index']]['disableAnom'] = obj['disableAnom']
+            
+            update = {
+                'processing': processing
+            }
+
+            update = FileRecordUpdate(**update)
+            mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+            # return ok
+            return 'ok', 200
+        else:
+            return {'msg': 'Record no existe'}, 404
+        return 'ok', 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
