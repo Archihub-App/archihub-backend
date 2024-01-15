@@ -5,6 +5,8 @@ fix.py
 /webfiles
 /userfiles
 
+requirements.txt.bak
+
 # everything in the plugins folder
 /app/plugins/*
 
