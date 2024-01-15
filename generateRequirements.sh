@@ -26,7 +26,7 @@ for dir in $ROOT_DIR/app/plugins/*; do
         # iterate over all files in the tessdata folder
         for file in $dir/tessdata/*; do
             # move the file to /usr/share/tesseract-ocr/4.00/tessdata/
-            mv "$file" "/usr/share/tesseract-ocr/4.00/tessdata/"
+            cp "$file" "/usr/share/tesseract-ocr/4.00/tessdata/"
         done
     fi
 done
