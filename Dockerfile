@@ -10,4 +10,4 @@ RUN sh generateRequirements.sh
 
 RUN pip install -r requirements.txt
 
-RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y ffmpeg
+RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y ffmpeg && apt-get install -y poppler-utils
