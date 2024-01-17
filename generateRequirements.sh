@@ -1,6 +1,3 @@
-# script that generates requirements.txt file iterating over all /app/plugins/*/requirements.txt files
-# and appending them to the requirements.txt file in the root of the project
-
 # get the current directory
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
