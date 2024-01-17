@@ -21,3 +21,4 @@ python-magic==0.4.27
 ffprobe3==0.1.2
 redis==3.5.3
 openpyxl==3.0.10
+pdf2image==1.16.3
