@@ -7,6 +7,10 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 # get the root directory
 ROOT_DIR=$DIR
 
+if [ ! -d "/usr/share/tesseract-ocr/4.00/tessdata/" ]; then
+    mkdir -p "/usr/share/tesseract-ocr/4.00/tessdata/"
+fi
+
 # get the requirements file
 REQUIREMENTS_FILE="$ROOT_DIR/requirements.txt"
 
