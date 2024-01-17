@@ -8,6 +8,18 @@ if [ ! -d "/usr/share/tesseract-ocr/4.00/tessdata/" ]; then
     mkdir -p "/usr/share/tesseract-ocr/4.00/tessdata/"
 fi
 
+if [ ! -d "/app/uploads" ]; then
+    mkdir -p "/app/uploads"
+fi
+
+if [ ! -d "/app/userfiles" ]; then
+    mkdir -p "/app/userfiles"
+fi
+
+if [ ! -d "/app/webfiles" ]; then
+    mkdir -p "/app/webfiles"
+fi
+
 # get the requirements file
 REQUIREMENTS_FILE="$ROOT_DIR/requirements.txt"
 
