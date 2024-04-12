@@ -13,8 +13,10 @@ from flask_cors import CORS
 from celery import Celery
 from celery import Task
 from flask import Flask
+
 import os
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 from app.utils import IndexHandler
 from app.api.system.services import update_option
 
@@ -23,8 +25,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
-
-
+cacheHandler = CacheHandler.CacheHandler()
 
 def create_app(config_class=config[os.environ['FLASK_ENV']]):
     app = Flask(__name__)

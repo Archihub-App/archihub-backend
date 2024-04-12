@@ -1,7 +1,7 @@
 from flask import jsonify, request
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 from bson import json_util
-from functools import lru_cache
 import json
 from app.api.forms.models import Form
 from app.api.forms.models import FormUpdate
@@ -12,18 +12,19 @@ from app.api.system.services import get_access_rights_id
 from app.api.types.services import get_by_slug as get_type_by_slug
 
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 def update_cache():
-    get_all.cache_clear()
-    get_by_slug.cache_clear()
-    get_type_by_slug.cache_clear()
+    get_all.invalidate_all()
+    get_by_slug.invalidate_all()
+    get_type_by_slug.invalidate_all()
 
 # Nuevo servicio para obtener todos los estándares de metadatos
-@lru_cache(maxsize=1)
+@cacheHandler.cache.cache()
 def get_all():
     try:
         # Obtener todos los estándares de metadatos
@@ -31,7 +32,7 @@ def get_all():
         # Quitar todos los campos menos el nombre y la descripción
         forms = [{ 'name': form['name'], 'description': form['description'], 'slug': form['slug']} for form in forms]
         # Retornar forms
-        return jsonify(forms), 200
+        return forms, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -51,15 +52,15 @@ def create(body, user):
             'slug': form.slug,
         }})
         # Limpiar la cache
-        get_by_slug.cache_clear()
-        get_all.cache_clear()
+        get_by_slug.invalidate_all()
+        get_all.invalidate_all()
         # Retornar el resultado
         return {'msg': 'Formulario creado exitosamente'}, 201
     except Exception as e:
             return {'msg': str(e)}, 500
 
 # Nuevo servicio para devolver un formulario por su slug
-@lru_cache(maxsize=30)
+@cacheHandler.cache.cache()
 def get_by_slug(slug):
     try:
         # Buscar el formulario en la base de datos
@@ -133,8 +134,8 @@ def delete_by_slug(slug, user):
             'slug': form['slug']
         }})
         # Limpiar la cache
-        get_all.cache_clear()
-        get_by_slug.cache_clear()
+        get_all.invalidate_all()
+        get_by_slug.invalidate_all()
         # Retornar el resultado
         return {'msg': 'Formulario eliminado exitosamente'}, 204
     except Exception as e:

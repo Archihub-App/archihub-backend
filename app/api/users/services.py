@@ -1,5 +1,6 @@
 from flask import jsonify
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 import bcrypt
 from bson import json_util
 import json
@@ -7,7 +8,6 @@ from app.api.users.models import User, UserUpdate
 from datetime import timedelta
 from flask_jwt_extended import create_access_token
 from cryptography.fernet import Fernet
-from functools import lru_cache
 from bson.objectid import ObjectId
 import re
 from config import config
@@ -17,6 +17,7 @@ from app.utils.functions import get_access_rights, get_roles, verify_accessright
 
 fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
 fernet = Fernet(fernet_key)
 
 # Funcion para parsear el resultado de una consulta a la base de datos
@@ -24,13 +25,13 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 def update_cache():
-    has_right.cache_clear()
-    has_role.cache_clear()
-    get_by_username.cache_clear()
-    get_total.cache_clear()
+    has_right.invalidate_all()
+    has_role.invalidate_all()
+    get_by_username.invalidate_all()
+    get_total.invalidate_all()
 
 # Nueva funcion para devolver el usuario por su id
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def get_by_id(id):
     try:
         # Obtener el usuario de la coleccion users
@@ -48,7 +49,7 @@ def get_by_id(id):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para obtener un usuario por su username
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def get_by_username(username):
     try:
         # Obtener el usuario de la coleccion users
@@ -140,7 +141,7 @@ def get_all(body, current_user):
         return {'msg': str(e)}, 500
     
 # Funcion para obtener el total de recursos
-@lru_cache(maxsize=100)
+@cacheHandler.cache.cache()
 def get_total(obj):
     try:
         # convertir string a dict
@@ -289,7 +290,7 @@ def accept_compromise(username):
     return jsonify({'msg': 'Compromiso aceptado exitosamente'}), 200
 
 # Nuevo servicio para verificar si el usuario tiene un rol específico
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def has_role(username, role):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
@@ -301,7 +302,7 @@ def has_role(username, role):
     # Si el usuario no tiene el rol, retornar False
     return False
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def has_right(username, right):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error

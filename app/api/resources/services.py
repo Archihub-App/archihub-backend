@@ -1,8 +1,8 @@
 from flask import jsonify, request
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 from bson import json_util
 import json
-from functools import lru_cache
 from bson.objectid import ObjectId
 from app.api.resources.models import Resource
 from app.utils.LogActions import log_actions
@@ -30,6 +30,7 @@ import os
 from datetime import datetime
 from dateutil import parser
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
 
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado
 def change_value(body, route, value):
@@ -324,6 +325,7 @@ def get_by_id(id, user):
                 return {'msg': 'No tiene permisos para obtener un recurso'}, 401
 
         resource = get_resource(id, user)
+
         register_log(user, log_actions['resource_open'], {'resource': id})
 
         # Retornar el recurso
@@ -331,14 +333,14 @@ def get_by_id(id, user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_resource_type(id):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'post_type': 1})
     if not resource:
         raise Exception('Recurso no existe')
     return resource['post_type']
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_accessRights(id):
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'accessRights': 1, 'parents': 1})
@@ -368,8 +370,9 @@ def get_accessRights(id):
         
     return None
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_resource(id, user):
+
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
     # Si el recurso no existe, retornar error
@@ -653,8 +656,7 @@ def delete_by_id(id, user):
 
 # Funcion para obtener los hijos de un recurso
 
-
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_children(id, available, resp=False):
     try:
         list_available = available.split('|')
@@ -683,7 +685,7 @@ def get_children(id, available, resp=False):
 # Funcion para obtener los hijos de un recurso en forma de arbol
 
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_tree(root, available, user):
     try:
         list_available = available.split('|')
@@ -714,7 +716,7 @@ def get_tree(root, available, user):
 # Funcion para validar que el tipo del padre sea uno admitido por el hijo
 
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def has_parent_postType(post_type, compare):
     try:
         # Obtener el tipo de post
@@ -737,7 +739,7 @@ def has_parent_postType(post_type, compare):
 # Funcion para obtener los padres de un recurso
 
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_parents(id):
     try:
         # Buscar el recurso en la base de datos
@@ -764,8 +766,7 @@ def get_parents(id):
 
 # Funcion para obtener el padre directo de un recurso
 
-
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_parent(id):
     try:
         # Buscar el recurso en la base de datos
@@ -823,8 +824,8 @@ def get_direct_children(id):
 
 def update_parents(id, post_type):
     try:
-        get_parents.cache_clear()
-        get_parent.cache_clear()
+        get_parents.invalidate_all()
+        get_parent.invalidate_all()
         # Hijos directos del recurso
         children = get_direct_children(id)
         # Si el recurso tiene hijos directos, actualizar el parent de cada hijo
@@ -908,7 +909,7 @@ def update_records(list, user):
         raise Exception(str(e))
 
 # Funcion para obtener el total de recursos
-@lru_cache(maxsize=500)
+@cacheHandler.cache.cache(limit=1000)
 def get_total(obj):
     try:
         # convertir string a dict
@@ -921,14 +922,14 @@ def get_total(obj):
         raise Exception(str(e))
 
 def update_cache():
-    get_access_rights.cache_clear()
-    get_resource.cache_clear()
-    get_children.cache_clear()
-    get_tree.cache_clear()
-    has_parent_postType.cache_clear()
-    get_parents.cache_clear()
-    get_parent.cache_clear()
-    get_total.cache_clear()
-    get_accessRights.cache_clear()
-    get_resource_type.cache_clear()
+    get_access_rights.invalidate_all()
+    get_resource.invalidate_all()
+    get_children.invalidate_all()
+    get_tree.invalidate_all()
+    has_parent_postType.invalidate_all()
+    get_parents.invalidate_all()
+    get_parent.invalidate_all()
+    get_total.invalidate_all()
+    get_accessRights.invalidate_all()
+    get_resource_type.invalidate_all()
     clear_cache()

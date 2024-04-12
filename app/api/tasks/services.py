@@ -1,7 +1,7 @@
 from flask import jsonify, request, send_file
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 from bson import json_util
-from functools import lru_cache
 import json
 from app.api.tasks.models import Task
 from app.api.tasks.models import TaskUpdate
@@ -10,6 +10,7 @@ from celery.result import AsyncResult
 import os
 
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
 USER_FILES_PATH = os.environ.get('USER_FILES_PATH', '')
 
 # Funcion para parsear el resultado de una consulta a la base de datos
@@ -97,15 +98,15 @@ def add_task(taskId, taskName, user, resultType):
 
     # Guardar la tarea en la base de datos
     mongodb.insert_record('tasks', task)
-    get_tasks_total.cache_clear()
+    get_tasks_total.invalidate_all()
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def get_tasks_total(user):
     try:
         # Obtener el total de tasks de un usuario
         total = mongodb.count('tasks', {'user': user})
         # Retornar el total
-        return jsonify(total), 200
+        return total
     except Exception as e:
         return {'msg': str(e)}, 500
     
