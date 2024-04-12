@@ -31,7 +31,11 @@ def get_all():
             description: Error al obtener los tipos de contenido
     """
     # Llamar al servicio para obtener todos los tipos de contenido
-    return services.get_all()
+    resp = services.get_all()
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para crear un tipo de contenido
 @bp.route('', methods=['POST'])

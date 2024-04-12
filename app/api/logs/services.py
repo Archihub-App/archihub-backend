@@ -1,13 +1,14 @@
 from flask import jsonify
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 from bson import json_util
 import json
 from app.api.logs.models import Log
 from datetime import datetime
 from app.utils import LogActions
-from functools import lru_cache
 
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
@@ -49,7 +50,7 @@ def filter(body):
         return {'msg': str(e)}, 500
     
 # Funcion para obtener el total de recursos
-@lru_cache(maxsize=500)
+@cacheHandler.cache.cache()
 def get_total(obj):
     try:
         # convertir string a dict

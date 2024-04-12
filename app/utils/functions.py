@@ -1,4 +1,5 @@
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 from functools import lru_cache
 from bson import json_util
 import json
@@ -13,12 +14,26 @@ load_dotenv()
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
 
 def clear_cache():
-    cache_type_roles.cache_clear()
-    get_resource_records.cache_clear()
+    cache_type_roles.invalidate_all()
+    get_resource_records.invalidate_all()
+    get_roles.invalidate_all()
+    get_roles_id.invalidate_all()
+    get_access_rights_id.invalidate_all()
+    get_access_rights.invalidate_all()
+    get_resource_records.invalidate_all()
+    cache_get_record_stream.invalidate_all()
+    cache_get_record_transcription.invalidate_all()
+    cache_get_record_document_detail.invalidate_all()
+    cache_get_block_by_page_id.invalidate_all()
+    cache_get_pages_by_id.invalidate_all()
+    cache_type_roles.invalidate_all()
+    has_right.invalidate_all()
+    has_role.invalidate_all()
 
-@lru_cache(maxsize=1)
+@cacheHandler.cache.cache()
 def get_roles_id():
     try:
         # Obtener el registro access_rights de la colección system
@@ -34,7 +49,7 @@ def get_roles_id():
         return None
 
 
-@lru_cache(maxsize=1)
+@cacheHandler.cache.cache()
 def get_roles():
     try:
         id_roles = get_roles_id()
@@ -60,7 +75,7 @@ def get_roles():
             'Error al obtener el registro access_rights: ' + str(e))
 
 
-@lru_cache(maxsize=1)
+@cacheHandler.cache.cache()
 def get_access_rights_id():
     try:
         # Obtener el registro access_rights de la colección system
@@ -77,7 +92,7 @@ def get_access_rights_id():
         return None
 
 
-@lru_cache(maxsize=1)
+@cacheHandler.cache.cache()
 def get_access_rights():
     try:
         access_id = get_access_rights_id()
@@ -156,7 +171,7 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def get_resource_records(ids, user):
     ids = json.loads(ids)
     for i in range(len(ids)):
@@ -167,6 +182,7 @@ def get_resource_records(ids, user):
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}))
         
         for r in r_:
+            r['_id'] = str(r['_id'])
             if 'accessRights' in r:
                 if r['accessRights']:
                     if not has_right(user, r['accessRights']) and not has_role(user, 'admin'):
@@ -189,7 +205,7 @@ def get_resource_records(ids, user):
         raise Exception(str(e))
 
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def cache_get_record_stream(id):
     # Buscar el record en la base de datos
     record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={
@@ -214,7 +230,7 @@ def cache_get_record_stream(id):
     return path, type
 
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def cache_get_record_transcription(id, slug):
     # Buscar el record en la base de datos
     record = mongodb.get_record(
@@ -249,7 +265,7 @@ def cache_get_record_transcription(id, slug):
     return transcription
 
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def cache_get_record_document_detail(id):
     # Buscar el record en la base de datos
     record = mongodb.get_record(
@@ -301,7 +317,7 @@ def cache_get_record_document_detail(id):
             'aspect_ratio': aspect_ratio
         }
     
-@lru_cache(maxsize=5000)
+@cacheHandler.cache.cache()
 def cache_get_block_by_page_id(id, page, slug, block=None):
     record = mongodb.get_record(
         'records', {'_id': ObjectId(id)}, fields={'processing': 1})
@@ -357,7 +373,7 @@ def cache_get_block_by_page_id(id, page, slug, block=None):
         return {'msg': 'Record no es de tipo document'}, 400    
 
 
-@lru_cache(maxsize=5000)
+@cacheHandler.cache.cache()
 def cache_get_pages_by_id(id, pages, size):
     pages = json.loads(pages)
     # Buscar el record en la base de datos
@@ -398,8 +414,7 @@ def cache_get_pages_by_id(id, pages, size):
                 encoded_data = base64.b64encode(data).decode('utf-8')
                 response.append({'filename': os.path.basename(file), 'data': encoded_data})
             
-        json_response = json.dumps(response).encode('utf-8')
-        return Response(json_response, mimetype='application/json', direct_passthrough=False)
+        return response
     
     elif record['processing']['fileProcessing']['type'] == 'image':
         path = record['processing']['fileProcessing']['path']
@@ -420,10 +435,9 @@ def cache_get_pages_by_id(id, pages, size):
             encoded_data = base64.b64encode(data).decode('utf-8')
             response = [{'filename': os.path.basename(path_img), 'data': encoded_data, 'aspect_ratio': aspect_ratio}]
 
-        json_response = json.dumps(response).encode('utf-8')
-        return Response(json_response, mimetype='application/json', direct_passthrough=False)
+        return response
         
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def cache_type_roles(slug):
     try:
         # Obtener el tipo de contenido por su slug
@@ -451,7 +465,7 @@ def cache_type_roles(slug):
         raise Exception(
             'Error al obtener el registro access_rights: ' + str(e))
     
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def has_right(username, right):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
@@ -463,7 +477,7 @@ def has_right(username, right):
     # Si el usuario no tiene el rol, retornar False
     return False
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def has_role(username, role):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error

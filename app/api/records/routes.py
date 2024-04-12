@@ -84,7 +84,11 @@ def get_by_id(id):
     current_user = get_jwt_identity()
     
     # Llamar al servicio para obtener un record por su id
-    return services.get_by_id(id, current_user)
+    resp = services.get_by_id(id, current_user)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para obtener el stream de un record por su id
 @bp.route('/<id>/stream', methods=['GET'])
@@ -321,7 +325,5 @@ def set_label():
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Obtener el body del request
     body = request.json
-
-    print(body)
     # Llamar al servicio para asignar un label a un record
     return services.updateLabelDocument(current_user, body)

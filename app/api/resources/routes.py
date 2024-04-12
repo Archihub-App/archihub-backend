@@ -146,7 +146,11 @@ def get_by_id(id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Llamar al servicio para obtener el recurso
-    return services.get_by_id(id, current_user)
+    resp = services.get_by_id(id, current_user)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para actualizar un recurso por su id
 @bp.route('/<id>', methods=['PUT'])
@@ -296,7 +300,12 @@ def get_tree():
         else:
             return_slugs.append(s)
     # Llamar al servicio para obtener la estructura de arból
-    return services.get_tree(body['root'],'|'.join(return_slugs), current_user)
+    resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user)
+    
+    if isinstance(resp, list):
+        resp = tuple(resp)
+    
+    return resp
 
 # Nuevo endpoint para obtener los recursos de un recurso padre
 @bp.route('/<resource_id>/records', methods=['GET'])

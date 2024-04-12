@@ -30,7 +30,10 @@ def get_all():
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener todos los estándares de metadatos
-    return services.get_all()
+    resp = services.get_all()
+    if isinstance(resp, list):
+        return tuple(resp)
+    return resp
 
 # Nuevo endpoint para crear un estándar de metadatos
 @bp.route('', methods=['POST'])
@@ -143,6 +146,7 @@ def get_by_slug(slug):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener el estándar por su slug
     resp = services.get_by_slug(slug)
+
     # Si el estándar no existe, retornar error
     if 'msg' in resp:
         if resp['msg'] == 'Formulario no existe':

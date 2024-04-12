@@ -1,8 +1,8 @@
 from flask import jsonify, request
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 from bson import json_util
 import json
-from functools import lru_cache
 from app.api.lists.models import List
 from app.api.lists.models import ListUpdate
 from app.api.lists.models import Option
@@ -13,17 +13,18 @@ from bson.objectid import ObjectId
 from app.utils.functions import get_roles, get_access_rights, get_roles_id, get_access_rights_id
 
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 def update_cache():
-    get_by_id.cache_clear()
-    get_all.cache_clear()
+    get_by_id.invalidate_all()
+    get_all.invalidate_all()
 
 # Nuevo servicio para obtener todos los listados
-@lru_cache(maxsize=1)
+@cacheHandler.cache.cache()
 def get_all():
     try:
         # Obtener todos los listados
@@ -31,8 +32,9 @@ def get_all():
 
         # Quitar todos los campos menos el nombre y la descripción si es que existe
         lists = [{ 'name': lista['name'], 'id': str(lista['_id']) } for lista in lists]
+
         # Retornar lists
-        return jsonify(lists), 200
+        return lists, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -64,7 +66,7 @@ def create(body, user):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para obtener un listado por su slug
-@lru_cache(maxsize=100)
+@cacheHandler.cache.cache()
 def get_by_slug(slug):
     try:
         # Buscar el listado en la base de datos
@@ -94,11 +96,15 @@ def get_by_slug(slug):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para devolver un listado por su id
-@lru_cache(maxsize=100)
+@cacheHandler.cache.cache()
 def get_by_id(id):
     try:
         # Buscar el listado en la base de datos
         lista = mongodb.get_record('lists', {'_id': ObjectId(id)})
+
+        # si description no existe, se agrega un string vacio
+        if 'description' not in lista:
+            lista['description'] = ''
         # a lista solo le dejamos los campos name, description, y options
         lista = { 'name': lista['name'], 'description': lista['description'], 'options': lista['options'] }
         # Si el listado no existe, retornar error
@@ -124,7 +130,7 @@ def get_by_id(id):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para obtener una opcion por su id
-@lru_cache(maxsize=100)
+@cacheHandler.cache.cache()
 def get_option_by_id(id):
     try:
         # Buscar la opcion en la base de datos
@@ -186,9 +192,9 @@ def update_by_id(id, body, user):
             # Limpiar la cache
             update_cache()
             if(id == get_access_rights_id()):
-                get_access_rights.cache_clear()
+                get_access_rights.invalidate_all()
             if(id == get_roles_id()):
-                get_roles.cache_clear()
+                get_roles.invalidate_all()
                 
             # Retornar el resultado
             return {'msg': 'Listado actualizado exitosamente'}, 200
@@ -212,8 +218,8 @@ def delete_by_id(id, user):
             'id': lista['_id'],
         }})
         # Limpiar la cache
-        get_by_id.cache_clear()
-        get_all.cache_clear()
+        get_by_id.invalidate_all()
+        get_all.invalidate_all()
         # Retornar el resultado
         return {'msg': 'Listado eliminado exitosamente'}, 200
     
