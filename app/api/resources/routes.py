@@ -218,7 +218,11 @@ def update_by_id(id):
     files = request.files.getlist('files')
 
     # Llamar al servicio para crear el recurso
-    return services.update_by_id(id, data, current_user, files)
+    resp = services.update_by_id(id, data, current_user, files)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
     # return 'ok'
 
 # Nuevo endpoint para eliminar un recurso por su id
