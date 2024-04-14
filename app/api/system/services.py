@@ -49,7 +49,6 @@ def parse_result(result):
 # Funcion para obtener todos los recursos de la coleccion system
 
 
-# @cacheHandler.cache.cache()
 def get_all_settings():
     try:
         # Obtener todos los recursos de la coleccion system

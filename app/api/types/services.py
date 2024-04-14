@@ -28,6 +28,8 @@ def update_cache():
     get_metadata.invalidate_all()
     get_types_info.invalidate_all()
     get_count.invalidate_all()
+    get_icon.invalidate_all()
+    get_form_by_slug.invalidate_all()
     clear_cache()
 
 # Nuevo servicio para obtener todos los tipos de

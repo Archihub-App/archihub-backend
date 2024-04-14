@@ -36,6 +36,7 @@ cacheHandler = CacheHandler.CacheHandler()
 def update_cache():
     get_all.invalidate_all()
     get_total.invalidate_all()
+    get_by_id.invalidate_all()
 
 
 def parse_result(result):
