@@ -312,11 +312,11 @@ def get_tree():
     return resp
 
 # Nuevo endpoint para obtener los recursos de un recurso padre
-@bp.route('/<resource_id>/records', methods=['GET'])
+@bp.route('/<resource_id>/records', methods=['POST'])
 @jwt_required()
 def get_all_records(resource_id):
     """
-    Obtener los recursos de un recurso padre
+    Obtener los archivos de un recurso padre
     ---
     security:
         - JWT: []
@@ -337,5 +337,13 @@ def get_all_records(resource_id):
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
+
+    body = request.json
+
+    print(body)
     # Llamar al servicio para obtener los recursos
-    return services.get_resource_files(resource_id, current_user)
+    resp = services.get_resource_files(resource_id, current_user, body['page'])
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
