@@ -417,27 +417,7 @@ def get_resource(id, user):
                 'slug': 'files',
             }, *resource['children']]
 
-            temp = []
-
-            ids = []
-            for r in resource['files']:
-                ids.append(r)
-
-            r_ = get_resource_records(json.dumps(ids), user)
-            for _ in r_:
-                obj = {
-                    'id': str(_['_id']),
-                    'hash': _['hash'],
-                }
-
-                if 'displayName' in _: obj['displayName'] = _['displayName']
-                else : obj['displayName'] = _['name']
-                if 'accessRights' in _: obj['accessRights'] = _['accessRights']
-                if 'processing' in _: obj['processing'] = _['processing']
-
-                temp.append(obj)
-
-            resource['files'] = temp
+            resource['files'] = []
 
     resource['fields'] = get_metadata(resource['post_type'])['fields']
 
@@ -520,7 +500,8 @@ def get_resource(id, user):
 
     return resource
 
-def get_resource_files(id, user):
+@cacheHandler.cache.cache(limit=1000)
+def get_resource_files(id, user, page):
     try:
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         # Si el recurso no existe, retornar error
@@ -528,18 +509,27 @@ def get_resource_files(id, user):
             return {'msg': 'Recurso no existe'}, 404
 
         temp = []
+        ids = []
         for r in resource['files']:
-            file = mongodb.get_record('records', {'_id': ObjectId(r)})
-            temp.append({
-                'name': file['name'],
-                'size': file['size'],
-                'id': str(file['_id']),
-                'url': file['filepath']
-            })
+            ids.append(r)
+
+        r_ = get_resource_records(json.dumps(ids), user, page)
+        for _ in r_:
+            obj = {
+                'id': str(_['_id']),
+                'hash': _['hash'],
+            }
+
+            if 'displayName' in _: obj['displayName'] = _['displayName']
+            else : obj['displayName'] = _['name']
+            if 'accessRights' in _: obj['accessRights'] = _['accessRights']
+            if 'processing' in _: obj['processing'] = _['processing']
+
+            temp.append(obj)
 
         resource['files'] = temp
         # Retornar el recurso
-        return jsonify(resource['files']), 200
+        return resource['files'], 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -932,4 +922,5 @@ def update_cache():
     get_total.invalidate_all()
     get_accessRights.invalidate_all()
     get_resource_type.invalidate_all()
+    get_resource_files.invalidate_all()
     clear_cache()

@@ -172,14 +172,14 @@ def parse_result(result):
 
 
 @cacheHandler.cache.cache()
-def get_resource_records(ids, user):
+def get_resource_records(ids, user, page=0, limit=10):
     ids = json.loads(ids)
     for i in range(len(ids)):
         ids[i] = ObjectId(ids[i])
 
     try:
         r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}, fields={
-                  'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}))
+                  'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}).skip(page * limit).limit(limit))
         
         for r in r_:
             r['_id'] = str(r['_id'])
