@@ -417,7 +417,9 @@ def get_resource(id, user):
                 'slug': 'files',
             }, *resource['children']]
 
-            resource['files'] = []
+            resource['files'] = len(resource['files'])
+        else:
+            resource['files'] = None
 
     resource['fields'] = get_metadata(resource['post_type'])['fields']
 
@@ -527,9 +529,12 @@ def get_resource_files(id, user, page):
 
             temp.append(obj)
 
-        resource['files'] = temp
+        resp = {
+            'data': temp,
+            'total': len(ids)
+        }
         # Retornar el recurso
-        return resource['files'], 200
+        return resp, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -548,12 +553,18 @@ def update_by_id(id, body, user, files):
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+        
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'files': 1})
 
         body['status'] = 'updated'
 
         temp = []
         for f in body['files']:
             if type(f) == str:
+                temp.append(f)
+
+        for f in resource['files']:
+            if f not in temp:
                 temp.append(f)
 
         body['files'] = temp

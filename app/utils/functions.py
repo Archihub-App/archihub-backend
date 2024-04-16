@@ -171,7 +171,7 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 
-@cacheHandler.cache.cache()
+@cacheHandler.cache.cache(limit=1000)
 def get_resource_records(ids, user, page=0, limit=10):
     ids = json.loads(ids)
     for i in range(len(ids)):

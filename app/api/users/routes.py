@@ -32,7 +32,11 @@ def get_by_id(id):
     if not services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener el usuario
-    return services.get_by_id(id)
+    resp = services.get_by_id(id)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para registrar un usuario
 @bp.route('/register', methods=['POST'])
