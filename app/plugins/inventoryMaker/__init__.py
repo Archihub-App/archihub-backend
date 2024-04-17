@@ -148,8 +148,8 @@ class ExtendedPluginClass(PluginClass):
     
 plugin_info = {
     'name': 'Exportar inventarios',
-    'description': 'Plugin para exportar inventarios del gestor documental',
-    'version': '0.1',
+    'description': 'Plugin para exportar inventarios del gestor documental.',
+    'version': '0.2',
     'author': 'Néstor Andrés Peña',
     'type': ['bulk'],
     'settings': {
@@ -158,6 +158,11 @@ plugin_info = {
                 'type':  'instructions',
                 'title': 'Instrucciones',
                 'text': 'Este plugin permite generar inventarios en archivo excel del contenido del gestor documental. Para ello, puede especificar el tipo de contenido sobre el cual quiere generar el inventario y los filtros que desea aplicar. El archivo se encontrará en su perfil para su descarga una vez se haya terminado de generar. Es importante notar que el proceso de generación de inventarios puede tardar varios minutos, dependiendo de la cantidad de recursos que se encuentren en el gestor documental.',
+            }
+        ],
+        'settings_lunch': [
+            {
+
             }
         ]
     }
