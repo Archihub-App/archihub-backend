@@ -82,6 +82,7 @@ def get_by_slug(slug):
             return {'msg': 'Tipo de post no existe'}
         # quitamos el id del tipo de post
         post_type.pop('_id')
+
         # Parsear el resultado
         post_type = parse_result(post_type)
         # Obtener los padres del tipo de post
@@ -118,6 +119,10 @@ def update_by_slug(slug, body, user):
 
         if 'viewRoles' in body:
             body['viewRoles'] = verify_role_exists(body['viewRoles'])
+
+        if slug in [p['id'] for p in body['parentType']]:
+            # eliminar el tipo de post actual de los padres
+            body['parentType'] = [p for p in body['parentType'] if p['id'] != slug]
         # crear instancia de PostTypeUpdate con el body del request
         post_type_update = PostTypeUpdate(**body)
         # Si el tipo de post no existe, retornar error
@@ -162,21 +167,37 @@ def delete_by_slug(slug, user):
 
 def get_parents(post_type, first=True):
     # Si el tipo de post no tiene padre, retornar una lista vacia
-    if post_type['parentType'] == '':
+    if len(post_type['parentType']) == 0:
         return []
+    
+    # iteramos post_type['parentType'] y armamos una lista con los slugs de cada hijo
+    ids = [p['id'] for p in post_type['parentType']]
+
+    if post_type['slug'] in ids:
+        ids.remove(post_type['slug'])
+
     # Buscar el padre del tipo de post
-    parent = mongodb.get_record(
-        'post_types', {'slug': post_type['parentType']})
+    parent = list(mongodb.get_all_records(
+        'post_types', {'slug': {'$in': ids}}))
     # Si el padre no existe, retornar una lista vacia
     if not parent and not parent['hierarchical']:
         return []
     # Retornar el padre y los padres del padre
-    return [{
-        'name': parent['name'],
-        'slug': parent['slug'],
-        'icon': parent['icon'],
-        'direct': True if first else False
-    }] + get_parents(parent, False)
+    resp = []
+    for p in parent:
+        resp.append({
+            'name': p['name'],
+            'slug': p['slug'],
+            'icon': p['icon'],
+            'direct': True if first else False
+        })
+
+        resp = resp + get_parents(p, False)
+    
+    # se eliminan los duplicados
+    resp = [dict(t) for t in {tuple(d.items()) for d in resp}]
+    
+    return resp
 
 # Funcion para agregar al contador de recursos de un tipo de post
 
@@ -201,7 +222,7 @@ def is_hierarchical(post_type_slug):
         return {'msg': 'Tipo de post no existe'}, 404
 
     # Retornar el resultado
-    return (post_type['hierarchical'], post_type['parentType'] != '')
+    return (post_type['hierarchical'], len(post_type['parentType']) > 0)
 
 # Funcion para devolver el icono de un tipo de post
 

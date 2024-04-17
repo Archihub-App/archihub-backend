@@ -417,7 +417,9 @@ def get_resource(id, user):
                 'slug': 'files',
             }, *resource['children']]
 
-            resource['files'] = []
+            resource['files'] = len(resource['files'])
+        else:
+            resource['files'] = None
 
     resource['fields'] = get_metadata(resource['post_type'])['fields']
 
@@ -527,9 +529,12 @@ def get_resource_files(id, user, page):
 
             temp.append(obj)
 
-        resource['files'] = temp
+        resp = {
+            'data': temp,
+            'total': len(ids)
+        }
         # Retornar el recurso
-        return resource['files'], 200
+        return resp, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -548,12 +553,18 @@ def update_by_id(id, body, user, files):
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+        
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'files': 1})
 
         body['status'] = 'updated'
 
         temp = []
         for f in body['files']:
             if type(f) == str:
+                temp.append(f)
+
+        for f in resource['files']:
+            if f not in temp:
                 temp.append(f)
 
         body['files'] = temp
@@ -578,6 +589,8 @@ def update_by_id(id, body, user, files):
 
         delete_records(body['deletedFiles'], id, user)
         update_records(body['updatedFiles'], user)
+
+        body['files'] = [f for f in body['files'] if f not in body['deletedFiles']]
 
         update = {
             'files': [*body['files'], *records]
@@ -679,15 +692,18 @@ def get_children(id, available, resp=False):
 def get_tree(root, available, user):
     try:
         list_available = available.split('|')
+
         # Obtener los recursos del tipo de contenido
 
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
         if root == 'all':
             resources = list(mongodb.get_all_records('resources', {
-                             'post_type': list_available[-1], 'parent': None}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             'post_type': {
+                             "$in": list_available}, 'parent': None}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         else:
             resources = list(mongodb.get_all_records('resources', {'post_type': {
                              "$in": list_available}, 'parent.id': root}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+        
         # Obtener el icono del post type
         # icon = mongodb.get_record(
             # 'post_types', {'slug': list_available[-1]})['icon']
@@ -715,11 +731,12 @@ def has_parent_postType(post_type, compare):
         if not post_type:
             return {'msg': 'Tipo de post no existe'}, 404
         # Si el tipo de post tiene padre, retornar True
-        if post_type['parentType'] != '':
-            if (post_type['parentType'] == compare):
-                return True
-            if (post_type['hierarchical'] and post_type['parentType'] != compare):
-                return True
+        if len(post_type['parentType']) > 0:
+            for p in post_type['parentType']:
+                if p['id'] == compare:
+                    return True
+                if p['hierarchical'] and p['id'] != compare:
+                    return True
 
         # Si el tipo de post no tiene padre, retornar False
         return False
