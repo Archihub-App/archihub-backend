@@ -48,7 +48,7 @@ class ExtendedPluginClass(PluginClass):
 plugin_info = {
     'name': 'Actualización masiva de recursos',
     'description': 'Plugin para actualizar masivamente los recursos del gestor documental.',
-    'version': '0.2',
+    'version': '0.1',
     'author': 'Néstor Andrés Peña',
     'type': ['lunch'],
     'settings': {
@@ -56,7 +56,20 @@ plugin_info = {
             {
                 'type':  'instructions',
                 'title': 'Instrucciones',
-                'text': '',
+                'text': 'La actualización masiva de recursos permite actualizar los recursos del gestor documental de manera masiva. Para ello, se debe subir un archivo CSV con los recursos a actualizar. El archivo debe tener la misma estructura que el archivo de exportación de recursos.'
+            },
+            {
+                'type': 'file',
+                'name': 'file',
+                'label': 'Archivo CSV',
+                'required': True
+            },
+            {
+                'type': 'checkbox',
+                'name': 'overwrite',
+                'label': 'Sobreescribir',
+                'required': True,
+                'text': 'Sobreescribir los recursos existentes'
             }
         ]
     }

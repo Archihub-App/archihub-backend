@@ -94,21 +94,43 @@ class ExtendedPluginClass(PluginClass):
         if len(resources) == 0:
             raise Exception('No se encontraron recursos con los filtros especificados')
         
+        obj = {}
+
+        obj['Tipo de contenido'] = 'post_type'
+
+        type_metadata['fields'] = [f for f in type_metadata['fields'] if f['type'] != 'file']
+
+        for f in type_metadata['fields']:
+            obj[f['label']] = f['destiny']
+
+        resources_df.append(obj)
+
+
         # si hay recursos, iteramos
         for r in resources:
             obj = {}
             
+            obj['id'] = str(r['_id'])
+            obj['ident'] = r['ident']
+            obj['Tipo de contenido'] = r['post_type']
+
             for f in type_metadata['fields']:
                 if f['type'] == 'text' or f['type'] == 'text-area':
                     obj[f['label']] = get_value_by_path(r, f['destiny'])
                 elif f['type'] == 'select':
                     obj[f['label']] = get_value_by_path(r, f['destiny'])
                 elif f['type'] == 'simple-date':
-                    value = get_value_by_path(r, f['destiny'])
-                    print(value)
                     obj[f['label']] = get_value_by_path(r, f['destiny'])
 
             resources_df.append(obj)
+
+            r_ = list(mongodb.get_all_records('records', {'parent.id': str(r['_id'])}, fields={'name': 1, 'displayName': 1}))
+
+            files = [record['name'] for record in r_]
+            obj['files'] = ', '.join(files)
+
+            files_ids = [str(record['_id']) for record in r_]
+            obj['files_ids'] = ', '.join(files_ids)
 
         resources = [str(resource['_id']) for resource in resources]
 
