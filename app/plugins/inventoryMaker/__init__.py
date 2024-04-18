@@ -97,6 +97,8 @@ class ExtendedPluginClass(PluginClass):
         obj = {}
 
         obj['Tipo de contenido'] = 'post_type'
+        obj['id'] = 'id'
+        obj['ident'] = 'ident'
 
         type_metadata['fields'] = [f for f in type_metadata['fields'] if f['type'] != 'file']
 
