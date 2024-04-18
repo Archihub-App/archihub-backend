@@ -4,6 +4,7 @@ fix.py
 /uploads
 /webfiles
 /userfiles
+/temporal
 
 requirements.txt.bak
 
