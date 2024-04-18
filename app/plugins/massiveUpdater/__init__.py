@@ -12,6 +12,7 @@ import pandas as pd
 import json
 from dotenv import load_dotenv
 from bson.objectid import ObjectId
+from app.api.system.services import set_value_in_dict
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -62,6 +63,8 @@ class ExtendedPluginClass(PluginClass):
                         for index, row in df.iterrows():
                             # recuperamos el recurso
                             resource = mongodb.get_record('resources', {'_id': ObjectId(row['id'])}, {'_id': 1, 'metadata': 1, 'post_type': 1})
+
+                            update = {}
                             
                             if resource == None:
                                 error = {
@@ -72,7 +75,23 @@ class ExtendedPluginClass(PluginClass):
                                 reporte.append(error)
                                 continue
 
-                            
+                            # recuperamos el tipo de contenido
+                            type = get_by_slug(resource['post_type'])
+
+                            fields = type['metadata']['fields']
+
+                            # iteramos sobre los campos del archivo
+                            for field in fields:
+                                # si el campo no está en el archivo, lo dejamos como está
+                                if field['destiny'] not in row:
+                                    continue
+                                # else si row[field['destiny']] es Nan, lo dejamos como está
+                                if pd.isna(row[field['destiny']]):
+                                    continue
+
+                                set_value_in_dict(update, field['destiny'], row[field['destiny']])
+
+                            print(update)
 
                     
                     else:

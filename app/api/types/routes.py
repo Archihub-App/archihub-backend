@@ -165,7 +165,6 @@ def get_by_slug(slug):
             return {'msg': 'No tiene permisos para obtener un tipo de contenido'}, 401
             
     # Llamar al servicio para obtener un tipo de contenido por su slug
-    print('hola')
     slug_exists = services.get_by_slug(slug)
     # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
     if 'msg' in slug_exists:
