@@ -193,8 +193,9 @@ def validate_parent(body):
             return body
         else:
             if hierarchical[0] and hierarchical[1]:
-                raise Exception(
-                    'El tipo de contenido es jerarquico y debe tener padre')
+                body['parents'] = []
+                body['parent'] = None
+                return body
             elif hierarchical[0] and not hierarchical[1]:
                 body['parents'] = []
                 body['parent'] = None

@@ -94,21 +94,45 @@ class ExtendedPluginClass(PluginClass):
         if len(resources) == 0:
             raise Exception('No se encontraron recursos con los filtros especificados')
         
+        obj = {}
+
+        obj['Tipo de contenido'] = 'post_type'
+        obj['id'] = 'id'
+        obj['ident'] = 'ident'
+
+        type_metadata['fields'] = [f for f in type_metadata['fields'] if f['type'] != 'file']
+
+        for f in type_metadata['fields']:
+            obj[f['label']] = f['destiny']
+
+        resources_df.append(obj)
+
+
         # si hay recursos, iteramos
         for r in resources:
             obj = {}
             
+            obj['id'] = str(r['_id'])
+            obj['ident'] = r['ident']
+            obj['Tipo de contenido'] = r['post_type']
+
             for f in type_metadata['fields']:
                 if f['type'] == 'text' or f['type'] == 'text-area':
                     obj[f['label']] = get_value_by_path(r, f['destiny'])
                 elif f['type'] == 'select':
                     obj[f['label']] = get_value_by_path(r, f['destiny'])
                 elif f['type'] == 'simple-date':
-                    value = get_value_by_path(r, f['destiny'])
-                    print(value)
                     obj[f['label']] = get_value_by_path(r, f['destiny'])
 
             resources_df.append(obj)
+
+            r_ = list(mongodb.get_all_records('records', {'parent.id': str(r['_id'])}, fields={'name': 1, 'displayName': 1}))
+
+            files = [record['name'] for record in r_]
+            obj['files'] = ', '.join(files)
+
+            files_ids = [str(record['_id']) for record in r_]
+            obj['files_ids'] = ', '.join(files_ids)
 
         resources = [str(resource['_id']) for resource in resources]
 
@@ -148,8 +172,8 @@ class ExtendedPluginClass(PluginClass):
     
 plugin_info = {
     'name': 'Exportar inventarios',
-    'description': 'Plugin para exportar inventarios del gestor documental',
-    'version': '0.1',
+    'description': 'Plugin para exportar inventarios del gestor documental.',
+    'version': '0.2',
     'author': 'Néstor Andrés Peña',
     'type': ['bulk'],
     'settings': {
@@ -158,6 +182,11 @@ plugin_info = {
                 'type':  'instructions',
                 'title': 'Instrucciones',
                 'text': 'Este plugin permite generar inventarios en archivo excel del contenido del gestor documental. Para ello, puede especificar el tipo de contenido sobre el cual quiere generar el inventario y los filtros que desea aplicar. El archivo se encontrará en su perfil para su descarga una vez se haya terminado de generar. Es importante notar que el proceso de generación de inventarios puede tardar varios minutos, dependiendo de la cantidad de recursos que se encuentren en el gestor documental.',
+            }
+        ],
+        'settings_lunch': [
+            {
+
             }
         ]
     }
