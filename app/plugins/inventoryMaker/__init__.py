@@ -9,6 +9,7 @@ import os
 import uuid
 import pandas as pd
 from dotenv import load_dotenv
+from bson.objectid import ObjectId
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -36,7 +37,7 @@ class ExtendedPluginClass(PluginClass):
             task = self.create.delay(body, current_user)
             self.add_task_to_user(task.id, 'inventoryMaker.create_inventory', current_user, 'file_download')
 
-            return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
+            return {'msg': 'Se agregó la tarea a la fila de procesamientos. Puedes revisar en tu perfil cuando haya terminado y descargar el inventario.'}, 201
         
         @self.route('/filedownload/<taskId>', methods=['GET'])
         @jwt_required()
@@ -85,7 +86,7 @@ class ExtendedPluginClass(PluginClass):
 
         if 'parent' in body:
             if body['parent']:
-                filters['parents.id'] = body['parent']
+                filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
 
         # buscamos los recursos con los filtros especificados
         resources = list(mongodb.get_all_records('resources', filters))

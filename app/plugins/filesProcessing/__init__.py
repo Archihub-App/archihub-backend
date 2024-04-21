@@ -12,6 +12,7 @@ from .utils import PDFprocessing
 from .utils import DocumentProcessing
 from .utils import DatabaseProcessing
 from app.api.records.models import RecordUpdate
+from bson.objectid import ObjectId
 
 from app.api.resources.services import update_cache as update_cache_resources
 from app.api.records.services import update_cache as update_cache_records
@@ -66,7 +67,7 @@ class ExtendedPluginClass(PluginClass):
 
         if 'parent' in body:
             if body['parent']:
-                filters['parents.id'] = body['parent']
+                filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
 
         # obtenemos los recursos
         resources = list(mongodb.get_all_records('resources', filters, fields={'_id': 1}))

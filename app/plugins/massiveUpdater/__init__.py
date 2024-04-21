@@ -50,11 +50,6 @@ class ExtendedPluginClass(PluginClass):
                     if self.allowedFile(filename, ['xlsx']):
                         filename_new = self.save_temp_file(f, filename)
                         path = os.path.join(TEMPORAL_FILES_PATH, filename_new)
-
-                        
-
-                        # iteramos sobre las filas del archivo
-                        
                         task = self.update.delay(path, data['overwrite'], current_user)
                         self.add_task_to_user(task.id, 'massiveUpdater.update_inventory', current_user, 'file_download')
                     
@@ -65,7 +60,7 @@ class ExtendedPluginClass(PluginClass):
                     return {'msg': 'Error al subir el archivo'}, 500
             
 
-            return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
+            return {'msg': 'Se cargó el archivo y se agregó la tarea a la fila de procesamientos. Puedes revisar en tu perfil cuando haya terminado y descargar el reporte.'}, 201
         
         @self.route('/filedownload/<taskId>', methods=['GET'])
         @jwt_required()
