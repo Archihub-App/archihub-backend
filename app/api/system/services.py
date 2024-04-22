@@ -84,18 +84,19 @@ def update_settings(settings, current_user):
             'settings': settings
         })
         # Limpiar la cache
-        get_all_settings.invalidate_all()
         get_default_cataloging_type.invalidate_all()
         get_default_visible_type.invalidate_all()
         get_roles.invalidate_all()
         get_access_rights.invalidate_all()
         get_roles_id.invalidate_all()
         get_access_rights_id.invalidate_all()
+        clear_cache()
 
         # Llamar al servicio para obtener todos los ajustes del sistema
         return {'msg': 'Ajustes del sistema actualizados exitosamente'}, 200
 
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 # Funcion para obtener el tipo por defecto del modulo de catalogacion

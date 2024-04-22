@@ -227,7 +227,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'text-area':
+                    elif field['type'] == 'text-area':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text(get_value_by_path(
@@ -235,7 +235,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'select':
+                    elif field['type'] == 'select':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text(get_value_by_path(
@@ -243,7 +243,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required'] and field['destiny'] != 'accessRights':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'pattern':
+                    elif field['type'] == 'pattern':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text_regex(get_value_by_path(
@@ -251,7 +251,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'select-multiple2':
+                    elif field['type'] == 'select-multiple2':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text_array(get_value_by_path(
@@ -259,7 +259,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'author':
+                    elif field['type'] == 'author':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_author_array(get_value_by_path(
@@ -267,7 +267,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'simple-date':
+                    elif field['type'] == 'simple-date':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             value = get_value_by_path(body, field['destiny'])
@@ -276,6 +276,29 @@ def validate_fields(body, metadata, errors):
                             value = value
                             validate_simple_date(value, field)
                             body = change_value(body, field['destiny'], value)
+                        elif field['required']:
+                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    elif field['type'] == 'relation':
+                        print(field['destiny'])
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            value = get_value_by_path(body, field['destiny'])
+                            temp = []
+                            for f in value:
+                                if 'id' not in f:
+                                    errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+                                else:
+                                    resource = mongodb.get_record('resources', {'_id': ObjectId(f['id'])})
+                                    if not resource:
+                                        errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+                                    elif resource['post_type'] != field['relation_type']:
+                                        errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+                                    else:
+                                        temp.append({
+                                            'id': f['id'],
+                                            'post_type': field['relation_type']
+                                        })
+                            body = change_value(body, field['destiny'], temp)
                         elif field['required']:
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
 
@@ -371,7 +394,7 @@ def get_accessRights(id):
         
     return None
 
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache(limit=2000)
 def get_resource(id, user):
 
     # Buscar el recurso en la base de datos
@@ -436,7 +459,7 @@ def get_resource(id, user):
                         'value': value,
                         'type': f['type']
                     })
-            if f['type'] == 'select':
+            elif f['type'] == 'select':
                 value = get_value_by_path(resource, f['destiny'])
                 value = get_option_by_id(value)
                 if value and 'term' in value:
@@ -445,7 +468,7 @@ def get_resource(id, user):
                         'value': [value['term']],
                         'type': 'select'
                     })
-            if f['type'] == 'pattern':
+            elif f['type'] == 'pattern':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
                     temp.append({
@@ -454,7 +477,7 @@ def get_resource(id, user):
                         'type': 'text'
                     })
 
-            if f['type'] == 'author':
+            elif f['type'] == 'author':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
                     temp_ = []
@@ -471,7 +494,7 @@ def get_resource(id, user):
                         'type': 'author'
                     })
 
-            if f['type'] == 'select-multiple2':
+            elif f['type'] == 'select-multiple2':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
                     temp_ = []
@@ -484,8 +507,7 @@ def get_resource(id, user):
                         'value': temp_,
                         'type': 'select'
                     })
-
-            if f['type'] == 'simple-date':
+            elif f['type'] == 'simple-date':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
                     temp.append({
@@ -493,6 +515,25 @@ def get_resource(id, user):
                         'value': value,
                         'type': 'simple-date'
                     })
+
+            elif f['type'] == 'relation':
+                value = get_value_by_path(resource, f['destiny'])
+                if value:
+                    temp_ = []
+                    for v in value:
+                        r = mongodb.get_record('resources', {'_id': ObjectId(v['id'])}, fields={'metadata.firstLevel.title': 1})
+                        temp_.append({
+                            'id': v['id'],
+                            'post_type': v['post_type'],
+                            'name': r['metadata']['firstLevel']['title']
+                        })
+
+                    temp.append({
+                        'label': f['label'],
+                        'value': temp_,
+                        'type': 'relation'
+                    })
+            
 
     resource['fields'] = temp
     resource['accessRights'] = get_option_by_id(resource['accessRights'])
