@@ -227,7 +227,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'text-area':
+                    elif field['type'] == 'text-area':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text(get_value_by_path(
@@ -235,7 +235,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'select':
+                    elif field['type'] == 'select':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text(get_value_by_path(
@@ -243,7 +243,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required'] and field['destiny'] != 'accessRights':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'pattern':
+                    elif field['type'] == 'pattern':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text_regex(get_value_by_path(
@@ -251,7 +251,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'select-multiple2':
+                    elif field['type'] == 'select-multiple2':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text_array(get_value_by_path(
@@ -259,7 +259,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'author':
+                    elif field['type'] == 'author':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_author_array(get_value_by_path(
@@ -267,7 +267,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'simple-date':
+                    elif field['type'] == 'simple-date':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             value = get_value_by_path(body, field['destiny'])
@@ -276,6 +276,21 @@ def validate_fields(body, metadata, errors):
                             value = value
                             validate_simple_date(value, field)
                             body = change_value(body, field['destiny'], value)
+                        elif field['required']:
+                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    elif field['type'] == 'relation':
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            value = get_value_by_path(body, field['destiny'])
+                            for f in value:
+                                if 'id' not in f:
+                                    errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+
+                                    resource = list(mongodb.get_record('resources', {'_id': ObjectId(f['id'])}))
+                                    if len(resource) == 0:
+                                        errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+                                    elif resource[0]['post_type'] != field['relation_type']:
+                                        errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
                         elif field['required']:
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
 

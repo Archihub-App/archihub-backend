@@ -262,6 +262,8 @@ def get_form_by_slug(slug):
     try:
         # Buscar el formulario en la base de datos
         form = mongodb.get_record('forms', {'slug': slug})
+
+        print(form)
         # Si el formulario no existe, retornar error
         if not form:
             return {'msg': 'Formulario no existe'}
