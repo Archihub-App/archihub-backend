@@ -27,7 +27,6 @@ def parse_result(result):
 def update_cache():
     has_right.invalidate_all()
     has_role.invalidate_all()
-    get_by_username.invalidate_all()
     get_total.invalidate_all()
 
 # Nueva funcion para devolver el usuario por su id
@@ -49,11 +48,10 @@ def get_by_id(id):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para obtener un usuario por su username
-@cacheHandler.cache.cache()
 def get_by_username(username):
     try:
         # Obtener el usuario de la coleccion users
-        user = mongodb.get_record('users', {'username': username}, fields={'token': 1, 'adminToken': 1, 'requests': 1, 'lastRequest': 1})
+        user = mongodb.get_record('users', {'username': username}, fields={'token': 1, 'adminToken': 1, 'requests': 1, 'lastRequest': 1, 'nodeToken': 1})
 
         # Si el usuario no existe, retornar error
         if not user:

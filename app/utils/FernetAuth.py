@@ -84,6 +84,7 @@ def nodeFernetAuthenticate(func):
             return jsonify({'msg': 'No se ha enviado el token de autenticación'}), 401
         
         try:
+
             # se quita la palabra Bearer del token
             auth_header = auth_header.split(" ")[1]
 
@@ -100,9 +101,9 @@ def nodeFernetAuthenticate(func):
                 if expiracion < time.time():
                     return jsonify({'msg': 'El token ha expirado'}), 401
 
-            
             # obtener el usuario actual
             current_user = get_by_username(username)
+
             if not has_role(username, 'admin'):
                 return jsonify({'msg': 'No tiene permisos para realizar esta acción'}), 401
         

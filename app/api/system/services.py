@@ -542,6 +542,7 @@ def index_resources(user):
         
 
 def clear_cache():
+    print('clearing cache')
     from app.utils.functions import clear_cache as update_cache_function
     from app.api.lists.services import update_cache as update_cache_lists
     from app.api.forms.services import update_cache as update_cache_forms
@@ -561,6 +562,7 @@ def clear_cache():
 
         return {'msg': 'Cache limpiada exitosamente'}, 200
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 @shared_task(ignore_result=False, name='system.regenerate_index')

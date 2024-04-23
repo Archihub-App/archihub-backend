@@ -38,7 +38,7 @@ class ExtendedPluginClass(PluginClass):
             if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
 
-            task = self.bulk.delay(body, current_user, self.clear_cache())
+            task = self.bulk.delay(body, current_user)
             self.add_task_to_user(task.id, 'filesProcessing.create_webfile', current_user, 'msg')
             
             return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
@@ -48,7 +48,7 @@ class ExtendedPluginClass(PluginClass):
         return 'ok'
         
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
-    def bulk(body, user, func=None):
+    def bulk(body, user):
         def get_filename_extension(filename):
             if '.' not in filename:
                 return None
@@ -193,7 +193,8 @@ class ExtendedPluginClass(PluginClass):
                     update = RecordUpdate(**update)
                     mongodb.update_record('records', {'_id': file['_id']}, update)
 
-        func()
+        instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
+        instance.clear_cache()
         return 'Se procesaron ' + str(size) + ' archivos'
     
 plugin_info = {

@@ -7,7 +7,7 @@ import os.path
 import requests
 
 TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', '')
-CLEAR_CACHE_PATH = os.environ.get('MASTER_HOST', '') + '/node-clear-cache'
+CLEAR_CACHE_PATH = os.environ.get('MASTER_HOST', '') + '/system/node-clear-cache'
 NODE_TOKEN = os.environ.get('NODE_TOKEN', '')
 
 class PluginClass(Blueprint):

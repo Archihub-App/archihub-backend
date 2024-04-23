@@ -323,7 +323,7 @@ def clear_cache():
 
 @bp.route('/node-clear-cache', methods=['GET'])
 @nodeFernetAuthenticate
-def node_clear_cache():
+def node_clear_cache(user):
     """
     Limpiar la cache desde los nodos de procesamiento
     ---
