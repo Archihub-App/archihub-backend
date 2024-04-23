@@ -13,6 +13,7 @@ class User(BaseModel):
     photo: str = None
     token: str = ""
     adminToken: str = ""
+    nodeToken: str = ""
     roles: list[str] = None
     accessRights: list[str] = None
     requests: int = 0
@@ -37,6 +38,7 @@ class UserUpdate(BaseModel):
     accessRights: Optional[list[str]] = None
     token: Optional[str] = None
     adminToken: Optional[str] = None
+    nodeToken: Optional[str] = None
     requests: Optional[int] = None
     lastRequest: Optional[datetime] = None
 

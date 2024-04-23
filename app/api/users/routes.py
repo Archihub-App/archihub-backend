@@ -332,7 +332,7 @@ def generate_node_token():
     # Obtener el username y password del body
     password = body.get('password')
     # Llamar al servicio para generar el token
-    return services.generate_token(current_user, password, True)
+    return services.generate_node_token(current_user, password)
 
 # Nuevo endpoint para obtener todos los usuarios usando filtros
 @bp.route('', methods=['POST'])
