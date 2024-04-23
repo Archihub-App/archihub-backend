@@ -294,6 +294,46 @@ def generate_admin_token():
     # Llamar al servicio para generar el token
     return services.generate_token(current_user, password, True)
 
+@bp.route('/node-token', methods=['POST'])
+@jwt_required()
+def generate_node_token():
+    """
+    Generar un token de acceso a la API para los nodos de procesamiento
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                password:
+                    type: string
+            required:
+                - password
+    responses:
+        200:
+            description: Token generado exitosamente
+        400:
+            description: Usuario no existe o contraseña incorrecta
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Obtener el body del request
+    body = request.json
+    # Obtener el username y password del body
+    password = body.get('password')
+    # Llamar al servicio para generar el token
+    return services.generate_token(current_user, password, True)
+
 # Nuevo endpoint para obtener todos los usuarios usando filtros
 @bp.route('', methods=['POST'])
 @jwt_required()

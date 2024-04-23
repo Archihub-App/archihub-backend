@@ -518,6 +518,7 @@ def get_resource(id, user):
 
             elif f['type'] == 'relation':
                 value = get_value_by_path(resource, f['destiny'])
+
                 if value:
                     temp_ = []
                     for v in value:
@@ -525,7 +526,8 @@ def get_resource(id, user):
                         temp_.append({
                             'id': v['id'],
                             'post_type': v['post_type'],
-                            'name': r['metadata']['firstLevel']['title']
+                            'name': r['metadata']['firstLevel']['title'],
+                            'icon': get_icon(v['post_type'])
                         })
 
                     temp.append({
