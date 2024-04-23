@@ -4,8 +4,11 @@ from app.api.tasks.services import add_task
 from app.api.users.services import has_role
 import uuid
 import os.path
+import requests
 
 TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', '')
+CLEAR_CACHE_PATH = os.environ.get('MASTER_HOST', '') + '/node-clear-cache'
+NODE_TOKEN = os.environ.get('NODE_TOKEN', '')
 
 class PluginClass(Blueprint):
     def __init__(self, path, filePath, import_name, name, description, version, author, type, settings=None):
@@ -53,6 +56,16 @@ class PluginClass(Blueprint):
                             os.path.join(path, filename_new))
         
         return filename_new
+    
+    def clear_cache(self):
+        try:
+            headers = {
+                 'Authorization': 'Bearer ' + NODE_TOKEN
+            }
+            requests.get(CLEAR_CACHE_PATH, headers=headers)
+
+        except:
+            pass
 
     def get_image(self):
         @self.route('/image', methods=['GET'])

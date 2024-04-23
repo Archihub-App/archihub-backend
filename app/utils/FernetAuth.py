@@ -93,7 +93,6 @@ def nodeFernetAuthenticate(func):
             decoded_token = jwt.decode(token, jwt_secret_key, algorithms=['HS256'])
 
             username = decoded_token['sub']
-            isAdmin = False
 
             # verificar si el token tiene fecha de expiración
             if 'exp' in decoded_token:
