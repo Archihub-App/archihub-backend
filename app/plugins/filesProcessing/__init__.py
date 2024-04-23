@@ -14,9 +14,6 @@ from .utils import DatabaseProcessing
 from app.api.records.models import RecordUpdate
 from bson.objectid import ObjectId
 
-from app.api.resources.services import update_cache as update_cache_resources
-from app.api.records.services import update_cache as update_cache_records
-
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -41,7 +38,7 @@ class ExtendedPluginClass(PluginClass):
             if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
 
-            task = self.bulk.delay(body, current_user)
+            task = self.bulk.delay(body, current_user, self.clear_cache())
             self.add_task_to_user(task.id, 'filesProcessing.create_webfile', current_user, 'msg')
             
             return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
@@ -51,7 +48,7 @@ class ExtendedPluginClass(PluginClass):
         return 'ok'
         
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
-    def bulk(body, user):
+    def bulk(body, user, func=None):
         def get_filename_extension(filename):
             if '.' not in filename:
                 return None
@@ -196,9 +193,7 @@ class ExtendedPluginClass(PluginClass):
                     update = RecordUpdate(**update)
                     mongodb.update_record('records', {'_id': file['_id']}, update)
 
-        
-        update_cache_records()
-        update_cache_resources()
+        func()
         return 'Se procesaron ' + str(size) + ' archivos'
     
 plugin_info = {

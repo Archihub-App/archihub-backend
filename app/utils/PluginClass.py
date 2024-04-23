@@ -63,7 +63,6 @@ class PluginClass(Blueprint):
                  'Authorization': 'Bearer ' + NODE_TOKEN
             }
             requests.get(CLEAR_CACHE_PATH, headers=headers)
-
         except:
             pass
 
