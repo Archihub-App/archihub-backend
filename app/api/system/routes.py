@@ -4,7 +4,7 @@ from flask_jwt_extended import get_jwt_identity
 from app.api.system import services
 from app.api.users import services as user_services
 from flask import request
-from app.utils.FernetAuth import fernetAuthenticate
+from app.utils.FernetAuth import fernetAuthenticate, nodeFernetAuthenticate
 
 
 # from app.tasks.tasks import add
@@ -322,7 +322,7 @@ def clear_cache():
     return services.clear_cache()
 
 @bp.route('/node-clear-cache', methods=['GET'])
-@jwt_required()
+@nodeFernetAuthenticate
 def node_clear_cache():
     """
     Limpiar la cache desde los nodos de procesamiento
@@ -339,10 +339,6 @@ def node_clear_cache():
         500:
             description: Error al limpiar la cache
     """
-    # Obtener el usuario actual
-    current_user = get_jwt_identity()
-    # Verificar si el usuario tiene el rol de procesamiento o administrador
-    if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para limpiar la cache'}, 401
+    
     # Llamar al servicio para limpiar la cache
     return services.clear_cache()
