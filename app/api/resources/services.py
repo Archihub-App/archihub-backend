@@ -1,6 +1,7 @@
 from flask import jsonify, request
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import HookHandler
 from bson import json_util
 import json
 from bson.objectid import ObjectId
@@ -31,7 +32,7 @@ from datetime import datetime
 from dateutil import parser
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
-
+hookHandler = HookHandler.HookHandler()
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado
 def change_value(body, route, value):
     route = route.split('.')
@@ -162,6 +163,8 @@ def create(body, user, files):
 
         # limpiar la cache
         update_cache()
+
+        hookHandler.call('resource_create', body)
 
         # Retornar el resultado
         return {'msg': 'Recurso creado exitosamente'}, 201
