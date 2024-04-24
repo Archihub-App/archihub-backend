@@ -1,6 +1,7 @@
 from app.utils.PluginClass import PluginClass
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.utils import DatabaseHandler
+from app.utils import HookHandler
 from flask import request
 from celery import shared_task
 from dotenv import load_dotenv
@@ -17,6 +18,8 @@ from bson.objectid import ObjectId
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
+hookHandler = HookHandler.HookHandler()
+
 USER_FILES_PATH = os.environ.get('USER_FILES_PATH', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
