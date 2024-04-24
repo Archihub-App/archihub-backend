@@ -192,10 +192,12 @@ def get_parents(post_type, first=True):
             'direct': True if first else False
         })
 
-        resp = resp + get_parents(p, False)
+        temp = get_parents(p, False)
+
+        for t in temp:
+            if t['slug'] not in [r['slug'] for r in resp]:
+                resp.append(t)
     
-    # se eliminan los duplicados
-    resp = [dict(t) for t in {tuple(d.items()) for d in resp}]
     
     return resp
 
