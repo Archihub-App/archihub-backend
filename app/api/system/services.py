@@ -185,7 +185,7 @@ def get_value_by_path(dict, path):
         raise Exception(f'Error al obtener el valor del campo {key}')
     
 
-def set_value_in_dict(d, path, value, type):
+def set_value_in_dict(d, path, value):
     keys = path.split('.')
     last_key = keys.pop()
     sub_dict = reduce(lambda d, key: d.setdefault(key, {}), keys, d)

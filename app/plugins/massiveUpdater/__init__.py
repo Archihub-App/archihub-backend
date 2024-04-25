@@ -137,7 +137,7 @@ class ExtendedPluginClass(PluginClass):
 
                     if field['type'] == 'text' or field['type'] == 'text-area':
                         validate_text(row[field['destiny']], field)
-                        set_value_in_dict(update, field['destiny'], row[field['destiny']], field['type'])
+                        set_value_in_dict(update, field['destiny'], row[field['destiny']])
 
                 except Exception as e:
                     error = {
