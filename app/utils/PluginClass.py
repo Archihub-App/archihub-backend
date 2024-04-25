@@ -1,10 +1,13 @@
-from flask import Blueprint, send_file
+from flask import Blueprint, send_file, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api.tasks.services import add_task
 from app.api.users.services import has_role
+from app.utils import DatabaseHandler
 import uuid
 import os.path
 import requests
+
+mongodb = DatabaseHandler.DatabaseHandler()
 
 TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', '')
 CLEAR_CACHE_PATH = os.environ.get('MASTER_HOST', '') + '/system/node-clear-cache'
@@ -57,6 +60,18 @@ class PluginClass(Blueprint):
         
         return filename_new
     
+    def get_plugin_settings(self):
+        settings = mongodb.get_record('system', {'name': 'active_plugins'}, fields={'plugins_settings': 1})
+        if 'plugins_settings' not in settings:
+            return None
+        elif self.name not in settings['plugins_settings']:
+            return None
+        else:
+            return settings['plugins_settings'][self.name]
+        
+    def set_plugin_settings(self, settings):
+        mongodb.update_record('system', {'name': 'active_plugins'}, {'plugins_settings.' + self.name: settings})
+    
     def clear_cache(self):
         try:
             headers = {
@@ -91,7 +106,28 @@ class PluginClass(Blueprint):
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
                     return {'msg': 'No tiene permisos suficientes'}, 401
                 
-                return self.settings['settings_' + type]
+                if type == 'all':
+                    return self.settings
+                elif type == 'settings':
+                    return self.settings['settings']
+                else:
+                    return self.settings['settings_' + type]
+            except Exception as e:
+                return {'msg': str(e)}, 500
+            
+        @self.route('/settings', methods=['POST'])
+        @jwt_required()
+        def set_settings(type):
+            try:
+                current_user = get_jwt_identity()
+
+                if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
+                    return {'msg': 'No tiene permisos suficientes'}, 401
+                
+                body = request.get_json()
+                self.set_plugin_settings(body)
+                return {'msg': 'Configuración guardada'}, 200
+            
             except Exception as e:
                 return {'msg': str(e)}, 500
 
