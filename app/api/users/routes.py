@@ -197,25 +197,25 @@ def get_user():
     return user, 200
 
 # Nuevo endpoint para obtener un token de acceso para un usuario
-@bp.route('/token', methods=['GET'])
-@jwt_required()
-def get_token():
-    """
-    Obtener un token de acceso a la API pública para un usuario
-    ---
-    security:
-        - JWT: []
-    tags:
-        - Usuarios
-    responses:
-        200:
-            description: Token obtenido exitosamente
-        400:
-            description: Usuario no existe, no ha aceptado el compromise o no tiene token de acceso
-    """
-    current_user = get_jwt_identity()
-    # Llamar al servicio para obtener el token
-    return services.get_token(current_user)
+# @bp.route('/token', methods=['GET'])
+# @jwt_required()
+# def get_token():
+#     """
+#     Obtener un token de acceso a la API pública para un usuario
+#     ---
+#     security:
+#         - JWT: []
+#     tags:
+#         - Usuarios
+#     responses:
+#         200:
+#             description: Token obtenido exitosamente
+#         400:
+#             description: Usuario no existe, no ha aceptado el compromise o no tiene token de acceso
+#     """
+#     current_user = get_jwt_identity()
+#     # Llamar al servicio para obtener el token
+#     return services.get_token(current_user)
 
 # Nuevo endpoint POST con un username y password en el body para generar un token de acceso para un usuario
 @bp.route('/token', methods=['POST'])

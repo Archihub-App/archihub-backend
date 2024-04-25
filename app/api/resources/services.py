@@ -115,6 +115,8 @@ def create(body, user, files):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
+        update_relations_children(body, metadata['fields'], True)
+
         if 'ident' not in body:
             body['ident'] = 'ident'
 
@@ -173,9 +175,72 @@ def create(body, user, files):
     except Exception as e:
         return {'msg': str(e)}, 500
 
+# Funcion para actualizar los recursos relacionados si el post_type es igual al del padre
+def update_relations_children(body, metadata, new = False):
+    for f in metadata:
+        if f['type'] == 'relation':
+            if f['relation_type'] == body['post_type']:
+                if not new:
+                    current = mongodb.get_record('resources', {'_id': ObjectId(body['_id'])})
+                    current_children = get_value_by_path(current, f['destiny'])
+                    
+                    if current_children:
+                        current_children = [c['id'] for c in current_children]
+                    else:
+                        current_children = []
+                else:
+                    current_children = []
+
+                # comparar los children actuales con los nuevos
+                new_children = get_value_by_path(body, f['destiny'])
+                new_children = [c['id'] for c in new_children]
+
+                to_delete = [item for item in current_children if item not in new_children]
+                to_add = [item for item in new_children if item not in current_children]
+
+                for d in to_delete:
+                    child_field_body = mongodb.get_record('resources', {'_id': ObjectId(d)})
+                    child_field = get_value_by_path(child_field_body, f['destiny'])
+                    if not child_field:
+                        child_field = []
+                    temp = []
+                    for c in child_field:
+                        if c['id'] != body['_id']:
+                            temp.append(c)
+                    
+                    update = {**child_field_body}
+                    from app.api.system.services import set_value_in_dict
+                    set_value_in_dict(update, f['destiny'], temp)
+
+                    update_ = ResourceUpdate(**update)
+
+                    mongodb.update_record('resources', {'_id': ObjectId(d)}, update_)
+
+                for a in to_add:
+                    child_field_body = mongodb.get_record('resources', {'_id': ObjectId(a)})
+                    child_field = get_value_by_path(child_field_body, f['destiny'])
+                    if not child_field:
+                        child_field = []
+                    temp = []
+                    for c in child_field:
+                        temp.append(c)
+
+                    temp.append({
+                        'id': body['_id'],
+                        'post_type': body['post_type']
+                    })
+
+                    update = {**child_field_body}
+                    from app.api.system.services import set_value_in_dict
+                    set_value_in_dict(update, f['destiny'], temp)
+
+                    update_ = ResourceUpdate(**update)
+
+                    mongodb.update_record('resources', {'_id': ObjectId(a)}, update_)
+                
+
+
 # Funcion para validar el padre de un recurso
-
-
 def validate_parent(body):
     if 'parents' in body:
         hierarchical = is_hierarchical(body['post_type'])
@@ -600,6 +665,10 @@ def update_by_id(id, body, user, files):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
+        print('1')
+        update_relations_children(body, metadata['fields'])
+        print('2')
+
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
         
@@ -757,6 +826,8 @@ def get_tree(root, available, user):
         # icon = mongodb.get_record(
             # 'post_types', {'slug': list_available[-1]})['icon']
         # Devolver solo los campos necesarios
+
+        print(resources)
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
 

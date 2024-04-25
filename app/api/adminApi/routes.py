@@ -49,6 +49,53 @@ def new_resource(username, isAdmin):
     # Llamar al servicio para crear el recurso
     return services.create(body, username)
 
+# Nuevo POST endpoint para actualizar un recurso
+@bp.route('/update', methods=['POST'])
+@fernetAuthenticate
+def update_resource(username, isAdmin):
+    """
+    Actualizar un recurso
+    ---
+    tags:
+        - Recursos
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                description:
+                    type: string
+                metadata:
+                    type: array
+                    items:
+                        type: object
+                icon:
+                    type: string
+                hierarchical:
+                    type: boolean
+                parentType:
+                    type: string
+    responses:
+        200:
+            description: Recurso actualizado exitosamente
+        401:
+            description: No tiene permisos para actualizar un recurso
+        500:
+            description: Error al actualizar el recurso
+    """
+    if not isAdmin:
+        return jsonify({'msg': 'No tiene permisos para actualizar un recurso'}), 401
+    # Obtener el body del request
+    body = request.json
+
+    # Llamar al servicio para actualizar el recurso
+    return services.update(body['id'], body, username)
+
 # Nuevo POST endpoint para obtener el id de un recurso por su nombre
 @bp.route('/get_id', methods=['POST'])
 @fernetAuthenticate
