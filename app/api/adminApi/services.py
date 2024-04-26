@@ -4,8 +4,8 @@ from app.utils import DatabaseHandler
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
-def create(body, user):
-    return create_resource(body, user, body['files'])
+def create(body, user, files):
+    return create_resource(body, user, files)
 
 def update(id, body, user):
     return update_resource(id, body, user, body['files'])

@@ -3,6 +3,7 @@ from flask import jsonify
 from flask import request
 from app.api.adminApi import services
 from app.utils.FernetAuth import fernetAuthenticate
+import json
 
 # Nuevo POST endpoint para crear nuevos recursos
 @bp.route('/create', methods=['POST'])
@@ -44,10 +45,12 @@ def new_resource(username, isAdmin):
     if not isAdmin:
         return jsonify({'msg': 'No tiene permisos para crear un recurso'}), 401
     # Obtener el body del request
-    body = request.json
+    body = request.form.to_dict()
+    files = request.files.getlist('files')
+    data = json.loads(body['data'])
 
     # Llamar al servicio para crear el recurso
-    return services.create(body, username)
+    return services.create(data, username, files)
 
 # Nuevo POST endpoint para actualizar un recurso
 @bp.route('/update', methods=['POST'])

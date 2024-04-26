@@ -203,11 +203,18 @@ def update_relations_children(body, metadata, new = False):
                     child_field = get_value_by_path(child_field_body, f['destiny'])
                     if not child_field:
                         child_field = []
+
                     temp = []
+                    require_update = False
                     for c in child_field:
                         if c['id'] != body['_id']:
                             temp.append(c)
+                        else:
+                            require_update = True
                     
+                    if not require_update:
+                        continue
+
                     update = {**child_field_body}
                     from app.api.system.services import set_value_in_dict
                     set_value_in_dict(update, f['destiny'], temp)
@@ -221,9 +228,16 @@ def update_relations_children(body, metadata, new = False):
                     child_field = get_value_by_path(child_field_body, f['destiny'])
                     if not child_field:
                         child_field = []
+                    
                     temp = []
+                    require_update = True
                     for c in child_field:
                         temp.append(c)
+                        if c['id'] == body['_id']:
+                            require_update = False
+
+                    if not require_update:
+                        continue                            
 
                     temp.append({
                         'id': body['_id'],
