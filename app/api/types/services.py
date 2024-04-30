@@ -140,8 +140,6 @@ def update_by_slug(slug, body, user):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para eliminar un tipo de post
-
-
 def delete_by_slug(slug, user):
     # Buscar el tipo de post en la base de datos
     post_type = mongodb.get_record('post_types', {'slug': slug})
@@ -163,8 +161,6 @@ def delete_by_slug(slug, user):
     return {'msg': 'Tipo de post eliminado exitosamente'}, 204
 
 # Funcion que devuelve recursivamente los padres de un tipo de post
-
-
 def get_parents(post_type, first=True):
     # Si el tipo de post no tiene padre, retornar una lista vacia
     if len(post_type['parentType']) == 0:
