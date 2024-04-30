@@ -12,6 +12,7 @@ from app.api.resources.models import ResourceUpdate
 from app.api.types.services import is_hierarchical
 from app.api.types.services import get_icon
 from app.api.types.services import get_metadata
+from app.api.types.services import get_parents as get_type_parents
 from app.api.system.services import validate_text
 from app.api.system.services import validate_text_array
 from app.api.system.services import validate_text_regex
@@ -829,6 +830,13 @@ def get_tree(root, available, user):
 
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
         if root == 'all':
+            # post_type = mongodb.get_record('post_types', {'slug': list_available[-1]})
+            # if not post_type:
+            #     return {'msg': 'Tipo de post no existe'}, 404
+            # parents = get_type_parents(post_type)
+            # parents = [p['slug'] for p in parents]
+            # parents = [*parents, post_type['slug']]
+            
             resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
                              "$in": list_available}, 'parent': None}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
@@ -841,13 +849,13 @@ def get_tree(root, available, user):
             # 'post_types', {'slug': list_available[-1]})['icon']
         # Devolver solo los campos necesarios
 
-        print(resources)
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
 
         for resource in resources:
             resource['children'] = get_children(resource['id'], available)
             resource['icon'] = get_icon(resource['post_type'])
+
         # Retornar los recursos y los padres
         return resources, 200
     except Exception as e:
