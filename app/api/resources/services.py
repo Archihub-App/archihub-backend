@@ -1,8 +1,9 @@
 from flask import jsonify, request
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
+from app.utils import HookHandler
 from bson import json_util
 import json
-from functools import lru_cache
 from bson.objectid import ObjectId
 from app.api.resources.models import Resource
 from app.utils.LogActions import log_actions
@@ -30,7 +31,8 @@ import os
 from datetime import datetime
 from dateutil import parser
 mongodb = DatabaseHandler.DatabaseHandler()
-
+cacheHandler = CacheHandler.CacheHandler()
+hookHandler = HookHandler.HookHandler()
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado
 def change_value(body, route, value):
     route = route.split('.')
@@ -113,6 +115,8 @@ def create(body, user, files):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
+        update_relations_children(body, metadata['fields'], True)
+
         if 'ident' not in body:
             body['ident'] = 'ident'
 
@@ -138,6 +142,7 @@ def create(body, user, files):
         body['_id'] = str(new_resource.inserted_id)
         # Registrar el log
         register_log(user, log_actions['resource_create'], {'resource': body})
+        hookHandler.call('resource_create', body)
 
         if files:
         # crear el record
@@ -158,18 +163,98 @@ def create(body, user, files):
 
             mongodb.update_record(
                 'resources', {'_id': ObjectId(body['_id'])}, update_)
+            
+            hookHandler.call('resource_files_create', body)
 
         # limpiar la cache
         update_cache()
+
 
         # Retornar el resultado
         return {'msg': 'Recurso creado exitosamente'}, 201
     except Exception as e:
         return {'msg': str(e)}, 500
 
+# Funcion para actualizar los recursos relacionados si el post_type es igual al del padre
+def update_relations_children(body, metadata, new = False):
+    for f in metadata:
+        if f['type'] == 'relation':
+            if f['relation_type'] == body['post_type']:
+                if not new:
+                    current = mongodb.get_record('resources', {'_id': ObjectId(body['_id'])})
+                    current_children = get_value_by_path(current, f['destiny'])
+                    
+                    if current_children:
+                        current_children = [c['id'] for c in current_children]
+                    else:
+                        current_children = []
+                else:
+                    current_children = []
+
+                # comparar los children actuales con los nuevos
+                new_children = get_value_by_path(body, f['destiny'])
+                new_children = [c['id'] for c in new_children]
+
+                to_delete = [item for item in current_children if item not in new_children]
+                to_add = [item for item in new_children if item not in current_children]
+
+                for d in to_delete:
+                    child_field_body = mongodb.get_record('resources', {'_id': ObjectId(d)})
+                    child_field = get_value_by_path(child_field_body, f['destiny'])
+                    if not child_field:
+                        child_field = []
+
+                    temp = []
+                    require_update = False
+                    for c in child_field:
+                        if c['id'] != body['_id']:
+                            temp.append(c)
+                        else:
+                            require_update = True
+                    
+                    if not require_update:
+                        continue
+
+                    update = {**child_field_body}
+                    from app.api.system.services import set_value_in_dict
+                    set_value_in_dict(update, f['destiny'], temp)
+
+                    update_ = ResourceUpdate(**update)
+
+                    mongodb.update_record('resources', {'_id': ObjectId(d)}, update_)
+
+                for a in to_add:
+                    child_field_body = mongodb.get_record('resources', {'_id': ObjectId(a)})
+                    child_field = get_value_by_path(child_field_body, f['destiny'])
+                    if not child_field:
+                        child_field = []
+                    
+                    temp = []
+                    require_update = True
+                    for c in child_field:
+                        temp.append(c)
+                        if c['id'] == body['_id']:
+                            require_update = False
+
+                    if not require_update:
+                        continue                            
+
+                    temp.append({
+                        'id': body['_id'],
+                        'post_type': body['post_type']
+                    })
+
+                    update = {**child_field_body}
+                    from app.api.system.services import set_value_in_dict
+                    set_value_in_dict(update, f['destiny'], temp)
+
+                    update_ = ResourceUpdate(**update)
+
+                    mongodb.update_record('resources', {'_id': ObjectId(a)}, update_)
+                
+
+
 # Funcion para validar el padre de un recurso
-
-
 def validate_parent(body):
     if 'parents' in body:
         hierarchical = is_hierarchical(body['post_type'])
@@ -192,8 +277,9 @@ def validate_parent(body):
             return body
         else:
             if hierarchical[0] and hierarchical[1]:
-                raise Exception(
-                    'El tipo de contenido es jerarquico y debe tener padre')
+                body['parents'] = []
+                body['parent'] = None
+                return body
             elif hierarchical[0] and not hierarchical[1]:
                 body['parents'] = []
                 body['parent'] = None
@@ -225,7 +311,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'text-area':
+                    elif field['type'] == 'text-area':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text(get_value_by_path(
@@ -233,7 +319,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'select':
+                    elif field['type'] == 'select':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text(get_value_by_path(
@@ -241,7 +327,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required'] and field['destiny'] != 'accessRights':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'pattern':
+                    elif field['type'] == 'pattern':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text_regex(get_value_by_path(
@@ -249,7 +335,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'select-multiple2':
+                    elif field['type'] == 'select-multiple2':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_text_array(get_value_by_path(
@@ -257,7 +343,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'author':
+                    elif field['type'] == 'author':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             validate_author_array(get_value_by_path(
@@ -265,7 +351,7 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    if field['type'] == 'simple-date':
+                    elif field['type'] == 'simple-date':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             value = get_value_by_path(body, field['destiny'])
@@ -274,6 +360,29 @@ def validate_fields(body, metadata, errors):
                             value = value
                             validate_simple_date(value, field)
                             body = change_value(body, field['destiny'], value)
+                        elif field['required']:
+                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    elif field['type'] == 'relation':
+                        print(field['destiny'])
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            value = get_value_by_path(body, field['destiny'])
+                            temp = []
+                            for f in value:
+                                if 'id' not in f:
+                                    errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+                                else:
+                                    resource = mongodb.get_record('resources', {'_id': ObjectId(f['id'])})
+                                    if not resource:
+                                        errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+                                    elif resource['post_type'] != field['relation_type']:
+                                        errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+                                    else:
+                                        temp.append({
+                                            'id': f['id'],
+                                            'post_type': field['relation_type']
+                                        })
+                            body = change_value(body, field['destiny'], temp)
                         elif field['required']:
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
 
@@ -324,6 +433,7 @@ def get_by_id(id, user):
                 return {'msg': 'No tiene permisos para obtener un recurso'}, 401
 
         resource = get_resource(id, user)
+
         register_log(user, log_actions['resource_open'], {'resource': id})
 
         # Retornar el recurso
@@ -331,14 +441,14 @@ def get_by_id(id, user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_resource_type(id):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'post_type': 1})
     if not resource:
         raise Exception('Recurso no existe')
     return resource['post_type']
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_accessRights(id):
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'accessRights': 1, 'parents': 1})
@@ -368,8 +478,9 @@ def get_accessRights(id):
         
     return None
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=2000)
 def get_resource(id, user):
+
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
     # Si el recurso no existe, retornar error
@@ -414,27 +525,9 @@ def get_resource(id, user):
                 'slug': 'files',
             }, *resource['children']]
 
-            temp = []
-
-            ids = []
-            for r in resource['files']:
-                ids.append(r)
-
-            r_ = get_resource_records(json.dumps(ids), user)
-            for _ in r_:
-                obj = {
-                    'id': str(_['_id']),
-                    'hash': _['hash'],
-                }
-
-                if 'displayName' in _: obj['displayName'] = _['displayName']
-                else : obj['displayName'] = _['name']
-                if 'accessRights' in _: obj['accessRights'] = _['accessRights']
-                if 'processing' in _: obj['processing'] = _['processing']
-
-                temp.append(obj)
-
-            resource['files'] = temp
+            resource['files'] = len(resource['files'])
+        else:
+            resource['files'] = None
 
     resource['fields'] = get_metadata(resource['post_type'])['fields']
 
@@ -450,7 +543,7 @@ def get_resource(id, user):
                         'value': value,
                         'type': f['type']
                     })
-            if f['type'] == 'select':
+            elif f['type'] == 'select':
                 value = get_value_by_path(resource, f['destiny'])
                 value = get_option_by_id(value)
                 if value and 'term' in value:
@@ -459,7 +552,7 @@ def get_resource(id, user):
                         'value': [value['term']],
                         'type': 'select'
                     })
-            if f['type'] == 'pattern':
+            elif f['type'] == 'pattern':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
                     temp.append({
@@ -468,7 +561,7 @@ def get_resource(id, user):
                         'type': 'text'
                     })
 
-            if f['type'] == 'author':
+            elif f['type'] == 'author':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
                     temp_ = []
@@ -485,7 +578,7 @@ def get_resource(id, user):
                         'type': 'author'
                     })
 
-            if f['type'] == 'select-multiple2':
+            elif f['type'] == 'select-multiple2':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
                     temp_ = []
@@ -498,8 +591,7 @@ def get_resource(id, user):
                         'value': temp_,
                         'type': 'select'
                     })
-
-            if f['type'] == 'simple-date':
+            elif f['type'] == 'simple-date':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
                     temp.append({
@@ -507,6 +599,27 @@ def get_resource(id, user):
                         'value': value,
                         'type': 'simple-date'
                     })
+
+            elif f['type'] == 'relation':
+                value = get_value_by_path(resource, f['destiny'])
+
+                if value:
+                    temp_ = []
+                    for v in value:
+                        r = mongodb.get_record('resources', {'_id': ObjectId(v['id'])}, fields={'metadata.firstLevel.title': 1})
+                        temp_.append({
+                            'id': v['id'],
+                            'post_type': v['post_type'],
+                            'name': r['metadata']['firstLevel']['title'],
+                            'icon': get_icon(v['post_type'])
+                        })
+
+                    temp.append({
+                        'label': f['label'],
+                        'value': temp_,
+                        'type': 'relation'
+                    })
+            
 
     resource['fields'] = temp
     resource['accessRights'] = get_option_by_id(resource['accessRights'])
@@ -517,7 +630,8 @@ def get_resource(id, user):
 
     return resource
 
-def get_resource_files(id, user):
+@cacheHandler.cache.cache(limit=1000)
+def get_resource_files(id, user, page):
     try:
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         # Si el recurso no existe, retornar error
@@ -525,18 +639,30 @@ def get_resource_files(id, user):
             return {'msg': 'Recurso no existe'}, 404
 
         temp = []
+        ids = []
         for r in resource['files']:
-            file = mongodb.get_record('records', {'_id': ObjectId(r)})
-            temp.append({
-                'name': file['name'],
-                'size': file['size'],
-                'id': str(file['_id']),
-                'url': file['filepath']
-            })
+            ids.append(r)
 
-        resource['files'] = temp
+        r_ = get_resource_records(json.dumps(ids), user, page)
+        for _ in r_:
+            obj = {
+                'id': str(_['_id']),
+                'hash': _['hash'],
+            }
+
+            if 'displayName' in _: obj['displayName'] = _['displayName']
+            else : obj['displayName'] = _['name']
+            if 'accessRights' in _: obj['accessRights'] = _['accessRights']
+            if 'processing' in _: obj['processing'] = _['processing']
+
+            temp.append(obj)
+
+        resp = {
+            'data': temp,
+            'total': len(ids)
+        }
         # Retornar el recurso
-        return jsonify(resource['files']), 200
+        return resp, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -553,14 +679,24 @@ def update_by_id(id, body, user, files):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
+        print('1')
+        update_relations_children(body, metadata['fields'])
+        print('2')
+
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+        
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'files': 1})
 
         body['status'] = 'updated'
 
         temp = []
         for f in body['files']:
             if type(f) == str:
+                temp.append(f)
+
+        for f in resource['files']:
+            if f not in temp:
                 temp.append(f)
 
         body['files'] = temp
@@ -585,6 +721,8 @@ def update_by_id(id, body, user, files):
 
         delete_records(body['deletedFiles'], id, user)
         update_records(body['updatedFiles'], user)
+
+        body['files'] = [f for f in body['files'] if f not in body['deletedFiles']]
 
         update = {
             'files': [*body['files'], *records]
@@ -653,8 +791,7 @@ def delete_by_id(id, user):
 
 # Funcion para obtener los hijos de un recurso
 
-
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_children(id, available, resp=False):
     try:
         list_available = available.split('|')
@@ -683,23 +820,28 @@ def get_children(id, available, resp=False):
 # Funcion para obtener los hijos de un recurso en forma de arbol
 
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_tree(root, available, user):
     try:
         list_available = available.split('|')
+
         # Obtener los recursos del tipo de contenido
 
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
         if root == 'all':
             resources = list(mongodb.get_all_records('resources', {
-                             'post_type': list_available[-1], 'parent': None}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             'post_type': {
+                             "$in": list_available}, 'parent': None}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         else:
             resources = list(mongodb.get_all_records('resources', {'post_type': {
                              "$in": list_available}, 'parent.id': root}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+        
         # Obtener el icono del post type
         # icon = mongodb.get_record(
             # 'post_types', {'slug': list_available[-1]})['icon']
         # Devolver solo los campos necesarios
+
+        print(resources)
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
 
@@ -714,7 +856,7 @@ def get_tree(root, available, user):
 # Funcion para validar que el tipo del padre sea uno admitido por el hijo
 
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def has_parent_postType(post_type, compare):
     try:
         # Obtener el tipo de post
@@ -723,11 +865,12 @@ def has_parent_postType(post_type, compare):
         if not post_type:
             return {'msg': 'Tipo de post no existe'}, 404
         # Si el tipo de post tiene padre, retornar True
-        if post_type['parentType'] != '':
-            if (post_type['parentType'] == compare):
-                return True
-            if (post_type['hierarchical'] and post_type['parentType'] != compare):
-                return True
+        if len(post_type['parentType']) > 0:
+            for p in post_type['parentType']:
+                if p['id'] == compare:
+                    return True
+                if p['hierarchical'] and p['id'] != compare:
+                    return True
 
         # Si el tipo de post no tiene padre, retornar False
         return False
@@ -737,7 +880,7 @@ def has_parent_postType(post_type, compare):
 # Funcion para obtener los padres de un recurso
 
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_parents(id):
     try:
         # Buscar el recurso en la base de datos
@@ -764,8 +907,7 @@ def get_parents(id):
 
 # Funcion para obtener el padre directo de un recurso
 
-
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_parent(id):
     try:
         # Buscar el recurso en la base de datos
@@ -823,8 +965,8 @@ def get_direct_children(id):
 
 def update_parents(id, post_type):
     try:
-        get_parents.cache_clear()
-        get_parent.cache_clear()
+        get_parents.invalidate_all()
+        get_parent.invalidate_all()
         # Hijos directos del recurso
         children = get_direct_children(id)
         # Si el recurso tiene hijos directos, actualizar el parent de cada hijo
@@ -908,7 +1050,7 @@ def update_records(list, user):
         raise Exception(str(e))
 
 # Funcion para obtener el total de recursos
-@lru_cache(maxsize=500)
+@cacheHandler.cache.cache(limit=1000)
 def get_total(obj):
     try:
         # convertir string a dict
@@ -921,14 +1063,15 @@ def get_total(obj):
         raise Exception(str(e))
 
 def update_cache():
-    get_access_rights.cache_clear()
-    get_resource.cache_clear()
-    get_children.cache_clear()
-    get_tree.cache_clear()
-    has_parent_postType.cache_clear()
-    get_parents.cache_clear()
-    get_parent.cache_clear()
-    get_total.cache_clear()
-    get_accessRights.cache_clear()
-    get_resource_type.cache_clear()
+    get_access_rights.invalidate_all()
+    get_resource.invalidate_all()
+    get_children.invalidate_all()
+    get_tree.invalidate_all()
+    has_parent_postType.invalidate_all()
+    get_parents.invalidate_all()
+    get_parent.invalidate_all()
+    get_total.invalidate_all()
+    get_accessRights.invalidate_all()
+    get_resource_type.invalidate_all()
+    get_resource_files.invalidate_all()
     clear_cache()

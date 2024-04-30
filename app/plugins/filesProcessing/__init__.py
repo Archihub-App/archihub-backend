@@ -1,6 +1,7 @@
 from app.utils.PluginClass import PluginClass
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.utils import DatabaseHandler
+from app.utils import HookHandler
 from flask import request
 from celery import shared_task
 from dotenv import load_dotenv
@@ -12,13 +13,13 @@ from .utils import PDFprocessing
 from .utils import DocumentProcessing
 from .utils import DatabaseProcessing
 from app.api.records.models import RecordUpdate
-
-from app.api.resources.services import update_cache as update_cache_resources
-from app.api.records.services import update_cache as update_cache_records
+from bson.objectid import ObjectId
 
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
+hookHandler = HookHandler.HookHandler()
+
 USER_FILES_PATH = os.environ.get('USER_FILES_PATH', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
@@ -66,7 +67,7 @@ class ExtendedPluginClass(PluginClass):
 
         if 'parent' in body:
             if body['parent']:
-                filters['parents.id'] = body['parent']
+                filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
 
         # obtenemos los recursos
         resources = list(mongodb.get_all_records('resources', filters, fields={'_id': 1}))
@@ -195,9 +196,8 @@ class ExtendedPluginClass(PluginClass):
                     update = RecordUpdate(**update)
                     mongodb.update_record('records', {'_id': file['_id']}, update)
 
-        
-        update_cache_records()
-        update_cache_resources()
+        instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
+        instance.clear_cache()
         return 'Se procesaron ' + str(size) + ' archivos'
     
 plugin_info = {

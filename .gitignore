@@ -4,6 +4,7 @@ fix.py
 /uploads
 /webfiles
 /userfiles
+/temporal
 
 requirements.txt.bak
 
@@ -12,3 +13,4 @@ requirements.txt.bak
 
 !/app/plugins/filesProcessing
 !/app/plugins/inventoryMaker
+!/app/plugins/massiveUpdater

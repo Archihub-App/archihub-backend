@@ -1,8 +1,8 @@
 import datetime
 from flask import jsonify, request
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 from bson import json_util
-from functools import lru_cache
 import json
 import re
 from app.utils.LogActions import log_actions
@@ -18,10 +18,13 @@ from app.utils.index.spanish_settings import settings as spanish_settings
 from celery import shared_task
 from app.api.tasks.services import add_task
 from app.api.types.services import get_metadata
+from functools import reduce
+
 
 
 mongodb = DatabaseHandler.DatabaseHandler()
 index_handler = IndexHandler.IndexHandler()
+cacheHandler = CacheHandler.CacheHandler()
 
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
@@ -47,7 +50,6 @@ def parse_result(result):
 # Funcion para obtener todos los recursos de la coleccion system
 
 
-@lru_cache(maxsize=32)
 def get_all_settings():
     try:
         # Obtener todos los recursos de la coleccion system
@@ -82,24 +84,25 @@ def update_settings(settings, current_user):
             'settings': settings
         })
         # Limpiar la cache
-        get_all_settings.cache_clear()
-        get_default_cataloging_type.cache_clear()
-        get_default_visible_type.cache_clear()
-        get_roles.cache_clear()
-        get_access_rights.cache_clear()
-        get_roles_id.cache_clear()
-        get_access_rights_id.cache_clear()
+        get_default_cataloging_type.invalidate_all()
+        get_default_visible_type.invalidate_all()
+        get_roles.invalidate_all()
+        get_access_rights.invalidate_all()
+        get_roles_id.invalidate_all()
+        get_access_rights_id.invalidate_all()
+        clear_cache()
 
         # Llamar al servicio para obtener todos los ajustes del sistema
         return {'msg': 'Ajustes del sistema actualizados exitosamente'}, 200
 
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 # Funcion para obtener el tipo por defecto del modulo de catalogacion
 
 
-@lru_cache(maxsize=32)
+@cacheHandler.cache.cache()
 def get_default_cataloging_type():
     try:
         # Obtener el registro post_types_settings de la colección system
@@ -120,7 +123,7 @@ def get_default_cataloging_type():
 # Funcion para obtener el tipo por defecto del modulo de catalogacion
 
 
-@lru_cache(maxsize=32)
+@cacheHandler.cache.cache()
 def get_default_visible_type():
     try:
         # Obtener el registro post_types_settings de la colección system
@@ -180,6 +183,13 @@ def get_value_by_path(dict, path):
 
     except Exception as e:
         raise Exception(f'Error al obtener el valor del campo {key}')
+    
+
+def set_value_in_dict(d, path, value):
+    keys = path.split('.')
+    last_key = keys.pop()
+    sub_dict = reduce(lambda d, key: d.setdefault(key, {}), keys, d)
+    sub_dict[last_key] = value
 
 # Funcion para validar un valor de texto
 
@@ -528,6 +538,31 @@ def index_resources(user):
         return {'msg': 'Indexación finalizada exitosamente'}, 200
 
     except Exception as e:
+        return {'msg': str(e)}, 500
+        
+
+def clear_cache():
+    print('clearing cache')
+    from app.utils.functions import clear_cache as update_cache_function
+    from app.api.lists.services import update_cache as update_cache_lists
+    from app.api.forms.services import update_cache as update_cache_forms
+    from app.api.records.services import update_cache as update_cache_records
+    from app.api.resources.services import update_cache as update_cache_resources
+    from app.api.types.services import update_cache as update_cache_types
+    from app.api.users.services import update_cache as update_cache_users
+
+    try:
+        update_cache_function()
+        update_cache_lists()
+        update_cache_forms()
+        update_cache_records()
+        update_cache_resources()
+        update_cache_types()
+        update_cache_users()
+
+        return {'msg': 'Cache limpiada exitosamente'}, 200
+    except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 @shared_task(ignore_result=False, name='system.regenerate_index')

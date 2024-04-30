@@ -31,7 +31,12 @@ def get_all():
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener todos los listados
-    return services.get_all()
+    resp = services.get_all()
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para crear un listado
 @bp.route('', methods=['POST'])
@@ -118,6 +123,7 @@ def get_by_id(id):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener el listado por su id
     resp = services.get_by_id(id)
+
     # Si el listado no existe, retornar error
     if 'msg' in resp:
         if resp['msg'] == 'Listado no existe':

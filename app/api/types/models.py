@@ -12,7 +12,8 @@ class PostType(BaseModel):
     metadata: str = None
     icon: str = None
     hierarchical: bool = False
-    parentType: str = None
+    # parentType array of dict
+    parentType: list[dict] = []
     editRoles: list[str] = None
     viewRoles: list[str] = None
 
@@ -31,7 +32,7 @@ class PostTypeUpdate(BaseModel):
     description: Optional[str]
     icon: Optional[str]
     hierarchical: Optional[bool]
-    parentType: Optional[str]
+    parentType: Optional[list[dict]]
     metadata: Optional[str]
     editRoles: Optional[list[str]]
     viewRoles: Optional[list[str]]
