@@ -13,6 +13,7 @@ from app.api.records.models import RecordUpdate as FileRecordUpdate
 from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id
 from werkzeug.utils import secure_filename
 import os
+import shutil
 import hashlib
 import magic
 import uuid
@@ -234,10 +235,13 @@ def create(resource_id, current_user, files, upload = True):
                 if not os.path.exists(path):
                     os.makedirs(path)
 
-                f.save(os.path.join(path, filename))
+                if type(f) is not dict:
+                    f.save(os.path.join(path, filename))
 
-                f.flush()
-                os.fsync(f.fileno())
+                    f.flush()
+                    os.fsync(f.fileno())
+                else:
+                    shutil.copy(f['file'], os.path.join(path, filename))
 
                 # renombrar el archivo
                 os.rename(os.path.join(path, filename),

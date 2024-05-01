@@ -148,12 +148,16 @@ def create(body, user, files):
         if files:
         # crear el record
             try:
+                print("existe files")
                 # si files es una lista
                 if not array_files:
+                    print("1")
                     records = create_record(body['_id'], user, files)
                 else:
+                    print("2")
                     records = create_record(body['_id'], user, temp_files, False)
             except Exception as e:
+                print(str(e))
                 return {'msg': str(e)}, 500
 
             update = {
@@ -174,6 +178,7 @@ def create(body, user, files):
         # Retornar el resultado
         return {'msg': 'Recurso creado exitosamente'}, 201
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 # Funcion para actualizar los recursos relacionados si el post_type es igual al del padre
@@ -265,6 +270,12 @@ def validate_parent(body):
             if '_id' in body:
                 if parent['id'] == body['_id']:
                     raise Exception('El recurso no puede ser su propio padre')
+            
+            if 'post_type' not in parent:
+                parent_temp = mongodb.get_record('resources', {'_id': ObjectId(parent['id'])}, fields={'post_type': 1})
+                if not parent_temp:
+                    raise Exception('El recurso padre no existe')
+                parent['post_type'] = parent_temp['post_type']
             # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
             if parent['post_type'] == body['post_type'] and not hierarchical[0]:
                 raise Exception('El tipo de contenido no es jerarquico')
