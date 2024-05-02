@@ -16,7 +16,7 @@ from app.api.types.services import get_parents as get_type_parents
 from app.api.system.services import validate_text
 from app.api.system.services import validate_text_array
 from app.api.system.services import validate_text_regex
-from app.api.system.services import get_value_by_path
+from app.api.system.services import get_value_by_path, set_value_in_dict
 from app.api.system.services import get_default_visible_type
 from app.api.system.services import validate_author_array
 from app.api.system.services import validate_simple_date
@@ -366,10 +366,13 @@ def validate_fields(body, metadata, errors):
                     elif field['type'] == 'simple-date':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
-                            value = get_value_by_path(body, field['destiny'])
-                            value = value.replace('"', '')
-                            value = parser.isoparse(value)
-                            value = value
+                            if isinstance(exists, str):
+                                value = get_value_by_path(body, field['destiny'])
+                                value = value.replace('"', '')
+                                value = parser.isoparse(value)
+                                value = value
+                            else:
+                                value = get_value_by_path(body, field['destiny'])
                             validate_simple_date(value, field)
                             body = change_value(body, field['destiny'], value)
                         elif field['required']:
@@ -492,7 +495,6 @@ def get_accessRights(id):
 
 @cacheHandler.cache.cache(limit=2000)
 def get_resource(id, user):
-
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
     # Si el recurso no existe, retornar error
@@ -606,6 +608,10 @@ def get_resource(id, user):
             elif f['type'] == 'simple-date':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
+                    if isinstance(value, datetime):
+                        value = value.isoformat()
+                        set_value_in_dict(resource, f['destiny'], value)
+
                     temp.append({
                         'label': f['label'],
                         'value': value,

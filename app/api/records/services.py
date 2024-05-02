@@ -363,6 +363,7 @@ def create(resource_id, current_user, files, upload = True):
                 }})
                 # limpiar la cache
                 get_all.invalidate_all()
+                get_hash.invalidate_all()
         else:
             raise Exception('Tipo de archivo no permitido')
 
