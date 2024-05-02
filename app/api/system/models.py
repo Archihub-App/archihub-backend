@@ -9,6 +9,7 @@ class Option(BaseModel):
     name: str
     data: dict = None
     label: str = None
+    plugins_settings: dict = None
 
     class Config:
         allow_population_by_field_name = True
@@ -24,6 +25,7 @@ class Option(BaseModel):
 # Modelo para la actualización de opciones del sistema
 class OptionUpdate(BaseModel):
     data: Any
+    plugins_settings: Optional[dict] = None
 
     class Config:
         allow_population_by_field_name = True
