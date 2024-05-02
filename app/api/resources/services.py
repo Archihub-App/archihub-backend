@@ -148,16 +148,12 @@ def create(body, user, files):
         if files:
         # crear el record
             try:
-                print("existe files")
                 # si files es una lista
                 if not array_files:
-                    print("1")
                     records = create_record(body['_id'], user, files)
                 else:
-                    print("2")
                     records = create_record(body['_id'], user, temp_files, False)
             except Exception as e:
-                print(str(e))
                 return {'msg': str(e)}, 500
 
             update = {
@@ -697,9 +693,7 @@ def update_by_id(id, body, user, files):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
-        print('1')
         update_relations_children(body, metadata['fields'])
-        print('2')
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
