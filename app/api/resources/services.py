@@ -16,7 +16,7 @@ from app.api.types.services import get_parents as get_type_parents
 from app.api.system.services import validate_text
 from app.api.system.services import validate_text_array
 from app.api.system.services import validate_text_regex
-from app.api.system.services import get_value_by_path
+from app.api.system.services import get_value_by_path, set_value_in_dict
 from app.api.system.services import get_default_visible_type
 from app.api.system.services import validate_author_array
 from app.api.system.services import validate_simple_date
@@ -174,6 +174,7 @@ def create(body, user, files):
         # Retornar el resultado
         return {'msg': 'Recurso creado exitosamente'}, 201
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 # Funcion para actualizar los recursos relacionados si el post_type es igual al del padre
@@ -265,6 +266,12 @@ def validate_parent(body):
             if '_id' in body:
                 if parent['id'] == body['_id']:
                     raise Exception('El recurso no puede ser su propio padre')
+            
+            if 'post_type' not in parent:
+                parent_temp = mongodb.get_record('resources', {'_id': ObjectId(parent['id'])}, fields={'post_type': 1})
+                if not parent_temp:
+                    raise Exception('El recurso padre no existe')
+                parent['post_type'] = parent_temp['post_type']
             # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
             if parent['post_type'] == body['post_type'] and not hierarchical[0]:
                 raise Exception('El tipo de contenido no es jerarquico')
@@ -355,10 +362,13 @@ def validate_fields(body, metadata, errors):
                     elif field['type'] == 'simple-date':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
-                            value = get_value_by_path(body, field['destiny'])
-                            value = value.replace('"', '')
-                            value = parser.isoparse(value)
-                            value = value
+                            if isinstance(exists, str):
+                                value = get_value_by_path(body, field['destiny'])
+                                value = value.replace('"', '')
+                                value = parser.isoparse(value)
+                                value = value
+                            else:
+                                value = get_value_by_path(body, field['destiny'])
                             validate_simple_date(value, field)
                             body = change_value(body, field['destiny'], value)
                         elif field['required']:
@@ -481,7 +491,6 @@ def get_accessRights(id):
 
 @cacheHandler.cache.cache(limit=2000)
 def get_resource(id, user):
-
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
     # Si el recurso no existe, retornar error
@@ -595,6 +604,10 @@ def get_resource(id, user):
             elif f['type'] == 'simple-date':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
+                    if isinstance(value, datetime):
+                        value = value.isoformat()
+                        set_value_in_dict(resource, f['destiny'], value)
+
                     temp.append({
                         'label': f['label'],
                         'value': value,
@@ -680,9 +693,7 @@ def update_by_id(id, body, user, files):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
-        print('1')
         update_relations_children(body, metadata['fields'])
-        print('2')
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400

@@ -46,10 +46,6 @@ class ExtendedPluginClass(PluginClass):
             
             return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
         
-    @shared_task(ignore_result=False, name='filesProcessing.create_webfile.auto')
-    def auto_bulk(self, params):
-        return 'ok'
-        
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
     def bulk(body, user):
         def get_filename_extension(filename):
@@ -80,7 +76,7 @@ class ExtendedPluginClass(PluginClass):
             records_filters['processing.fileProcessing'] = {'$exists': True}
         else:
             records_filters['processing.fileProcessing'] = {'$exists': False}
-
+        
         records = list(mongodb.get_all_records('records', records_filters, fields={'_id': 1, 'mime': 1, 'filepath': 1}))
 
         size = len(records)

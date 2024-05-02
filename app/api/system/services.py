@@ -90,6 +90,7 @@ def update_settings(settings, current_user):
         get_access_rights.invalidate_all()
         get_roles_id.invalidate_all()
         get_access_rights_id.invalidate_all()
+        get_resources_schema.invalidate_all()
         clear_cache()
 
         # Llamar al servicio para obtener todos los ajustes del sistema
@@ -143,8 +144,6 @@ def get_default_visible_type():
             'Error al obtener el tipo por defecto del modulo de catalogacion')
 
 # Funcion para actualizar el registro resources-schema en la colección system
-
-
 def update_resources_schema(schema):
     try:
         # Obtener el registro resources-schema de la colección system
@@ -164,10 +163,23 @@ def update_resources_schema(schema):
         return {'msg': 'Schema actualizado exitosamente'}
     except Exception as e:
         raise Exception('Error al actualizar el schema de los recursos')
+    
+# Funcio para obtener el schema de los recursos
+@cacheHandler.cache.cache()
+def get_resources_schema():
+    try:
+        # Obtener el registro resources-schema de la colección system
+        resources_schema = mongodb.get_record(
+            'system', {'name': 'resources-schema'})
+        # Si el registro no existe, retornar error
+        if not resources_schema:
+            return {'msg': 'No existe el schema de los recursos'}, 404
+        # Retornar el resultado
+        return {'schema': resources_schema['data']}
+    except Exception as e:
+        raise Exception('Error al obtener el schema de los recursos')
 
 # Funcion para obtener el valor de un dict dado un path
-
-
 def get_value_by_path(dict, path):
     try:
         keys = path.split('.')
