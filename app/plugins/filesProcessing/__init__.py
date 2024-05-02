@@ -13,7 +13,10 @@ from .utils import PDFprocessing
 from .utils import DocumentProcessing
 from .utils import DatabaseProcessing
 from app.api.records.models import RecordUpdate
+from app.api.users.services import has_role
 from bson.objectid import ObjectId
+from app.api.types.services import get_all as get_all_types
+import json
 
 load_dotenv()
 
@@ -24,9 +27,160 @@ USER_FILES_PATH = os.environ.get('USER_FILES_PATH', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
 
+def get_filename_extension(filename):
+    if '.' not in filename:
+        return None
+    if len(filename.split('.')) != 2:
+        return None
+    ext = os.path.splitext(filename)[1]
+    ext = ext.lower()
+    return ext
+
+def process_file(file):
+    path = os.path.join(ORIGINAL_FILES_PATH, file['filepath'])
+    # quitar el nombre del archivo de la ruta
+    path_dir = os.path.dirname(file['filepath'])
+    # obtener el nombre del archivo sin la extensión
+    filename = os.path.splitext(os.path.basename(file['filepath']))[0]
+    
+    if not os.path.exists(os.path.join(WEB_FILES_PATH, path_dir)):
+        os.makedirs(os.path.join(WEB_FILES_PATH, path_dir))
+
+    if 'audio' in file['mime']:
+        result = AudioProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+        if result:
+            update = {
+                'processing': {
+                    'fileProcessing': {
+                        'type': 'audio',
+                        'path': os.path.join(path_dir, filename),
+                    }
+                }
+            }
+            update = RecordUpdate(**update)
+            mongodb.update_record('records', {'_id': file['_id']}, update)
+
+    elif 'video' in file['mime']:
+        result_audio, result_video = VideoProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+        if result_video or result_audio:
+            type = 'video' if result_video else 'audio' if result_audio else None
+            update = {
+                'processing': {
+                    'fileProcessing': {
+                        'type': type,
+                        'path': os.path.join(path_dir, filename),
+                    }
+                }
+            }
+            update = RecordUpdate(**update)
+            mongodb.update_record('records', {'_id': file['_id']}, update)
+    elif 'image' in file['mime']:
+        result = ImageProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+        if result:
+            update = {
+                'processing': {
+                    'fileProcessing': {
+                        'type': 'image',
+                        'path': os.path.join(path_dir, filename),
+                    }
+                }
+            }
+            update = RecordUpdate(**update)
+            mongodb.update_record('records', {'_id': file['_id']}, update)
+    elif 'word' in file['mime'] or ('text' in file['mime'] and get_filename_extension(file['filepath']) != '.csv'):
+        result = DocumentProcessing.main(path, os.path.join(ORIGINAL_FILES_PATH, path_dir, filename), os.path.join(WEB_FILES_PATH, path_dir, filename))
+
+        if result:
+            update = {
+                'processing': {
+                    'fileProcessing': {
+                        'type': 'document',
+                        'path': os.path.join(path_dir, filename),
+                    }
+                }
+            }
+            update = RecordUpdate(**update)
+            mongodb.update_record('records', {'_id': file['_id']}, update)
+    elif 'application/pdf' in file['mime']:
+        result = PDFprocessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+        folder_path = os.path.join(path_dir, filename).split('.')[0]
+
+        if result:
+            update = {
+                'processing': {
+                    'fileProcessing': {
+                        'type': 'document',
+                        'path': folder_path,
+                    }
+                }
+            }
+            update = RecordUpdate(**update)
+            mongodb.update_record('records', {'_id': file['_id']}, update)
+    
+    elif 'text' in file['mime'] and get_filename_extension(file['filepath']) == '.csv':
+        result = DatabaseProcessing.main_csv(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+
+        if result:
+            update = {
+                'processing': {
+                    'fileProcessing': {
+                        'type': 'database',
+                        'path': os.path.join(path_dir, filename),
+                    }
+                }
+            }
+            update = RecordUpdate(**update)
+            mongodb.update_record('records', {'_id': file['_id']}, update)
+
+    elif 'sheet' in file['mime']:
+        result = DatabaseProcessing.main_excel(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+
+        if result:
+            update = {
+                'processing': {
+                    'fileProcessing': {
+                        'type': 'database',
+                        'path': os.path.join(path_dir, filename),
+                    }
+                }
+            }
+            update = RecordUpdate(**update)
+            mongodb.update_record('records', {'_id': file['_id']}, update)
+
+    
+
+
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type, settings):
         super().__init__(path, __file__, import_name, name, description, version, author, type, settings)
+        self.activate_settings()
+
+    @shared_task(ignore_result=False, name='filesProcessingCreate.auto')
+    def automatic(type, body):
+        if body['post_type'] != type['type']:
+            return 'ok'
+        
+        records_filters = {
+            'parent.id': {'$in': [str(body['_id'])]},
+        }
+        
+        records = list(mongodb.get_all_records('records', records_filters, fields={'_id': 1, 'mime': 1, 'filepath': 1}))
+        size = len(records)
+        for file in records:
+            process_file(file)
+
+        instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
+        instance.clear_cache()
+        return 'Se procesaron ' + str(size) + ' archivos'
+
+    def activate_settings(self):
+        current = self.get_plugin_settings()
+        if current is None:
+            return
+        
+        types = current['types_activation']
+        for t in types:
+            hookHandler.register('resource_files_create', self.automatic, t, t['order'])
 
     def add_routes(self):
         @self.route('/bulk', methods=['POST'])
@@ -48,15 +202,6 @@ class ExtendedPluginClass(PluginClass):
         
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
     def bulk(body, user):
-        def get_filename_extension(filename):
-            if '.' not in filename:
-                return None
-            if len(filename.split('.')) != 2:
-                return None
-            ext = os.path.splitext(filename)[1]
-            ext = ext.lower()
-            return ext
-    
         filters = {
             'post_type': body['post_type']
         }
@@ -81,121 +226,88 @@ class ExtendedPluginClass(PluginClass):
 
         size = len(records)
         for file in records:
-            path = os.path.join(ORIGINAL_FILES_PATH, file['filepath'])
-            # quitar el nombre del archivo de la ruta
-            path_dir = os.path.dirname(file['filepath'])
-            # obtener el nombre del archivo sin la extensión
-            filename = os.path.splitext(os.path.basename(file['filepath']))[0]
-            
-            if not os.path.exists(os.path.join(WEB_FILES_PATH, path_dir)):
-                os.makedirs(os.path.join(WEB_FILES_PATH, path_dir))
-
-            if 'audio' in file['mime']:
-                result = AudioProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
-                if result:
-                    update = {
-                        'processing': {
-                            'fileProcessing': {
-                                'type': 'audio',
-                                'path': os.path.join(path_dir, filename),
-                            }
-                        }
-                    }
-                    update = RecordUpdate(**update)
-                    mongodb.update_record('records', {'_id': file['_id']}, update)
-
-            elif 'video' in file['mime']:
-                result_audio, result_video = VideoProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
-                if result_video or result_audio:
-                    type = 'video' if result_video else 'audio' if result_audio else None
-                    update = {
-                        'processing': {
-                            'fileProcessing': {
-                                'type': type,
-                                'path': os.path.join(path_dir, filename),
-                            }
-                        }
-                    }
-                    update = RecordUpdate(**update)
-                    mongodb.update_record('records', {'_id': file['_id']}, update)
-            elif 'image' in file['mime']:
-                result = ImageProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
-                if result:
-                    update = {
-                        'processing': {
-                            'fileProcessing': {
-                                'type': 'image',
-                                'path': os.path.join(path_dir, filename),
-                            }
-                        }
-                    }
-                    update = RecordUpdate(**update)
-                    mongodb.update_record('records', {'_id': file['_id']}, update)
-            elif 'word' in file['mime'] or ('text' in file['mime'] and get_filename_extension(file['filepath']) != '.csv'):
-                result = DocumentProcessing.main(path, os.path.join(ORIGINAL_FILES_PATH, path_dir, filename), os.path.join(WEB_FILES_PATH, path_dir, filename))
-
-                if result:
-                    update = {
-                        'processing': {
-                            'fileProcessing': {
-                                'type': 'document',
-                                'path': os.path.join(path_dir, filename),
-                            }
-                        }
-                    }
-                    update = RecordUpdate(**update)
-                    mongodb.update_record('records', {'_id': file['_id']}, update)
-
-            elif 'application/pdf' in file['mime']:
-                result = PDFprocessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
-                folder_path = os.path.join(path_dir, filename).split('.')[0]
-
-                if result:
-                    update = {
-                        'processing': {
-                            'fileProcessing': {
-                                'type': 'document',
-                                'path': folder_path,
-                            }
-                        }
-                    }
-                    update = RecordUpdate(**update)
-                    mongodb.update_record('records', {'_id': file['_id']}, update)
-            
-            elif 'text' in file['mime'] and get_filename_extension(file['filepath']) == '.csv':
-                result = DatabaseProcessing.main_csv(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
-
-                if result:
-                    update = {
-                        'processing': {
-                            'fileProcessing': {
-                                'type': 'database',
-                                'path': os.path.join(path_dir, filename),
-                            }
-                        }
-                    }
-                    update = RecordUpdate(**update)
-                    mongodb.update_record('records', {'_id': file['_id']}, update)
-
-            elif 'sheet' in file['mime']:
-                result = DatabaseProcessing.main_excel(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
-
-                if result:
-                    update = {
-                        'processing': {
-                            'fileProcessing': {
-                                'type': 'database',
-                                'path': os.path.join(path_dir, filename),
-                            }
-                        }
-                    }
-                    update = RecordUpdate(**update)
-                    mongodb.update_record('records', {'_id': file['_id']}, update)
+            process_file(file)
 
         instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
         instance.clear_cache()
         return 'Se procesaron ' + str(size) + ' archivos'
     
+    def get_settings(self):
+        @self.route('/settings/<type>', methods=['GET'])
+        @jwt_required()
+        def get_settings(type):
+            try:
+                current_user = get_jwt_identity()
+
+                if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
+                    return {'msg': 'No tiene permisos suficientes'}, 401
+                
+                types = get_all_types()
+                if isinstance(types, list):
+                    types = tuple(types)[0]
+
+                current = self.get_plugin_settings()
+
+                resp = {**self.settings}
+
+                resp['settings'][1]['fields'] = [
+                    {
+                        'type': 'select',
+                        'id': 'type',
+                        'default': '',
+                        'options': [{'value': t['slug'], 'label': t['name']} for t in types],
+                        'required': True
+                    },
+                    {
+                        'type': 'number',
+                        'id': 'order',
+                        'default': 0,
+                        'required': True
+                    }
+                ]
+                
+                if current is None:
+                    resp['settings'][1]['default'] = []
+                    
+                else:
+                    resp['settings'][1]['default'] = current['types_activation']
+
+                
+                if type == 'all':
+                    return resp
+                elif type == 'settings':
+                    return resp['settings']
+                else:
+                    return resp['settings_' + type]
+            except Exception as e:
+                return {'msg': str(e)}, 500
+            
+        @self.route('/settings', methods=['POST'])
+        @jwt_required()
+        def set_settings_update():
+            try:
+                current_user = get_jwt_identity()
+
+                if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
+                    return {'msg': 'No tiene permisos suficientes'}, 401
+                
+                body = request.form.to_dict()
+                data = body['data']
+                data = json.loads(data)
+
+                types = data['types_activation']
+                for t in types:
+                    if 'order' not in t:
+                        t['order'] = '0'
+
+                self.set_plugin_settings(data)
+
+                return {'msg': 'Configuración guardada'}, 200
+            
+            except Exception as e:
+                return {'msg': str(e)}, 500
+        
+
 plugin_info = {
     'name': 'Procesamiento de archivos',
     'description': 'Plugin para procesar archivos y generar versiones para consulta en el gestor documental',

@@ -154,9 +154,9 @@ def create(body, user, files):
             try:
                 # si files es una lista
                 if not array_files:
-                    records = create_record(body['_id'], user, files)
+                    records = create_record(str(body['_id']), user, files)
                 else:
-                    records = create_record(body['_id'], user, temp_files, False)
+                    records = create_record(str(body['_id']), user, temp_files, False)
             except Exception as e:
                 return {'msg': str(e)}, 500
 

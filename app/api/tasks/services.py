@@ -87,7 +87,7 @@ def add_task(taskId, taskName, username, resultType):
 
     new_task = {
         "taskId": taskId,
-        "user": user if user else 'automatic',
+        "user": user['username'] if user else 'automatic',
         "status": "pending",
         "name": taskName,
         "resultType": resultType,
