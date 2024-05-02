@@ -2,10 +2,12 @@ from flask import Blueprint, send_file, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.api.tasks.services import add_task
 from app.api.users.services import has_role
+from app.api.system.models import OptionUpdate
 from app.utils import DatabaseHandler
 import uuid
 import os.path
 import requests
+import json
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -22,7 +24,9 @@ class PluginClass(Blueprint):
         self.author = author
         self.type = type
         self.filePath = filePath
+        self.path = path
         self.settings = settings
+        self.slug = path.replace('app.plugins.', '')
         
     def get_info(self):
         return {
@@ -64,13 +68,20 @@ class PluginClass(Blueprint):
         settings = mongodb.get_record('system', {'name': 'active_plugins'}, fields={'plugins_settings': 1})
         if 'plugins_settings' not in settings:
             return None
-        elif self.name not in settings['plugins_settings']:
+        elif self.slug not in settings['plugins_settings']:
             return None
         else:
-            return settings['plugins_settings'][self.name]
+            return settings['plugins_settings'][self.slug]
         
     def set_plugin_settings(self, settings):
-        mongodb.update_record('system', {'name': 'active_plugins'}, {'plugins_settings.' + self.name: settings})
+        settings_old = mongodb.get_record('system', {'name': 'active_plugins'}, fields={'plugins_settings': 1})
+        if 'plugins_settings' not in settings_old:
+            settings_old['plugins_settings'] = {}
+        
+        settings_old['plugins_settings'][self.slug] = settings
+        
+        update = OptionUpdate(**settings_old)
+        mongodb.update_record('system', {'name': 'active_plugins'}, update)
     
     def clear_cache(self):
         try:
@@ -117,15 +128,20 @@ class PluginClass(Blueprint):
             
         @self.route('/settings', methods=['POST'])
         @jwt_required()
-        def set_settings(type):
+        def set_settings_update():
             try:
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
                     return {'msg': 'No tiene permisos suficientes'}, 401
                 
-                body = request.get_json()
-                self.set_plugin_settings(body)
+                body = request.form.to_dict()
+                data = body['data']
+                data = json.loads(data)
+
+                print(data)
+
+                self.set_plugin_settings(data)
                 return {'msg': 'Configuración guardada'}, 200
             
             except Exception as e:

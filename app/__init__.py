@@ -43,6 +43,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
 
     # agregar CORS
     CORS(app)
+    # CORS(app, resources={r"/*": {"origins": "*"}})
     # Inicializar JWT
     jwt = JWTManager(app)
     # Inicializar Swagger

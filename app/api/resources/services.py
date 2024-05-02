@@ -143,6 +143,10 @@ def create(body, user, files):
         body['_id'] = str(new_resource.inserted_id)
         # Registrar el log
         register_log(user, log_actions['resource_create'], {'resource': body})
+
+        # limpiar la cache
+        update_cache()
+        
         hookHandler.call('resource_create', body)
 
         if files:
@@ -165,11 +169,10 @@ def create(body, user, files):
             mongodb.update_record(
                 'resources', {'_id': ObjectId(body['_id'])}, update_)
             
+            # limpiar la cache
+            update_cache()
+            
             hookHandler.call('resource_files_create', body)
-
-        # limpiar la cache
-        update_cache()
-
 
         # Retornar el resultado
         return {'msg': 'Recurso creado exitosamente'}, 201
