@@ -379,6 +379,7 @@ def get_hash(hash):
         if not record:
             return None
         # retornar los records
+        record['_id'] = str(record['_id'])
         return record
 
     except Exception as e:
