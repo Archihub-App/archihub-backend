@@ -47,8 +47,11 @@ class HookHandler:
             if task_signatures:
                 result = chain(*task_signatures).apply_async()
                 task_ids = self.get_task_ids(result)
+                temp = []
                 for x, task_id in enumerate(task_ids):
-                    add_task(task_id, names[x], 'automatic', 'hook')
+                    if task_id not in temp:
+                        temp.append(task_id)
+                        add_task(task_id, names[x], 'automatic', 'hook')
 
     def get_task_ids(self, result):
         ids = []

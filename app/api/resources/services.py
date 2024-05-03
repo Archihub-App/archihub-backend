@@ -835,7 +835,7 @@ def get_children(id, available, resp=False):
 # Funcion para obtener los hijos de un recurso en forma de arbol
 
 
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache(limit=2000)
 def get_tree(root, available, user):
     try:
         list_available = available.split('|')
