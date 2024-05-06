@@ -179,6 +179,7 @@ class ExtendedPluginClass(PluginClass):
             return
         
         types = current['types_activation']
+        print(types)
         for t in types:
             hookHandler.register('resource_files_create', self.automatic, t, t['order'])
 
