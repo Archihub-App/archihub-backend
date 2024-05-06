@@ -27,6 +27,7 @@ class HookHandler:
         if hook_name in self.hooks:
             task_signatures = []
             names = []
+            task_ids = []
             for _, func, reg_args, reg_kwargs in sorted(self.hooks[hook_name], key=lambda x: x[0]):
                 if not isinstance(reg_args, list):
                     reg_args = [reg_args] if reg_args is not None else []
@@ -45,6 +46,7 @@ class HookHandler:
                 task_signatures.append(task_signature)
             
             if task_signatures:
+                print(task_signatures)
                 result = chain(*task_signatures).apply_async()
                 task_ids = self.get_task_ids(result)
                 temp = []

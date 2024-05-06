@@ -386,7 +386,7 @@ def get_hash(hash):
         raise Exception(str(e))
     
 # Nuevo servicio para obtener un record por su id verificando el usuario
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache(limit=5000)
 def get_by_id(id, current_user):
     try:
         # Buscar el record en la base de datos
@@ -412,10 +412,24 @@ def get_by_id(id, current_user):
 
         record['processing'] = keys
 
+
+        from app.api.types.services import get_icon
+
+        if 'parent' in record:
+            for p in record['parent']:
+                r_ = mongodb.get_record('resources', {'_id': ObjectId(p['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
+                print("5", r_)
+                p['name'] = r_['metadata']['firstLevel']['title']
+                p['icon'] = get_icon(r_['post_type'])
+
+        if 'parents' in record:
+            record.pop('parents')
+
         # Si el record existe, retornar el record
         return parse_result(record), 200
 
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para devolver un stream de un archivo por su id

@@ -505,8 +505,7 @@ def get_resource(id, user):
     if 'parents' in resource:
         if resource['parents']:
             for r in resource['parents']:
-                r_ = mongodb.get_record(
-                    'resources', {'_id': ObjectId(r['id'])})
+                r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
                 r['name'] = r_['metadata']['firstLevel']['title']
                 r['icon'] = get_icon(r_['post_type'])
 
@@ -1049,6 +1048,14 @@ def delete_children(id):
         if children:
             for child in children:
                 delete_children(child['id'])
+                # buscar el recurso en la base de datos
+                resource = mongodb.get_record(
+                    'resources', {'_id': ObjectId(child['id'])}, fields={'files': 1})
+                # si el recurso tiene archivos, eliminarlos
+                if 'files' in resource:
+                    records_list = resource['files']
+                    delete_records(records_list, child['id'], None)
+                # eliminar el recurso de la base de datos
                 mongodb.delete_record(
                     'resources', {'_id': ObjectId(child['id'])})
 

@@ -102,6 +102,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 
     if(admin_api['data'][0]['value']):
+        print('API de administración activa')
         from app.api.adminApi import bp as adminApi_bp
         app.register_blueprint(adminApi_bp, url_prefix='/adminApi')
 
@@ -149,6 +150,8 @@ def celery_init_app(app: Flask) -> Celery:
         def __call__(self, *args: object, **kwargs: object) -> object:
             with app.app_context():
                 return self.run(*args, **kwargs)
+
+    # clear cache redis
 
     celery_app = Celery(app.name, task_cls=FlaskTask)
     celery_app.config_from_object(app.config["CELERY"])
