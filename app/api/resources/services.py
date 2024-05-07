@@ -377,7 +377,6 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'relation':
-                        print(field['destiny'])
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             value = get_value_by_path(body, field['destiny'])
@@ -1028,9 +1027,7 @@ def update_records_parents(id, user):
                 temp = []
 
                 for p in parents:
-                    print(p)
                     temp = [*temp, *get_parents(p['id'])]
-                    print(temp)
 
                 update_parent(child, user, temp)
 

@@ -179,9 +179,10 @@ class ExtendedPluginClass(PluginClass):
             return
         
         types = current['types_activation']
-        print(types)
-        for t in types:
-            hookHandler.register('resource_files_create', self.automatic, t, t['order'])
+        if not os.environ.get('CELERY_WORKER'):
+            print('No celery worker', types)
+            for t in types:
+                hookHandler.register('resource_files_create', self.automatic, t, t['order'])
 
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
     def bulk(body, user):
