@@ -27,6 +27,9 @@ class PluginClass(Blueprint):
         self.path = path
         self.settings = settings
         self.slug = path.replace('app.plugins.', '')
+
+    def activate_settings(self):
+        pass
         
     def get_info(self):
         return {

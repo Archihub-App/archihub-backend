@@ -153,7 +153,8 @@ def process_file(file):
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type, settings):
         super().__init__(path, __file__, import_name, name, description, version, author, type, settings)
-        self.activate_settings()
+        if not os.environ.get('CELERY_WORKER'):
+            self.activate_settings()
 
     @shared_task(ignore_result=False, name='filesProcessingCreate.auto')
     def automatic(type, body):
@@ -180,10 +181,9 @@ class ExtendedPluginClass(PluginClass):
             return
         
         types = current['types_activation']
-        if not os.environ.get('CELERY_WORKER'):
-            print('No celery worker', types)
-            for t in types:
-                hookHandler.register('resource_files_create', self.automatic, t, t['order'])
+        for t in types:
+            print("Registering fileProcessing hook for type: ", t['type'])
+            hookHandler.register('resource_files_create', self.automatic, t, t['order'])
 
     def add_routes(self):
         @self.route('/bulk', methods=['POST'])

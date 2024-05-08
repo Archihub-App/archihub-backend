@@ -142,6 +142,8 @@ def register_plugin(app, plugin_name, plugin_url_prefix):
     plugin_bp.add_routes()
     plugin_bp.get_image()
     plugin_bp.get_settings()
+    if os.environ.get('CELERY_WORKER', False):
+        plugin_bp.activate_settings()
     app.register_blueprint(plugin_bp, url_prefix=f'/{plugin_url_prefix}')
 
 # definiendo celery
@@ -150,8 +152,6 @@ def celery_init_app(app: Flask) -> Celery:
         def __call__(self, *args: object, **kwargs: object) -> object:
             with app.app_context():
                 return self.run(*args, **kwargs)
-
-    # clear cache redis
 
     celery_app = Celery(app.name, task_cls=FlaskTask)
     celery_app.config_from_object(app.config["CELERY"])
