@@ -198,7 +198,6 @@ class ExtendedPluginClass(PluginClass):
             if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
 
-            print('add task')
             task = self.bulk.delay(body, current_user)
             self.add_task_to_user(task.id, 'filesProcessing.create_webfile', current_user, 'msg')
             
@@ -206,14 +205,16 @@ class ExtendedPluginClass(PluginClass):
 
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
     def bulk(body, user):
-        print('bulk')
         filters = {
             'post_type': body['post_type']
         }
 
-        if 'parent' in body:
-            if body['parent']:
-                filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
+        if body['parent'] and len(body['resources']) == 0:
+            filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}], **filters}
+        
+        if body['resources']:
+            if len(body['resources']) > 0:
+                filters = {'_id': {'$in': [ObjectId(resource) for resource in body['resources']]}, **filters}
 
         # obtenemos los recursos
         resources = list(mongodb.get_all_records('resources', filters, fields={'_id': 1}))
