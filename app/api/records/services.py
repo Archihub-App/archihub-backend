@@ -263,6 +263,8 @@ def create(resource_id, current_user, files, upload = True):
                 # eliminar el archivo que se subio
                 os.remove(os.path.join(path, filename_new))
 
+                print("NUEVO RECORD", record['_id'], resource_id)
+
                 resp.append(str(record['_id']))
 
                 new_parent = [{
@@ -293,10 +295,11 @@ def create(resource_id, current_user, files, upload = True):
                     else:
                         update_dict['status'] = 'uploaded'
 
+                print("UPDATE DICT", update_dict)
                 # actualizar el record
                 update = FileRecordUpdate(**update_dict)
                 mongodb.update_record(
-                    'records', {'_id': record['_id']}, update)
+                    'records', {'_id': ObjectId(record['_id'])}, update)
 
                 # registrar el log
                 register_log(current_user, log_actions['record_update'], {
@@ -416,11 +419,17 @@ def get_by_id(id, current_user):
         from app.api.types.services import get_icon
 
         if 'parent' in record:
+            to_clean = []
             for p in record['parent']:
                 r_ = mongodb.get_record('resources', {'_id': ObjectId(p['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
-                print("5", r_)
-                p['name'] = r_['metadata']['firstLevel']['title']
-                p['icon'] = get_icon(r_['post_type'])
+                if r_:
+                    p['name'] = r_['metadata']['firstLevel']['title']
+                    p['icon'] = get_icon(r_['post_type'])
+                else:
+                    to_clean.append(p['id'])
+
+            record['parent'] = [x for x in record['parent'] if x['id'] not in to_clean]
+
 
         if 'parents' in record:
             record.pop('parents')

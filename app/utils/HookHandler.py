@@ -46,7 +46,6 @@ class HookHandler:
                 task_signatures.append(task_signature)
             
             if task_signatures:
-                print(task_signatures)
                 result = chain(*task_signatures).apply_async()
                 task_ids = self.get_task_ids(result)
                 temp = []
