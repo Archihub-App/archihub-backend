@@ -153,7 +153,8 @@ def process_file(file):
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type, settings):
         super().__init__(path, __file__, import_name, name, description, version, author, type, settings)
-        self.activate_settings()
+        if not os.environ.get('CELERY_WORKER'):
+            self.activate_settings()
 
     @shared_task(ignore_result=False, name='filesProcessingCreate.auto')
     def automatic(type, body):
@@ -180,10 +181,9 @@ class ExtendedPluginClass(PluginClass):
             return
         
         types = current['types_activation']
-        if not os.environ.get('CELERY_WORKER'):
-            print('No celery worker', types)
-            for t in types:
-                hookHandler.register('resource_files_create', self.automatic, t, t['order'])
+        for t in types:
+            print("Registering fileProcessing hook for type: ", t['type'])
+            hookHandler.register('resource_files_create', self.automatic, t, t['order'])
 
     def add_routes(self):
         @self.route('/bulk', methods=['POST'])
@@ -198,7 +198,6 @@ class ExtendedPluginClass(PluginClass):
             if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
 
-            print('add task')
             task = self.bulk.delay(body, current_user)
             self.add_task_to_user(task.id, 'filesProcessing.create_webfile', current_user, 'msg')
             
@@ -206,14 +205,16 @@ class ExtendedPluginClass(PluginClass):
 
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
     def bulk(body, user):
-        print('bulk')
         filters = {
             'post_type': body['post_type']
         }
 
-        if 'parent' in body:
-            if body['parent']:
-                filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
+        if body['parent'] and len(body['resources']) == 0:
+            filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}], **filters}
+        
+        if body['resources']:
+            if len(body['resources']) > 0:
+                filters = {'_id': {'$in': [ObjectId(resource) for resource in body['resources']]}, **filters}
 
         # obtenemos los recursos
         resources = list(mongodb.get_all_records('resources', filters, fields={'_id': 1}))
