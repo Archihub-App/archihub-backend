@@ -92,12 +92,14 @@ def update_resource(username, isAdmin):
             description: Error al actualizar el recurso
     """
     if not isAdmin:
-        return jsonify({'msg': 'No tiene permisos para actualizar un recurso'}), 401
+        return jsonify({'msg': 'No tiene permisos para crear un recurso'}), 401
     # Obtener el body del request
-    body = request.json
+    body = request.form.to_dict()
+    files = request.files.getlist('files')
+    data = json.loads(body['data'])
 
     # Llamar al servicio para actualizar el recurso
-    return services.update(body['id'], body, username)
+    return services.update(body['id'], data, username, files)
 
 # Nuevo POST endpoint para obtener el id de un recurso por su nombre
 @bp.route('/get_id', methods=['POST'])

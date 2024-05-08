@@ -163,6 +163,7 @@ class ExtendedPluginClass(PluginClass):
         records_filters = {
             'parent.id': {'$in': [str(body['_id'])]},
         }
+        records_filters['processing.fileProcessing'] = {'$exists': False}
         
         records = list(mongodb.get_all_records('records', records_filters, fields={'_id': 1, 'mime': 1, 'filepath': 1}))
         size = len(records)
@@ -179,8 +180,10 @@ class ExtendedPluginClass(PluginClass):
             return
         
         types = current['types_activation']
-        for t in types:
-            hookHandler.register('resource_files_create', self.automatic, t, t['order'])
+        if not os.environ.get('CELERY_WORKER'):
+            print('No celery worker', types)
+            for t in types:
+                hookHandler.register('resource_files_create', self.automatic, t, t['order'])
 
     def add_routes(self):
         @self.route('/bulk', methods=['POST'])
@@ -195,13 +198,15 @@ class ExtendedPluginClass(PluginClass):
             if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
 
+            print('add task')
             task = self.bulk.delay(body, current_user)
             self.add_task_to_user(task.id, 'filesProcessing.create_webfile', current_user, 'msg')
             
             return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
-        
+
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
     def bulk(body, user):
+        print('bulk')
         filters = {
             'post_type': body['post_type']
         }
@@ -231,7 +236,8 @@ class ExtendedPluginClass(PluginClass):
         instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
         instance.clear_cache()
         return 'Se procesaron ' + str(size) + ' archivos'
-    
+        
+      
     def get_settings(self):
         @self.route('/settings/<type>', methods=['GET'])
         @jwt_required()

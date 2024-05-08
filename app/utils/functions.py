@@ -246,7 +246,6 @@ def cache_get_record_transcription(id, slug):
         raise Exception('Record no ha sido procesado con el slug ' + slug)
 
     resp = {
-        'text': record['processing'][slug]['result']['text'],
         'segments': record['processing'][slug]['result']['segments']
     }
 
