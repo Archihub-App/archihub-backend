@@ -529,6 +529,5 @@ def updateLabelDocument(current_user, obj):
             return 'ok', 200
         else:
             return {'msg': 'Record no existe'}, 404
-        return 'ok', 200
     except Exception as e:
         return {'msg': str(e)}, 500

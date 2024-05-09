@@ -287,7 +287,12 @@ def get_blocks_by_id(id):
         return {'msg': 'Debe especificar un slug'}, 500
     
     # Llamar al servicio para obtener un record por su id
-    return services.get_document_block_by_page(current_user, id, body['page'], body['slug'], body['block'])
+    resp = services.get_document_block_by_page(current_user, id, body['page'], body['slug'], body['block'])
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 @bp.route('/setLabel', methods=['POST'])
 @jwt_required()
