@@ -531,3 +531,56 @@ def updateLabelDocument(current_user, obj):
             return {'msg': 'Record no existe'}, 404
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+def updateBlockDocument(current_user, obj):
+    try:
+        # get record with body['id']
+        record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
+        # if record exists
+        if record:
+            # get record['processing'] and update it
+            processing = record['processing']
+
+            for k, val in obj['data'].items():
+                if obj['type_block'] == 'blocks':
+                    processing[obj['slug']]['result'][obj['page'] - 1]['blocks'][obj['index']][k] = val
+            
+            update = {
+                'processing': processing
+            }
+
+            update = FileRecordUpdate(**update)
+            mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+
+            cache_get_block_by_page_id.invalidate_all()
+            return {'msg': 'Bloque actualizado'}, 200
+        else:
+            return {'msg': 'Record no existe'}, 404
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def deleteBlockDocument(current_user, obj):
+    try:
+        # get record with body['id']
+        record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
+        # if record exists
+        if record:
+            # get record['processing'] and update it
+            processing = record['processing']
+
+            if obj['type_block'] == 'blocks':
+                processing[obj['slug']]['result'][obj['page'] - 1]['blocks'].pop(obj['index'])
+            
+            update = {
+                'processing': processing
+            }
+
+            update = FileRecordUpdate(**update)
+            mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+
+            cache_get_block_by_page_id.invalidate_all()
+            return {'msg': 'Bloque eliminado'}, 200
+        else:
+            return {'msg': 'Record no existe'}, 404
+    except Exception as e:
+        return {'msg': str(e)}, 500

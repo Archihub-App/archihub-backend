@@ -348,15 +348,18 @@ def cache_get_block_by_page_id(id, page, slug, block=None):
             raise Exception('No existe el archivo')
 
         resp = record['processing'][slug]['result'][page - 1]
+        labels = record['processing'][slug]['labels']
 
         if block == 'blocks':
+            resp['labels'] = labels
             for b in resp['blocks']:
                 if 'words' in b:
                     del b['words']
         elif block == 'words':
             resp_ = {
                 'page': page,
-                'words': []
+                'words': [],
+                'labels': labels
             }
             for b in resp['blocks']:
                 if 'words' in b:
