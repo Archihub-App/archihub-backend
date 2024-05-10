@@ -507,8 +507,8 @@ def get_document_block_by_page(current_user, id, page, slug, block=None):
         return cache_get_block_by_page_id(id, page, slug, block)
     except Exception as e:
         return {'msg': str(e)}, 500
-
-def updateLabelDocument(current_user, obj):
+    
+def postBlockDocument(current_user, obj):
     try:
         # get record with body['id']
         record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
@@ -516,8 +516,12 @@ def updateLabelDocument(current_user, obj):
         if record:
             # get record['processing'] and update it
             processing = record['processing']
-            processing[obj['slug']]['result'][obj['page']]['blocks'][obj['index']]['text'] = obj['text']
-            processing[obj['slug']]['result'][obj['page']]['blocks'][obj['index']]['disableAnom'] = obj['disableAnom']
+
+            if obj['type_block'] == 'blocks':
+                processing[obj['slug']]['result'][obj['page'] - 1]['blocks'].append({
+                    'bbox': obj['bbox'],
+                    **obj['data']
+                })
             
             update = {
                 'processing': processing
@@ -525,13 +529,14 @@ def updateLabelDocument(current_user, obj):
 
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
-            # return ok
-            return 'ok', 200
+
+            cache_get_block_by_page_id.invalidate_all()
+            return {'msg': 'Bloque actualizado'}, 201
         else:
             return {'msg': 'Record no existe'}, 404
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
 def updateBlockDocument(current_user, obj):
     try:
         # get record with body['id']
@@ -544,6 +549,9 @@ def updateBlockDocument(current_user, obj):
             for k, val in obj['data'].items():
                 if obj['type_block'] == 'blocks':
                     processing[obj['slug']]['result'][obj['page'] - 1]['blocks'][obj['index']][k] = val
+            
+            if obj['type_block'] == 'blocks':
+                processing[obj['slug']]['result'][obj['page'] - 1]['blocks'][obj['index']]['bbox'] = obj['bbox']
             
             update = {
                 'processing': processing
