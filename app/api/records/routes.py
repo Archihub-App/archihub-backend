@@ -294,11 +294,11 @@ def get_blocks_by_id(id):
     else:
         return resp
 
-@bp.route('/setLabel', methods=['POST'])
+@bp.route('/setBlock', methods=['PUT'])
 @jwt_required()
 def set_label():
     """
-    Asignar un label a un record
+    Actualizar un bloque de un record
     ---
     security:
         - JWT: []
@@ -325,10 +325,50 @@ def set_label():
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # si el usuario no es admin
-    if not user_services.has_role(current_user, 'admin'):
+    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
         # retornar error
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Obtener el body del request
     body = request.json
     # Llamar al servicio para asignar un label a un record
-    return services.updateLabelDocument(current_user, body)
+    return services.updateBlockDocument(current_user, body)
+
+@bp.route('/setBlock', methods=['DELETE'])
+@jwt_required()
+def delete_label():
+    """
+    Actualizar un bloque de un record
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                id:
+                    type: string
+                label:
+                    type: string
+    responses:
+        200:
+            description: Label asignado exitosamente
+        401:
+            description: No tiene permisos para asignar un label a un record
+        500:
+            description: Error al asignar un label a un record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # si el usuario no es admin
+    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
+        # retornar error
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Obtener el body del request
+    body = request.json
+
+    # Llamar al servicio para asignar un label a un record
+    return services.deleteBlockDocument(current_user, body)
