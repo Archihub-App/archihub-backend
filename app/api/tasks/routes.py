@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required
 from flask_jwt_extended import get_jwt_identity
 from app.api.tasks import services
 from app.api.users import services as user_services
-from flask import request
+from flask import request, jsonify
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 
@@ -56,7 +56,9 @@ def get_tasks_total(user):
     if not user_services.has_role(current_user, 'admin') or current_user != user:
         return {'msg': 'No tiene permisos para obtener las tasks'}, 401
 
-    return services.get_tasks_total(user)
+    resp = services.get_tasks_total(user)
+
+    return jsonify(resp), 200
 
 @bp.route('', methods=['GET'])
 @jwt_required()

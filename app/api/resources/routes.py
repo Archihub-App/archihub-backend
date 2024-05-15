@@ -146,7 +146,11 @@ def get_by_id(id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Llamar al servicio para obtener el recurso
-    return services.get_by_id(id, current_user)
+    resp = services.get_by_id(id, current_user)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para actualizar un recurso por su id
 @bp.route('/<id>', methods=['PUT'])
@@ -214,7 +218,11 @@ def update_by_id(id):
     files = request.files.getlist('files')
 
     # Llamar al servicio para crear el recurso
-    return services.update_by_id(id, data, current_user, files)
+    resp = services.update_by_id(id, data, current_user, files)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
     # return 'ok'
 
 # Nuevo endpoint para eliminar un recurso por su id
@@ -296,14 +304,19 @@ def get_tree():
         else:
             return_slugs.append(s)
     # Llamar al servicio para obtener la estructura de arból
-    return services.get_tree(body['root'],'|'.join(return_slugs), current_user)
+    resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user)
+    
+    if isinstance(resp, list):
+        resp = tuple(resp)
+    
+    return resp
 
 # Nuevo endpoint para obtener los recursos de un recurso padre
-@bp.route('/<resource_id>/records', methods=['GET'])
+@bp.route('/<resource_id>/records', methods=['POST'])
 @jwt_required()
 def get_all_records(resource_id):
     """
-    Obtener los recursos de un recurso padre
+    Obtener los archivos de un recurso padre
     ---
     security:
         - JWT: []
@@ -324,5 +337,13 @@ def get_all_records(resource_id):
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
+
+    body = request.json
+
+    print(body)
     # Llamar al servicio para obtener los recursos
-    return services.get_resource_files(resource_id, current_user)
+    resp = services.get_resource_files(resource_id, current_user, body['page'])
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp

@@ -1,5 +1,6 @@
 from flask import jsonify
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 import bcrypt
 from bson import json_util
 import json
@@ -7,7 +8,6 @@ from app.api.users.models import User, UserUpdate
 from datetime import timedelta
 from flask_jwt_extended import create_access_token
 from cryptography.fernet import Fernet
-from functools import lru_cache
 from bson.objectid import ObjectId
 import re
 from config import config
@@ -17,6 +17,7 @@ from app.utils.functions import get_access_rights, get_roles, verify_accessright
 
 fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
 fernet = Fernet(fernet_key)
 
 # Funcion para parsear el resultado de una consulta a la base de datos
@@ -24,17 +25,16 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 def update_cache():
-    has_right.cache_clear()
-    has_role.cache_clear()
-    get_by_username.cache_clear()
-    get_total.cache_clear()
+    has_right.invalidate_all()
+    has_role.invalidate_all()
+    get_total.invalidate_all()
 
 # Nueva funcion para devolver el usuario por su id
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def get_by_id(id):
     try:
         # Obtener el usuario de la coleccion users
-        user = mongodb.get_record('users', {'_id': ObjectId(id)}, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0})
+        user = mongodb.get_record('users', {'_id': ObjectId(id)}, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0, 'nodeToken': 0})
 
         # Si el usuario no existe, retornar error
         if not user:
@@ -48,11 +48,10 @@ def get_by_id(id):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para obtener un usuario por su username
-@lru_cache(maxsize=1000)
 def get_by_username(username):
     try:
         # Obtener el usuario de la coleccion users
-        user = mongodb.get_record('users', {'username': username}, fields={'token': 1, 'adminToken': 1, 'requests': 1, 'lastRequest': 1})
+        user = mongodb.get_record('users', {'username': username}, fields={'token': 1, 'adminToken': 1, 'requests': 1, 'lastRequest': 1, 'nodeToken': 1})
 
         # Si el usuario no existe, retornar error
         if not user:
@@ -101,7 +100,7 @@ def get_all(body, current_user):
     try:
         # Obtener todos los usuarios de la coleccion users
         users = list(mongodb.get_all_records(
-            'users', body['filters'], limit=20, skip=body['page'] * 20, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0}))
+            'users', body['filters'], limit=20, skip=body['page'] * 20, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0, 'nodeToken': 0}))
         
         total = get_total(json.dumps(body['filters']))
 
@@ -140,7 +139,7 @@ def get_all(body, current_user):
         return {'msg': str(e)}, 500
     
 # Funcion para obtener el total de recursos
-@lru_cache(maxsize=100)
+@cacheHandler.cache.cache()
 def get_total(obj):
     try:
         # convertir string a dict
@@ -289,7 +288,7 @@ def accept_compromise(username):
     return jsonify({'msg': 'Compromiso aceptado exitosamente'}), 200
 
 # Nuevo servicio para verificar si el usuario tiene un rol específico
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def has_role(username, role):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
@@ -301,7 +300,7 @@ def has_role(username, role):
     # Si el usuario no tiene el rol, retornar False
     return False
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache()
 def has_right(username, right):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
@@ -349,21 +348,49 @@ def generate_token(username, password, admin = False):
     # Retornar el token de acceso
     return jsonify({'access_token': access_token}), 200
 
-# Nuevo servicio que devuelve el token de acceso de un usuario
-def get_token(username):
+def generate_node_token(username, password):
     # Buscar el usuario en la base de datos
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
     if not user:
         return jsonify({'msg': 'Usuario no existe'}), 400
+    
+    # Si la contraseña no coincide, retornar error
+    if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+        return jsonify({'msg': 'Contraseña incorrecta'}), 400
+    
     # Si el usuario no ha aceptado el compromiso, retornar error
     if not user['compromise']:
         return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
-    # Si el usuario no tiene token de acceso, retornar error
-    if not user['access_token']:
-        return jsonify({'msg': 'Usuario no tiene token de acceso'}), 400
+    
+    access_token = create_access_token(identity=username, expires_delta=False)
+    # usamos Fernet para encriptar el token de acceso
+    cipher = fernet.encrypt(access_token.encode('utf-8'))
+
+    # encrypt the access token
+    update = UserUpdate(nodeToken=cipher)
+
+    # guardar el token de acceso en la base de datos
+    mongodb.update_record('users', {'username': username}, update)
+
     # Retornar el token de acceso
-    return jsonify({'access_token': user['access_token']}), 200
+    return jsonify({'access_token': access_token}), 200
+
+# # Nuevo servicio que devuelve el token de acceso de un usuario
+# def get_token(username):
+#     # Buscar el usuario en la base de datos
+#     user = mongodb.get_record('users', {'username': username})
+#     # Si el usuario no existe, retornar error
+#     if not user:
+#         return jsonify({'msg': 'Usuario no existe'}), 400
+#     # Si el usuario no ha aceptado el compromiso, retornar error
+#     if not user['compromise']:
+#         return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
+#     # Si el usuario no tiene token de acceso, retornar error
+#     if not user['access_token']:
+#         return jsonify({'msg': 'Usuario no tiene token de acceso'}), 400
+#     # Retornar el token de acceso
+#     return jsonify({'access_token': user['access_token']}), 200
     
 # Funcion para devolver las requests de un usuario, si lastRequest no es de la semana actual, se establece requests a 0
 def get_requests(username):

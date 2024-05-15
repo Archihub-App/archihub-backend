@@ -1,9 +1,9 @@
 import datetime
-from flask import jsonify, send_file
+from flask import jsonify, send_file, Response
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 from bson import json_util
 import json
-from functools import lru_cache
 from bson.objectid import ObjectId
 from app.api.records.models import Record as FileRecord
 from app.utils.LogActions import log_actions
@@ -13,6 +13,7 @@ from app.api.records.models import RecordUpdate as FileRecordUpdate
 from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id
 from werkzeug.utils import secure_filename
 import os
+import shutil
 import hashlib
 import magic
 import uuid
@@ -31,18 +32,19 @@ ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif',
                           'mp3', 'wav', 'avi', 'mkv', 'flv', 'mov', 'wmv', 'm4a', 'mxf', 'cr2', 'arw', 'mts', 'nef', 'json', 'html', 'wma', 'aac', 'flac'])
 
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
 
 def update_cache():
-    get_all.cache_clear()
-    get_hash.cache_clear()
-    get_by_id.cache_clear()
+    get_all.invalidate_all()
+    get_total.invalidate_all()
+    get_by_id.invalidate_all()
 
 
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para obtener todos los records para un recurso
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_all(resource_id, current_user):
     try:
         # Buscar el recurso en la base de datos
@@ -89,7 +91,7 @@ def get_by_filters(body, current_user):
         return {'msg': str(e)}, 500
     
 # Funcion para obtener el total de recursos
-@lru_cache(maxsize=500)
+@cacheHandler.cache.cache(limit=1000)
 def get_total(obj):
     try:
         # convertir string a dict
@@ -175,7 +177,7 @@ def delete_parent(resource_id, parent_id, current_user):
         register_log(current_user, log_actions['record_update'], {
                      'record': parent_id})
         # Limpiar la cache
-        get_all.cache_clear()
+        get_all.invalidate_all()
 
         # Retornar el resultado
         return {'msg': 'Parent eliminado exitosamente'}, 200
@@ -201,7 +203,7 @@ def update_parent(parent_id, current_user, parents):
     register_log(current_user, log_actions['record_update'], {
         'record': parent_id})
     # Limpiar la cache
-    get_all.cache_clear()
+    get_all.invalidate_all()
 
 
 # Nuevo servicio para crear un record para un recurso
@@ -233,10 +235,13 @@ def create(resource_id, current_user, files, upload = True):
                 if not os.path.exists(path):
                     os.makedirs(path)
 
-                f.save(os.path.join(path, filename))
+                if type(f) is not dict:
+                    f.save(os.path.join(path, filename))
 
-                f.flush()
-                os.fsync(f.fileno())
+                    f.flush()
+                    os.fsync(f.fileno())
+                else:
+                    shutil.copy(f['file'], os.path.join(path, filename))
 
                 # renombrar el archivo
                 os.rename(os.path.join(path, filename),
@@ -297,7 +302,7 @@ def create(resource_id, current_user, files, upload = True):
                 register_log(current_user, log_actions['record_update'], {
                                 'record': str(record['_id'])})
                 # limpiar la cache
-                get_all.cache_clear()
+                get_all.invalidate_all()
             else:
                 if upload:
                     # obtener el tamaño del archivo
@@ -357,14 +362,15 @@ def create(resource_id, current_user, files, upload = True):
                     'filepath': record.filepath
                 }})
                 # limpiar la cache
-                get_all.cache_clear()
+                get_all.invalidate_all()
+                get_hash.invalidate_all()
         else:
             raise Exception('Tipo de archivo no permitido')
 
     # retornar el resultado
     return resp
 
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_hash(hash):
     try:
         # Buscar el recurso en la base de datos
@@ -379,7 +385,7 @@ def get_hash(hash):
         raise Exception(str(e))
     
 # Nuevo servicio para obtener un record por su id verificando el usuario
-@lru_cache(maxsize=1000)
+@cacheHandler.cache.cache(limit=1000)
 def get_by_id(id, current_user):
     try:
         # Buscar el record en la base de datos
@@ -462,7 +468,9 @@ def get_document_pages(id, pages, size, current_user):
         if status != 200:
             return {'msg': resp_['msg']}, 500
         pages = json.dumps(pages)
-        return cache_get_pages_by_id(id, pages, size)
+        resp = cache_get_pages_by_id(id, pages, size)
+        response = Response(json.dumps(resp).encode('utf-8'), mimetype='application/json', direct_passthrough=False)
+        return response
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -473,5 +481,30 @@ def get_document_block_by_page(current_user, id, page, slug, block=None):
             return {'msg': resp_['msg']}, 500
         
         return cache_get_block_by_page_id(id, page, slug, block)
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def updateLabelDocument(current_user, obj):
+    try:
+        # get record with body['id']
+        record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
+        # if record exists
+        if record:
+            # get record['processing'] and update it
+            processing = record['processing']
+            processing[obj['slug']]['result'][obj['page']]['blocks'][obj['index']]['text'] = obj['text']
+            processing[obj['slug']]['result'][obj['page']]['blocks'][obj['index']]['disableAnom'] = obj['disableAnom']
+            
+            update = {
+                'processing': processing
+            }
+
+            update = FileRecordUpdate(**update)
+            mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+            # return ok
+            return 'ok', 200
+        else:
+            return {'msg': 'Record no existe'}, 404
+        return 'ok', 200
     except Exception as e:
         return {'msg': str(e)}, 500

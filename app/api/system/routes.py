@@ -4,9 +4,8 @@ from flask_jwt_extended import get_jwt_identity
 from app.api.system import services
 from app.api.users import services as user_services
 from flask import request
-from app.utils.LogActions import log_actions
-from app.api.logs.services import register_log
-from app.utils.functions import get_roles
+from app.utils.FernetAuth import fernetAuthenticate, nodeFernetAuthenticate
+
 
 # from app.tasks.tasks import add
 from celery.result import AsyncResult
@@ -40,7 +39,8 @@ def get_all():
     if not user_services.has_role(current_user, 'admin'):
         return {'msg': 'No tiene permisos para obtener los ajustes del sistema'}, 401
     # Llamar al servicio para obtener todos los ajustes del sistema
-    return services.get_all_settings()
+    resp = services.get_all_settings()
+    return resp
 
 # PUT para actualizar los ajustes del sistema
 @bp.route('', methods=['PUT'])
@@ -92,7 +92,9 @@ def get_default_cataloging_type():
             description: Error al obtener el tipo por defecto del modulo de catalogacion
     """
     # Llamar al servicio para obtener el tipo por defecto del modulo de catalogacion
-    return services.get_default_cataloging_type()
+    resp = services.get_default_cataloging_type()
+    if isinstance(resp, list):
+        return tuple(resp)
 
 # GET para obtener el listado de plugins en la carpeta plugins
 @bp.route('/plugins', methods=['GET'])
@@ -292,3 +294,51 @@ def index_resources():
         return {'msg': 'No tiene permisos para iniciar la indexación de recursos'}, 401
     # Llamar al servicio para iniciar la indexación de recursos
     return services.index_resources(current_user)
+
+@bp.route('/clear-cache', methods=['GET'])
+@jwt_required()
+def clear_cache():
+    """
+    Limpiar la cache
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Cache limpiada exitosamente
+        401:
+            description: No tiene permisos para limpiar la cache
+        500:
+            description: Error al limpiar la cache
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de procesamiento o administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para limpiar la cache'}, 401
+    # Llamar al servicio para limpiar la cache
+    return services.clear_cache()
+
+@bp.route('/node-clear-cache', methods=['GET'])
+@nodeFernetAuthenticate
+def node_clear_cache(user):
+    """
+    Limpiar la cache desde los nodos de procesamiento
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Cache limpiada exitosamente
+        401:
+            description: No tiene permisos para limpiar la cache
+        500:
+            description: Error al limpiar la cache
+    """
+    
+    # Llamar al servicio para limpiar la cache
+    return services.clear_cache()
