@@ -30,7 +30,6 @@ def update_cache():
     get_total.invalidate_all()
 
 # Nueva funcion para devolver el usuario por su id
-@cacheHandler.cache.cache()
 def get_by_id(id):
     try:
         # Obtener el usuario de la coleccion users
