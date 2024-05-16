@@ -26,7 +26,7 @@ def get_tasks(user, body):
             skip = body['page'] * limit
 
         # Obtener las tasks de un usuario
-        tasks = mongodb.get_all_records('tasks', {'user': user}, sort=[('date', -1)], fields={'_id': 0, 'user': 0}, limit=limit, skip=skip)
+        tasks = mongodb.get_all_records('tasks', {'user': {'$in': [user]}}, sort=[('date', -1)], fields={'_id': 0, 'user': 0}, limit=limit, skip=skip)
         # Parsear el resultado
         tasks = parse_result(tasks)
 
@@ -79,15 +79,15 @@ def get_tasks(user, body):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para agregar una tarea a la base de datos asignandola a un usuario
-def add_task(taskId, taskName, user, resultType):
+def add_task(taskId, taskName, username, resultType):
     # Verificar si el usuario existe
-    user = mongodb.get_record('users', {'username': user})
-    if not user:
+    user = mongodb.get_record('users', {'username': username})
+    if not user and username != 'automatic':
         return {'msg': 'El usuario no existe'}, 404
 
     new_task = {
         "taskId": taskId,
-        "user": user['username'],
+        "user": user['username'] if user else 'automatic',
         "status": "pending",
         "name": taskName,
         "resultType": resultType,

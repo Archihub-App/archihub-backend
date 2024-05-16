@@ -263,6 +263,8 @@ def create(resource_id, current_user, files, upload = True):
                 # eliminar el archivo que se subio
                 os.remove(os.path.join(path, filename_new))
 
+                print("NUEVO RECORD", record['_id'], resource_id)
+
                 resp.append(str(record['_id']))
 
                 new_parent = [{
@@ -293,10 +295,11 @@ def create(resource_id, current_user, files, upload = True):
                     else:
                         update_dict['status'] = 'uploaded'
 
+                print("UPDATE DICT", update_dict)
                 # actualizar el record
                 update = FileRecordUpdate(**update_dict)
                 mongodb.update_record(
-                    'records', {'_id': record['_id']}, update)
+                    'records', {'_id': ObjectId(record['_id'])}, update)
 
                 # registrar el log
                 register_log(current_user, log_actions['record_update'], {
@@ -379,13 +382,14 @@ def get_hash(hash):
         if not record:
             return None
         # retornar los records
+        record['_id'] = str(record['_id'])
         return record
 
     except Exception as e:
         raise Exception(str(e))
     
 # Nuevo servicio para obtener un record por su id verificando el usuario
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache(limit=5000)
 def get_by_id(id, current_user):
     try:
         # Buscar el record en la base de datos
@@ -411,10 +415,30 @@ def get_by_id(id, current_user):
 
         record['processing'] = keys
 
+
+        from app.api.types.services import get_icon
+
+        if 'parent' in record:
+            to_clean = []
+            for p in record['parent']:
+                r_ = mongodb.get_record('resources', {'_id': ObjectId(p['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
+                if r_:
+                    p['name'] = r_['metadata']['firstLevel']['title']
+                    p['icon'] = get_icon(r_['post_type'])
+                else:
+                    to_clean.append(p['id'])
+
+            record['parent'] = [x for x in record['parent'] if x['id'] not in to_clean]
+
+
+        if 'parents' in record:
+            record.pop('parents')
+
         # Si el record existe, retornar el record
         return parse_result(record), 200
 
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para devolver un stream de un archivo por su id
@@ -483,8 +507,8 @@ def get_document_block_by_page(current_user, id, page, slug, block=None):
         return cache_get_block_by_page_id(id, page, slug, block)
     except Exception as e:
         return {'msg': str(e)}, 500
-
-def updateLabelDocument(current_user, obj):
+    
+def postBlockDocument(current_user, obj):
     try:
         # get record with body['id']
         record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
@@ -492,8 +516,12 @@ def updateLabelDocument(current_user, obj):
         if record:
             # get record['processing'] and update it
             processing = record['processing']
-            processing[obj['slug']]['result'][obj['page']]['blocks'][obj['index']]['text'] = obj['text']
-            processing[obj['slug']]['result'][obj['page']]['blocks'][obj['index']]['disableAnom'] = obj['disableAnom']
+
+            if obj['type_block'] == 'blocks':
+                processing[obj['slug']]['result'][obj['page'] - 1]['blocks'].append({
+                    'bbox': obj['bbox'],
+                    **obj['data']
+                })
             
             update = {
                 'processing': processing
@@ -501,10 +529,66 @@ def updateLabelDocument(current_user, obj):
 
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
-            # return ok
-            return 'ok', 200
+
+            cache_get_block_by_page_id.invalidate_all()
+            return {'msg': 'Bloque actualizado'}, 201
         else:
             return {'msg': 'Record no existe'}, 404
-        return 'ok', 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def updateBlockDocument(current_user, obj):
+    try:
+        # get record with body['id']
+        record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
+        # if record exists
+        if record:
+            # get record['processing'] and update it
+            processing = record['processing']
+
+            for k, val in obj['data'].items():
+                if obj['type_block'] == 'blocks':
+                    processing[obj['slug']]['result'][obj['page'] - 1]['blocks'][obj['index']][k] = val
+            
+            if obj['type_block'] == 'blocks':
+                processing[obj['slug']]['result'][obj['page'] - 1]['blocks'][obj['index']]['bbox'] = obj['bbox']
+            
+            update = {
+                'processing': processing
+            }
+
+            update = FileRecordUpdate(**update)
+            mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+
+            cache_get_block_by_page_id.invalidate_all()
+            return {'msg': 'Bloque actualizado'}, 200
+        else:
+            return {'msg': 'Record no existe'}, 404
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def deleteBlockDocument(current_user, obj):
+    try:
+        # get record with body['id']
+        record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
+        # if record exists
+        if record:
+            # get record['processing'] and update it
+            processing = record['processing']
+
+            if obj['type_block'] == 'blocks':
+                processing[obj['slug']]['result'][obj['page'] - 1]['blocks'].pop(obj['index'])
+            
+            update = {
+                'processing': processing
+            }
+
+            update = FileRecordUpdate(**update)
+            mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+
+            cache_get_block_by_page_id.invalidate_all()
+            return {'msg': 'Bloque eliminado'}, 200
+        else:
+            return {'msg': 'Record no existe'}, 404
     except Exception as e:
         return {'msg': str(e)}, 500

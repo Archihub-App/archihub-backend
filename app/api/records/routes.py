@@ -287,13 +287,18 @@ def get_blocks_by_id(id):
         return {'msg': 'Debe especificar un slug'}, 500
     
     # Llamar al servicio para obtener un record por su id
-    return services.get_document_block_by_page(current_user, id, body['page'], body['slug'], body['block'])
+    resp = services.get_document_block_by_page(current_user, id, body['page'], body['slug'], body['block'])
 
-@bp.route('/setLabel', methods=['POST'])
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
+
+@bp.route('/setBlock', methods=['POST'])
 @jwt_required()
-def set_label():
+def post_label():
     """
-    Asignar un label a un record
+    Agregar un bloque de un record
     ---
     security:
         - JWT: []
@@ -320,10 +325,91 @@ def set_label():
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # si el usuario no es admin
-    if not user_services.has_role(current_user, 'admin'):
+    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
         # retornar error
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Obtener el body del request
     body = request.json
+
+    # Llamar al servicio para asignar un label a un record  
+    return services.postBlockDocument(current_user, body)
+
+@bp.route('/setBlock', methods=['PUT'])
+@jwt_required()
+def set_label():
+    """
+    Actualizar un bloque de un record
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                id:
+                    type: string
+                label:
+                    type: string
+    responses:
+        200:
+            description: Label asignado exitosamente
+        401:
+            description: No tiene permisos para asignar un label a un record
+        500:
+            description: Error al asignar un label a un record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # si el usuario no es admin
+    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
+        # retornar error
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Obtener el body del request
+    body = request.json
+
     # Llamar al servicio para asignar un label a un record
-    return services.updateLabelDocument(current_user, body)
+    return services.updateBlockDocument(current_user, body)
+
+@bp.route('/setBlock', methods=['DELETE'])
+@jwt_required()
+def delete_label():
+    """
+    Actualizar un bloque de un record
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                id:
+                    type: string
+                label:
+                    type: string
+    responses:
+        200:
+            description: Label asignado exitosamente
+        401:
+            description: No tiene permisos para asignar un label a un record
+        500:
+            description: Error al asignar un label a un record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # si el usuario no es admin
+    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
+        # retornar error
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Obtener el body del request
+    body = request.json
+
+    # Llamar al servicio para asignar un label a un record
+    return services.deleteBlockDocument(current_user, body)

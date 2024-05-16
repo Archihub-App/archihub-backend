@@ -73,6 +73,12 @@ class ExtendedPluginClass(PluginClass):
         
     @shared_task(ignore_result=False, name='inventoryMaker.create_inventory')
     def create(body, user):
+        def clean_string(input_string):
+            if input_string is None:
+                return ''
+            cleaned_string = ''.join(char for char in input_string if ord(char) > 31 or ord(char) in (9, 10, 13))
+            return cleaned_string
+
         filters = {
             'post_type': body['post_type']
         }
@@ -119,11 +125,11 @@ class ExtendedPluginClass(PluginClass):
 
             for f in type_metadata['fields']:
                 if f['type'] == 'text' or f['type'] == 'text-area':
-                    obj[f['label']] = get_value_by_path(r, f['destiny'])
+                    obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
                 elif f['type'] == 'select':
-                    obj[f['label']] = get_value_by_path(r, f['destiny'])
+                    obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
                 elif f['type'] == 'simple-date':
-                    obj[f['label']] = get_value_by_path(r, f['destiny'])
+                    obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
 
             resources_df.append(obj)
 
