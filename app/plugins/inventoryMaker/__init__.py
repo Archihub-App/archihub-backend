@@ -131,13 +131,14 @@ class ExtendedPluginClass(PluginClass):
         forms = list(mongodb.get_all_records('forms', {}))
 
         forms_df = []
+        fields_df = []
 
         obj = {}
 
         obj['id'] = 'id'
         obj['name'] = 'name'
+        obj['slug'] = 'slug'
         obj['description'] = 'description'
-        obj['fields'] = 'fields'
 
         forms_df.append(obj)
 
@@ -148,10 +149,20 @@ class ExtendedPluginClass(PluginClass):
                 'id': str(f['_id']),
                 'name': f['name'],
                 'description': f['description'],
-                'fields': ', '.join([field['label'] for field in fields])
+                'slug': f['slug']
             }
 
             forms_df.append(obj)
+
+            for field in fields:
+                obj = {
+                    'id': str(field['_id']),
+                    'label': field['label'],
+                    'type': field['type'],
+                    'destiny': field['destiny']
+                }
+
+                fields_df.append(obj)
 
         folder_path = USER_FILES_PATH + '/' + user + '/inventoryMaker'
         if not os.path.exists(folder_path):
@@ -161,7 +172,9 @@ class ExtendedPluginClass(PluginClass):
 
         with pd.ExcelWriter(folder_path + '/' + file_id + '.xlsx') as writer:
             df = pd.DataFrame(forms_df)
-            df.to_excel(writer, sheet_name='Formularios', index=False)
+            df.to_excel(writer, sheet_name='Estandar', index=False)
+            df = pd.DataFrame(fields_df)
+            df.to_excel(writer, sheet_name='Campos', index=False)
 
         return '/' + user + '/inventoryMaker/' + file_id + '.xlsx'
 
