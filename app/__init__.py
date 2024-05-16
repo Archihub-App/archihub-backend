@@ -98,11 +98,15 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.tasks import bp as tasks_bp
     app.register_blueprint(tasks_bp, url_prefix='/tasks')
 
+    # Registrar favorites blueprint
+    from app.api.favorites import bp as favorites_bp
+    app.register_blueprint(favorites_bp, url_prefix='/favorites')
+
     # verificar en la base de datos si la admin API está activa
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 
     if(admin_api['data'][0]['value']):
-        print('API de administración activa')
+        print('Administrators API is active')
         from app.api.adminApi import bp as adminApi_bp
         app.register_blueprint(adminApi_bp, url_prefix='/adminApi')
 
