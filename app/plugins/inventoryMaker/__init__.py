@@ -5,7 +5,8 @@ from flask import request, send_file
 from app.utils import DatabaseHandler
 from app.api.types.services import get_by_slug
 from app.api.resources.services import get_value_by_path
-from app.utils.functions import cache_type_roles, get_accessRights
+from app.utils.functions import cache_type_roles
+from app.api.resources.services import get_accessRights
 import os
 import uuid
 import pandas as pd
@@ -59,7 +60,7 @@ class ExtendedPluginClass(PluginClass):
         
         @self.route('/bulk-lists', methods=['POST'])
         @jwt_required()
-        def create_inventory():
+        def create_inventory_lists():
             # get the current user
             current_user = get_jwt_identity()
 
@@ -75,7 +76,7 @@ class ExtendedPluginClass(PluginClass):
         
         @self.route('/bulk-forms', methods=['POST'])
         @jwt_required()
-        def create_inventory():
+        def create_inventory_forms():
             # get the current user
             current_user = get_jwt_identity()
 

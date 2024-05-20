@@ -6,7 +6,7 @@ RUN pip install --upgrade pip
 
 COPY . .
 
-RUN sh generateRequirements.sh
+RUN bash generateRequirements.sh
 
 RUN pip install torch==2.1.0
 
