@@ -143,6 +143,10 @@ def create(body, user, files):
         body['_id'] = str(new_resource.inserted_id)
         # Registrar el log
         register_log(user, log_actions['resource_create'], {'resource': body})
+
+        # limpiar la cache
+        update_cache()
+        
         hookHandler.call('resource_create', body)
 
         if files:
@@ -150,9 +154,9 @@ def create(body, user, files):
             try:
                 # si files es una lista
                 if not array_files:
-                    records = create_record(body['_id'], user, files)
+                    records = create_record(str(body['_id']), user, files)
                 else:
-                    records = create_record(body['_id'], user, temp_files, False)
+                    records = create_record(str(body['_id']), user, temp_files, False)
             except Exception as e:
                 return {'msg': str(e)}, 500
 
@@ -165,11 +169,10 @@ def create(body, user, files):
             mongodb.update_record(
                 'resources', {'_id': ObjectId(body['_id'])}, update_)
             
+            # limpiar la cache
+            update_cache()
+            
             hookHandler.call('resource_files_create', body)
-
-        # limpiar la cache
-        update_cache()
-
 
         # Retornar el resultado
         return {'msg': 'Recurso creado exitosamente'}, 201
@@ -374,7 +377,6 @@ def validate_fields(body, metadata, errors):
                         elif field['required']:
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'relation':
-                        print(field['destiny'])
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
                             value = get_value_by_path(body, field['destiny'])
@@ -502,8 +504,7 @@ def get_resource(id, user):
     if 'parents' in resource:
         if resource['parents']:
             for r in resource['parents']:
-                r_ = mongodb.get_record(
-                    'resources', {'_id': ObjectId(r['id'])})
+                r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
                 r['name'] = r_['metadata']['firstLevel']['title']
                 r['icon'] = get_icon(r_['post_type'])
 
@@ -832,7 +833,7 @@ def get_children(id, available, resp=False):
 # Funcion para obtener los hijos de un recurso en forma de arbol
 
 
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache(limit=2000)
 def get_tree(root, available, user):
     try:
         list_available = available.split('|')
@@ -1026,9 +1027,7 @@ def update_records_parents(id, user):
                 temp = []
 
                 for p in parents:
-                    print(p)
                     temp = [*temp, *get_parents(p['id'])]
-                    print(temp)
 
                 update_parent(child, user, temp)
 
@@ -1046,6 +1045,14 @@ def delete_children(id):
         if children:
             for child in children:
                 delete_children(child['id'])
+                # buscar el recurso en la base de datos
+                resource = mongodb.get_record(
+                    'resources', {'_id': ObjectId(child['id'])}, fields={'files': 1})
+                # si el recurso tiene archivos, eliminarlos
+                if 'files' in resource:
+                    records_list = resource['files']
+                    delete_records(records_list, child['id'], None)
+                # eliminar el recurso de la base de datos
                 mongodb.delete_record(
                     'resources', {'_id': ObjectId(child['id'])})
 

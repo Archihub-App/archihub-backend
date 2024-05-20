@@ -246,7 +246,6 @@ def cache_get_record_transcription(id, slug):
         raise Exception('Record no ha sido procesado con el slug ' + slug)
 
     resp = {
-        'text': record['processing'][slug]['result']['text'],
         'segments': record['processing'][slug]['result']['segments']
     }
 
@@ -339,26 +338,28 @@ def cache_get_block_by_page_id(id, page, slug, block=None):
         
         files = os.listdir(path_files)
         
-        if page >= len(files):
+        if page > len(files):
             raise Exception('Record no tiene tantas páginas')
         
         # verificar si el archivo existe
-        file = files[page]
+        file = files[page - 1]
         file = os.path.join(path_files, file)
         if not os.path.exists(file):
             raise Exception('No existe el archivo')
 
-        print(slug)
         resp = record['processing'][slug]['result'][page - 1]
+        labels = record['processing'][slug]['labels']
 
         if block == 'blocks':
+            resp['labels'] = labels
             for b in resp['blocks']:
                 if 'words' in b:
                     del b['words']
         elif block == 'words':
             resp_ = {
                 'page': page,
-                'words': []
+                'words': [],
+                'labels': labels
             }
             for b in resp['blocks']:
                 if 'words' in b:

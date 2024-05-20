@@ -168,6 +168,9 @@ class ExtendedPluginClass(PluginClass):
             df = pd.DataFrame(reporte)
             df.to_excel(writer, sheet_name='Reporte', index=False)
 
+        # borramos el archivo temporal
+        os.remove(path)
+
         return '/' + user + '/massiveUpdater/' + file_id + '.xlsx'
 
         
