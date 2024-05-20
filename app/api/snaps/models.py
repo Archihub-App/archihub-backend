@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class Snap(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
     user_id: str
+    resource_id: str
     type: str
     data: dict
 
