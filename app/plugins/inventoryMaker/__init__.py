@@ -63,12 +63,14 @@ class ExtendedPluginClass(PluginClass):
         def create_inventory_lists():
             # get the current user
             current_user = get_jwt_identity()
+            body = request.get_json()
 
             if not self.has_role('admin', current_user) and not self.has_role('editor', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
             
-            body = request.get_json()
-            
+            if 'parent' not in body:
+                return {'msg': 'No se especificó el listado'}, 400
+
             task = self.create_lists.delay(body, current_user)
             self.add_task_to_user(task.id, 'inventoryMaker.create_inventory_lists', current_user, 'file_download')
 
@@ -79,14 +81,34 @@ class ExtendedPluginClass(PluginClass):
         def create_inventory_forms():
             # get the current user
             current_user = get_jwt_identity()
+            body = request.get_json()
 
             if not self.has_role('admin', current_user) and not self.has_role('editor', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
             
-            body = request.get_json()
-            
+            if 'parent' not in body:
+                return {'msg': 'No se especificó el estándar de metadatos'}, 400
+
             task = self.create_forms.delay(body, current_user)
             self.add_task_to_user(task.id, 'inventoryMaker.create_inventory_forms', current_user, 'file_download')
+
+            return {'msg': 'Se agregó la tarea a la fila de procesamientos. Puedes revisar en tu perfil cuando haya terminado y descargar el inventario.'}, 201
+        
+        @self.route('/bulk-types', methods=['POST'])
+        @jwt_required()
+        def create_inventory_types():
+            # get the current user
+            current_user = get_jwt_identity()
+            body = request.get_json()
+
+            if not self.has_role('admin', current_user) and not self.has_role('editor', current_user):
+                return {'msg': 'No tiene permisos suficientes'}, 401
+            
+            if 'parent' not in body:
+                return {'msg': 'No se especificó el tipo de contenido'}, 400
+            
+            task = self.create_types.delay(body, current_user)
+            self.add_task_to_user(task.id, 'inventoryMaker.create_inventory_types', current_user, 'file_download')
 
             return {'msg': 'Se agregó la tarea a la fila de procesamientos. Puedes revisar en tu perfil cuando haya terminado y descargar el inventario.'}, 201
         
@@ -129,7 +151,7 @@ class ExtendedPluginClass(PluginClass):
             cleaned_string = ''.join(char for char in input_string if ord(char) > 31 or ord(char) in (9, 10, 13))
             return cleaned_string
 
-        forms = list(mongodb.get_all_records('forms', {}))
+        forms = list(mongodb.get_all_records('forms', {'slug': body['parent']}))
 
         forms_df = []
         fields_df = []
@@ -144,7 +166,7 @@ class ExtendedPluginClass(PluginClass):
         forms_df.append(obj)
 
         for f in forms:
-            fields = list(mongodb.get_all_records('fields', {'_id': {'$in': [ObjectId(field) for field in f['fields']]}}, [('label', 1)]))
+            fields = f['fields']
 
             obj = {
                 'id': str(f['_id']),
@@ -157,10 +179,10 @@ class ExtendedPluginClass(PluginClass):
 
             for field in fields:
                 obj = {
-                    'id': str(field['_id']),
                     'label': field['label'],
                     'type': field['type'],
-                    'destiny': field['destiny']
+                    'destiny': field['destiny'],
+                    'required': field['required'],
                 }
 
                 fields_df.append(obj)
@@ -187,7 +209,7 @@ class ExtendedPluginClass(PluginClass):
             cleaned_string = ''.join(char for char in input_string if ord(char) > 31 or ord(char) in (9, 10, 13))
             return cleaned_string
     
-        lists = list(mongodb.get_all_records('lists', {}))
+        lists = list(mongodb.get_all_records('lists', {'_id': ObjectId(body['parent'])}))
 
         lists_df = []
 
@@ -220,10 +242,68 @@ class ExtendedPluginClass(PluginClass):
 
         with pd.ExcelWriter(folder_path + '/' + file_id + '.xlsx') as writer:
             df = pd.DataFrame(lists_df)
-            df.to_excel(writer, sheet_name='Listados', index=False)
+            df.to_excel(writer, sheet_name='Listado', index=False)
 
         return '/' + user + '/inventoryMaker/' + file_id + '.xlsx'
         
+    @shared_task(ignore_result=False, name='inventoryMaker.create_inventory_types')
+    def create_types(body, user):
+        def clean_string(input_string):
+            if input_string is None:
+                return ''
+            cleaned_string = ''.join(char for char in input_string if ord(char) > 31 or ord(char) in (9, 10, 13))
+            return cleaned_string
+
+        print(body)
+        types = list(mongodb.get_all_records('post_types', {'slug': body['parent']}))
+
+        print(types)
+
+        types_df = []
+
+        obj = {}
+
+        obj['id'] = 'id'
+        obj['name'] = 'name'
+        obj['slug'] = 'slug'
+        obj['description'] = 'description'
+        obj['metadata'] = 'metadata'
+        obj['icon'] = 'icon'
+        obj['hierarchical'] = 'hierarchical'
+        obj['parentType'] = 'parentType'
+        obj['editRoles'] = 'editRoles'
+        obj['viewRoles'] = 'viewRoles'
+
+        types_df.append(obj)
+
+        for t in types:
+            obj = {
+                'id': str(t['_id']),
+                'name': t['name'],
+                'slug': t['slug'],
+                'description': t['description'],
+                'metadata': t['metadata'],
+                'icon': t['icon'],
+                'hierarchical': t['hierarchical'],
+                'parentType': t['parentType'],
+                'editRoles': t['editRoles'],
+                'viewRoles': t['viewRoles']
+            }
+
+            types_df.append(obj)
+
+        folder_path = USER_FILES_PATH + '/' + user + '/inventoryMaker'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        file_id = str(uuid.uuid4())
+
+        with pd.ExcelWriter(folder_path + '/' + file_id + '.xlsx') as writer:
+            df = pd.DataFrame(types_df)
+            df.to_excel(writer, sheet_name='Tipo', index=False)
+
+        return '/' + user + '/inventoryMaker/' + file_id + '.xlsx'
+    
     @shared_task(ignore_result=False, name='inventoryMaker.create_inventory')
     def create(body, user):
         def clean_string(input_string):
@@ -332,7 +412,7 @@ class ExtendedPluginClass(PluginClass):
     
 plugin_info = {
     'name': 'Exportar inventarios',
-    'description': 'Plugin para exportar inventarios del gestor documental.',
+    'description': 'Plugin para exportar inventarios de los recursos y del contenido del gestor documental.',
     'version': '0.2',
     'author': 'Néstor Andrés Peña',
     'type': ['bulk'],
