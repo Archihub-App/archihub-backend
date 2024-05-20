@@ -5,6 +5,8 @@ from flask import request, send_file
 from app.utils import DatabaseHandler
 from app.api.types.services import get_by_slug
 from app.api.resources.services import get_value_by_path
+from app.utils.functions import cache_type_roles
+from app.api.resources.services import get_accessRights
 import os
 import uuid
 import pandas as pd
@@ -26,7 +28,7 @@ class ExtendedPluginClass(PluginClass):
             # get the current user
             current_user = get_jwt_identity()
 
-            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
+            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user) and not self.has_role('editor', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
             
             body = request.get_json()
@@ -34,17 +36,89 @@ class ExtendedPluginClass(PluginClass):
             if 'post_type' not in body:
                 return {'msg': 'No se especificó el tipo de contenido'}, 400
             
+            post_type_roles = cache_type_roles(body['post_type'])
+            if post_type_roles['viewRoles']:
+                canView = False
+                for r in post_type_roles['viewRoles']:
+                    if self.has_role(current_user, r) or self.has_role(current_user, 'admin'):
+                        canView = True
+                        break
+                if not canView:
+                    return {'msg': 'No tiene permisos para obtener un recurso'}, 401
+                
+            if 'parent' in body:
+                if body['parent']:
+                    accessRights = get_accessRights(body['parent'])
+                    if accessRights:
+                        if not self.has_right(current_user, accessRights['id']) and not self.has_role(current_user, 'admin'):
+                            return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+            
             task = self.create.delay(body, current_user)
             self.add_task_to_user(task.id, 'inventoryMaker.create_inventory', current_user, 'file_download')
 
             return {'msg': 'Se agregó la tarea a la fila de procesamientos. Puedes revisar en tu perfil cuando haya terminado y descargar el inventario.'}, 201
         
+        @self.route('/bulk-lists', methods=['POST'])
+        @jwt_required()
+        def create_inventory_lists():
+            # get the current user
+            current_user = get_jwt_identity()
+            body = request.get_json()
+
+            if not self.has_role('admin', current_user) and not self.has_role('editor', current_user):
+                return {'msg': 'No tiene permisos suficientes'}, 401
+            
+            if 'parent' not in body:
+                return {'msg': 'No se especificó el listado'}, 400
+
+            task = self.create_lists.delay(body, current_user)
+            self.add_task_to_user(task.id, 'inventoryMaker.create_inventory_lists', current_user, 'file_download')
+
+            return {'msg': 'Se agregó la tarea a la fila de procesamientos. Puedes revisar en tu perfil cuando haya terminado y descargar el inventario.'}, 201
+        
+        @self.route('/bulk-forms', methods=['POST'])
+        @jwt_required()
+        def create_inventory_forms():
+            # get the current user
+            current_user = get_jwt_identity()
+            body = request.get_json()
+
+            if not self.has_role('admin', current_user) and not self.has_role('editor', current_user):
+                return {'msg': 'No tiene permisos suficientes'}, 401
+            
+            if 'parent' not in body:
+                return {'msg': 'No se especificó el estándar de metadatos'}, 400
+
+            task = self.create_forms.delay(body, current_user)
+            self.add_task_to_user(task.id, 'inventoryMaker.create_inventory_forms', current_user, 'file_download')
+
+            return {'msg': 'Se agregó la tarea a la fila de procesamientos. Puedes revisar en tu perfil cuando haya terminado y descargar el inventario.'}, 201
+        
+        @self.route('/bulk-types', methods=['POST'])
+        @jwt_required()
+        def create_inventory_types():
+            # get the current user
+            current_user = get_jwt_identity()
+            body = request.get_json()
+
+            if not self.has_role('admin', current_user) and not self.has_role('editor', current_user):
+                return {'msg': 'No tiene permisos suficientes'}, 401
+            
+            if 'parent' not in body:
+                return {'msg': 'No se especificó el tipo de contenido'}, 400
+            
+            task = self.create_types.delay(body, current_user)
+            self.add_task_to_user(task.id, 'inventoryMaker.create_inventory_types', current_user, 'file_download')
+
+            return {'msg': 'Se agregó la tarea a la fila de procesamientos. Puedes revisar en tu perfil cuando haya terminado y descargar el inventario.'}, 201
+        
+
         @self.route('/filedownload/<taskId>', methods=['GET'])
         @jwt_required()
         def file_download(taskId):
             current_user = get_jwt_identity()
 
-            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
+            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user) and not self.has_role('editor', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
             
             # Buscar la tarea en la base de datos
@@ -68,9 +142,168 @@ class ExtendedPluginClass(PluginClass):
                 
             path = USER_FILES_PATH + task['result']
             return send_file(path, as_attachment=True)
-
-            
         
+    @shared_task(ignore_result=False, name='inventoryMaker.create_inventory_forms')
+    def create_forms(body, user):
+        def clean_string(input_string):
+            if input_string is None:
+                return ''
+            cleaned_string = ''.join(char for char in input_string if ord(char) > 31 or ord(char) in (9, 10, 13))
+            return cleaned_string
+
+        forms = list(mongodb.get_all_records('forms', {'slug': body['parent']}))
+
+        forms_df = []
+        fields_df = []
+
+        obj = {}
+
+        obj['id'] = 'id'
+        obj['name'] = 'name'
+        obj['slug'] = 'slug'
+        obj['description'] = 'description'
+
+        forms_df.append(obj)
+
+        for f in forms:
+            fields = f['fields']
+
+            obj = {
+                'id': str(f['_id']),
+                'name': f['name'],
+                'description': f['description'],
+                'slug': f['slug']
+            }
+
+            forms_df.append(obj)
+
+            for field in fields:
+                obj = {
+                    'label': field['label'],
+                    'type': field['type'],
+                    'destiny': field['destiny'],
+                    'required': field['required'],
+                }
+
+                fields_df.append(obj)
+
+        folder_path = USER_FILES_PATH + '/' + user + '/inventoryMaker'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        file_id = str(uuid.uuid4())
+
+        with pd.ExcelWriter(folder_path + '/' + file_id + '.xlsx') as writer:
+            df = pd.DataFrame(forms_df)
+            df.to_excel(writer, sheet_name='Estandar', index=False)
+            df = pd.DataFrame(fields_df)
+            df.to_excel(writer, sheet_name='Campos', index=False)
+
+        return '/' + user + '/inventoryMaker/' + file_id + '.xlsx'
+
+    @shared_task(ignore_result=False, name='inventoryMaker.create_inventory_lists')
+    def create_lists(body, user):
+        def clean_string(input_string):
+            if input_string is None:
+                return ''
+            cleaned_string = ''.join(char for char in input_string if ord(char) > 31 or ord(char) in (9, 10, 13))
+            return cleaned_string
+    
+        lists = list(mongodb.get_all_records('lists', {'_id': ObjectId(body['parent'])}))
+
+        lists_df = []
+
+        obj = {}
+
+        obj['id'] = 'id'
+        obj['name'] = 'name'
+        obj['description'] = 'description'
+        obj['options'] = 'options'
+
+        lists_df.append(obj)
+
+        for l in lists:
+            options = list(mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(option) for option in l['options']]}}, [('term', 1)]))
+
+            obj = {
+                'id': str(l['_id']),
+                'name': l['name'],
+                'description': l['description'],
+                'options': ', '.join([str(option['term']) for option in options])
+            }
+
+            lists_df.append(obj)
+
+        folder_path = USER_FILES_PATH + '/' + user + '/inventoryMaker'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        file_id = str(uuid.uuid4())
+
+        with pd.ExcelWriter(folder_path + '/' + file_id + '.xlsx') as writer:
+            df = pd.DataFrame(lists_df)
+            df.to_excel(writer, sheet_name='Listado', index=False)
+
+        return '/' + user + '/inventoryMaker/' + file_id + '.xlsx'
+        
+    @shared_task(ignore_result=False, name='inventoryMaker.create_inventory_types')
+    def create_types(body, user):
+        def clean_string(input_string):
+            if input_string is None:
+                return ''
+            cleaned_string = ''.join(char for char in input_string if ord(char) > 31 or ord(char) in (9, 10, 13))
+            return cleaned_string
+
+        print(body)
+        types = list(mongodb.get_all_records('post_types', {'slug': body['parent']}))
+
+        print(types)
+
+        types_df = []
+
+        obj = {}
+
+        obj['id'] = 'id'
+        obj['name'] = 'name'
+        obj['slug'] = 'slug'
+        obj['description'] = 'description'
+        obj['metadata'] = 'metadata'
+        obj['icon'] = 'icon'
+        obj['hierarchical'] = 'hierarchical'
+        obj['parentType'] = 'parentType'
+        obj['editRoles'] = 'editRoles'
+        obj['viewRoles'] = 'viewRoles'
+
+        types_df.append(obj)
+
+        for t in types:
+            obj = {
+                'id': str(t['_id']),
+                'name': t['name'],
+                'slug': t['slug'],
+                'description': t['description'],
+                'metadata': t['metadata'],
+                'icon': t['icon'],
+                'hierarchical': t['hierarchical'],
+                'parentType': t['parentType'],
+                'editRoles': t['editRoles'],
+                'viewRoles': t['viewRoles']
+            }
+
+            types_df.append(obj)
+
+        folder_path = USER_FILES_PATH + '/' + user + '/inventoryMaker'
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+        file_id = str(uuid.uuid4())
+
+        with pd.ExcelWriter(folder_path + '/' + file_id + '.xlsx') as writer:
+            df = pd.DataFrame(types_df)
+            df.to_excel(writer, sheet_name='Tipo', index=False)
+
+        return '/' + user + '/inventoryMaker/' + file_id + '.xlsx'
+    
     @shared_task(ignore_result=False, name='inventoryMaker.create_inventory')
     def create(body, user):
         def clean_string(input_string):
@@ -179,7 +412,7 @@ class ExtendedPluginClass(PluginClass):
     
 plugin_info = {
     'name': 'Exportar inventarios',
-    'description': 'Plugin para exportar inventarios del gestor documental.',
+    'description': 'Plugin para exportar inventarios de los recursos y del contenido del gestor documental.',
     'version': '0.2',
     'author': 'Néstor Andrés Peña',
     'type': ['bulk'],

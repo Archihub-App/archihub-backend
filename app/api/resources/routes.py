@@ -340,7 +340,6 @@ def get_all_records(resource_id):
 
     body = request.json
 
-    print(body)
     # Llamar al servicio para obtener los recursos
     resp = services.get_resource_files(resource_id, current_user, body['page'])
     if isinstance(resp, list):
