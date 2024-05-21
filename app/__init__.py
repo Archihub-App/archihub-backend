@@ -58,6 +58,11 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
         }
     }
 
+    # registrar plugins activos en la base de datos
+    plugins = mongodb.get_record('system', {'name': 'active_plugins'})
+    for p in plugins['data']:
+        register_plugin(app, p, p)
+
     # Registrar users blueprint
     from app.api.users import bp as users_bp
     app.register_blueprint(users_bp, url_prefix='/users')
@@ -127,12 +132,6 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             print('No se pudo iniciar el indexador de documentos')
             index_management['data'][0]['value'] = False
             update_option('index_management', {'index_activation': False})
-
-
-    # registrar plugins activos en la base de datos
-    plugins = mongodb.get_record('system', {'name': 'active_plugins'})
-    for p in plugins['data']:
-        register_plugin(app, p, p)
 
 
     return app
