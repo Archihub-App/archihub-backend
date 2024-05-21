@@ -95,6 +95,7 @@ def get_default_cataloging_type():
     resp = services.get_default_cataloging_type()
     if isinstance(resp, list):
         return tuple(resp)
+    return resp
 
 # GET para obtener el listado de plugins en la carpeta plugins
 @bp.route('/plugins', methods=['GET'])

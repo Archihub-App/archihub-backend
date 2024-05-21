@@ -7,6 +7,7 @@ RUN pip install --upgrade pip
 COPY . .
 
 RUN sed -i 's/\r$//' generateRequirements.sh
+RUN sed -i 's/\r$//' start.sh
 
 RUN bash generateRequirements.sh
 
