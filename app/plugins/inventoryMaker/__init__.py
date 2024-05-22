@@ -104,9 +104,6 @@ class ExtendedPluginClass(PluginClass):
             if not self.has_role('admin', current_user) and not self.has_role('editor', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
             
-            if 'parent' not in body:
-                return {'msg': 'No se especificó el tipo de contenido'}, 400
-            
             task = self.create_types.delay(body, current_user)
             self.add_task_to_user(task.id, 'inventoryMaker.create_inventory_types', current_user, 'file_download')
 
@@ -254,10 +251,7 @@ class ExtendedPluginClass(PluginClass):
             cleaned_string = ''.join(char for char in input_string if ord(char) > 31 or ord(char) in (9, 10, 13))
             return cleaned_string
 
-        print(body)
-        types = list(mongodb.get_all_records('post_types', {'slug': body['parent']}))
-
-        print(types)
+        types = list(mongodb.get_all_records('post_types'))
 
         types_df = []
 

@@ -40,6 +40,7 @@ def get_all():
 def create(body, user):
     # Crear instancia de Form con el body del request
     try:
+        validate_form(body)
         # se verifica el arbol completo de metadatos de la herramienta
         update_main_schema(new_form=body)
 

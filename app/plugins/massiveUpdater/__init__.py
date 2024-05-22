@@ -97,65 +97,313 @@ class ExtendedPluginClass(PluginClass):
     def update(path, overwrite, user):
         reporte = []
         errores = []
-        # abrir el archivo excel y leer la hoja Recursos
-        df = pd.read_excel(path, sheet_name='Recursos')
 
-        # quitamos el encabezado y dejamos la segunda fila como encabezado
-        new_header = df.iloc[0]
-        df = df[1:]
-        df.columns = new_header
+        # abrir el archivo excel y recuperar un listado con las hojas
+        xls = pd.ExcelFile(path)
+        sheets = xls.sheet_names
 
-        for index, row in df.iterrows():
-            # recuperamos el recurso
-            resource = mongodb.get_record('resources', {'_id': ObjectId(row['id'])}, {'_id': 1, 'metadata': 1, 'post_type': 1})
+        content_type = 'Recursos'
 
-            update = {}
-            
-            if resource == None:
-                error = {
-                    'index': index,
-                    'id': row['id'],
-                    'error': 'Recurso no encontrado'
-                }
-                errores.append(error)
-                continue
+        for sheet in sheets:
+            if sheet == 'Tipo':
+                content_type = 'Tipo'
+                break
+            if sheet == 'Estandar':
+                content_type = 'Estandar'
+                break
+            if sheet == 'Listado':
+                content_type = 'Listado'
+                break
 
-            # recuperamos el tipo de contenido
-            type = get_by_slug(resource['post_type'])
 
-            fields = type['metadata']['fields']
+        if content_type == 'Recursos':
 
-            # iteramos sobre los campos del archivo
-            for field in fields:
-                try:
-                    # si el campo no está en el archivo, lo dejamos como está
-                    if field['destiny'] not in row:
-                        continue
-                    # else si row[field['destiny']] es Nan, lo dejamos como está
-                    if pd.isna(row[field['destiny']]):
-                        continue
+            # abrir la hoja de excel
+            df = pd.read_excel(path, sheet_name='Recursos')
 
-                    if field['type'] == 'text' or field['type'] == 'text-area':
-                        validate_text(row[field['destiny']], field)
-                        set_value_in_dict(update, field['destiny'], row[field['destiny']])
+            # quitamos el encabezado y dejamos la segunda fila como encabezado
+            new_header = df.iloc[0]
+            df = df[1:]
+            df.columns = new_header
 
-                except Exception as e:
+            for index, row in df.iterrows():
+                # recuperamos el recurso
+                resource = mongodb.get_record('resources', {'_id': ObjectId(row['id'])}, {'_id': 1, 'metadata': 1, 'post_type': 1})
+
+                update = {}
+                
+                if resource == None:
                     error = {
                         'index': index,
                         'id': row['id'],
-                        'error': str(e)
+                        'error': 'Recurso no encontrado'
                     }
                     errores.append(error)
                     continue
 
-            
-            # actualizamos el recurso
-            resource = ResourceUpdate(**update)
-            updated_resource = mongodb.update_record('resources', {'_id': ObjectId(row['id'])}, resource)
+                # recuperamos el tipo de contenido
+                type = get_by_slug(resource['post_type'])
+
+                fields = type['metadata']['fields']
+
+                # iteramos sobre los campos del archivo
+                for field in fields:
+                    try:
+                        # si el campo no está en el archivo, lo dejamos como está
+                        if field['destiny'] not in row:
+                            continue
+                        # else si row[field['destiny']] es Nan, lo dejamos como está
+                        if pd.isna(row[field['destiny']]):
+                            continue
+
+                        if field['type'] == 'text' or field['type'] == 'text-area':
+                            validate_text(row[field['destiny']], field)
+                            set_value_in_dict(update, field['destiny'], row[field['destiny']])
+
+                    except Exception as e:
+                        error = {
+                            'index': index,
+                            'id': row['id'],
+                            'error': str(e)
+                        }
+                        errores.append(error)
+                        continue
+
+                
+                # actualizamos el recurso
+                resource = ResourceUpdate(**update)
+                updated_resource = mongodb.update_record('resources', {'_id': ObjectId(row['id'])}, resource)
+                reporte.append({
+                    'id': row['id'],
+                    'status': 'Actualizado'
+                })
+
+        elif content_type == 'Tipo':
+            # abrir la hoja de excel
+            df = pd.read_excel(path, sheet_name='Tipo')
+
+            # quitamos el encabezado y dejamos la segunda fila como encabezado
+            new_header = df.iloc[0]
+            df = df[1:]
+            df.columns = new_header
+
+            for index, row in df.iterrows():
+                id = row['id']
+                # se busca el tipo
+                if id:
+                    type = mongodb.get_record('post_types', {'_id': ObjectId(id)})
+                else:
+                    type = None
+
+                type = {
+                    'name': row['name'],
+                    'slug': row['slug'],
+                    'metadata': row['metadata'],
+                    'description': row['description'],
+                    'icon': row['icon'],
+                    'hierarchical': row['hierarchical'],
+                    'parentType': json.loads(row['parentType'].replace("'", '"')),
+                    'editRoles': json.loads(row['editRoles'].replace("'", '"')),
+                    'viewRoles': json.loads(row['viewRoles'].replace("'", '"')),
+                }
+                if type == None:
+                    try:
+                        from app.api.types.services import create
+                        resp = create(type, user)
+                        if resp[1] != 201:
+                            error = {
+                                'index': index,
+                                'id': id,
+                                'error': resp[0]['msg']
+                            }
+                            errores.append(error)
+                            continue
+                    except Exception as e:
+                        error = {
+                            'index': index,
+                            'id': id,
+                            'error': str(e)
+                        }
+                        errores.append(error)
+                        continue
+                else:
+                    try:
+                        slug = type['slug']
+                        del type['slug']
+                        from app.api.types.services import update_by_slug
+                        resp = update_by_slug(slug, type, user)
+                        if resp[1] != 200:
+                            error = {
+                                'index': index,
+                                'id': id,
+                                'error': resp[0]['msg']
+                            }
+                            errores.append(error)
+                            continue
+                    except Exception as e:
+                        error = {
+                            'index': index,
+                            'id': id,
+                            'error': str(e)
+                        }
+                        errores.append(error)
+                        continue
+                
+                reporte.append({
+                    'id': id,
+                    'status': 'Actualizado'
+                })
+
+        elif content_type == 'Estandar':
+            # abrir la hoja de excel
+            df = pd.read_excel(path, sheet_name='Estandar')
+            df_fields = pd.read_excel(path, sheet_name='Campos')
+
+            fields = []
+
+            # quitamos el encabezado y dejamos la segunda fila como encabezado
+            new_header = df.iloc[0]
+            df = df[1:]
+            df.columns = new_header
+
+            for index, row in df_fields.iterrows():
+                fields.append({
+                    'label': row['label'],
+                    'type': row['type'],
+                    'destiny': row['destiny'],
+                    'required': row['required'],
+                })
+
+            for index, row in df.iterrows():
+                form = {
+                    'id': row['id'],
+                    'name': row['name'],
+                    'slug': row['slug'],
+                    'description': row['description'],
+                    'fields': fields
+                }
+
+            id = form['id']
+            # se busca el tipo
+            type = mongodb.get_record('post_types', {'slug': form['slug']})
+
+            if type == None:
+                try:
+                    from app.api.forms.services import create
+                    resp = create(form, user)
+                    if resp[1] != 201:
+                        error = {
+                            'index': index,
+                            'id': id,
+                            'error': resp[0]['msg']
+                        }
+                        errores.append(error)
+                except Exception as e:
+                    error = {
+                        'index': index,
+                        'id': id,
+                        'error': str(e)
+                    }
+                    errores.append(error)
+            else:
+                try:
+                    slug = form['slug']
+                    from app.api.forms.services import update_by_slug
+                    resp = update_by_slug(slug, form, user)
+                    if resp[1] != 200:
+                        error = {
+                            'index': index,
+                            'id': id,
+                            'error': resp[0]['msg']
+                        }
+                        errores.append(error)
+                except Exception as e:
+                    error = {
+                        'index': index,
+                        'id': id,
+                        'error': str(e)
+                    }
+                    errores.append(error)
+                
             reporte.append({
-                'id': row['id'],
+                'id': id,
                 'status': 'Actualizado'
             })
+
+
+        elif content_type == 'Listado':
+            # abrir la hoja de excel
+            df = pd.read_excel(path, sheet_name='Listado')
+
+            # quitamos el encabezado y dejamos la segunda fila como encabezado
+            new_header = df.iloc[0]
+            df = df[1:]
+            df.columns = new_header
+
+            for index, row in df.iterrows():
+                options = row['options'].split(',')
+                options = [{'term': option} for option in options]
+                list_ =  {
+                    'name': row['name'],
+                    'description': row['description'],
+                    'options': options
+                }
+                
+                id = list_['id']
+
+                if id:
+                    list = mongodb.get_record('lists', {'_id': ObjectId(id)})
+                else:
+                    list = None
+
+                if list == None:
+                    try:
+                        from app.api.lists.services import create
+                        resp = create(list_, user)
+                        if resp[1] != 201:
+                            error = {
+                                'index': index,
+                                'id': id,
+                                'error': resp[0]['msg']
+                            }
+                            errores.append(error)
+                            continue
+                    except Exception as e:
+                        error = {
+                            'index': index,
+                            'id': id,
+                            'error': str(e)
+                        }
+                        errores.append(error)
+                        continue
+                else:
+                    try:
+                        slug = list['slug']
+                        del list['slug']
+                        from app.api.lists.services import update_by_slug
+                        resp = update_by_slug(slug, list_, user)
+                        if resp[1] != 200:
+                            error = {
+                                'index': index,
+                                'id': id,
+                                'error': resp[0]['msg']
+                            }
+                            errores.append(error)
+                            continue
+                    except Exception as e:
+                        error = {
+                            'index': index,
+                            'id': id,
+                            'error': str(e)
+                        }
+                        errores.append(error)
+                        continue
+
+                reporte.append({
+                    'id': id,
+                    'status': 'Actualizado'
+                })
+
 
         # save the report
         folder_path = USER_FILES_PATH + '/' + user + '/massiveUpdater'
