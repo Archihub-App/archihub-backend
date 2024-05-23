@@ -109,8 +109,9 @@ def create(body, user, files):
 
         status = body['status']
         if status == 'published':
-            if not has_role(user, 'publisher'):
+            if not has_role(user, 'publisher') and not has_role(user, 'admin'):
                 return {'msg': 'No tiene permisos para publicar un recurso'}, 401
+            
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 
@@ -122,6 +123,8 @@ def create(body, user, files):
 
         if 'ident' not in body:
             body['ident'] = 'ident'
+        
+        hookHandler.call('resource_ident_create', body)
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
@@ -703,7 +706,10 @@ def update_by_id(id, body, user, files):
         
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'files': 1})
 
-        body['status'] = 'updated'
+        status = body['status']
+        if status == 'published':
+            if not has_role(user, 'publisher') and not has_role(user, 'admin'):
+                return {'msg': 'No tiene permisos para publicar un recurso'}, 401
 
         temp = []
         for f in body['files']:
