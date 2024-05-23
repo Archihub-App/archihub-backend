@@ -63,7 +63,7 @@ def get_roles():
         # Agregar admin y editor a la lista
         temp.append({'id': 'admin', 'term': 'admin'})
         temp.append({'id': 'editor', 'term': 'editor'})
-        temp.append({'id': 'user', 'term': 'user'})
+        temp.append({'id': 'publisher', 'term': 'publisher'})
         temp.append({'id': 'processing', 'term': 'processing'})
 
         return {

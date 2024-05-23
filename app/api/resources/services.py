@@ -106,9 +106,11 @@ def create(body, user, files):
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': 'El recurso debe tener metadata'}, 400
-        # Agregar el campo status al body
-        body['status'] = 'created'
 
+        status = body['status']
+        if status == 'published':
+            if not has_role(user, 'publisher'):
+                return {'msg': 'No tiene permisos para publicar un recurso'}, 401
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 
