@@ -79,6 +79,10 @@ def get_all(post_type, body, user):
 
         filters['status'] = body['status']
 
+        if filters['status'] == 'draft':
+            if not has_role(user, 'publisher') and not has_role(user, 'admin'):
+                filters['createdBy'] = user
+
         # Obtener todos los recursos dado un tipo de contenido
         resources = list(mongodb.get_all_records(
             'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1}, sort=[('metadata.firstLevel.title', 1)]))
@@ -119,6 +123,8 @@ def create(body, user, files):
             
         if not status:
             status = 'draft'
+
+        body['createdBy'] = user
             
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
