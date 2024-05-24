@@ -112,6 +112,9 @@ def create(body, user, files):
             if not has_role(user, 'publisher') and not has_role(user, 'admin'):
                 return {'msg': 'No tiene permisos para publicar un recurso'}, 401
             
+        if not status:
+            status = 'draft'
+            
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 
@@ -550,6 +553,25 @@ def get_resource(id, user):
     temp = []
     for f in resource['fields']:
         if f['type'] != 'file' and f['type'] != 'separator':
+            accesRights = None
+            if 'accessRights' in f:
+                accesRights = f['accessRights']
+
+            canView = True
+            if accesRights:
+                for a in accesRights:
+                    if not has_right(user, a) and not has_role(user, 'admin'):
+                        canView = False
+                        continue
+            
+            if not canView:
+                temp.append({
+                    'label': f['label'],
+                    'value': 'No tiene permisos para ver este campo',
+                    'type': 'text'
+                })
+                continue
+
             if f['type'] == 'text' or f['type'] == 'text-area':
                 value = get_value_by_path(resource, f['destiny'])
 
@@ -576,7 +598,6 @@ def get_resource(id, user):
                         'value': value,
                         'type': 'text'
                     })
-
             elif f['type'] == 'author':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
@@ -593,7 +614,6 @@ def get_resource(id, user):
                         'value': temp_,
                         'type': 'author'
                     })
-
             elif f['type'] == 'select-multiple2':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
@@ -619,7 +639,6 @@ def get_resource(id, user):
                         'value': value,
                         'type': 'simple-date'
                     })
-
             elif f['type'] == 'relation':
                 value = get_value_by_path(resource, f['destiny'])
 
@@ -710,6 +729,8 @@ def update_by_id(id, body, user, files):
         if status == 'published':
             if not has_role(user, 'publisher') and not has_role(user, 'admin'):
                 return {'msg': 'No tiene permisos para publicar un recurso'}, 401
+        if not status:
+            status = 'draft'
 
         temp = []
         for f in body['files']:

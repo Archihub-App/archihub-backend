@@ -10,6 +10,7 @@ from app.api.logs.services import register_log
 from app.api.system.services import update_resources_schema
 from app.api.system.services import get_access_rights_id
 from app.api.types.services import get_by_slug as get_type_by_slug
+from app.utils.functions import get_access_rights
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -147,23 +148,29 @@ def delete_by_slug(slug, user):
 def validate_form(form):
     # verificar que no tenga dos fields de tipo file
     files = 0
-    for field in form['fields']:
-        if field['type'] == 'file':
-            files += 1
-    if files > 1:
-        raise Exception("Error: el formulario no puede tener dos campos de tipo archivo")
-    
     # verificar que no tenga un field con destiny igual a ident
     for field in form['fields']:
         if 'destiny' in field:
             if field['destiny'] == 'ident':
                 raise Exception("Error: el formulario no puede tener un campo con destino igual a ident")
-    
-    # verificar que todos los campos tengan un destiny que inicien con metadata
-    for field in form['fields']:
-        if 'destiny' in field:
+            
             if not field['destiny'].startswith('metadata') and not field['destiny'] == 'file':
                 raise Exception("Error: el formulario no puede tener un campo con destino que no inicie con metadata")
+            
+        if field['type'] == 'file':
+            files += 1
+
+        if 'accessRights' in field:
+            if field['accessRights']:
+                options = get_access_rights()
+                options = [o['id'] for o in options['options']]
+                for f in field['accessRights']:
+                    if f not in options:
+                        raise Exception("Error: el campo accessRights tiene un valor que no es válido")
+            
+    if files > 1:
+        raise Exception("Error: el formulario no puede tener dos campos de tipo archivo")
+            
     
 # Funcion que itera entre todos los formularios y devuelve la estructura combinada de todos
 def update_main_schema(new_form = None, updated_form = None):
