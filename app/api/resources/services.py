@@ -562,9 +562,9 @@ def get_resource(id, user):
                 for a in accesRights:
                     if not has_right(user, a) and not has_role(user, 'admin'):
                         canView = False
-                        continue
             
             if not canView:
+                set_value_in_dict(resource, f['destiny'], 'No tiene permisos para ver este campo')
                 temp.append({
                     'label': f['label'],
                     'value': 'No tiene permisos para ver este campo',
