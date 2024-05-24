@@ -71,8 +71,13 @@ def get_all(post_type, body, user):
             if body['parents']:
                 filters['parents.id'] = body['parents']['id']
 
+        if 'status' not in body:
+            body['status'] = 'published'
+
         if 'page' in body:
             skip = body['page'] * limit
+
+        filters['status'] = body['status']
 
         # Obtener todos los recursos dado un tipo de contenido
         resources = list(mongodb.get_all_records(
@@ -499,7 +504,7 @@ def get_accessRights(id):
         
     return None
 
-@cacheHandler.cache.cache(limit=2000)
+@cacheHandler.cache.cache(limit=5000)
 def get_resource(id, user):
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
