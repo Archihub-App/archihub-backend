@@ -321,6 +321,18 @@ class ExtendedPluginClass(PluginClass):
             if body['parent']:
                 filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
 
+                if 'status' not in body:
+                    for o in filters['$or']:
+                        o['status'] = 'published'
+                elif body['status'] == 'draft':
+                    from app.api.users.services import has_role
+                    if not has_role(user, 'publisher') or not has_role(user, 'admin'):
+                        for o in filters['$or']:
+                            o['createdBy'] = user
+
+        if 'status' not in body:
+            filters['status'] = 'published'
+ 
         # buscamos los recursos con los filtros especificados
         resources = list(mongodb.get_all_records('resources', filters))
 
@@ -356,7 +368,11 @@ class ExtendedPluginClass(PluginClass):
                 elif f['type'] == 'select':
                     obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
                 elif f['type'] == 'simple-date':
-                    obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
+                    date = get_value_by_path(r, f['destiny'])
+                    if date:
+                        obj[f['label']] = date.strftime('%Y-%m-%d')
+                    else:
+                        obj[f['label']] = ''
 
             resources_df.append(obj)
 
