@@ -275,8 +275,6 @@ def update_relations_children(body, metadata, new = False):
                     update_ = ResourceUpdate(**update)
 
                     mongodb.update_record('resources', {'_id': ObjectId(a)}, update_)
-                
-
 
 # Funcion para validar el padre de un recurso
 def validate_parent(body):
@@ -326,8 +324,6 @@ def validate_parent(body):
         return body
 
 # Funcion para validar los campos de la metadata
-
-
 def validate_fields(body, metadata, errors):
     for field in metadata['fields']:
         try:
@@ -442,8 +438,6 @@ def validate_fields(body, metadata, errors):
     return body
 
 # Nuevo servicio para obtener un recurso por su id
-
-
 def get_by_id(id, user):
     try:
         # Obtener los accessRights del recurso
@@ -797,8 +791,6 @@ def update_by_id(id, body, user, files):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para eliminar un recurso
-
-
 def delete_by_id(id, user):
     try:
         post_type = get_resource_type(id)
@@ -843,7 +835,6 @@ def delete_by_id(id, user):
         return {'msg': str(e)}, 500
 
 # Funcion para obtener los hijos de un recurso
-
 @cacheHandler.cache.cache(limit=1000)
 def get_children(id, available, resp=False):
     try:
@@ -871,8 +862,6 @@ def get_children(id, available, resp=False):
         return {'msg': str(e)}, 500
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
-
-
 @cacheHandler.cache.cache(limit=2000)
 def get_tree(root, available, user):
     try:
@@ -914,8 +903,6 @@ def get_tree(root, available, user):
         return {'msg': str(e)}, 500
 
 # Funcion para validar que el tipo del padre sea uno admitido por el hijo
-
-
 @cacheHandler.cache.cache(limit=1000)
 def has_parent_postType(post_type, compare):
     try:
@@ -938,8 +925,6 @@ def has_parent_postType(post_type, compare):
         return {'msg': str(e)}, 500
 
 # Funcion para obtener los padres de un recurso
-
-
 @cacheHandler.cache.cache(limit=1000)
 def get_parents(id):
     try:
@@ -966,7 +951,6 @@ def get_parents(id):
         raise Exception(str(e))
 
 # Funcion para obtener el padre directo de un recurso
-
 @cacheHandler.cache.cache(limit=1000)
 def get_parent(id):
     try:
@@ -988,8 +972,6 @@ def get_parent(id):
         raise Exception(str(e))
 
 # Funcion para determinar si un recurso cambio de padre
-
-
 def has_changed_parent(id, body):
     try:
         if (len(body['parents']) == 0):
@@ -1004,8 +986,6 @@ def has_changed_parent(id, body):
         raise Exception(str(e))
 
 # Funcion para obtener los hijos directos de un recurso
-
-
 def get_direct_children(id):
     try:
         # Buscar los recursos en la base de datos con parent igual al id
