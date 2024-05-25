@@ -82,9 +82,12 @@ def get_all(post_type, body, user):
         filters['status'] = body['status']
 
         if filters['status'] == 'draft':
-            filters['status'] = {'$or': [{'status': 'draft'}, {'status': 'created'}, {'status': 'updated'}]}
+            filters.pop('status')
+            filters_ = {'$or': [{'status': 'draft', **filters}, {'status': 'created', **filters}, {'status': 'updated', **filters}]}
             if not has_role(user, 'publisher') or not has_role(user, 'admin'):
-                filters['createdBy'] = user
+                for o in filters_['$or']:
+                    o['createdBy'] = user
+            filters = filters_
 
         # Obtener todos los recursos dado un tipo de contenido
         resources = list(mongodb.get_all_records(
@@ -470,14 +473,14 @@ def get_by_id(id, user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache(limit=5000)
 def get_resource_type(id):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'post_type': 1})
     if not resource:
         raise Exception('Recurso no existe')
     return resource['post_type']
 
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache(limit=5000)
 def get_accessRights(id):
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'accessRights': 1, 'parents': 1})
