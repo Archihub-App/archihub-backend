@@ -46,8 +46,17 @@ def get_all(post_type):
     current_user = get_jwt_identity()
     # Obtener el body del request
     body = request.json
+    
+    # convertir a cadena de texto el body
+    body = json.dumps(body)
+
     # Llamar al servicio para obtener los recursos
-    return services.get_all(post_type, body, current_user)
+    resp = services.get_all(post_type, body, current_user)
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para guardar un recurso nuevo
 @bp.route('', methods=['POST'])

@@ -50,8 +50,10 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
+@cacheHandler.cache.cache(limit=5000)
 def get_all(post_type, body, user):
     try:
+        body = json.loads(body)
         post_type_roles = cache_type_roles(post_type)
         if post_type_roles['viewRoles']:
             canView = False
@@ -80,7 +82,8 @@ def get_all(post_type, body, user):
         filters['status'] = body['status']
 
         if filters['status'] == 'draft':
-            if not has_role(user, 'publisher') and not has_role(user, 'admin'):
+            filters['status'] = {'$or': [{'status': 'draft'}, {'status': 'created'}, {'status': 'updated'}]}
+            if not has_role(user, 'publisher') or not has_role(user, 'admin'):
                 filters['createdBy'] = user
 
         # Obtener todos los recursos dado un tipo de contenido
@@ -103,7 +106,7 @@ def get_all(post_type, body, user):
             'resources': resources
         }
         # Retornar los recursos
-        return jsonify(response), 200
+        return response, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -511,6 +514,13 @@ def get_resource(id, user):
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception('Recurso no existe')
+    
+    status = resource['status']
+    if status == 'draft':
+        if not has_role(user, 'publisher') or not has_role(user, 'admin'):
+            if resource['createdBy'] != user:
+                raise Exception('No tiene permisos para ver este recurso')
+        
     # Registrar el log
     resource['_id'] = str(resource['_id'])
 
@@ -880,10 +890,10 @@ def get_tree(root, available, user):
             
             resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
-                             "$in": list_available}, 'parent': None}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         else:
             resources = list(mongodb.get_all_records('resources', {'post_type': {
-                             "$in": list_available}, 'parent.id': root}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         
         # Obtener el icono del post type
         # icon = mongodb.get_record(
@@ -1120,4 +1130,5 @@ def update_cache():
     get_accessRights.invalidate_all()
     get_resource_type.invalidate_all()
     get_resource_files.invalidate_all()
+    get_all.invalidate_all()
     clear_cache()
