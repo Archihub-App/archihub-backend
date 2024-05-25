@@ -325,6 +325,9 @@ class ExtendedPluginClass(PluginClass):
                     for o in filters['$or']:
                         o['status'] = 'published'
                 elif body['status'] == 'draft':
+                    for o in filters['$or']:
+                        o['status'] = 'draft'
+
                     from app.api.users.services import has_role
                     if not has_role(user, 'publisher') or not has_role(user, 'admin'):
                         for o in filters['$or']:
@@ -332,6 +335,12 @@ class ExtendedPluginClass(PluginClass):
 
         if 'status' not in body:
             filters['status'] = 'published'
+        elif body['status'] == 'draft':
+            filters['status'] = 'draft'
+
+            from app.api.users.services import has_role
+            if not has_role(user, 'publisher') or not has_role(user, 'admin'):
+                filters['createdBy'] = user
  
         # buscamos los recursos con los filtros especificados
         resources = list(mongodb.get_all_records('resources', filters))
