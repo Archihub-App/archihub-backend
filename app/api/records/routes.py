@@ -413,3 +413,33 @@ def delete_label():
 
     # Llamar al servicio para asignar un label a un record
     return services.deleteBlockDocument(current_user, body)
+
+@bp.route('/favcount/<record_id>', methods=['GET'])
+@jwt_required()
+def favcount(record_id):
+    """
+    Obtener el favCount de un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: record_id
+          schema:
+            type: string
+            required: true
+            description: id del record a obtener
+    responses:
+        200:
+            description: FavCount del record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Llamar al servicio para obtener un record por su id
+    return services.get_favCount(record_id)
