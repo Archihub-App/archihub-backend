@@ -1107,6 +1107,42 @@ def update_records(list, user):
             update_record(l, user)
     except Exception as e:
         raise Exception(str(e))
+    
+def add_to_favCount(id):
+    try:
+        update = {
+            '$inc': {
+                'favCount': 1
+            }
+        }
+        update_ = ResourceUpdate(**update)
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update_)
+        get_favCount.invalidate(id)
+    except Exception as e:
+        raise Exception(str(e))
+    
+def remove_from_favCount(id):
+    try:
+        update = {
+            '$inc': {
+                'favCount': -1
+            }
+        }
+        update_ = ResourceUpdate(**update)
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update_)
+        get_favCount.invalidate(id)
+    except Exception as e:
+        raise Exception(str(e))
+
+@cacheHandler.cache.cache(limit=2000)
+def get_favCount(id):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'favCount': 1})
+        if not resource:
+            raise Exception('Recurso no existe')
+        return {'favCount': resource['favCount']}, 200
+    except Exception as e:
+        raise Exception(str(e))
 
 # Funcion para obtener el total de recursos
 @cacheHandler.cache.cache(limit=1000)

@@ -355,3 +355,29 @@ def get_all_records(resource_id):
         return tuple(resp)
     else:
         return resp
+    
+@bp.route('/favcount/<resource_id>', methods=['GET'])
+@jwt_required()
+def favcount(resource_id):
+    """
+    Obtener el contador de favoritos de un recurso
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: resource_id
+          schema:
+              type: string
+    responses:
+        200:
+            description: Contador de favoritos obtenido exitosamente
+        401:
+            description: No tiene permisos para obtener el contador de favoritos
+        500:
+            description: Error al obtener el contador de favoritos
+    """
+    # Llamar al servicio para obtener el contador de favoritos
+    return services.get_favCount(resource_id)

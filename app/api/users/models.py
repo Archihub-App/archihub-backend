@@ -18,6 +18,7 @@ class User(BaseModel):
     accessRights: list[str] = None
     requests: int = 0
     lastRequest: datetime = None
+    favorites: list[str] = None
 
     class Config:
         allow_population_by_field_name = True
@@ -41,6 +42,7 @@ class UserUpdate(BaseModel):
     nodeToken: Optional[str] = None
     requests: Optional[int] = None
     lastRequest: Optional[datetime] = None
+    favorites: Optional[list[str]] = None
 
     class Config:
         allow_population_by_field_name = True

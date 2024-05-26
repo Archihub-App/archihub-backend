@@ -196,27 +196,6 @@ def get_user():
         return jsonify({'msg': 'Usuario no existe'}), 400
     return user, 200
 
-# Nuevo endpoint para obtener un token de acceso para un usuario
-# @bp.route('/token', methods=['GET'])
-# @jwt_required()
-# def get_token():
-#     """
-#     Obtener un token de acceso a la API pública para un usuario
-#     ---
-#     security:
-#         - JWT: []
-#     tags:
-#         - Usuarios
-#     responses:
-#         200:
-#             description: Token obtenido exitosamente
-#         400:
-#             description: Usuario no existe, no ha aceptado el compromise o no tiene token de acceso
-#     """
-#     current_user = get_jwt_identity()
-#     # Llamar al servicio para obtener el token
-#     return services.get_token(current_user)
-
 # Nuevo endpoint POST con un username y password en el body para generar un token de acceso para un usuario
 @bp.route('/token', methods=['POST'])
 @jwt_required()
@@ -397,3 +376,52 @@ def get_requests():
     
     # Llamar al servicio para obtener los requests
     return services.get_requests(current_user)
+
+# Nuevo endpoint para obtener la cantidad de requests por usuario y el lastRequest
+@bp.route('/favorites', methods=['POST'])
+@jwt_required()
+def set_favorite():
+    """
+    Obtener la cantidad de requests por usuario y el lastRequest
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    responses:
+        200:
+            description: Requests obtenidos exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    body = request.json
+    
+    # Llamar al servicio para obtener los requests
+    return services.set_favorite(current_user, body)
+
+@bp.route('/favorites', methods=['DELETE'])
+@jwt_required()
+def delete_favorite():
+    """
+    Obtener la cantidad de requests por usuario y el lastRequest
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    responses:
+        200:
+            description: Requests obtenidos exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    body = request.json
+    
+    # Llamar al servicio para obtener los requests
+    return services.delete_favorite(current_user, body)

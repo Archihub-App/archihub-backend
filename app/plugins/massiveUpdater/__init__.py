@@ -31,7 +31,7 @@ class ExtendedPluginClass(PluginClass):
             # get the current user
             current_user = get_jwt_identity()
 
-            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
+            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user) and not self.has_role('editor', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
             
             body = request.form.to_dict()
@@ -128,7 +128,9 @@ class ExtendedPluginClass(PluginClass):
 
             for index, row in df.iterrows():
                 # recuperamos el recurso
-                resource = mongodb.get_record('resources', {'_id': ObjectId(row['id'])}, {'_id': 1, 'metadata': 1, 'post_type': 1})
+                resource = mongodb.get_record('resources', {'_id': ObjectId(row['id'])}, {'_id': 1, 'metadata': 1, 'post_type': 1, 'status': 1})
+
+                status = resource['status']
 
                 update = {}
                 
