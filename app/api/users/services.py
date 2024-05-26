@@ -416,6 +416,8 @@ def set_favorite(user, body):
 
         update = UserUpdate(**update)
         mongodb.update_record('users', {'username': user}, update)
+        from app.api.resources.services import add_to_favCount
+        add_to_favCount(body['resource_id'])
 
         return {'msg': 'Favorito agregado exitosamente'}, 200
     except Exception as e:
@@ -430,6 +432,9 @@ def delete_favorite(user, body):
         }
         update = UserUpdate(**update)
         mongodb.update_record('users', {'username': user}, update)
+        from app.api.resources.services import remove_from_favCount
+        remove_from_favCount(body['resource_id'])
+        
         return {'msg': 'Favorito eliminado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500

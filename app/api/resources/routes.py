@@ -374,8 +374,6 @@ def favcount(resource_id):
     responses:
         200:
             description: Contador de favoritos obtenido exitosamente
-        401:
-            description: No tiene permisos para obtener el contador de favoritos
         500:
             description: Error al obtener el contador de favoritos
     """
