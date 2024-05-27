@@ -46,8 +46,17 @@ def get_all(post_type):
     current_user = get_jwt_identity()
     # Obtener el body del request
     body = request.json
+    
+    # convertir a cadena de texto el body
+    body = json.dumps(body)
+
     # Llamar al servicio para obtener los recursos
-    return services.get_all(post_type, body, current_user)
+    resp = services.get_all(post_type, body, current_user)
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para guardar un recurso nuevo
 @bp.route('', methods=['POST'])
@@ -93,7 +102,7 @@ def create():
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
-    if not user_services.has_role(current_user, 'admin'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
 
     # Obtener el body del request
@@ -346,3 +355,27 @@ def get_all_records(resource_id):
         return tuple(resp)
     else:
         return resp
+    
+@bp.route('/favcount/<resource_id>', methods=['GET'])
+@jwt_required()
+def favcount(resource_id):
+    """
+    Obtener el contador de favoritos de un recurso
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: resource_id
+          schema:
+              type: string
+    responses:
+        200:
+            description: Contador de favoritos obtenido exitosamente
+        500:
+            description: Error al obtener el contador de favoritos
+    """
+    # Llamar al servicio para obtener el contador de favoritos
+    return services.get_favCount(resource_id)

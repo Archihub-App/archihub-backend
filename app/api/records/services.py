@@ -592,3 +592,39 @@ def deleteBlockDocument(current_user, obj):
             return {'msg': 'Record no existe'}, 404
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+@cacheHandler.cache.cache(limit=2000)
+def get_favCount(id):
+    try:
+        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'favCount': 1})
+        if not record:
+            return {'msg': 'Record no existe'}, 404
+        return record['favCount']
+    except Exception as e:
+        raise Exception(str(e))
+    
+def add_to_favCount(id):
+    try:
+        update = {
+            '$inc': {
+                'favCount': 1
+            }
+        }
+        update_ = FileRecordUpdate(**update)
+        mongodb.update_record('records', {'_id': ObjectId(id)}, update_)
+        get_favCount.invalidate(id)
+    except Exception as e:
+        raise Exception(str(e))
+    
+def remove_from_favCount(id):
+    try:
+        update = {
+            '$inc': {
+                'favCount': -1
+            }
+        }
+        update_ = FileRecordUpdate(**update)
+        mongodb.update_record('records', {'_id': ObjectId(id)}, update_)
+        get_favCount.invalidate(id)
+    except Exception as e:
+        raise Exception(str(e))

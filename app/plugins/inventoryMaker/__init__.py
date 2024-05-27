@@ -104,9 +104,6 @@ class ExtendedPluginClass(PluginClass):
             if not self.has_role('admin', current_user) and not self.has_role('editor', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
             
-            if 'parent' not in body:
-                return {'msg': 'No se especificó el tipo de contenido'}, 400
-            
             task = self.create_types.delay(body, current_user)
             self.add_task_to_user(task.id, 'inventoryMaker.create_inventory_types', current_user, 'file_download')
 
@@ -254,10 +251,7 @@ class ExtendedPluginClass(PluginClass):
             cleaned_string = ''.join(char for char in input_string if ord(char) > 31 or ord(char) in (9, 10, 13))
             return cleaned_string
 
-        print(body)
-        types = list(mongodb.get_all_records('post_types', {'slug': body['parent']}))
-
-        print(types)
+        types = list(mongodb.get_all_records('post_types'))
 
         types_df = []
 
@@ -327,6 +321,27 @@ class ExtendedPluginClass(PluginClass):
             if body['parent']:
                 filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
 
+                if 'status' not in body:
+                    for o in filters['$or']:
+                        o['status'] = 'published'
+                elif body['status'] == 'draft':
+                    for o in filters['$or']:
+                        o['status'] = 'draft'
+
+                    from app.api.users.services import has_role
+                    if not has_role(user, 'publisher') or not has_role(user, 'admin'):
+                        for o in filters['$or']:
+                            o['createdBy'] = user
+
+        if 'status' not in body:
+            filters['status'] = 'published'
+        elif body['status'] == 'draft':
+            filters['status'] = 'draft'
+
+            from app.api.users.services import has_role
+            if not has_role(user, 'publisher') or not has_role(user, 'admin'):
+                filters['createdBy'] = user
+ 
         # buscamos los recursos con los filtros especificados
         resources = list(mongodb.get_all_records('resources', filters))
 
@@ -362,7 +377,11 @@ class ExtendedPluginClass(PluginClass):
                 elif f['type'] == 'select':
                     obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
                 elif f['type'] == 'simple-date':
-                    obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
+                    date = get_value_by_path(r, f['destiny'])
+                    if date:
+                        obj[f['label']] = date.strftime('%Y-%m-%d')
+                    else:
+                        obj[f['label']] = ''
 
             resources_df.append(obj)
 

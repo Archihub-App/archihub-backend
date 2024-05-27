@@ -17,6 +17,7 @@ class Record(BaseModel):
     status: str = 'uploaded'
     displayName: str = None
     accessRights: str = None
+    favCount: int = 0
 
     class Config:
         allow_population_by_field_name = True
@@ -45,6 +46,7 @@ class RecordUpdate(BaseModel):
     status: Optional[str]
     displayName: Optional[str]
     accessRights: Optional[str]
+    favCount: Optional[int]
 
     class Config:
         allow_population_by_field_name = True

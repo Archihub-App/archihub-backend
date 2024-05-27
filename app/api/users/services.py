@@ -374,22 +374,6 @@ def generate_node_token(username, password):
 
     # Retornar el token de acceso
     return jsonify({'access_token': access_token}), 200
-
-# # Nuevo servicio que devuelve el token de acceso de un usuario
-# def get_token(username):
-#     # Buscar el usuario en la base de datos
-#     user = mongodb.get_record('users', {'username': username})
-#     # Si el usuario no existe, retornar error
-#     if not user:
-#         return jsonify({'msg': 'Usuario no existe'}), 400
-#     # Si el usuario no ha aceptado el compromiso, retornar error
-#     if not user['compromise']:
-#         return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
-#     # Si el usuario no tiene token de acceso, retornar error
-#     if not user['access_token']:
-#         return jsonify({'msg': 'Usuario no tiene token de acceso'}), 400
-#     # Retornar el token de acceso
-#     return jsonify({'access_token': user['access_token']}), 200
     
 # Funcion para devolver las requests de un usuario, si lastRequest no es de la semana actual, se establece requests a 0
 def get_requests(username):
@@ -421,7 +405,62 @@ def get_requests(username):
         return parse_result(user)
     except Exception as e:
         raise Exception(str(e))
+
+def set_favorite(user, body):
+    try:
+        update = {
+            '$addToSet': {
+                'favorites': {
+                    'type': body['type'],
+                    'id': body['id']
+                }
+            }
+        }
+
+        fav = mongodb.get_record(body['type'], {'_id': ObjectId(body['id'])}, fields={'_id': 1, 'status': 1})
+
+        if not fav:
+            return {'msg': 'Favorito no existe'}, 404
+        elif fav['status'] != 'published' and body['type'] == 'resources':
+            return {'msg': 'Favorito no publicado'}, 400
+
+        resp = mongodb.update_record_operator('users', {'username': user}, update)
+
+        if body['type'] == 'resource':
+            from app.api.resources.services import add_to_favCount
+            add_to_favCount(body['id'])
+        elif body['type'] == 'record':
+            from app.api.records.services import add_to_favCount
+            add_to_favCount(body['id'])
+
+        return {'msg': 'Favorito agregado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
     
+def delete_favorite(user, body):
+    try:
+        update = {
+            '$pull': {
+                'favorites': {
+                    'type': body['type'],
+                    'id': body['id']
+                }
+            }
+        }
+
+        resp = mongodb.update_record_operator('users', {'username': user}, update)
+
+        if body['type'] == 'resource':
+            from app.api.resources.services import remove_from_favCount
+            remove_from_favCount(body['id'])
+        elif body['type'] == 'record':
+            from app.api.records.services import remove_from_favCount
+            remove_from_favCount(body['id'])
+
+        return {'msg': 'Favorito eliminado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 # Funcion que verifica que una fecha este dentro de la semana actual
 def is_date_in_current_week(date):
     today = datetime.date.today()

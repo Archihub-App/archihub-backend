@@ -50,8 +50,10 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
+@cacheHandler.cache.cache(limit=5000)
 def get_all(post_type, body, user):
     try:
+        body = json.loads(body)
         post_type_roles = cache_type_roles(post_type)
         if post_type_roles['viewRoles']:
             canView = False
@@ -71,9 +73,23 @@ def get_all(post_type, body, user):
             if body['parents']:
                 filters['parents.id'] = body['parents']['id']
 
+        if 'status' not in body:
+            body['status'] = 'published'
+
         if 'page' in body:
             skip = body['page'] * limit
 
+        filters['status'] = body['status']
+
+        if filters['status'] == 'draft':
+            filters.pop('status')
+            filters_ = {'$or': [{'status': 'draft', **filters}, {'status': 'created', **filters}, {'status': 'updated', **filters}]}
+            if not has_role(user, 'publisher') or not has_role(user, 'admin'):
+                for o in filters_['$or']:
+                    o['createdBy'] = user
+            filters = filters_
+
+        print(filters)
         # Obtener todos los recursos dado un tipo de contenido
         resources = list(mongodb.get_all_records(
             'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1}, sort=[('metadata.firstLevel.title', 1)]))
@@ -94,7 +110,7 @@ def get_all(post_type, body, user):
             'resources': resources
         }
         # Retornar los recursos
-        return jsonify(response), 200
+        return response, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -106,9 +122,17 @@ def create(body, user, files):
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': 'El recurso debe tener metadata'}, 400
-        # Agregar el campo status al body
-        body['status'] = 'created'
 
+        status = body['status']
+        if status == 'published':
+            if not has_role(user, 'publisher') and not has_role(user, 'admin'):
+                return {'msg': 'No tiene permisos para publicar un recurso'}, 401
+            
+        if not status:
+            status = 'draft'
+
+        body['createdBy'] = user
+            
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 
@@ -120,6 +144,8 @@ def create(body, user, files):
 
         if 'ident' not in body:
             body['ident'] = 'ident'
+        
+        hookHandler.call('resource_ident_create', body)
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
@@ -256,8 +282,6 @@ def update_relations_children(body, metadata, new = False):
                     update_ = ResourceUpdate(**update)
 
                     mongodb.update_record('resources', {'_id': ObjectId(a)}, update_)
-                
-
 
 # Funcion para validar el padre de un recurso
 def validate_parent(body):
@@ -307,8 +331,6 @@ def validate_parent(body):
         return body
 
 # Funcion para validar los campos de la metadata
-
-
 def validate_fields(body, metadata, errors):
     for field in metadata['fields']:
         try:
@@ -423,8 +445,6 @@ def validate_fields(body, metadata, errors):
     return body
 
 # Nuevo servicio para obtener un recurso por su id
-
-
 def get_by_id(id, user):
     try:
         # Obtener los accessRights del recurso
@@ -454,14 +474,14 @@ def get_by_id(id, user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache(limit=5000)
 def get_resource_type(id):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'post_type': 1})
     if not resource:
         raise Exception('Recurso no existe')
     return resource['post_type']
 
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache(limit=5000)
 def get_accessRights(id):
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'accessRights': 1, 'parents': 1})
@@ -491,13 +511,20 @@ def get_accessRights(id):
         
     return None
 
-@cacheHandler.cache.cache(limit=2000)
+@cacheHandler.cache.cache(limit=5000)
 def get_resource(id, user):
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception('Recurso no existe')
+    
+    status = resource['status']
+    if status == 'draft':
+        if not has_role(user, 'publisher') or not has_role(user, 'admin'):
+            if resource['createdBy'] != user:
+                raise Exception('No tiene permisos para ver este recurso')
+        
     # Registrar el log
     resource['_id'] = str(resource['_id'])
 
@@ -545,6 +572,25 @@ def get_resource(id, user):
     temp = []
     for f in resource['fields']:
         if f['type'] != 'file' and f['type'] != 'separator':
+            accesRights = None
+            if 'accessRights' in f:
+                accesRights = f['accessRights']
+
+            canView = True
+            if accesRights:
+                for a in accesRights:
+                    if not has_right(user, a) and not has_role(user, 'admin'):
+                        canView = False
+            
+            if not canView:
+                set_value_in_dict(resource, f['destiny'], 'No tiene permisos para ver este campo')
+                temp.append({
+                    'label': f['label'],
+                    'value': 'No tiene permisos para ver este campo',
+                    'type': 'text'
+                })
+                continue
+
             if f['type'] == 'text' or f['type'] == 'text-area':
                 value = get_value_by_path(resource, f['destiny'])
 
@@ -571,7 +617,6 @@ def get_resource(id, user):
                         'value': value,
                         'type': 'text'
                     })
-
             elif f['type'] == 'author':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
@@ -588,7 +633,6 @@ def get_resource(id, user):
                         'value': temp_,
                         'type': 'author'
                     })
-
             elif f['type'] == 'select-multiple2':
                 value = get_value_by_path(resource, f['destiny'])
                 if value:
@@ -614,7 +658,6 @@ def get_resource(id, user):
                         'value': value,
                         'type': 'simple-date'
                     })
-
             elif f['type'] == 'relation':
                 value = get_value_by_path(resource, f['destiny'])
 
@@ -701,7 +744,12 @@ def update_by_id(id, body, user, files):
         
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'files': 1})
 
-        body['status'] = 'updated'
+        status = body['status']
+        if status == 'published':
+            if not has_role(user, 'publisher') and not has_role(user, 'admin'):
+                return {'msg': 'No tiene permisos para publicar un recurso'}, 401
+        if not status:
+            status = 'draft'
 
         temp = []
         for f in body['files']:
@@ -757,8 +805,6 @@ def update_by_id(id, body, user, files):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para eliminar un recurso
-
-
 def delete_by_id(id, user):
     try:
         post_type = get_resource_type(id)
@@ -803,7 +849,6 @@ def delete_by_id(id, user):
         return {'msg': str(e)}, 500
 
 # Funcion para obtener los hijos de un recurso
-
 @cacheHandler.cache.cache(limit=1000)
 def get_children(id, available, resp=False):
     try:
@@ -831,8 +876,6 @@ def get_children(id, available, resp=False):
         return {'msg': str(e)}, 500
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
-
-
 @cacheHandler.cache.cache(limit=2000)
 def get_tree(root, available, user):
     try:
@@ -851,10 +894,10 @@ def get_tree(root, available, user):
             
             resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
-                             "$in": list_available}, 'parent': None}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         else:
             resources = list(mongodb.get_all_records('resources', {'post_type': {
-                             "$in": list_available}, 'parent.id': root}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         
         # Obtener el icono del post type
         # icon = mongodb.get_record(
@@ -874,8 +917,6 @@ def get_tree(root, available, user):
         return {'msg': str(e)}, 500
 
 # Funcion para validar que el tipo del padre sea uno admitido por el hijo
-
-
 @cacheHandler.cache.cache(limit=1000)
 def has_parent_postType(post_type, compare):
     try:
@@ -898,8 +939,6 @@ def has_parent_postType(post_type, compare):
         return {'msg': str(e)}, 500
 
 # Funcion para obtener los padres de un recurso
-
-
 @cacheHandler.cache.cache(limit=1000)
 def get_parents(id):
     try:
@@ -926,7 +965,6 @@ def get_parents(id):
         raise Exception(str(e))
 
 # Funcion para obtener el padre directo de un recurso
-
 @cacheHandler.cache.cache(limit=1000)
 def get_parent(id):
     try:
@@ -948,8 +986,6 @@ def get_parent(id):
         raise Exception(str(e))
 
 # Funcion para determinar si un recurso cambio de padre
-
-
 def has_changed_parent(id, body):
     try:
         if (len(body['parents']) == 0):
@@ -964,8 +1000,6 @@ def has_changed_parent(id, body):
         raise Exception(str(e))
 
 # Funcion para obtener los hijos directos de un recurso
-
-
 def get_direct_children(id):
     try:
         # Buscar los recursos en la base de datos con parent igual al id
@@ -1074,6 +1108,42 @@ def update_records(list, user):
             update_record(l, user)
     except Exception as e:
         raise Exception(str(e))
+    
+def add_to_favCount(id):
+    try:
+        update = {
+            '$inc': {
+                'favCount': 1
+            }
+        }
+        update_ = ResourceUpdate(**update)
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update_)
+        get_favCount.invalidate(id)
+    except Exception as e:
+        raise Exception(str(e))
+    
+def remove_from_favCount(id):
+    try:
+        update = {
+            '$inc': {
+                'favCount': -1
+            }
+        }
+        update_ = ResourceUpdate(**update)
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update_)
+        get_favCount.invalidate(id)
+    except Exception as e:
+        raise Exception(str(e))
+
+@cacheHandler.cache.cache(limit=2000)
+def get_favCount(id):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'favCount': 1})
+        if not resource:
+            raise Exception('Recurso no existe')
+        return {'favCount': resource['favCount']}, 200
+    except Exception as e:
+        raise Exception(str(e))
 
 # Funcion para obtener el total de recursos
 @cacheHandler.cache.cache(limit=1000)
@@ -1100,4 +1170,5 @@ def update_cache():
     get_accessRights.invalidate_all()
     get_resource_type.invalidate_all()
     get_resource_files.invalidate_all()
+    get_all.invalidate_all()
     clear_cache()

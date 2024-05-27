@@ -47,6 +47,11 @@ class ExtendedPluginClass(PluginClass):
         if 'parent' in body:
             if body['parent']:
                 filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
+                
+        if 'resources' in body:
+            if body['resources']:
+                if len(body['resources']) > 0:
+                    filters = {'_id': {'$in': [ObjectId(resource) for resource in body['resources']]}, **filters}
 
         return 'ok'
     
