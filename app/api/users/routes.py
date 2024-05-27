@@ -382,7 +382,7 @@ def get_requests():
 @jwt_required()
 def set_favorite():
     """
-    Obtener la cantidad de requests por usuario y el lastRequest
+    Agregar un favorito a un usuario
     ---
     security:
         - JWT: []
@@ -406,7 +406,7 @@ def set_favorite():
 @jwt_required()
 def delete_favorite():
     """
-    Obtener la cantidad de requests por usuario y el lastRequest
+    Eliminar un favorito de un usuario
     ---
     security:
         - JWT: []

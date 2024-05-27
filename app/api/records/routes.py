@@ -434,10 +434,6 @@ def favcount(record_id):
     responses:
         200:
             description: FavCount del record
-        401:
-            description: No tiene permisos para obtener un record
-        404:
-            description: Record no existe
         500:
             description: Error al obtener el record
     """

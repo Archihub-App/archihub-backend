@@ -412,15 +412,26 @@ def set_favorite(user, body):
             '$addToSet': {
                 'favorites': {
                     'type': body['type'],
-                    'id': body['resource_id']
+                    'id': body['id']
                 }
             }
         }
 
-        update = UserUpdate(**update)
-        mongodb.update_record('users', {'username': user}, update)
-        from app.api.resources.services import add_to_favCount
-        add_to_favCount(body['resource_id'])
+        fav = mongodb.get_record(body['type'], {'_id': ObjectId(body['id'])}, fields={'_id': 1, 'status': 1})
+
+        if not fav:
+            return {'msg': 'Favorito no existe'}, 404
+        elif fav['status'] != 'published' and body['type'] == 'resources':
+            return {'msg': 'Favorito no publicado'}, 400
+
+        resp = mongodb.update_record_operator('users', {'username': user}, update)
+
+        if body['type'] == 'resource':
+            from app.api.resources.services import add_to_favCount
+            add_to_favCount(body['id'])
+        elif body['type'] == 'record':
+            from app.api.records.services import add_to_favCount
+            add_to_favCount(body['id'])
 
         return {'msg': 'Favorito agregado exitosamente'}, 200
     except Exception as e:
@@ -432,14 +443,19 @@ def delete_favorite(user, body):
             '$pull': {
                 'favorites': {
                     'type': body['type'],
-                    'id': body['resource_id']
+                    'id': body['id']
                 }
             }
         }
-        update = UserUpdate(**update)
-        mongodb.update_record('users', {'username': user}, update)
-        from app.api.resources.services import remove_from_favCount
-        remove_from_favCount(body['resource_id'])
+
+        resp = mongodb.update_record_operator('users', {'username': user}, update)
+
+        if body['type'] == 'resource':
+            from app.api.resources.services import remove_from_favCount
+            remove_from_favCount(body['id'])
+        elif body['type'] == 'record':
+            from app.api.records.services import remove_from_favCount
+            remove_from_favCount(body['id'])
 
         return {'msg': 'Favorito eliminado exitosamente'}, 200
     except Exception as e:
