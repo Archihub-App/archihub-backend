@@ -1,8 +1,8 @@
 '''
 ARCHIHUB herramienta de gestión documental
-Versión 0.1
+Versión 0.2
 Autor: Néstor Andrés Peña
-
+Hecho con <3 en Colombia
 '''
 
 from flask import Flask
