@@ -117,8 +117,10 @@ def get_all(post_type, body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user, files):
     try:
+        print("11")
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
+        print("22")
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': 'El recurso debe tener metadata'}, 400
@@ -133,6 +135,7 @@ def create(body, user, files):
 
         body['createdBy'] = user
             
+        print("33")
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 
@@ -164,6 +167,7 @@ def create(body, user, files):
 
         resource = Resource(**body)
 
+        print("44")
         # Insertar el recurso en la base de datos
         new_resource = mongodb.insert_record('resources', resource)
         body['_id'] = str(new_resource.inserted_id)

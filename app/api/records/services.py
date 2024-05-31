@@ -447,7 +447,9 @@ def get_stream(id, current_user):
         resp_, status = get_by_id(id, current_user)
         if status != 200:
             return {'msg': resp_['msg']}, 500
+        
         path, type = cache_get_record_stream(id)
+
         path = os.path.join(WEB_FILES_PATH, path)
 
         if type == 'video':

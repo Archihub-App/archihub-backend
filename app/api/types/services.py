@@ -351,7 +351,10 @@ def get_types_info(post_type):
             last = post_types[-1]
 
             for p in post_types:
-                p['percent'] = round((p['count'] / last['count']) * 100)
+                if p['count'] == 0:
+                    p['percent'] = 0
+                else:
+                    p['percent'] = round((p['count'] / last['count']) * 100)
 
         else:
             post_types_children = get_children(pt, True, ['name', 'slug', 'icon', 'description'])
@@ -376,7 +379,10 @@ def get_types_info(post_type):
             last = post_types[-1]
 
             for p in post_types:
-                p['percent'] = round((p['count'] / last['count']) * 100)
+                if p['count'] == 0:
+                    p['percent'] = 0
+                else:
+                    p['percent'] = round((p['count'] / last['count']) * 100)
 
 
         filter_condition = {'parent.post_type': {'$in': [p['slug'] for p in post_types]}}
