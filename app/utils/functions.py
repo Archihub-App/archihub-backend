@@ -250,17 +250,43 @@ def cache_get_record_transcription(id, slug):
         'segments': record['processing'][slug]['result']['segments']
     }
 
+    temp = []
+    hasSpeakers = False
+
     for s in resp['segments']:
+        speaker = s['speaker'] if 'speaker' in s else None
+
+        if speaker:
+            hasSpeakers = True
+
         obj = {
             'text': s['text'],
             'start': s['start'],
             'end': s['end'],
+            'speaker': speaker
         }
 
-        s = obj
+        temp.append(obj)
 
-    # obtener el path del archivo
-    transcription = resp
+    speakers = None
+    if hasSpeakers:
+        speakers = []
+        for s in temp:
+            if s['speaker']:
+                if s['speaker'] not in [sp['name'] for sp in speakers]:
+                    speakers.append({'name': s['speaker'], 'segments': [
+                        {'start': s['start'], 'end': s['end']}
+                    ]})
+                else:
+                    for sp in speakers:
+                        if sp['name'] == s['speaker']:
+                            sp['segments'].append({'start': s['start'], 'end': s['end']})
+                
+
+    transcription = {
+        'segments': temp,
+        'speakers': speakers
+    }
 
     return transcription
 

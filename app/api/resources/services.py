@@ -120,7 +120,6 @@ def create(body, user, files):
         print("11")
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
-        print("22")
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': 'El recurso debe tener metadata'}, 400
@@ -135,15 +134,16 @@ def create(body, user, files):
 
         body['createdBy'] = user
             
-        print("33")
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 
         errors = {}
         # Validar los campos de la metadata
+        print("22")
         body = validate_fields(body, metadata, errors)
 
         update_relations_children(body, metadata['fields'], True)
+        print("33")
 
         if 'ident' not in body:
             body['ident'] = 'ident'
@@ -151,6 +151,7 @@ def create(body, user, files):
         hookHandler.call('resource_ident_create', body)
 
         if errors:
+            print(errors)
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
 
         array_files = False

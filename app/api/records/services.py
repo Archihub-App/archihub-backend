@@ -470,7 +470,6 @@ def get_transcription(id, slug, current_user):
         if status != 200:
             return {'msg': resp_['msg']}, 500
         resp = cache_get_record_transcription(id, slug)
-        
         # Si el record existe, retornar el record
         return resp, 200
 
