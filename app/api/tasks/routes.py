@@ -31,7 +31,7 @@ def get_tasks(user):
     
     body = request.json
     # Verificar si el usuario tiene el rol de administrador
-    if not user_services.has_role(current_user, 'admin') or current_user != user:
+    if not user_services.has_role(current_user, 'admin') and (current_user != user and user == 'automatic'):
         return {'msg': 'No tiene permisos para obtener las tasks'}, 401
 
     return services.get_tasks(user, body)
@@ -53,7 +53,7 @@ def get_tasks_total(user):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
-    if not user_services.has_role(current_user, 'admin') or current_user != user:
+    if not user_services.has_role(current_user, 'admin') and (current_user != user and user == 'automatic'):
         return {'msg': 'No tiene permisos para obtener las tasks'}, 401
 
     resp = services.get_tasks_total(user)

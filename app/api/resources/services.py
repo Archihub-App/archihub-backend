@@ -140,8 +140,6 @@ def create(body, user, files):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
-
-        print(metadata['fields'])
         update_relations_children(body, metadata['fields'], True)
 
         if 'ident' not in body:
