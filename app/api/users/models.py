@@ -14,11 +14,12 @@ class User(BaseModel):
     token: str = ""
     adminToken: str = ""
     nodeToken: str = ""
+    vizToken: str = ""
     roles: list[str] = None
     accessRights: list[str] = None
     requests: int = 0
     lastRequest: datetime = None
-    favorites: list[str] = None
+    favorites: list[dict] = None
 
     class Config:
         allow_population_by_field_name = True
@@ -40,9 +41,10 @@ class UserUpdate(BaseModel):
     token: Optional[str] = None
     adminToken: Optional[str] = None
     nodeToken: Optional[str] = None
+    vizToken: Optional[str] = None
     requests: Optional[int] = None
     lastRequest: Optional[datetime] = None
-    favorites: Optional[list[str]] = None
+    favorites: Optional[list[dict]] = None
 
     class Config:
         allow_population_by_field_name = True

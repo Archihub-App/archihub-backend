@@ -254,8 +254,8 @@ def delete_by_slug(slug):
     # Llamar al servicio para eliminar un tipo de contenido por su slug
     return services.delete_by_slug(slug, current_user)
 
-@bp.route('/info', methods=['GET'])
-def get_types_info():
+@bp.route('/info/<post_type>', methods=['GET'])
+def get_types_info(post_type):
     """
     Obtener información de los tipos de contenido
     ---
@@ -267,4 +267,9 @@ def get_types_info():
         500:
             description: Error al obtener la información de los tipos de contenido
     """
-    return services.get_types_info()
+    resp = services.get_types_info(post_type)
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp

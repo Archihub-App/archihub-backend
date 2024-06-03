@@ -148,6 +148,7 @@ def create(body, user, files):
         hookHandler.call('resource_ident_create', body)
 
         if errors:
+            print(errors)
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
 
         array_files = False
@@ -210,7 +211,7 @@ def create(body, user, files):
 def update_relations_children(body, metadata, new = False):
     for f in metadata:
         if f['type'] == 'relation':
-            if f['relation_type'] == body['post_type']:
+            if f['relation_type'] == body['post_type'] and get_value_by_path(body, f['destiny']):
                 if not new:
                     current = mongodb.get_record('resources', {'_id': ObjectId(body['_id'])})
                     current_children = get_value_by_path(current, f['destiny'])
@@ -422,7 +423,7 @@ def validate_fields(body, metadata, errors):
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
 
         except Exception as e:
-            print(str(e))
+            print(str(e), field['destiny'])
             errors[field['destiny']] = str(e)
 
     if 'accessRights' not in body:

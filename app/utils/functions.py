@@ -64,6 +64,7 @@ def get_roles():
         temp.append({'id': 'admin', 'term': 'admin'})
         temp.append({'id': 'editor', 'term': 'editor'})
         temp.append({'id': 'publisher', 'term': 'publisher'})
+        temp.append({'id': 'visualizer', 'term': 'visualizer'})
         temp.append({'id': 'processing', 'term': 'processing'})
 
         return {
@@ -249,17 +250,52 @@ def cache_get_record_transcription(id, slug):
         'segments': record['processing'][slug]['result']['segments']
     }
 
+    temp = []
+    hasSpeakers = False
+
     for s in resp['segments']:
+        speaker = s['speaker'] if 'speaker' in s else None
+
+        if speaker:
+            hasSpeakers = True
+
         obj = {
             'text': s['text'],
             'start': s['start'],
             'end': s['end'],
+            'speaker': speaker
         }
 
-        s = obj
+        temp.append(obj)
 
-    # obtener el path del archivo
-    transcription = resp
+    speakers = None
+    if hasSpeakers:
+        speakers = []
+        for s in temp:
+            if s['speaker']:
+                if s['speaker'] not in [sp['name'] for sp in speakers]:
+                    speakers.append({'name': s['speaker'], 'segments': [
+                        {'start': s['start'], 'end': s['end']}
+                    ]})
+                else:
+                    for sp in speakers:
+                        if sp['name'] == s['speaker']:
+                            if s['start'] - sp['segments'][-1]['end'] < 5:
+                                sp['segments'][-1]['end'] = s['end']
+                            else:
+                                sp['segments'].append({'start': s['start'], 'end': s['end']})
+        
+        for sp in speakers:
+            total = 0
+            for seg in sp['segments']:
+                total += seg['end'] - seg['start']
+            sp['total'] = total
+                
+
+    transcription = {
+        'segments': temp,
+        'speakers': speakers
+    }
 
     return transcription
 

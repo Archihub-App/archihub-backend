@@ -165,7 +165,7 @@ def delete_by_slug(slug, user):
     return {'msg': 'Tipo de post eliminado exitosamente'}, 204
 
 # Funcion que devuelve recursivamente los padres de un tipo de post
-def get_parents(post_type, first=True):
+def get_parents(post_type, first=True, fields=['name', 'slug', 'icon']):
     # Si el tipo de post no tiene padre, retornar una lista vacia
     if len(post_type['parentType']) == 0:
         return []
@@ -185,20 +185,52 @@ def get_parents(post_type, first=True):
     # Retornar el padre y los padres del padre
     resp = []
     for p in parent:
-        resp.append({
-            'name': p['name'],
-            'slug': p['slug'],
-            'icon': p['icon'],
-            'direct': True if first else False
-        })
+        obj = {
+            'direct': True if first else False,
+        }
 
-        temp = get_parents(p, False)
+        for f in fields:
+            obj[f] = p[f]
+
+        resp.append(obj)
+
+        temp = get_parents(p, False, fields)
 
         for t in temp:
             if t['slug'] not in [r['slug'] for r in resp]:
                 resp.append(t)
-    
-    
+    return resp
+
+# Funcion para obtener recursivamente los hijos de un tipo de post
+def get_children(post_type, first=True, fields=['name', 'slug', 'icon']):
+    # Buscar los tipos de post que tengan como padre el tipo de post
+    children = list(mongodb.get_all_records(
+        'post_types', {'parentType.id': post_type['slug']}))
+    # Si no hay hijos, retornar una lista vacia
+    if not children:
+        return []
+    # Retornar los hijos y los hijos de los hijos
+    resp = []
+    for c in children:
+        obj = {
+            'direct': True if first else False,
+        }
+
+        for f in fields:
+            obj[f] = c[f]
+
+        resp.append(obj)
+
+    for c in resp:
+        temp = get_children(c, False, fields)
+
+        if len(temp) == 0:
+            c['is_last'] = True
+
+        for t in temp:
+            if t['slug'] not in [r['slug'] for r in resp]:
+                resp.append(t)
+
     return resp
 
 # Funcion para agregar al contador de recursos de un tipo de post
@@ -264,8 +296,6 @@ def get_form_by_slug(slug):
     try:
         # Buscar el formulario en la base de datos
         form = mongodb.get_record('forms', {'slug': slug})
-
-        print(form)
         # Si el formulario no existe, retornar error
         if not form:
             return {'msg': 'Formulario no existe'}
@@ -290,33 +320,77 @@ def get_form_by_slug(slug):
 
 
 @cacheHandler.cache.cache()
-def get_types_info():
+def get_types_info(post_type):
     try:
-        # Obtener todos los tipos de post en orden alfabetico ascendente por el campo name
-        post_types = list(mongodb.get_all_records(
-            'post_types',  {'$or': [{'viewRoles': {'$exists': False}}, {'viewRoles': {'$eq': []}}]}, [('name', 1)]))
+        # Obtener el tipo de post en la base de datos
+        pt = mongodb.get_record('post_types', {'slug': post_type})
+        # verificar si el tipo de post es padre de otro
+        is_parent = mongodb.count('post_types', {'parentType.id': post_type})
 
-        # Quitar todos los campos menos el nombre y la descripción
-        post_types = [{'name': post_type['name'], 'slug': post_type['slug']}
-                      for post_type in post_types]
-        
-        for p in post_types:
-            p['count'] = get_count(p['slug'])
+        if is_parent > 0:
+            is_parent = True
+        else:
+            is_parent = False
 
-        # order post_types by count
-        post_types = sorted(
-            post_types, key=lambda k: k['count'], reverse=False)
-        # get last item of post_types
-        last = post_types[-1]
+        if not is_parent:
+            post_types = get_parents(pt, True, ['name', 'slug', 'icon', 'description'])
 
-        for p in post_types:
-            p['percent'] = round((p['count'] / last['count']) * 100)
+            post_types.append({
+                'name': pt['name'],
+                'slug': pt['slug'],
+                'icon': pt['icon'],
+                'description': pt['description'],
+                'direct': True,
+                'is_last': True
+            })
 
-        # records count
+            for p in post_types:
+                p['count'] = get_count(p['slug'])
+
+            post_types = sorted(post_types, key=lambda k: k['count'], reverse=False)
+            last = post_types[-1]
+
+            for p in post_types:
+                if p['count'] == 0:
+                    p['percent'] = 0
+                else:
+                    p['percent'] = round((p['count'] / last['count']) * 100)
+
+        else:
+            post_types_children = get_children(pt, True, ['name', 'slug', 'icon', 'description'])
+            post_types_parents = get_parents(pt, True, ['name', 'slug', 'icon', 'description'])
+
+            post_types = [
+                *post_types_parents,
+                {
+                    'name': pt['name'],
+                    'slug': pt['slug'],
+                    'icon': pt['icon'],
+                    'description': pt['description'],
+                    'direct': True
+                },
+                *post_types_children
+            ]
+
+            for p in post_types:
+                p['count'] = get_count(p['slug'])
+
+            post_types = sorted(post_types, key=lambda k: k['count'], reverse=False)
+            last = post_types[-1]
+
+            for p in post_types:
+                if p['count'] == 0:
+                    p['percent'] = 0
+                else:
+                    p['percent'] = round((p['count'] / last['count']) * 100)
+
+
+        filter_condition = {'parent.post_type': {'$in': [p['slug'] for p in post_types]}}
         records_count = mongodb.count(
-            'records', {'viewRoles': {'$exists': True, '$ne': []}})
+            'records', filter_condition)
 
         records_types = list(mongodb.aggregate('records', [
+            {'$match': filter_condition},
             {'$group': {'_id': '$processing.fileProcessing.type', 'count': {'$sum': 1}}},
             {'$sort': {'count': -1}}
         ]))
@@ -328,8 +402,7 @@ def get_types_info():
                 'data': records_types
             }
         }
-        # Retornar post_types
-        return jsonify(resp), 200
+        return resp, 200
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
@@ -339,7 +412,7 @@ def get_types_info():
 def get_count(type):
     try:
         # Obtener todos los tipos de post en orden alfabetico ascendente por el campo name
-        count = mongodb.count('resources', {'post_type': type})
+        count = mongodb.count('resources', {'post_type': type, 'status': 'published'})
 
         # Retornar post_types
         return count

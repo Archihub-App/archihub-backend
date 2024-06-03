@@ -447,7 +447,9 @@ def get_stream(id, current_user):
         resp_, status = get_by_id(id, current_user)
         if status != 200:
             return {'msg': resp_['msg']}, 500
+        
         path, type = cache_get_record_stream(id)
+
         path = os.path.join(WEB_FILES_PATH, path)
 
         if type == 'video':
@@ -467,14 +469,17 @@ def get_transcription(id, slug, current_user):
         resp_, status = get_by_id(id, current_user)
         if status != 200:
             return {'msg': resp_['msg']}, 500
-        resp = cache_get_record_transcription(id, slug)
         
+        resp = cache_get_record_transcription(id, slug)
         # Si el record existe, retornar el record
         return resp, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+def update_transcription(id, slug, transcription, current_user):
+    pass
+
 # Nuevo servicio para devolver las paginas en baja de un documento por su id
 def get_document(id, current_user):
     try:

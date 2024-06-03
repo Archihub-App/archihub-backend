@@ -374,6 +374,34 @@ def generate_node_token(username, password):
 
     # Retornar el token de acceso
     return jsonify({'access_token': access_token}), 200
+
+def generate_viz_token(username, password):
+    # Buscar el usuario en la base de datos
+    user = mongodb.get_record('users', {'username': username})
+    # Si el usuario no existe, retornar error
+    if not user:
+        return jsonify({'msg': 'Usuario no existe'}), 400
+    
+    # Si la contraseña no coincide, retornar error
+    if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+        return jsonify({'msg': 'Contraseña incorrecta'}), 400
+    
+    # Si el usuario no ha aceptado el compromiso, retornar error
+    if not user['compromise']:
+        return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
+    
+    access_token = create_access_token(identity=username, expires_delta=False)
+    # usamos Fernet para encriptar el token de acceso
+    cipher = fernet.encrypt(access_token.encode('utf-8'))
+
+    # encrypt the access token
+    update = UserUpdate(vizToken=cipher)
+
+    # guardar el token de acceso en la base de datos
+    mongodb.update_record('users', {'username': username}, update)
+
+    # Retornar el token de acceso
+    return jsonify({'access_token': access_token}), 200
     
 # Funcion para devolver las requests de un usuario, si lastRequest no es de la semana actual, se establece requests a 0
 def get_requests(username):
