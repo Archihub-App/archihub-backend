@@ -117,7 +117,6 @@ def get_all(post_type, body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user, files):
     try:
-        print("11")
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
         # Si el body no tiene metadata, retornar error
@@ -139,11 +138,11 @@ def create(body, user, files):
 
         errors = {}
         # Validar los campos de la metadata
-        print("22")
         body = validate_fields(body, metadata, errors)
 
+
+        print(metadata['fields'])
         update_relations_children(body, metadata['fields'], True)
-        print("33")
 
         if 'ident' not in body:
             body['ident'] = 'ident'
@@ -168,7 +167,6 @@ def create(body, user, files):
 
         resource = Resource(**body)
 
-        print("44")
         # Insertar el recurso en la base de datos
         new_resource = mongodb.insert_record('resources', resource)
         body['_id'] = str(new_resource.inserted_id)
@@ -215,7 +213,7 @@ def create(body, user, files):
 def update_relations_children(body, metadata, new = False):
     for f in metadata:
         if f['type'] == 'relation':
-            if f['relation_type'] == body['post_type']:
+            if f['relation_type'] == body['post_type'] and get_value_by_path(body, f['destiny']):
                 if not new:
                     current = mongodb.get_record('resources', {'_id': ObjectId(body['_id'])})
                     current_children = get_value_by_path(current, f['destiny'])
@@ -427,7 +425,7 @@ def validate_fields(body, metadata, errors):
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
 
         except Exception as e:
-            print(str(e))
+            print(str(e), field['destiny'])
             errors[field['destiny']] = str(e)
 
     if 'accessRights' not in body:

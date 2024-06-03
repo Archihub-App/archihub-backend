@@ -14,6 +14,7 @@ class User(BaseModel):
     token: str = ""
     adminToken: str = ""
     nodeToken: str = ""
+    vizToken: str = ""
     roles: list[str] = None
     accessRights: list[str] = None
     requests: int = 0
@@ -40,6 +41,7 @@ class UserUpdate(BaseModel):
     token: Optional[str] = None
     adminToken: Optional[str] = None
     nodeToken: Optional[str] = None
+    vizToken: Optional[str] = None
     requests: Optional[int] = None
     lastRequest: Optional[datetime] = None
     favorites: Optional[list[dict]] = None

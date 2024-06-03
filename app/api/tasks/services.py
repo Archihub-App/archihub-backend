@@ -25,8 +25,13 @@ def get_tasks(user, body):
         if 'page' in body:
             skip = body['page'] * limit
 
+        user_array = [user]
+
+        if 'automatic' in body:
+            user_array = ['automatic']
+
         # Obtener las tasks de un usuario
-        tasks = mongodb.get_all_records('tasks', {'user': {'$in': [user]}}, sort=[('date', -1)], fields={'_id': 0, 'user': 0}, limit=limit, skip=skip)
+        tasks = mongodb.get_all_records('tasks', {'user': {'$in': user_array}}, sort=[('date', -1)], fields={'_id': 0, 'user': 0}, limit=limit, skip=skip)
         # Parsear el resultado
         tasks = parse_result(tasks)
 

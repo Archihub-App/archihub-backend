@@ -280,7 +280,16 @@ def cache_get_record_transcription(id, slug):
                 else:
                     for sp in speakers:
                         if sp['name'] == s['speaker']:
-                            sp['segments'].append({'start': s['start'], 'end': s['end']})
+                            if s['start'] - sp['segments'][-1]['end'] < 5:
+                                sp['segments'][-1]['end'] = s['end']
+                            else:
+                                sp['segments'].append({'start': s['start'], 'end': s['end']})
+        
+        for sp in speakers:
+            total = 0
+            for seg in sp['segments']:
+                total += seg['end'] - seg['start']
+            sp['total'] = total
                 
 
     transcription = {
