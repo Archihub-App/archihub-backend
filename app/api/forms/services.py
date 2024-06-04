@@ -154,7 +154,7 @@ def validate_form(form):
             if field['destiny'] == 'ident':
                 raise Exception("Error: el formulario no puede tener un campo con destino igual a ident")
             
-            if not field['destiny'].startswith('metadata') and not field['destiny'] == 'file':
+            if not field['destiny'].startswith('metadata') and not field['destiny'] == 'file' and not field['type'] == 'separator':
                 raise Exception("Error: el formulario no puede tener un campo con destino que no inicie con metadata")
             
         if field['type'] == 'file':
