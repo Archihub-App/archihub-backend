@@ -114,7 +114,7 @@ def create():
             return {'msg': 'El slug ya existe'}, 400
 
 # Nuevo endpoint para devolver un estándar por su slug
-@bp.route('/<slug>', methods=['GET'])
+@bp.route('/<slug>', methods=['POST'])
 @jwt_required()
 def get_by_slug(slug):
     """
@@ -141,11 +141,12 @@ def get_by_slug(slug):
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
+    body = request.json
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener el estándar por su slug
-    resp = services.get_by_slug(slug)
+    resp = services.get_by_slug(slug, body)
 
     # Si el estándar no existe, retornar error
     if 'msg' in resp:
