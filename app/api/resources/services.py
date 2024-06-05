@@ -361,11 +361,21 @@ def validate_fields(body, metadata, errors):
                         elif field['required'] and field['destiny'] != 'accessRights':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
-                    elif field['type'] == 'pattern':
+                    elif field['type'] == 'number':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
-                            validate_text_regex(get_value_by_path(
-                                body, field['destiny']), field)
+                            if not isinstance(get_value_by_path(body, field['destiny']), int):
+                                errors[field['destiny']
+                                    ] = f'El campo {field["label"]} debe ser un número'
+                        elif field['required']:
+                            errors[field['destiny']
+                                   ] = f'El campo {field["label"]} es requerido'
+                    elif field['type'] == 'checkbox':
+                        exists = get_value_by_path(body, field['destiny'])
+                        if exists:
+                            if not isinstance(get_value_by_path(body, field['destiny']), bool):
+                                errors[field['destiny']
+                                    ] = f'El campo {field["label"]} debe ser un booleano'
                         elif field['required']:
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'

@@ -63,13 +63,18 @@ def create(body, user):
 
 # Nuevo servicio para devolver un formulario por su slug
 @cacheHandler.cache.cache()
-def get_by_slug(slug):
+def get_by_slug(slug, body):
     try:
         # Buscar el formulario en la base de datos
         form = mongodb.get_record('forms', {'slug': slug})
         # Si el formulario no existe, retornar error
         if not form:
             return {'msg': 'Formulario no existe'}
+        
+        isPaged = False
+        if 'paged' in body:
+            if body['paged'] == True and 'page' in body:
+                isPaged = True
         
         # Agregamos un nuevo campo al inicio del arreglo de fields, que es el campo de accessRights
         form['fields'].insert(0, {
@@ -154,7 +159,7 @@ def validate_form(form):
             if field['destiny'] == 'ident':
                 raise Exception("Error: el formulario no puede tener un campo con destino igual a ident")
             
-            if not field['destiny'].startswith('metadata') and not field['destiny'] == 'file':
+            if not field['destiny'].startswith('metadata') and not field['destiny'] == 'file' and not field['type'] == 'separator':
                 raise Exception("Error: el formulario no puede tener un campo con destino que no inicie con metadata")
             
         if field['type'] == 'file':
