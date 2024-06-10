@@ -1,6 +1,6 @@
 from flask import jsonify, request
 from app.utils import IndexHandler
-from app.api.users.services import has_right, has_role
+from app.api.users.services import has_right, has_role, get_user_rights
 from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
 from app.api.resources.services import get_accessRights, get_resource_type, get_children
 from app.api.types.services import get_icon
@@ -13,6 +13,9 @@ ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 def get_resources_by_filters(body, user):
     try:
         post_type_roles = cache_type_roles(body['post_type'])
+        user_accessRights = get_user_rights(user)
+        user_accessRights = user_accessRights + ['public']
+
         if post_type_roles['viewRoles']:
             canView = False
             for r in post_type_roles['viewRoles']:
@@ -28,7 +31,17 @@ def get_resources_by_filters(body, user):
                     'filter': [
                         {
                             'term': {
-                                'post_type': body['post_type']
+                                'post_type.keyword': body['post_type']
+                            }
+                        },
+                        {
+                            'term': {
+                                'status.keyword': 'published'
+                            }
+                        },
+                        {
+                            'terms': {
+                                'accessRights.keyword': user_accessRights
                             }
                         }
                     ],

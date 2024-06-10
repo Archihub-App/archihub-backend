@@ -150,4 +150,6 @@ class IndexHandler:
             ELASTIC_PORT + '/' + index + '/_search'
         response = requests.post(url, json=query, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
+        
+        print(query)
         return response.json()

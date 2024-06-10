@@ -453,6 +453,10 @@ def regenerate_index(user):
             'type': 'keyword'
         }
 
+        mapping['status'] = {
+            'type': 'keyword'
+        }
+
         mapping['parents'] = {
             'type': 'object',
             'properties': {
@@ -627,6 +631,11 @@ def index_resources_task(user):
             document['parents'] = resource['parents']
             document['parent'] = resource['parent']
             document['ident'] = resource['ident']
+            document['status'] = resource['status']
+            document['accessRights'] = 'public'
+            if 'accessRights' in resource:
+                if resource['accessRights']:
+                    document['accessRights'] = resource['accessRights']
 
             r = index_handler.index_document(ELASTIC_INDEX_PREFIX + '-resources', str(resource['_id']), document)
             if r.status_code != 201 and r.status_code != 200:
