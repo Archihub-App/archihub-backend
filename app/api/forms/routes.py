@@ -82,36 +82,9 @@ def create():
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
-    # si el slug no está definido, crearlo
-    if 'slug' not in body or body['slug'] == '':
-        body['slug'] = body['name'].lower().replace(' ', '-')
-        # quitamos los caracteres especiales y las tildes pero dejamos los guiones
-        body['slug'] = ''.join(e for e in body['slug'] if e.isalnum() or e == '-')
-        # quitamos los guiones al inicio y al final
-        body['slug'] = body['slug'].strip('-')
-        # quitamos los guiones repetidos
-        body['slug'] = body['slug'].replace('--', '-')
-
-        # llamamos al servicio para verificar si el slug ya existe
-        slug_exists = services.get_by_slug(body['slug'])
-        # Mientras el slug exista, agregar un número al final
-        index = 1
-        while 'msg' not in slug_exists:
-            body['slug'] = body['slug'] + '-' + index
-            slug_exists = services.get_by_slug(body['slug'])
-            index += 1
-            
-        # Llamar al servicio para crear un estándar de metadatos
-        return services.create(body, current_user)
-    else:
-        slug_exists = services.get_by_slug(body['slug'])
-        # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
-        if 'msg' in slug_exists:
-            if slug_exists['msg'] == 'Tipo de contenido no existe':
-                # Llamar al servicio para crear un tipo de contenido
-                return services.create(body, current_user)
-        else:
-            return {'msg': 'El slug ya existe'}, 400
+    
+    return services.create(body, current_user)
+    
 
 # Nuevo endpoint para devolver un estándar por su slug
 @bp.route('/<slug>', methods=['POST'])
@@ -146,7 +119,7 @@ def get_by_slug(slug):
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener el estándar por su slug
-    resp = services.get_by_slug(slug, body)
+    resp = services.get_by_slug(slug)
 
     # Si el estándar no existe, retornar error
     if 'msg' in resp:
@@ -248,3 +221,38 @@ def delete_by_slug(slug):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para eliminar el estándar por su slug
     return services.delete_by_slug(slug, current_user)
+
+# Nuevo endpoint para duplicar un estándar por su slug
+@bp.route('/duplicate/<slug>', methods=['POST'])
+@jwt_required()
+def duplicate_by_slug(slug):
+    """
+    Duplicar un estándar por su slug
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Estándares de metadatos
+    parameters:
+        - in: path
+          name: slug
+          schema:
+            type: string
+          required: true
+    responses:
+        200:
+            description: Estándar de metadatos duplicado exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
+        404:
+            description: Estándar de metadatos no encontrado
+        500:
+            description: Error al duplicar el estándar de metadatos
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Llamar al servicio para duplicar el estándar por su slug
+    return services.duplicate_by_slug(slug, current_user)
