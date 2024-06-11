@@ -7,6 +7,7 @@ log_actions = {
     'type_delete': 'TYPE_DELETE',
     'form_create': 'FORM_CREATE',
     'form_update': 'FORM_UPDATE',
+    'form_duplicate': 'FORM_DUPLICATE',
     'form_delete': 'FORM_DELETE',
     'list_create': 'LIST_CREATE',
     'list_update': 'LIST_UPDATE',

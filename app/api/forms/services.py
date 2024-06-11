@@ -41,6 +41,33 @@ def get_all():
 def create(body, user):
     # Crear instancia de Form con el body del request
     try:
+        # si el slug no está definido, crearlo
+        if 'slug' not in body or body['slug'] == '':
+            body['slug'] = body['name'].lower().replace(' ', '-')
+            # quitamos los caracteres especiales y las tildes pero dejamos los guiones
+            body['slug'] = ''.join(e for e in body['slug'] if e.isalnum() or e == '-')
+            # quitamos los guiones al inicio y al final
+            body['slug'] = body['slug'].strip('-')
+            # quitamos los guiones repetidos
+            body['slug'] = body['slug'].replace('--', '-')
+
+            # llamamos al servicio para verificar si el slug ya existe
+            slug_exists = get_by_slug(body['slug'])
+            # Mientras el slug exista, agregar un número al final
+            index = 1
+            while 'msg' not in slug_exists:
+                body['slug'] = body['slug'] + '-' + str(index)
+                slug_exists = get_by_slug(body['slug'])
+                index += 1
+                
+        else:
+            slug_exists = get_by_slug(body['slug'])
+            index = 1
+            while 'msg' not in slug_exists:
+                body['slug'] = body['slug'] + '-' + str(index)
+                slug_exists = get_by_slug(body['slug'])
+                index += 1
+            
         validate_form(body)
         # se verifica el arbol completo de metadatos de la herramienta
         update_main_schema(new_form=body)
@@ -59,22 +86,18 @@ def create(body, user):
         # Retornar el resultado
         return {'msg': 'Formulario creado exitosamente'}, 201
     except Exception as e:
+            print(str(e))
             return {'msg': str(e)}, 500
 
 # Nuevo servicio para devolver un formulario por su slug
 @cacheHandler.cache.cache()
-def get_by_slug(slug, body):
+def get_by_slug(slug):
     try:
         # Buscar el formulario en la base de datos
         form = mongodb.get_record('forms', {'slug': slug})
         # Si el formulario no existe, retornar error
         if not form:
             return {'msg': 'Formulario no existe'}
-        
-        isPaged = False
-        if 'paged' in body:
-            if body['paged'] == True and 'page' in body:
-                isPaged = True
         
         # Agregamos un nuevo campo al inicio del arreglo de fields, que es el campo de accessRights
         form['fields'].insert(0, {
@@ -260,6 +283,23 @@ def update_main_schema(new_form = None, updated_form = None):
 
     except Exception as e:
         raise Exception(str(e))
+    
+def duplicate_by_slug(slug, user):
+    try:
+        form = mongodb.get_record('forms', {'slug': slug})
+        if not form:
+            return {'msg': 'Formulario no existe'}, 404
+        
+        form['name'] = form['name'] + ' (copia)'
+        form['slug'] = form['slug']
+        form['fields'] = [field for field in form['fields']]
+
+        form.pop('_id')
+        
+        return create(form, user)
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
     
 # Funcion que hace un merge entre dos diccionarios
 def merge_dicts(dict1, dict2):

@@ -311,6 +311,14 @@ def has_right(username, right):
     # Si el usuario no tiene el rol, retornar False
     return False
 
+def get_user_rights(username):
+    user = mongodb.get_record('users', {'username': username}, fields={'accessRights': 1})
+    # Si el usuario no existe, retornar error
+    if not user:
+        return jsonify({'msg': 'Usuario no existe'}), 400
+    # Retornar los roles del usuario
+    return user['accessRights']
+
 # Nuevo servicio para generar un token de autenticación para usar la API publica
 def generate_token(username, password, admin = False):
     # Buscar el usuario en la base de datos
