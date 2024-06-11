@@ -342,7 +342,7 @@ def validate_fields(body, metadata, errors):
                         if exists:
                             validate_text(get_value_by_path(
                                 body, field['destiny']), field)
-                        elif field['required']:
+                        elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'text-area':
@@ -350,7 +350,7 @@ def validate_fields(body, metadata, errors):
                         if exists:
                             validate_text(get_value_by_path(
                                 body, field['destiny']), field)
-                        elif field['required']:
+                        elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'select':
@@ -358,7 +358,7 @@ def validate_fields(body, metadata, errors):
                         if exists:
                             validate_text(get_value_by_path(
                                 body, field['destiny']), field)
-                        elif field['required'] and field['destiny'] != 'accessRights':
+                        elif field['required'] and body['status'] == 'published' and field['destiny'] != 'accessRights':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'number':
@@ -367,7 +367,7 @@ def validate_fields(body, metadata, errors):
                             if not isinstance(get_value_by_path(body, field['destiny']), int):
                                 errors[field['destiny']
                                     ] = f'El campo {field["label"]} debe ser un número'
-                        elif field['required']:
+                        elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'checkbox':
@@ -376,7 +376,7 @@ def validate_fields(body, metadata, errors):
                             if not isinstance(get_value_by_path(body, field['destiny']), bool):
                                 errors[field['destiny']
                                     ] = f'El campo {field["label"]} debe ser un booleano'
-                        elif field['required']:
+                        elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'select-multiple2':
@@ -384,7 +384,7 @@ def validate_fields(body, metadata, errors):
                         if exists:
                             validate_text_array(get_value_by_path(
                                 body, field['destiny']), field)
-                        elif field['required']:
+                        elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'author':
@@ -392,7 +392,7 @@ def validate_fields(body, metadata, errors):
                         if exists:
                             validate_author_array(get_value_by_path(
                                 body, field['destiny']), field)
-                        elif field['required']:
+                        elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'simple-date':
@@ -407,7 +407,7 @@ def validate_fields(body, metadata, errors):
                                 value = get_value_by_path(body, field['destiny'])
                             validate_simple_date(value, field)
                             body = change_value(body, field['destiny'], value)
-                        elif field['required']:
+                        elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'relation':
                         exists = get_value_by_path(body, field['destiny'])
@@ -429,7 +429,7 @@ def validate_fields(body, metadata, errors):
                                             'post_type': field['relation_type']
                                         })
                             body = change_value(body, field['destiny'], temp)
-                        elif field['required']:
+                        elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
 
         except Exception as e:

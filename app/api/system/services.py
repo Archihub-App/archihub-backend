@@ -601,7 +601,7 @@ def regenerate_index_task(mapping, user):
         return 'ok'
     
 @shared_task(ignore_result=False, name='system.index_resources')
-def index_resources_task(user):
+def index_resources_task(user, filters = None):
     skip = 0
     resources = list(mongodb.get_all_records('resources', {}, limit=1000, skip=skip))
     index_handler.delete_all_documents(ELASTIC_INDEX_PREFIX + '-resources')
