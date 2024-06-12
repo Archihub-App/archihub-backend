@@ -112,18 +112,21 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
         app.register_blueprint(adminApi_bp, url_prefix='/adminApi')
 
     if(admin_api['data'][1]['value']):
+        print('Public API is active')
         from app.api.publicApi import bp as publicApi_bp
         app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
-
     
     index_management = mongodb.get_record('system', {'name': 'index_management'})
 
     if index_management['data'][0]['value']:
+        print('Indexing is active')
         try:
             index_handler = IndexHandler.IndexHandler()
             from app.api.search import bp as search_bp
             app.register_blueprint(search_bp, url_prefix='/search')
             index_handler.start()
+            from app.api.system.services import hookHandlerIndex
+            hookHandlerIndex()
         except:
             print('No se pudo iniciar el indexador de documentos')
             index_management['data'][0]['value'] = False

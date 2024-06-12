@@ -19,14 +19,19 @@ from celery import shared_task
 from app.api.tasks.services import add_task
 from app.api.types.services import get_metadata
 from functools import reduce
+from app.utils import HookHandler
+from bson.objectid import ObjectId
 
-
-
+hookHandler = HookHandler.HookHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
 index_handler = IndexHandler.IndexHandler()
 cacheHandler = CacheHandler.CacheHandler()
 
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
+
+def hookHandlerIndex():
+    hookHandler.register('resource_create', index_resources_task, queue=101)
+    hookHandler.register('resource_update', index_resources_task, queue=101)
 
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado. Si el valor no existe, lo crea
 def change_value(body, path, value):
@@ -547,7 +552,7 @@ def index_resources(user):
         if not index_management['data'][0]['value']:
             return {'msg': 'Indexación no está activada'}, 400
 
-        task = index_resources_task.delay(user)
+        task = index_resources_task.delay()
         add_task(task.id, 'system.index_resources', user, 'msg')
 
         # Retornar el resultado
@@ -601,10 +606,16 @@ def regenerate_index_task(mapping, user):
         return 'ok'
     
 @shared_task(ignore_result=False, name='system.index_resources')
-def index_resources_task(user, filters = None):
+def index_resources_task(body = {}):
     skip = 0
-    resources = list(mongodb.get_all_records('resources', {}, limit=1000, skip=skip))
-    index_handler.delete_all_documents(ELASTIC_INDEX_PREFIX + '-resources')
+    filters = {}
+    if '_id' in body:
+        filters['_id'] = ObjectId(body['_id'])
+
+    resources = list(mongodb.get_all_records('resources', filters, limit=1000, skip=skip))
+
+    if body == {}:
+        index_handler.delete_all_documents(ELASTIC_INDEX_PREFIX + '-resources')
 
     while len(resources) > 0:
         for resource in resources:

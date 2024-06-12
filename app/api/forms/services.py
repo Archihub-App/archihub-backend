@@ -174,15 +174,14 @@ def delete_by_slug(slug, user):
 
 # Funcion que valida que el formulario tenga todos los campos requeridos
 def validate_form(form):
-    # verificar que no tenga dos fields de tipo file
     files = 0
-    # verificar que no tenga un field con destiny igual a ident
+
     for field in form['fields']:
         if 'destiny' in field:
             if field['destiny'] == 'ident':
                 raise Exception("Error: el formulario no puede tener un campo con destino igual a ident")
             
-            if not field['destiny'].startswith('metadata') and not field['destiny'] == 'file' and not field['type'] == 'separator':
+            if not field['destiny'].startswith('metadata') and not field['destiny'].startswith('file') and not field['type'] == 'separator':
                 raise Exception("Error: el formulario no puede tener un campo con destino que no inicie con metadata")
             
         if field['type'] == 'file':

@@ -805,6 +805,8 @@ def update_by_id(id, body, user, files):
 
         mongodb.update_record(
             'resources', {'_id': ObjectId(body['_id'])}, update_)
+        
+        hookHandler.call('resource_update', body)
 
         # Registrar el log
         register_log(user, log_actions['resource_update'], {'resource': body})

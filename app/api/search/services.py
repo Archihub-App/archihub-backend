@@ -4,6 +4,7 @@ from app.api.users.services import has_right, has_role, get_user_rights
 from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
 from app.api.resources.services import get_accessRights, get_resource_type, get_children
 from app.api.types.services import get_icon
+from app.utils.functions import get_access_rights
 import os
 
 index_handler = IndexHandler.IndexHandler()
@@ -12,6 +13,7 @@ ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
 def get_resources_by_filters(body, user):
     try:
+        print(body)
         post_type_roles = cache_type_roles(body['post_type'])
         user_accessRights = get_user_rights(user)
         user_accessRights = user_accessRights + ['public']
@@ -36,7 +38,7 @@ def get_resources_by_filters(body, user):
                         },
                         {
                             'term': {
-                                'status.keyword': 'published'
+                                'status.keyword': body['status']
                             }
                         },
                         {
@@ -130,12 +132,28 @@ def get_tree_by_query(body, root, available, user):
         return {'msg': str(e)}, 500
 
 def clean_elastic_response(response):
+    rights_system = get_access_rights()
+    rights_system = rights_system['options']
+
     if 'hits' in response:
         response = response['hits']
 
         resources = []
         for r in response['hits']:
-            resources.append({**r['_source'], 'id': r['_id']})
+            index = True
+            new = {**r['_source'], 'id': r['_id']}
+            rights = new['accessRights']
+            if rights == 'public':
+                del new['accessRights']
+            else:
+                right = [r for r in rights_system if r['id'] == new['accessRights']]
+                if len(right) > 0:
+                    new['accessRights'] = right[0]['term']
+                else:
+                    index = False
+
+            if index:
+                resources.append(new)
 
         response = {
             'total': response['total']['value'],
