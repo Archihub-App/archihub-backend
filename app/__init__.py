@@ -159,7 +159,7 @@ def celery_init_app(app: Flask) -> Celery:
     celery_app.config_from_object(app.config["CELERY"])
     celery_app.conf.timezone = 'UTC'
     celery_app.conf.update(
-        CELERYD_CONCURRENCY=1,
+        CELERYD_CONCURRENCY=int(os.environ.get("CELERYD_CONCURRENCY", 1)),
         CELERYD_PREFETCH_MULTIPLIER=1,
         CELERY_ACKS_LATE=True
     )

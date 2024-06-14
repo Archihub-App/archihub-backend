@@ -502,7 +502,7 @@ def regenerate_index(user):
         add_task(task.id, 'system.regenerate_index', user, 'msg')
 
         # Retornar el resultado
-        return {'msg': 'Indexación finalizada exitosamente'}, 200
+        return {'msg': 'Se ha agregado la tarea de regenerar el índice a la fila de procesos'}, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -556,7 +556,7 @@ def index_resources(user):
         add_task(task.id, 'system.index_resources', user, 'msg')
 
         # Retornar el resultado
-        return {'msg': 'Indexación finalizada exitosamente'}, 200
+        return {'msg': 'Se ha agregado la tarea de indexación de todo el contenido a la fila de procesos'}, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500

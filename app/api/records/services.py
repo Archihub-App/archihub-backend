@@ -207,7 +207,7 @@ def update_parent(parent_id, current_user, parents):
 
 
 # Nuevo servicio para crear un record para un recurso
-def create(resource_id, current_user, files, upload = True):
+def create(resource_id, current_user, files, upload = True, filesTags = None):
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(resource_id)}, fields={'parents': 1, 'post_type': 1})
     # Si el recurso no existe, retornar error
@@ -215,6 +215,7 @@ def create(resource_id, current_user, files, upload = True):
         raise Exception('Recurso no existe')
     
     resp = []
+    index = 0
 
     for f in files:
         if type(f) is not dict:
@@ -254,7 +255,6 @@ def create(resource_id, current_user, files, upload = True):
 
                 # se verifica si el hash del archivo ya existe en la base de datos
                 record = get_hash(str(hash.hexdigest()))
-
             else:
                 record = None
 
@@ -263,9 +263,10 @@ def create(resource_id, current_user, files, upload = True):
                 # eliminar el archivo que se subio
                 os.remove(os.path.join(path, filename_new))
 
-                print("NUEVO RECORD", record['_id'], resource_id)
-
-                resp.append(str(record['_id']))
+                resp.append({
+                    'id': str(record['_id']),
+                    'tag': filesTags[index]['filetag']
+                })
 
                 new_parent = [{
                     'id': resource_id,
@@ -295,7 +296,6 @@ def create(resource_id, current_user, files, upload = True):
                     else:
                         update_dict['status'] = 'uploaded'
 
-                print("UPDATE DICT", update_dict)
                 # actualizar el record
                 update = FileRecordUpdate(**update_dict)
                 mongodb.update_record(
@@ -331,7 +331,10 @@ def create(resource_id, current_user, files, upload = True):
                     })
                     # insertar el record en la base de datos
                     new_record = mongodb.insert_record('records', record)
-                    resp.append(str(new_record.inserted_id))
+                    resp.append({
+                        'id': str(new_record.inserted_id),
+                        'tag': filesTags[index]['filetag']
+                    })
                 else:
                     # crear un nuevo record
                     record = FileRecord(**{
@@ -353,9 +356,15 @@ def create(resource_id, current_user, files, upload = True):
                     if not record_exists:
                         # insertar el record en la base de datos
                         new_record = mongodb.insert_record('records', record)
-                        resp.append(str(new_record.inserted_id))
+                        resp.append({
+                            'id': str(new_record.inserted_id),
+                            'tag': filesTags[index]['filetag']
+                        })
                     else:
-                        resp.append(str(record_exists['_id']))
+                        resp.append({
+                            'id': str(record_exists['_id']),
+                            'tag': filesTags[index]['filetag']
+                        })
 
                 # registrar el log
                 register_log(current_user, log_actions['record_create'], {'record': {
@@ -370,6 +379,7 @@ def create(resource_id, current_user, files, upload = True):
         else:
             raise Exception('Tipo de archivo no permitido')
 
+        index += 1
     # retornar el resultado
     return resp
 

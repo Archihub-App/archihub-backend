@@ -1,6 +1,7 @@
 import uuid
 from typing import Optional
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 # Modelo para el registro de un recurso
 class Resource(BaseModel):
@@ -9,11 +10,12 @@ class Resource(BaseModel):
     metadata: dict
     parents: list[dict] = None
     parent: dict = None
-    files: list[str] = []
+    filesObj: list[dict] = []
     ident: str
     status: str = 'created'
     accessRights: str = None
     createdBy: str = None
+    createdAt: datetime = datetime.now()
     favCount: int = 0
 
     class Config:
@@ -37,7 +39,7 @@ class Resource(BaseModel):
 class ResourceUpdate(BaseModel):
     post_type: Optional[str]
     metadata: Optional[dict]
-    files: Optional[list[str]]
+    filesObj: Optional[list[dict]]
     parents: Optional[list[dict]]
     parent: Optional[dict]
     status: Optional[str]
