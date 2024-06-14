@@ -188,11 +188,14 @@ def create(body, user, files):
                 else:
                     records = create_record(str(body['_id']), user, temp_files, upload = False, filesTags = temp_files_obj)
             except Exception as e:
+                print(str(e))
                 return {'msg': str(e)}, 500
 
             update = {
                 'filesObj': records
             }
+
+            print(update)
 
             update_ = ResourceUpdate(**update)
 
@@ -209,6 +212,99 @@ def create(body, user, files):
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
+
+def update_by_id(id, body, user, files):
+    try:
+        body = validate_parent(body)
+        has_new_parent = has_changed_parent(id, body)
+        # Obtener los metadatos en función del tipo de contenido
+        metadata = get_metadata(body['post_type'])
+
+        errors = {}
+
+        # Validar los campos de la metadata
+        body = validate_fields(body, metadata, errors)
+
+        update_relations_children(body, metadata['fields'])
+
+        if errors:
+            return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+        
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'files': 1, 'filesObj': 1})
+
+        validate_files([*body['filesIds'], *resource['filesObj']], metadata, errors)
+
+        if errors:
+            return {'msg': 'Error al validar los archivos', 'errors': errors}, 400
+
+        status = body['status']
+        if status == 'published':
+            if not has_role(user, 'publisher') and not has_role(user, 'admin'):
+                return {'msg': 'No tiene permisos para publicar un recurso'}, 401
+        if not status:
+            status = 'draft'
+
+        temp = []
+        temp_files_obj = body['filesIds']
+
+        if 'filesObj' in resource:
+            for f in resource['filesObj']:
+                temp.append(f)
+
+        body['filesObj'] = temp
+        del body['filesIds']
+
+        # Crear instancia de ResourceUpdate con el body del request
+        resource = ResourceUpdate(**body)
+
+        # Actualizar el recurso en la base de datos
+        updated_resource = mongodb.update_record(
+            'resources', {'_id': ObjectId(id)}, resource)
+
+        if has_new_parent:
+            update_parents(id, body['post_type'])
+            update_records_parents(id, user)
+
+        try:
+            records = create_record(id, user, files, filesTags = temp_files_obj)
+        except Exception as e:
+            print(str(e))
+            return {'msg': str(e)}, 500
+
+        delete_records(body['deletedFiles'], id, user)
+        update_records(body['updatedFiles'], user)
+        
+        body['filesObj'] = [f for f in body['filesObj'] if f['id'] not in body['deletedFiles']]
+
+        update = {
+            'filesObj': [*body['filesObj'], *records]
+        }
+
+        seen = set()
+        new_list = []
+        for d in update['filesObj']:
+            t = tuple(d.items())
+            if t not in seen:
+                seen.add(t)
+                new_list.append(d)
+        update['filesObj'] = new_list
+
+        update_ = ResourceUpdate(**update)
+
+        mongodb.update_record(
+            'resources', {'_id': ObjectId(body['_id'])}, update_)
+        
+        hookHandler.call('resource_update', body)
+
+        # Registrar el log
+        register_log(user, log_actions['resource_update'], {'resource': body})
+        # limpiar la cache
+        update_cache()
+        # Retornar el resultado
+        return {'msg': 'Recurso actualizado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 
 # Funcion para actualizar los recursos relacionados si el post_type es igual al del padre
 def update_relations_children(body, metadata, new = False):
@@ -464,6 +560,26 @@ def validate_fields(body, metadata, errors):
                     errors['accessRights'] = 'El recurso debe tener derechos de acceso válidos'
 
     return body
+
+def validate_files(files, metadata, errors):
+    file_fields = [f for f in metadata['fields'] if f['type'] == 'file']
+    count_tags = {}
+    for f in files:
+        tag = f['tag'] if 'tag' in f else f['filetag'] if 'filetag' in f else 'file'
+        # find the field with the same tag
+        field = [field for field in file_fields if field['filetag'] == tag]
+        if len(field) > 0:
+            if field[0]['filetag'] not in count_tags:
+                count_tags[field[0]['filetag']] = 1
+            else:
+                count_tags[field[0]['filetag']] += 1
+
+    for f in file_fields:
+        if 'maxFiles' in f:
+            if f['maxFiles'] != '' and f['maxFiles'] != 0:
+                if f['filetag'] in count_tags:
+                    if f['maxFiles'] < count_tags[f['filetag']]:
+                        errors[f['filetag']] = f'El campo {f["label"]} no puede tener más de {f["maxFiles"]} archivos'
 
 # Nuevo servicio para obtener un recurso por su id
 def get_by_id(id, user):
@@ -750,100 +866,6 @@ def get_resource_files(id, user, page):
         }
         # Retornar el recurso
         return resp, 200
-    except Exception as e:
-        return {'msg': str(e)}, 500
-
-# Nuevo servicio para actualizar un recurso
-def update_by_id(id, body, user, files):
-    try:
-        body = validate_parent(body)
-        has_new_parent = has_changed_parent(id, body)
-        # Obtener los metadatos en función del tipo de contenido
-        metadata = get_metadata(body['post_type'])
-
-        errors = {}
-
-        # Validar los campos de la metadata
-        body = validate_fields(body, metadata, errors)
-
-        update_relations_children(body, metadata['fields'])
-
-        if errors:
-            return {'msg': 'Error al validar los campos', 'errors': errors}, 400
-        
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'files': 1, 'filesObj': 1})
-
-        status = body['status']
-        if status == 'published':
-            if not has_role(user, 'publisher') and not has_role(user, 'admin'):
-                return {'msg': 'No tiene permisos para publicar un recurso'}, 401
-        if not status:
-            status = 'draft'
-
-        temp = []
-        temp_files_obj = body['filesIds']
-
-        for f in resource['files']:
-            temp.append({
-                'id': f,
-                'tag': 'file'
-            })
-
-        if 'filesObj' in resource:
-            for f in resource['filesObj']:
-                temp.append(f)
-
-        body['filesObj'] = temp
-        del body['filesIds']
-
-        # Crear instancia de ResourceUpdate con el body del request
-        resource = ResourceUpdate(**body)
-
-        # Actualizar el recurso en la base de datos
-        updated_resource = mongodb.update_record(
-            'resources', {'_id': ObjectId(id)}, resource)
-
-        if has_new_parent:
-            update_parents(id, body['post_type'])
-            update_records_parents(id, user)
-
-        try:
-            records = create_record(id, user, files, filesTags = temp_files_obj)
-        except Exception as e:
-            print(str(e))
-            return {'msg': str(e)}, 500
-
-        delete_records(body['deletedFiles'], id, user)
-        update_records(body['updatedFiles'], user)
-        
-        body['filesObj'] = [f for f in body['filesObj'] if f['id'] not in body['deletedFiles']]
-
-        update = {
-            'filesObj': [*body['filesObj'], *records]
-        }
-
-        seen = set()
-        new_list = []
-        for d in update['filesObj']:
-            t = tuple(d.items())
-            if t not in seen:
-                seen.add(t)
-                new_list.append(d)
-        update['filesObj'] = new_list
-
-        update_ = ResourceUpdate(**update)
-
-        mongodb.update_record(
-            'resources', {'_id': ObjectId(body['_id'])}, update_)
-        
-        hookHandler.call('resource_update', body)
-
-        # Registrar el log
-        register_log(user, log_actions['resource_update'], {'resource': body})
-        # limpiar la cache
-        update_cache()
-        # Retornar el resultado
-        return {'msg': 'Recurso actualizado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 

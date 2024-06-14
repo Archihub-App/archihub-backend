@@ -221,7 +221,6 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
         if type(f) is not dict:
             filename = secure_filename(f.filename)
         else:
-            print("filename!!", f)
             filename = f['filename']
         
         if allowedFile(filename):
@@ -256,7 +255,6 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
 
                 # se verifica si el hash del archivo ya existe en la base de datos
                 record = get_hash(str(hash.hexdigest()))
-
             else:
                 record = None
 
@@ -264,8 +262,6 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
             if record:
                 # eliminar el archivo que se subio
                 os.remove(os.path.join(path, filename_new))
-
-                print("NUEVO RECORD", record['_id'], resource_id)
 
                 resp.append({
                     'id': str(record['_id']),
@@ -300,7 +296,6 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                     else:
                         update_dict['status'] = 'uploaded'
 
-                print("UPDATE DICT", update_dict)
                 # actualizar el record
                 update = FileRecordUpdate(**update_dict)
                 mongodb.update_record(
