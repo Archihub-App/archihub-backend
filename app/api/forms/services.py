@@ -174,6 +174,8 @@ def delete_by_slug(slug, user):
 
 # Funcion que valida que el formulario tenga todos los campos requeridos
 def validate_form(form):
+    hasTitle = False
+
     for field in form['fields']:
         if 'destiny' in field:
             if field['destiny'] == 'ident':
@@ -181,6 +183,9 @@ def validate_form(form):
             
             if not field['destiny'].startswith('metadata') and not field['type'] == 'separator' and not field['type'] == 'file':
                 raise Exception("Error: el formulario no puede tener un campo con destino que no inicie con metadata")
+            
+            if field['destiny'] == 'metadata.firstLevel.title':
+                hasTitle = True
             
         if field['type'] == 'file':
             if not 'filetag' in field:
@@ -193,6 +198,9 @@ def validate_form(form):
                 for f in field['accessRights']:
                     if f not in options:
                         raise Exception("Error: el campo accessRights tiene un valor que no es válido")
+                    
+    if not hasTitle:
+        raise Exception("Error: el formulario debe tener un campo con destino igual a metadata.firstLevel.title")
             
     
 # Funcion que itera entre todos los formularios y devuelve la estructura combinada de todos

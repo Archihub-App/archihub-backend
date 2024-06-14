@@ -1,6 +1,7 @@
 import uuid
 from typing import Optional
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 # Modelo para el registro de un recurso
 class Resource(BaseModel):
@@ -15,6 +16,7 @@ class Resource(BaseModel):
     status: str = 'created'
     accessRights: str = None
     createdBy: str = None
+    createdAt: datetime = datetime.now()
     favCount: int = 0
 
     class Config:

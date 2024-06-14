@@ -340,6 +340,13 @@ def validate_fields(body, metadata, errors):
         try:
             if field['type'] != 'file' and field['type'] != 'separator':
                 if field['destiny'] != 'ident':
+                    if field['destiny'] == 'metadata.firstLevel.title':
+                        value = get_value_by_path(body, field['destiny'])
+                        if not value or value == '':
+                            if field['required'] and body['status'] == 'published':
+                                errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                            else:
+                                body = change_value(body, field['destiny'], 'Sin título')
                     if field['type'] == 'text':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
@@ -764,7 +771,7 @@ def update_by_id(id, body, user, files):
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
         
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'files': 1})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'files': 1, 'filesObj': 1})
 
         status = body['status']
         if status == 'published':
@@ -814,7 +821,7 @@ def update_by_id(id, body, user, files):
         update = {
             'filesObj': [*body['filesObj'], *records]
         }
-        # remove all duplicates from update['filesObj']
+
         seen = set()
         new_list = []
         for d in update['filesObj']:
