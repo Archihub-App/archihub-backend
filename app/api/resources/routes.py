@@ -225,7 +225,6 @@ def update_by_id(id):
             return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
 
     files = request.files.getlist('files')
-
     # Llamar al servicio para crear el recurso
     resp = services.update_by_id(id, data, current_user, files)
     if isinstance(resp, list):

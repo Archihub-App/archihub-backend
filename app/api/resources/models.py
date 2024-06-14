@@ -10,6 +10,7 @@ class Resource(BaseModel):
     parents: list[dict] = None
     parent: dict = None
     files: list[str] = []
+    filesObj: list[dict] = []
     ident: str
     status: str = 'created'
     accessRights: str = None
@@ -38,6 +39,7 @@ class ResourceUpdate(BaseModel):
     post_type: Optional[str]
     metadata: Optional[dict]
     files: Optional[list[str]]
+    filesObj: Optional[list[dict]]
     parents: Optional[list[dict]]
     parent: Optional[dict]
     status: Optional[str]

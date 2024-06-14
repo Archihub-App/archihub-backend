@@ -153,6 +153,7 @@ def create(body, user, files):
 
         array_files = False
         temp_files = []
+        temp_files_obj = body['filesIds']
 
         if 'files' in body:
             if len(body['files']) > 0:
@@ -161,6 +162,8 @@ def create(body, user, files):
                     temp_files = body['files']
         
         body['files'] = []
+        del body['filesIds']
+        body['filesObj'] = []
         # Crear instancia de Resource con el body del request
 
         resource = Resource(**body)
@@ -181,14 +184,14 @@ def create(body, user, files):
             try:
                 # si files es una lista
                 if not array_files:
-                    records = create_record(str(body['_id']), user, files)
+                    records = create_record(str(body['_id']), user, files, filesTags = temp_files_obj)
                 else:
-                    records = create_record(str(body['_id']), user, temp_files, False)
+                    records = create_record(str(body['_id']), user, temp_files, upload = False, filesTags = temp_files_obj)
             except Exception as e:
                 return {'msg': str(e)}, 500
 
             update = {
-                'files': records
+                'filesObj': records
             }
 
             update_ = ResourceUpdate(**update)
@@ -565,8 +568,8 @@ def get_resource(id, user):
 
     resource['children'] = children
 
-    if 'files' in resource:
-        if len(resource['files']) > 0:
+    if 'filesObj' in resource:
+        if len(resource['filesObj']) > 0:
             resource['children'] = [{
                 'post_type': 'files',
                 'name': 'Archivos asociados',
@@ -574,7 +577,7 @@ def get_resource(id, user):
                 'slug': 'files',
             }, *resource['children']]
 
-            resource['files'] = len(resource['files'])
+            resource['files'] = len(resource['filesObj'])
         else:
             resource['files'] = None
 
@@ -709,14 +712,22 @@ def get_resource_files(id, user, page):
 
         temp = []
         ids = []
-        for r in resource['files']:
-            ids.append(r)
+        if 'filesObj' in resource:
+            for r in resource['filesObj']:
+                ids.append(r)
+        if 'files' in resource:
+            for r in resource['files']:
+                ids.append({
+                    'id': r,
+                    'tag': 'file'
+                })
 
         r_ = get_resource_records(json.dumps(ids), user, page)
         for _ in r_:
             obj = {
                 'id': str(_['_id']),
                 'hash': _['hash'],
+                'tag': _['tag'],
             }
 
             if 'displayName' in _: obj['displayName'] = _['displayName']
@@ -763,16 +774,20 @@ def update_by_id(id, body, user, files):
             status = 'draft'
 
         temp = []
-        for f in body['files']:
-            if type(f) == str:
-                temp.append(f)
+        temp_files_obj = body['filesIds']
 
         for f in resource['files']:
-            if f not in temp:
+            temp.append({
+                'id': f,
+                'tag': 'file'
+            })
+
+        if 'filesObj' in resource:
+            for f in resource['filesObj']:
                 temp.append(f)
 
-        body['files'] = temp
-
+        body['filesObj'] = temp
+        del body['filesIds']
 
         # Crear instancia de ResourceUpdate con el body del request
         resource = ResourceUpdate(**body)
@@ -786,20 +801,28 @@ def update_by_id(id, body, user, files):
             update_records_parents(id, user)
 
         try:
-            records = create_record(id, user, files)
+            records = create_record(id, user, files, filesTags = temp_files_obj)
         except Exception as e:
             print(str(e))
             return {'msg': str(e)}, 500
 
         delete_records(body['deletedFiles'], id, user)
         update_records(body['updatedFiles'], user)
-
-        body['files'] = [f for f in body['files'] if f not in body['deletedFiles']]
+        
+        body['filesObj'] = [f for f in body['filesObj'] if f['id'] not in body['deletedFiles']]
 
         update = {
-            'files': [*body['files'], *records]
+            'filesObj': [*body['filesObj'], *records]
         }
-        update['files'] = list(set(update['files']))
+        # remove all duplicates from update['filesObj']
+        seen = set()
+        new_list = []
+        for d in update['filesObj']:
+            t = tuple(d.items())
+            if t not in seen:
+                seen.add(t)
+                new_list.append(d)
+        update['filesObj'] = new_list
 
         update_ = ResourceUpdate(**update)
 
@@ -1096,8 +1119,9 @@ def delete_children(id):
                 resource = mongodb.get_record(
                     'resources', {'_id': ObjectId(child['id'])}, fields={'files': 1})
                 # si el recurso tiene archivos, eliminarlos
-                if 'files' in resource:
-                    records_list = resource['files']
+                if 'filesObj' in resource:
+                    records_list = resource['filesObj']
+                    records_list = [r['id'] for r in records_list]
                     delete_records(records_list, child['id'], None)
                 # eliminar el recurso de la base de datos
                 mongodb.delete_record(

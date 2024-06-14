@@ -175,15 +175,18 @@ def parse_result(result):
 @cacheHandler.cache.cache(limit=1000)
 def get_resource_records(ids, user, page=0, limit=10):
     ids = json.loads(ids)
+    ids_filter = []
     for i in range(len(ids)):
-        ids[i] = ObjectId(ids[i])
+        ids_filter.append(ObjectId(ids[i]['id']))
 
     try:
-        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids}}, fields={
+        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids_filter}}, fields={
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}).skip(page * limit).limit(limit))
         
         for r in r_:
             r['_id'] = str(r['_id'])
+            r['tag'] = [x['tag'] for x in ids if x['id'] == r['_id']][0]
+
             if 'accessRights' in r:
                 if r['accessRights']:
                     if not has_right(user, r['accessRights']) and not has_role(user, 'admin'):

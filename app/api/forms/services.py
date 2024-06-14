@@ -174,18 +174,17 @@ def delete_by_slug(slug, user):
 
 # Funcion que valida que el formulario tenga todos los campos requeridos
 def validate_form(form):
-    files = 0
-
     for field in form['fields']:
         if 'destiny' in field:
             if field['destiny'] == 'ident':
                 raise Exception("Error: el formulario no puede tener un campo con destino igual a ident")
             
-            if not field['destiny'].startswith('metadata') and not field['destiny'].startswith('file') and not field['type'] == 'separator':
+            if not field['destiny'].startswith('metadata') and not field['type'] == 'separator' and not field['type'] == 'file':
                 raise Exception("Error: el formulario no puede tener un campo con destino que no inicie con metadata")
             
         if field['type'] == 'file':
-            files += 1
+            if not 'filetag' in field:
+                raise Exception("Error: el campo archivo debe tener una etiqueta")
 
         if 'accessRights' in field:
             if field['accessRights']:
@@ -194,9 +193,6 @@ def validate_form(form):
                 for f in field['accessRights']:
                     if f not in options:
                         raise Exception("Error: el campo accessRights tiene un valor que no es válido")
-            
-    if files > 1:
-        raise Exception("Error: el formulario no puede tener dos campos de tipo archivo")
             
     
 # Funcion que itera entre todos los formularios y devuelve la estructura combinada de todos
@@ -221,7 +217,7 @@ def update_main_schema(new_form = None, updated_form = None):
             for field in form['fields']:
                 # Si el campo no tiene el atributo 'form', se agrega el slug del formulario
                 tipo = field['type']
-                if 'destiny' in field:
+                if 'destiny' in field and tipo != 'separator' and tipo != 'file':
                     # el destino del campo es de tipo llave.llave (ej: 'metadata.title'), agregamos el campo al diccionario resp con el tipo del campo
                     if(field['destiny'] in resp):
                         if(resp[field['destiny']] != tipo):
@@ -235,7 +231,7 @@ def update_main_schema(new_form = None, updated_form = None):
         if new_form:
             for field in new_form['fields']:
                 tipo = field['type']
-                if 'destiny' in field:
+                if 'destiny' in field and tipo != 'separator' and tipo != 'file':
                     if(field['destiny'] in resp):
                         if(resp[field['destiny']] != tipo):
                             if(tipo not in same_types and resp[field['destiny']] not in same_types):
@@ -246,7 +242,7 @@ def update_main_schema(new_form = None, updated_form = None):
         if updated_form:
             for field in updated_form['fields']:
                 tipo = field['type']
-                if 'destiny' in field:
+                if 'destiny' in field and tipo != 'separator' and tipo != 'file':
                     if(field['destiny'] in resp):
                         if(resp[field['destiny']] != tipo):
                             if(tipo not in same_types and resp[field['destiny']] not in same_types):
