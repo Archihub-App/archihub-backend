@@ -119,6 +119,40 @@ def update():
     # Llamar al servicio para actualizar el usuario
     return services.update_user(body, current_user)
 
+@bp.route('/update-me', methods=['PUT'])
+@jwt_required()
+def updateme():
+    """
+    Actualizar un usuario
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                id:
+                    type: string
+            required:
+                - id
+    responses:
+        200:
+            description: Usuario actualizado exitosamente
+        400:
+            description: Usuario no existe
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    body = request.json
+    # Llamar al servicio para actualizar el usuario
+    return services.update_me(body, current_user)
+
 # Nuevo endpoint para obtener el compromise de un usuario. Este compromise es el que el usuario acepta al iniciar sesión
 @bp.route('/compromise', methods=['GET'])
 @jwt_required()
