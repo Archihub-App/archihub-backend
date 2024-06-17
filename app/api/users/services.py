@@ -153,7 +153,6 @@ def get_total(obj):
 # Nuevo servicio para actualizar un usuario
 def update_user(body, current_user):
     try:
-        print(body)
         # Buscar el usuario en la base de datos
         user = mongodb.get_record('users', {'_id': ObjectId(body['_id'])}, fields={'lastRequest': 0})
         # Si el usuario no existe, retornar error
@@ -176,6 +175,42 @@ def update_user(body, current_user):
         update_cache()
         # Retornar mensaje de éxito
         return {'msg': 'Usuario actualizado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def update_me(body, current_user):
+    try:
+        # Buscar el usuario en la base de datos
+        user = mongodb.get_record('users', {'username': current_user}, fields={'password': 1, 'name': 1})
+        # Si el usuario no existe, retornar error
+        if not user:
+            return jsonify({'msg': 'Usuario no existe'}), 400
+        
+        password = body['password']
+        # Si la contraseña no coincide, retornar error
+        if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+            return jsonify({'msg': 'Contraseña incorrecta'}), 400
+        
+        update = False
+        update_payload = {}
+
+        if body['name'] != user['name']:
+            update_payload['name'] = body['name']
+            update = True
+
+        if body['new_password'] != '' and body['new_password_confirmation'] != '':
+            if body['new_password'] != body['new_password_confirmation']:
+                return jsonify({'msg': 'Las contraseñas no coinciden'}), 400
+            update_payload['password'] = bcrypt.hashpw(body['new_password'].encode('utf-8'), bcrypt.gensalt())
+            update = True
+
+        if update:
+            user_update = UserUpdate(**update_payload)
+            mongodb.update_record('users', {'username': current_user}, user_update)
+            return jsonify({'msg': 'Usuario actualizado exitosamente'}), 200
+        else:
+            return jsonify({'msg': 'No hay cambios para guardar'}), 400
+        
     except Exception as e:
         return {'msg': str(e)}, 500
 
