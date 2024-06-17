@@ -425,3 +425,27 @@ def delete_favorite():
     
     # Llamar al servicio para obtener los requests
     return services.delete_favorite(current_user, body)
+
+# Nuevo endpoint para obtener los favoritos de un usuario paginados
+@bp.route('/favorites_list', methods=['POST'])
+@jwt_required()
+def get_favorites():
+    """
+    Obtener los favoritos de un usuario paginados
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    responses:
+        200:
+            description: Favoritos obtenidos exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Obtener el body del request
+    body = request.json
+    # Llamar al servicio para obtener los favoritos
+    return services.get_favorites(current_user, body)
