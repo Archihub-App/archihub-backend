@@ -514,6 +514,7 @@ def get_favorites(user, body):
     try:
         user_fav = get_user_favorites(user)
         user_fav = [fav for fav in user_fav if fav['type'] == body['type']]
+        total = len(user_fav)
 
         filters = {
             '_id': {
@@ -530,8 +531,16 @@ def get_favorites(user, body):
             sort = [('name', 1)]
 
         resp = list(mongodb.get_all_records(body['type'], filters, limit=20, skip=body['page'] * 20, fields=fields, sort=sort))
+        for r in resp:
+            r['id'] = str(r['_id'])
+            r.pop('_id')
 
-        return parse_result(user_fav), 200
+        resp = {
+            'total': total,
+            'results': resp
+        }
+
+        return resp, 200
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
