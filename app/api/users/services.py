@@ -469,6 +469,8 @@ def set_favorite(user, body):
             from app.api.records.services import add_to_favCount
             add_to_favCount(body['id'])
 
+        get_user_favorites.invalidate(user)
+
         return {'msg': 'Favorito agregado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -493,9 +495,47 @@ def delete_favorite(user, body):
             from app.api.records.services import remove_from_favCount
             remove_from_favCount(body['id'])
 
+        get_user_favorites.invalidate(user)
+
         return {'msg': 'Favorito eliminado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+
+@cacheHandler.cache.cache()
+def get_user_favorites(username):
+    try:
+        user_fav = mongodb.get_record('users', {'username': username}, fields={'favorites': 1})
+        user_fav = user_fav['favorites']
+        return user_fav
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def get_favorites(user, body):
+    try:
+        user_fav = get_user_favorites(user)
+        user_fav = [fav for fav in user_fav if fav['type'] == body['type']]
+
+        filters = {
+            '_id': {
+                '$in': [ObjectId(fav['id']) for fav in user_fav]
+            },
+        }
+
+        if body['type'] == 'resources':
+            filters['status'] = 'published'
+            fields = {'metadata.firstLevel.title': 1}
+            sort = [('metadata.firstLevel.title', 1)]
+        else:
+            fields = {'name': 1, 'displayName': 1}
+            sort = [('name', 1)]
+
+        resp = list(mongodb.get_all_records(body['type'], filters, limit=20, skip=body['page'] * 20, fields=fields, sort=sort))
+
+        return parse_result(user_fav), 200
+    except Exception as e:
+        print(str(e))
+        return {'msg': str(e)}, 500
+    
 
 # Funcion que verifica que una fecha este dentro de la semana actual
 def is_date_in_current_week(date):
