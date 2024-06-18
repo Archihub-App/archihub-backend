@@ -837,12 +837,6 @@ def get_resource_files(id, user, page):
         if 'filesObj' in resource:
             for r in resource['filesObj']:
                 ids.append(r)
-        if 'files' in resource:
-            for r in resource['files']:
-                ids.append({
-                    'id': r,
-                    'tag': 'file'
-                })
 
         r_ = get_resource_records(json.dumps(ids), user, page)
         for _ in r_:
@@ -911,6 +905,25 @@ def delete_by_id(id, user):
         return {'msg': 'Recurso eliminado exitosamente'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+@cacheHandler.cache.cache()
+def get_resource_images(id, user):
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+
+    ids = []
+    if 'filesObj' in resource:
+        for r in resource['filesObj']:
+            ids.append(r['id'])
+
+    img = mongodb.count('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'})
+    if img == 0:
+        return {'msg': 'No hay imágenes asociadas al recurso'}, 404
+    
+    resp = {
+        'pages': img
+    }
+
+    return resp, 200
 
 # Funcion para obtener los hijos de un recurso
 @cacheHandler.cache.cache(limit=1000)
@@ -1236,4 +1249,5 @@ def update_cache():
     get_resource_type.invalidate_all()
     get_resource_files.invalidate_all()
     get_all.invalidate_all()
+    get_resource_images.invalidate_all()
     clear_cache()

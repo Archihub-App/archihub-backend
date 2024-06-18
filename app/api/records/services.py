@@ -10,7 +10,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.users.services import has_right
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id
+from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id
 from werkzeug.utils import secure_filename
 import os
 import shutil
@@ -511,6 +511,20 @@ def get_document_pages(id, pages, size, current_user):
         response = Response(json.dumps(resp).encode('utf-8'), mimetype='application/json', direct_passthrough=False)
         return response
     except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def get_document_gallery(id, pages, size, current_user):
+    try:
+        from app.api.resources.services import get_by_id as get_resource_by_id
+        resp_, status = get_resource_by_id(id, current_user)
+        if status != 200:
+            return {'msg': resp_['msg']}, 500
+        pages = json.dumps(pages)
+        resp = cache_get_imgs_gallery_by_id(id, pages, size)
+        response = Response(json.dumps(resp).encode('utf-8'), mimetype='application/json', direct_passthrough=False)
+        return response
+    except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
     
 def get_document_block_by_page(current_user, id, page, slug, block=None):

@@ -29,6 +29,7 @@ def clear_cache():
     cache_get_record_document_detail.invalidate_all()
     cache_get_block_by_page_id.invalidate_all()
     cache_get_pages_by_id.invalidate_all()
+    cache_get_imgs_gallery_by_id.invalidate_all()
     cache_type_roles.invalidate_all()
     has_right.invalidate_all()
     has_role.invalidate_all()
@@ -172,7 +173,7 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache()
 def get_resource_records(ids, user, page=0, limit=10):
     ids = json.loads(ids)
     ids_filter = []
@@ -180,7 +181,7 @@ def get_resource_records(ids, user, page=0, limit=10):
         ids_filter.append(ObjectId(ids[i]['id']))
 
     try:
-        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids_filter}}, fields={
+        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids_filter}, '$or': [{'processing.fileProcessing.type': {'$exists': False}}, {'processing.fileProcessing.type': {'$ne': 'image'}}]}, fields={
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}).skip(page * limit).limit(limit))
         
         for r in r_:
@@ -203,11 +204,27 @@ def get_resource_records(ids, user, page=0, limit=10):
 
             r['processing'] = pro_dict
 
+        img = mongodb.count('records', {'_id': {'$in': ids_filter}, 'processing.fileProcessing.type': 'image'})
+        
+        if img > 0:
+            r_.append({
+                '_id': 'imgGallery',
+                'displayName': f'{str(img)} imágenes',
+                'hash': '',
+                'id': 'imgGallery',
+                'processing': {
+                    'fileProcessing': {
+                        'type': 'image gallery'
+                    }
+                },
+                'tag': 'Galería de imágenes',
+            })
+
         return r_
 
     except Exception as e:
+        print(str(e))
         raise Exception(str(e))
-
 
 @cacheHandler.cache.cache()
 def cache_get_record_stream(id):
@@ -412,10 +429,50 @@ def cache_get_block_by_page_id(id, page, slug, block=None):
     else:
         return {'msg': 'Record no es de tipo document'}, 400    
 
+@cacheHandler.cache.cache()
+def cache_get_imgs_gallery_by_id(id, pages, size):
+    pages = json.loads(pages)
+
+    if len(pages) == 0:
+        return []
+    
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+    ids = []
+    if 'filesObj' in resource:
+        for r in resource['filesObj']:
+            ids.append(r['id'])
+
+    img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}, sort=[('name', 1)]).skip(pages[0]).limit(len(pages)))
+    
+    response = []
+    
+    for i in range(len(img)):
+        path = img[i]['processing']['fileProcessing']['path']
+        path_img = os.path.join(WEB_FILES_PATH, path)
+        if size == 'big': size = 'large'
+        path_img = path_img + '_' + size + '.jpg'
+
+        if not os.path.exists(path_img):
+            raise Exception('No existe el archivo')
+        
+        img_ = Image.open(path_img)
+        width, height = img_.size
+        aspect_ratio = width / height
+
+        with open(path_img, 'rb') as f:
+            data = f.read()
+            encoded_data = base64.b64encode(data).decode('utf-8')
+            response.append({'filename': os.path.basename(path_img), 'data': encoded_data, 'aspect_ratio': aspect_ratio})
+
+    return response
+        
 
 @cacheHandler.cache.cache()
 def cache_get_pages_by_id(id, pages, size):
     pages = json.loads(pages)
+    
+    if len(pages) == 0:
+        return []
     # Buscar el record en la base de datos
     record = mongodb.get_record(
         'records', {'_id': ObjectId(id)}, fields={'processing': 1})

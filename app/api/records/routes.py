@@ -240,7 +240,10 @@ def get_page_by_id(id):
     body = request.json
 
     # Llamar al servicio para obtener un record por su id
-    return services.get_document_pages(id, body['pages'], body['size'], current_user)
+    if 'gallery' in body and body['gallery'] == True:
+        return services.get_document_gallery(id, body['pages'], body['size'], current_user)
+    else:
+        return services.get_document_pages(id, body['pages'], body['size'], current_user)
 
 @bp.route('/<id>/blocks', methods=['POST'])
 @jwt_required()

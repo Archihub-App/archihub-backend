@@ -10,8 +10,8 @@ def main(filepath, output):
         copy = im.copy()
         if copy.mode in ("RGBA", "P"):
             copy = copy.convert("RGB")
-        copy.thumbnail((2000,2000))
-        copy.save(output + '_large.jpg', 'JPEG', optimize=True, quality=80)
+        copy.thumbnail((2500,2500))
+        copy.save(output + '_large.jpg', 'JPEG', optimize=True, quality=90)
 
         copy = im.copy()
         if copy.mode in ("RGBA", "P"):
@@ -24,8 +24,8 @@ def main(filepath, output):
         if copy.mode in ("RGBA", "P"):
             print("Tiene canal alpha")
             copy = copy.convert("RGB")
-        copy.thumbnail((700,700))
-        copy.save(output + '_small.jpg', 'JPEG', optimize=True, quality=80)
+        copy.thumbnail((150,150))
+        copy.save(output + '_small.jpg', 'JPEG', optimize=True, quality=40)
 
         return True
     except Exception as e:
