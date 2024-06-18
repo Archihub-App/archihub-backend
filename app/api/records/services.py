@@ -524,7 +524,6 @@ def get_document_gallery(id, pages, size, current_user):
         response = Response(json.dumps(resp).encode('utf-8'), mimetype='application/json', direct_passthrough=False)
         return response
     except Exception as e:
-        print(pages, size)
         print(str(e))
         return {'msg': str(e)}, 500
     

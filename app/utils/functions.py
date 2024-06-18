@@ -29,6 +29,7 @@ def clear_cache():
     cache_get_record_document_detail.invalidate_all()
     cache_get_block_by_page_id.invalidate_all()
     cache_get_pages_by_id.invalidate_all()
+    cache_get_imgs_gallery_by_id.invalidate_all()
     cache_type_roles.invalidate_all()
     has_right.invalidate_all()
     has_role.invalidate_all()
@@ -428,15 +429,19 @@ def cache_get_block_by_page_id(id, page, slug, block=None):
     else:
         return {'msg': 'Record no es de tipo document'}, 400    
 
-# @cacheHandler.cache.cache()
+@cacheHandler.cache.cache()
 def cache_get_imgs_gallery_by_id(id, pages, size):
     pages = json.loads(pages)
+
+    if len(pages) == 0:
+        return []
+    
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
     ids = []
     if 'filesObj' in resource:
         for r in resource['filesObj']:
             ids.append(r['id'])
-    
+
     img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}, sort=[('name', 1)]).skip(pages[0]).limit(len(pages)))
     
     response = []
@@ -465,6 +470,9 @@ def cache_get_imgs_gallery_by_id(id, pages, size):
 @cacheHandler.cache.cache()
 def cache_get_pages_by_id(id, pages, size):
     pages = json.loads(pages)
+    
+    if len(pages) == 0:
+        return []
     # Buscar el record en la base de datos
     record = mongodb.get_record(
         'records', {'_id': ObjectId(id)}, fields={'processing': 1})
