@@ -919,30 +919,11 @@ def get_resource_images(id, user):
     if img == 0:
         return {'msg': 'No hay imágenes asociadas al recurso'}, 404
     
-    records = mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'hash': 1, 'displayName': 1, 'processing': 1, 'name': 1, 'size': 1, 'parent': 1})
-    temp = []
-    from app.api.types.services import get_icon
-    for r in records:
-        to_clean = []
-        for p in r['parent']:
-            r_ = mongodb.get_record('resources', {'_id': ObjectId(p['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
-            if r_:
-                p['name'] = r_['metadata']['firstLevel']['title']
-                p['icon'] = get_icon(r_['post_type'])
-            else:
-                to_clean.append(p['id'])
+    resp = {
+        'pages': img
+    }
 
-        obj = {
-            'id': str(r['_id']),
-            'hash': r['hash'],
-            'size': r['size'],
-            'displayName': r['displayName'] if 'displayName' in r else r['name'],
-            'processing': r['processing'] if 'processing' in r else None,
-            'parent': [x for x in r['parent'] if x['id'] not in to_clean]
-        }
-        temp.append(obj)
-
-    return temp, 200
+    return resp, 200
 
 # Funcion para obtener los hijos de un recurso
 @cacheHandler.cache.cache(limit=1000)

@@ -428,7 +428,7 @@ def cache_get_block_by_page_id(id, page, slug, block=None):
     else:
         return {'msg': 'Record no es de tipo document'}, 400    
 
-@cacheHandler.cache.cache()
+# @cacheHandler.cache.cache()
 def cache_get_imgs_gallery_by_id(id, pages, size):
     pages = json.loads(pages)
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
@@ -437,7 +437,7 @@ def cache_get_imgs_gallery_by_id(id, pages, size):
         for r in resource['filesObj']:
             ids.append(r['id'])
     
-    img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}))
+    img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}, sort=[('name', 1)]).skip(pages[0]).limit(len(pages)))
     
     response = []
     
@@ -450,7 +450,6 @@ def cache_get_imgs_gallery_by_id(id, pages, size):
         if not os.path.exists(path_img):
             raise Exception('No existe el archivo')
         
-        response = {}
         img_ = Image.open(path_img)
         width, height = img_.size
         aspect_ratio = width / height
