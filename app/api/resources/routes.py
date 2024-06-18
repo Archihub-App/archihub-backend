@@ -355,6 +355,40 @@ def get_all_records(resource_id):
     else:
         return resp
     
+@bp.route('/<resource_id>/imgs', methods=['GET'])
+@jwt_required()
+def get_imgs(resource_id):
+    """
+    Obtener los archivos de un recurso padre
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: resource_id
+          schema:
+              type: string
+    responses:
+        200:
+            description: Recursos obtenidos exitosamente
+        401:
+            description: No tiene permisos para obtener los recursos
+        500:
+            description: Error al obtener los recursos
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    # Llamar al servicio para obtener los recursos
+    resp = services.get_resource_images(resource_id, current_user)
+    
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
+    
 @bp.route('/favcount/<resource_id>', methods=['GET'])
 @jwt_required()
 def favcount(resource_id):

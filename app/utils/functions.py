@@ -172,7 +172,7 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 
-@cacheHandler.cache.cache(limit=1000)
+@cacheHandler.cache.cache()
 def get_resource_records(ids, user, page=0, limit=10):
     ids = json.loads(ids)
     ids_filter = []
@@ -180,7 +180,7 @@ def get_resource_records(ids, user, page=0, limit=10):
         ids_filter.append(ObjectId(ids[i]['id']))
 
     try:
-        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids_filter}}, fields={
+        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids_filter}, '$or': [{'processing.fileProcessing.type': {'$exists': False}}, {'processing.fileProcessing.type': {'$ne': 'image'}}]}, fields={
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}).skip(page * limit).limit(limit))
         
         for r in r_:
@@ -203,11 +203,27 @@ def get_resource_records(ids, user, page=0, limit=10):
 
             r['processing'] = pro_dict
 
+        img = mongodb.count('records', {'_id': {'$in': ids_filter}, 'processing.fileProcessing.type': 'image'})
+        
+        if img > 0:
+            r_.append({
+                '_id': 'imgGallery',
+                'displayName': f'{str(img)} imágenes',
+                'hash': '',
+                'id': 'imgGallery',
+                'processing': {
+                    'fileProcessing': {
+                        'type': 'image gallery'
+                    }
+                },
+                'tag': 'Galería de imágenes',
+            })
+
         return r_
 
     except Exception as e:
+        print(str(e))
         raise Exception(str(e))
-
 
 @cacheHandler.cache.cache()
 def cache_get_record_stream(id):
