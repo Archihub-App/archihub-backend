@@ -428,6 +428,40 @@ def cache_get_block_by_page_id(id, page, slug, block=None):
     else:
         return {'msg': 'Record no es de tipo document'}, 400    
 
+@cacheHandler.cache.cache()
+def cache_get_imgs_gallery_by_id(id, pages, size):
+    pages = json.loads(pages)
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+    ids = []
+    if 'filesObj' in resource:
+        for r in resource['filesObj']:
+            ids.append(r['id'])
+    
+    img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}))
+    
+    response = []
+    
+    for i in range(len(img)):
+        path = img[i]['processing']['fileProcessing']['path']
+        path_img = os.path.join(WEB_FILES_PATH, path)
+        if size == 'big': size = 'large'
+        path_img = path_img + '_' + size + '.jpg'
+
+        if not os.path.exists(path_img):
+            raise Exception('No existe el archivo')
+        
+        response = {}
+        img_ = Image.open(path_img)
+        width, height = img_.size
+        aspect_ratio = width / height
+
+        with open(path_img, 'rb') as f:
+            data = f.read()
+            encoded_data = base64.b64encode(data).decode('utf-8')
+            response.append({'filename': os.path.basename(path_img), 'data': encoded_data, 'aspect_ratio': aspect_ratio})
+
+    return response
+        
 
 @cacheHandler.cache.cache()
 def cache_get_pages_by_id(id, pages, size):
