@@ -825,7 +825,7 @@ def get_resource(id, user):
     return resource
 
 @cacheHandler.cache.cache(limit=1000)
-def get_resource_files(id, user, page):
+def get_resource_files(id, user, page, groupImages = False):
     try:
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         # Si el recurso no existe, retornar error
@@ -838,7 +838,7 @@ def get_resource_files(id, user, page):
             for r in resource['filesObj']:
                 ids.append(r)
 
-        r_ = get_resource_records(json.dumps(ids), user, page)
+        r_ = get_resource_records(json.dumps(ids), user, page, groupImages=groupImages)
         for _ in r_:
             obj = {
                 'id': str(_['_id']),

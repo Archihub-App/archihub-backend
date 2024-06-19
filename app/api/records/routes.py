@@ -89,6 +89,46 @@ def get_by_id(id):
         return tuple(resp)
     else:
         return resp
+    
+# Nuevo endpoint para obtener un record por su id
+@bp.route('/galleryinfo', methods=['POST'])
+@jwt_required()
+def get_by_gallery_index():
+    """
+    Obtener un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            required: true
+            description: id del record a obtener
+    responses:
+        200:
+            description: Record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    body = request.json
+    
+    # Llamar al servicio para obtener un record por su id
+    resp = services.get_by_index_gallery(body, current_user)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para obtener el stream de un record por su id
 @bp.route('/<id>/stream', methods=['GET'])

@@ -451,6 +451,26 @@ def get_by_id(id, current_user):
         print(str(e))
         return {'msg': str(e)}, 500
     
+def get_by_index_gallery(body, current_user):
+    try:
+        if 'id' not in body:
+            return {'msg': 'id no definido'}, 400
+        if 'index' not in body:
+            return {'msg': 'index no definido'}, 400
+        
+        resource = mongodb.get_record('resources', {'_id': ObjectId(body['id'])}, fields={'filesObj': 1})
+        ids = []
+        if 'filesObj' in resource:
+            for r in resource['filesObj']:
+                ids.append(r['id'])
+
+        img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}, sort=[('name', 1)]).skip(body['index']).limit(1))
+
+        return get_by_id(str(img[0]['_id']), current_user)
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
 # Nuevo servicio para devolver un stream de un archivo por su id
 def get_stream(id, current_user):
     try:

@@ -160,6 +160,7 @@ def get_by_id(id):
         return tuple(resp)
     else:
         return resp
+    
 
 # Nuevo endpoint para actualizar un recurso por su id
 @bp.route('/<id>', methods=['PUT'])
@@ -348,8 +349,11 @@ def get_all_records(resource_id):
 
     body = request.json
 
-    # Llamar al servicio para obtener los recursos
-    resp = services.get_resource_files(resource_id, current_user, body['page'])
+    if 'groupImages' not in body:
+        resp = services.get_resource_files(resource_id, current_user, body['page'])
+    else:
+        resp = services.get_resource_files(resource_id, current_user, body['page'], body['groupImages'])
+        
     if isinstance(resp, list):
         return tuple(resp)
     else:
@@ -383,7 +387,7 @@ def get_imgs(resource_id):
 
     # Llamar al servicio para obtener los recursos
     resp = services.get_resource_images(resource_id, current_user)
-    
+
     if isinstance(resp, list):
         return tuple(resp)
     else:
