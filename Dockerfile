@@ -15,6 +15,6 @@ RUN pip install torch==2.1.0
 
 RUN pip install -r requirements.txt
 
-RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y ffmpeg && apt-get install -y poppler-utils
+RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y ffmpeg && apt-get install -y poppler-utils && apt-get install -y libreoffice
 
 RUN chmod +x /app/start.sh

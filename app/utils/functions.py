@@ -174,14 +174,20 @@ def parse_result(result):
 
 
 @cacheHandler.cache.cache()
-def get_resource_records(ids, user, page=0, limit=10):
+def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
     ids = json.loads(ids)
     ids_filter = []
     for i in range(len(ids)):
         ids_filter.append(ObjectId(ids[i]['id']))
 
     try:
-        r_ = list(mongodb.get_all_records('records', {'_id': {'$in': ids_filter}, '$or': [{'processing.fileProcessing.type': {'$exists': False}}, {'processing.fileProcessing.type': {'$ne': 'image'}}]}, fields={
+        filters = {
+            '_id': {'$in': ids_filter},
+        }
+        if groupImages:
+            filters['$or'] = [{'processing.fileProcessing.type': {'$exists': False}}, {'processing.fileProcessing.type': {'$ne': 'image'}}]
+
+        r_ = list(mongodb.get_all_records('records', filters=filters, fields={
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}).skip(page * limit).limit(limit))
         
         for r in r_:
@@ -204,21 +210,22 @@ def get_resource_records(ids, user, page=0, limit=10):
 
             r['processing'] = pro_dict
 
-        img = mongodb.count('records', {'_id': {'$in': ids_filter}, 'processing.fileProcessing.type': 'image'})
-        
-        if img > 0:
-            r_.append({
-                '_id': 'imgGallery',
-                'displayName': f'{str(img)} imágenes',
-                'hash': '',
-                'id': 'imgGallery',
-                'processing': {
-                    'fileProcessing': {
-                        'type': 'image gallery'
-                    }
-                },
-                'tag': 'Galería de imágenes',
-            })
+        if groupImages:
+            img = mongodb.count('records', {'_id': {'$in': ids_filter}, 'processing.fileProcessing.type': 'image'})
+            
+            if img > 0:
+                r_.append({
+                    '_id': 'imgGallery',
+                    'displayName': f'{str(img)} imágenes',
+                    'hash': '',
+                    'id': 'imgGallery',
+                    'processing': {
+                        'fileProcessing': {
+                            'type': 'image gallery'
+                        }
+                    },
+                    'tag': 'Galería de imágenes',
+                })
 
         return r_
 
