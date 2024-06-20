@@ -581,6 +581,14 @@ def get_favorites(user, body):
         return {'msg': str(e)}, 500
     
 
+def get_user_snaps(user, type):
+    try:
+        from app.api.snaps.services import get_by_user_id
+        snaps = get_by_user_id(user, type)
+        return snaps, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 # Funcion que verifica que una fecha este dentro de la semana actual
 def is_date_in_current_week(date):
     today = datetime.date.today()

@@ -18,53 +18,34 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 def update_cache():
-    get_by_id.invalidate_all()
-    get_all.invalidate_all()
-
-# Nuevo servicio para obtener todos los snaps
-@cacheHandler.cache.cache()
-def get_all():
-    try:
-        # Obtener todos los snaps
-        snaps = mongodb.get_all_records('snaps', {}, [('name', 1)])
-
-        # Quitar todos los campos menos el nombre y la descripción si es que existe
-        snaps = [{ 'name': snap['name'], 'id': str(snap['_id']) } for snap in snaps]
-
-        # Retornar snaps
-        return snaps, 200
-    except Exception as e:
-        return {'msg': str(e)}, 500
+    get_by_user_id.invalidate_all()
     
 # Nuevo servicio para crear un snap
-def create(body, user):
-    # Crear instancia de Snap con el body del request
+def create(user, body):
     try:
-        snap = Snap(**body)
+        record = mongodb.get_record('records', {'_id': ObjectId(body['record_id'])}, {'name': 1})
+        if record is None:
+            return {'msg': 'Archivo no encontrado'}, 404
+        
+        snap = {
+            'user': user,
+            'record_id': body['record_id'],
+            'record_name': record['name'],
+            'type': body['type'],
+            'data': body['data'],
+        }
+
+        snap = Snap(**snap)
         # Insertar el snap en la base de datos
         new_snap = mongodb.insert_record('snaps', snap)
         # Registrar el log
         register_log(user, log_actions['snap_create'], {'snap': {
-            'name': snap.name,
             'id': str(new_snap.inserted_id),
         }})
         # Limpiar la cache
-        update_cache()
-        return {'msg': 'Snap creado exitosamente'}, 200
-    except Exception as e:
-        return {'msg': str(e)}, 500
-    
-# Nuevo servicio para obtener un snap por su id
-@cacheHandler.cache.cache()
-def get_by_id(id):
-    try:
-        # Obtener el snap por su id
-        snap = mongodb.get_record_by_id('snaps', id)
-        # Si el snap no existe, retornar error
-        if snap is None:
-            return {'msg': 'Snap no encontrado'}, 404
-        # Retornar el snap
-        return parse_result(snap), 200
+        get_by_user_id.invalidate(user, body['type'])
+
+        return {'msg': 'Recorte creado exitosamente'}, 201
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -115,13 +96,13 @@ def delete_by_id(id, user):
     
 # Nuevo servicio para obtener todos los snaps de un usuario
 @cacheHandler.cache.cache()
-def get_by_user_id(user_id):
+def get_by_user_id(user, type):
     try:
         # Obtener todos los snaps de un usuario
-        snaps = mongodb.get_all_records('snaps', {'user_id': user_id}, [('name', 1)])
+        snaps = list(mongodb.get_all_records('snaps', {'user': user, 'type': type}))
 
-        # Quitar todos los campos menos el nombre y la descripción si es que existe
-        snaps = [{ 'name': snap['name'], 'id': str(snap['_id']) } for snap in snaps]
+        for s in snaps:
+            s['_id'] = str(s['_id'])
 
         # Retornar snaps
         return snaps, 200

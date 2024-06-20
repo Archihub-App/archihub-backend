@@ -483,3 +483,29 @@ def get_favorites():
     body = request.json
     # Llamar al servicio para obtener los favoritos
     return services.get_favorites(current_user, body)
+
+@bp.route('/snaps/<type>', methods=['GET'])
+@jwt_required()
+def get_snaps(type):
+    """
+    Obtener los snaps de un usuario
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    responses:
+        200:
+            description: Snaps obtenidos exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Llamar al servicio para obtener los snaps
+    from app.api.snaps.services import get_by_user_id
+    resp = get_by_user_id(current_user, type)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
