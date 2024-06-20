@@ -32,6 +32,7 @@ ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 def hookHandlerIndex():
     hookHandler.register('resource_create', index_resources_task, queue=101)
     hookHandler.register('resource_update', index_resources_task, queue=101)
+    hookHandler.register('resource_delete', index_resources_delete_task, queue=101)
 
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado. Si el valor no existe, lo crea
 def change_value(body, path, value):
@@ -656,4 +657,12 @@ def index_resources_task(body = {}):
         skip += 1000
         resources = list(mongodb.get_all_records('resources', {}, limit=1000, skip=skip))
 
+    return 'ok'
+
+@shared_task(ignore_result=False, name='system.index_resources_delete')
+def index_resources_delete_task(body = {}):
+    r = index_handler.delete_document(ELASTIC_INDEX_PREFIX + '-resources', body['_id'])
+    if r.result != 'deleted':
+            raise Exception('Error al indexar el recurso ' + str(body['_id']))
+    
     return 'ok'

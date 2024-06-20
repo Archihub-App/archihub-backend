@@ -895,6 +895,8 @@ def delete_by_id(id, user):
         delete_children(id)
         # Eliminar el recurso de la base de datos
         deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})
+
+        hookHandler.call('resource_delete', {'_id': id})
         # Eliminar los hijos del recurso
         # Registrar el log
         register_log(user, log_actions['resource_delete'], {'resource': id})
