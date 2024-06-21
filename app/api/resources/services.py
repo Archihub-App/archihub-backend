@@ -163,6 +163,7 @@ def create(body, user, files):
         body['files'] = []
         del body['filesIds']
         body['filesObj'] = []
+        body['createdAt'] = datetime.now()
         # Crear instancia de Resource con el body del request
 
         resource = Resource(**body)

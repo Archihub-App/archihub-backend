@@ -15,7 +15,7 @@ class Resource(BaseModel):
     status: str = 'created'
     accessRights: str = None
     createdBy: str = None
-    createdAt: datetime = datetime.now()
+    createdAt: datetime
     favCount: int = 0
 
     class Config:

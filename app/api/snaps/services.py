@@ -9,6 +9,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from bson.objectid import ObjectId
 from app.utils.functions import get_roles, get_access_rights, get_roles_id, get_access_rights_id
+from datetime import datetime
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -33,6 +34,7 @@ def create(user, body):
             'record_name': record['name'],
             'type': body['type'],
             'data': body['data'],
+            'createdAt': datetime.now(),
         }
 
         snap = Snap(**snap)
@@ -96,15 +98,23 @@ def delete_by_id(id, user):
     
 # Nuevo servicio para obtener todos los snaps de un usuario
 @cacheHandler.cache.cache()
-def get_by_user_id(user, type):
+def get_by_user_id(user, body):
     try:
+        
+        resp = {}
         # Obtener todos los snaps de un usuario
-        snaps = list(mongodb.get_all_records('snaps', {'user': user, 'type': type}))
+        snaps = list(mongodb.get_all_records('snaps', {'user': user, 'type': body['type']}, fields={'data': 0, 'createdAt': 0}, sort=[('createdAt', -1)], limit=20, skip=body['page'] * 20))
+
+        total = mongodb.count('snaps', {'user': user, 'type': body['type']})
 
         for s in snaps:
             s['_id'] = str(s['_id'])
 
+        resp['results'] = snaps
+        resp['total'] = total
+
         # Retornar snaps
-        return snaps, 200
+        return resp, 200
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
