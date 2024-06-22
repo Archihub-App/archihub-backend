@@ -483,3 +483,37 @@ def get_favorites():
     body = request.json
     # Llamar al servicio para obtener los favoritos
     return services.get_favorites(current_user, body)
+
+@bp.route('/snaps', methods=['POST'])
+@jwt_required()
+def get_snaps():
+    """
+    Obtener los snaps de un usuario
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    responses:
+        200:
+            description: Snaps obtenidos exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    body = request.json
+
+    if 'type' not in body:
+        return jsonify({'msg': 'Falta el campo type en el body'}), 400
+    if 'page' not in body:
+        return jsonify({'msg': 'Falta el campo page en el body'}), 400
+
+    # Llamar al servicio para obtener los snaps
+    from app.api.snaps.services import get_by_user_id
+    resp = get_by_user_id(current_user, body)
+    
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp

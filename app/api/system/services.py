@@ -572,6 +572,7 @@ def clear_cache():
     from app.api.resources.services import update_cache as update_cache_resources
     from app.api.types.services import update_cache as update_cache_types
     from app.api.users.services import update_cache as update_cache_users
+    from app.api.snaps.services import update_cache as update_cache_snaps
 
     try:
         update_cache_function()
@@ -581,6 +582,7 @@ def clear_cache():
         update_cache_resources()
         update_cache_types()
         update_cache_users()
+        update_cache_snaps()
 
         return {'msg': 'Cache limpiada exitosamente'}, 200
     except Exception as e:

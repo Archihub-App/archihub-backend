@@ -103,6 +103,10 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.tasks import bp as tasks_bp
     app.register_blueprint(tasks_bp, url_prefix='/tasks')
 
+    # Registrar snaps blueprint
+    from app.api.snaps import bp as snaps_bp
+    app.register_blueprint(snaps_bp, url_prefix='/snaps')
+
     # verificar en la base de datos si la admin API está activa
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 
