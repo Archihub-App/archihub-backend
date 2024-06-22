@@ -1,4 +1,4 @@
-from flask import jsonify, request
+from flask import jsonify, request, Response, send_file
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from bson import json_util
@@ -10,6 +10,9 @@ from app.api.logs.services import register_log
 from bson.objectid import ObjectId
 from app.utils.functions import get_roles, get_access_rights, get_roles_id, get_access_rights_id
 from datetime import datetime
+from io import BytesIO
+from PIL import Image
+import base64
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -45,7 +48,7 @@ def create(user, body):
             'id': str(new_snap.inserted_id),
         }})
         # Limpiar la cache
-        get_by_user_id.invalidate(user, body['type'])
+        update_cache()
 
         return {'msg': 'Recorte creado exitosamente'}, 201
     except Exception as e:
@@ -79,20 +82,22 @@ def update_by_id(id, body, user):
 def delete_by_id(id, user):
     try:
         # Obtener el snap por su id
-        snap = mongodb.get_record_by_id('snaps', id)
+        snap = mongodb.get_record('snaps', {'_id': ObjectId(id)}, {'user': 1})
         # Si el snap no existe, retornar error
         if snap is None:
             return {'msg': 'Snap no encontrado'}, 404
+        if snap['user'] != user:
+            return {'msg': 'No tienes permisos para eliminar este recorte'}, 401
+        
         # Eliminar el snap de la base de datos
-        mongodb.delete_record('snaps', id)
+        mongodb.delete_record('snaps', {'_id': ObjectId(id)})
         # Registrar el log
         register_log(user, log_actions['snap_delete'], {'snap': {
-            'name': snap['name'],
             'id': id,
         }})
         # Limpiar la cache
         update_cache()
-        return {'msg': 'Snap eliminado exitosamente'}, 200
+        return {'msg': 'Recorte eliminado exitosamente'}, 204
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -118,3 +123,51 @@ def get_by_user_id(user, body):
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
+    
+# Nuevo servicio para obtener un snap por su id
+def get_by_id(id, user):
+    try:
+        # Obtener el snap por su id
+        snap = mongodb.get_record('snaps', {'_id': ObjectId(id)}, {'user': 1, 'record_id': 1, 'data': 1, 'type': 1})
+        # Si el snap no existe, retornar error
+        if snap is None:
+            return {'msg': 'Snap no encontrado'}, 404
+        if snap['user'] != user:
+            return {'msg': 'No tienes permisos para ver este recorte'}, 401
+        
+        if snap['type'] == 'document':
+            return get_document_snap(user, snap['record_id'], snap['data'])
+
+        snap['_id'] = str(snap['_id'])
+        
+        # Retornar snap
+        return snap, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def get_document_snap(user, record_id, data):
+    from app.api.records.services import get_by_id
+    record, status = get_by_id(record_id, user)
+    if status != 200:
+        return {'msg': f'Error al obtener el archivo: {record["msg"]}'} , 500
+    
+    pages = json.dumps([data['page'] - 1])
+    from app.utils.functions import cache_get_pages_by_id
+    resp = cache_get_pages_by_id(record_id, pages, 'big')
+    img_data = resp[0]['data']
+    img_data = base64.b64decode(img_data)
+
+    image = Image.open(BytesIO(img_data))
+    width, height = image.size
+
+    left = width * data['bbox']['x']
+    top = height * data['bbox']['y']
+    right = width * (data['bbox']['x'] + data['bbox']['width'])
+    bottom = height * (data['bbox']['y'] + data['bbox']['height'])
+    image = image.crop((left, top, right, bottom))
+
+    img_io = BytesIO()
+    image.save(img_io, 'JPEG', quality=70)
+    img_io.seek(0)
+
+    return send_file(img_io, mimetype='image/jpeg')
