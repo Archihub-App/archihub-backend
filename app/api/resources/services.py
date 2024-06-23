@@ -823,6 +823,9 @@ def get_resource(id, user):
     else:
         resource['accessRights'] = None
 
+    if 'createdAt' in resource:
+        resource['createdAt'] = resource['createdAt'].isoformat()
+
     return resource
 
 @cacheHandler.cache.cache(limit=1000)
