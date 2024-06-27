@@ -203,6 +203,87 @@ def get_transcription_by_id(id):
     
     return resp
 
+@bp.route('/<id>/edit-transcription', methods=['PUT'])
+@jwt_required()
+def edit_document_transcription(id):
+    """
+    Editar la transcripción de un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+            name: id
+            schema:
+                type: string
+                required: true
+                description: id del record a obtener
+    responses:
+        200:
+            description: Record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
+        # retornar error
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+
+    body = request.json
+    
+    # Llamar al servicio para obtener un record por su id
+    resp = services.edit_transcription(id, body, current_user)
+
+    return resp
+
+@bp.route('/<id>/edit-transcription', methods=['DELETE'])
+@jwt_required()
+def delete_document_transcription(id):
+    """
+    Eliminar la transcripción de un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+            name: id
+            schema:
+                type: string
+                required: true
+                description: id del record a obtener
+    responses:
+        200:
+            description: Record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
+        # retornar error
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+
+    body = request.json
+    
+    # Llamar al servicio para obtener un record por su id
+    resp = services.delete_transcription_segment(id, body, current_user)
+
+
 @bp.route('/<id>/document', methods=['GET'])
 @jwt_required()
 def get_document_by_id(id):
