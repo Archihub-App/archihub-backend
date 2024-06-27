@@ -507,9 +507,6 @@ def get_transcription(id, slug, current_user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
-def update_transcription(id, slug, transcription, current_user):
-    pass
-
 # Nuevo servicio para devolver las paginas en baja de un documento por su id
 def get_document(id, current_user):
     try:
@@ -677,3 +674,82 @@ def remove_from_favCount(id):
         get_favCount.invalidate(id)
     except Exception as e:
         raise Exception(str(e))
+    
+def delete_transcription_segment(id, body, user):
+    resp_, status = get_by_id(id, user)
+    if status != 200:
+        return {'msg': resp_['msg']}, 500
+    
+    slug = body['slug']
+    index = body['index']
+
+    record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
+    if not record:
+        return {'msg': 'Record no existe'}, 404
+    if 'processing' not in record:
+        return {'msg': 'El record no tiene transcripción'}, 404
+    if slug not in record['processing']:
+        return {'msg': 'El record no tiene transcripción'}, 404
+    if record['processing'][slug]['type'] != 'av_transcribe':
+        return {'msg': 'Record no ha sido procesado con el slug ' + slug}, 404
+    
+    segments = record['processing'][slug]['result']['segments']
+
+    segments.pop(index)
+
+    update = {
+        'processing': record['processing']
+    }
+
+    update['processing'][slug]['result']['segments'] = segments
+
+    update = FileRecordUpdate(**update)
+    mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+
+    cache_get_record_transcription.invalidate(id, slug)
+
+    return {'msg': 'Segmento eliminado'}, 200
+    
+def edit_transcription(id, body, user):
+    resp_, status = get_by_id(id, user)
+    if status != 200:
+        return {'msg': resp_['msg']}, 500
+    
+    slug = body['slug']
+
+    record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
+    if not record:
+        return {'msg': 'Record no existe'}, 404
+    if 'processing' not in record:
+        return {'msg': 'El record no tiene transcripción'}, 404
+    if slug not in record['processing']:
+        return {'msg': 'El record no tiene transcripción'}, 404
+    if record['processing'][slug]['type'] != 'av_transcribe':
+        return {'msg': 'Record no ha sido procesado con el slug ' + slug}, 404
+    
+    segments = record['processing'][slug]['result']['segments']
+
+    updateSpeaker = False
+    segments[body['index']]['text'] = body['text']
+    if 'speaker' in body:
+        if body['speaker'] != segments[body['index']]['speaker']:
+            updateSpeaker = segments[body['index']]['speaker']
+            
+    if updateSpeaker:
+        for segment in segments:
+            if 'speaker' in segment:
+                if segment['speaker'] == updateSpeaker:
+                    segment['speaker'] = body['speaker']
+
+    update = {
+        'processing': record['processing']
+    }
+
+    update['processing'][slug]['result']['segments'] = segments
+
+    update = FileRecordUpdate(**update)
+    mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+
+    cache_get_record_transcription.invalidate(id, slug)
+
+    return {'msg': 'Transcripción editada'}, 200
