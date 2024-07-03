@@ -166,3 +166,120 @@ def get_opts_id(username, isAdmin):
 
     # Llamar al servicio para obtener el id del recurso
     return services.get_opts_id(body, username)
+
+@bp.route('/create_type', methods=['POST'])
+@fernetAuthenticate
+def create_type(username, isAdmin):
+    """
+    Crear un nuevo tipo de contenido
+    ---
+    tags:
+        - Recursos
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                name:
+                    type: string
+                slug:
+                    type: string
+                description:
+                    type: string
+                metadata:
+                    type: array
+                    items:
+                        type: object
+                icon:
+                    type: string
+    responses:
+        200:
+            description: Tipo de contenido creado exitosamente
+        401:
+            description: No tiene permisos para crear un tipo de contenido
+        500:
+            description: Error al crear el tipo de contenido
+    """
+    if not isAdmin:
+        return jsonify({'msg': 'No tiene permisos para crear un tipo de contenido'}), 401
+
+    # Obtener el body del request
+    body = request.json
+
+    # Llamar al servicio para crear el tipo de contenido
+    return services.create_type(body, username)
+
+@bp.route('/update_type', methods=['POST'])
+@fernetAuthenticate
+def update_type(username, isAdmin):
+    """
+    Actualizar un tipo de contenido
+    ---
+    tags:
+        - Recursos
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                slug:
+                    type: string
+                description:
+                    type: string
+                metadata:
+                    type: array
+                    items:
+                        type: object
+                icon:
+                    type: string
+    responses:
+        200:
+            description: Tipo de contenido actualizado exitosamente
+        401:
+            description: No tiene permisos para actualizar un tipo de contenido
+        500:
+            description: Error al actualizar el tipo de contenido
+    """
+    if not isAdmin:
+        return jsonify({'msg': 'No tiene permisos para actualizar un tipo de contenido'}), 401
+
+    # Obtener el body del request
+    body = request.json
+
+    # Llamar al servicio para actualizar el tipo de contenido
+    return services.update_type(body, username)
+
+@bp.route('/get_type/<slug>', methods=['GET'])
+@fernetAuthenticate
+def get_type(username, isAdmin, slug):
+    """
+    Obtener el tipo de contenido por su slug
+    ---
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: slug
+          schema:
+            type: string
+          required: true
+          description: Slug del tipo de contenido
+    responses:
+        200:
+            description: Tipo del recurso obtenido exitosamente
+        401:
+            description: No tiene permisos para obtener el tipo del recurso
+        500:
+            description: Error al obtener el tipo del recurso
+    """
+    if not isAdmin:
+        return jsonify({'msg': 'No tiene permisos para obtener el tipo del recurso'}), 401
+
+    # Llamar al servicio para obtener el tipo del recurso
+    return services.get_type(slug, username)
