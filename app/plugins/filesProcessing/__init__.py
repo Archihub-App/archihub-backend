@@ -224,7 +224,7 @@ class ExtendedPluginClass(PluginClass):
             'parent.id': {'$in': resources}
         }
         if body['overwrite']:
-            records_filters['processing.fileProcessing'] = {'$exists': True}
+            records_filters = {"$or": [{"processing.fileProcessing": {"$exists": False}, **records_filters}, {"processing.fileProcessing": {"$exists": True}, **records_filters}]}
         else:
             records_filters['processing.fileProcessing'] = {'$exists': False}
         

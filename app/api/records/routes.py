@@ -283,6 +283,8 @@ def delete_document_transcription(id):
     # Llamar al servicio para obtener un record por su id
     resp = services.delete_transcription_segment(id, body, current_user)
 
+    return resp
+
 
 @bp.route('/<id>/document', methods=['GET'])
 @jwt_required()
