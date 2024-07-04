@@ -113,8 +113,7 @@ def create():
         index = 1
         while slug_exists:
             body['slug'] = body['slug'] + '-' + str(index)
-            slug_exists = services.get_by_slug(body['slug'])
-            slug_exists = slug_exists[0] if type(slug_exists) == list else slug_exists
+            slug_exists = mongodb.get_record('post_types', {'slug': body['slug']}, {'slug': 1})
             index += 1
 
         # Llamar al servicio para crear un tipo de contenido
