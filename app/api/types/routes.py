@@ -111,8 +111,9 @@ def create():
         
         # Mientras el slug exista, agregar un número al final
         index = 1
+        begin_slug = body['slug']
         while slug_exists:
-            body['slug'] = body['slug'] + '-' + str(index)
+            body['slug'] = begin_slug + '-' + str(index)
             slug_exists = mongodb.get_record('post_types', {'slug': body['slug']}, {'slug': 1})
             index += 1
 
