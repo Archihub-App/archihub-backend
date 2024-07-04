@@ -30,7 +30,7 @@ class ExtendedPluginClass(PluginClass):
             if 'post_type' not in body:
                 return {'msg': 'No se especificó el tipo de contenido'}, 400
             
-            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
+            if not self.has_role('adimn', current_user) and not self.has_role('processing', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
 
             task = self.bulk.delay(body, current_user)

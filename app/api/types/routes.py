@@ -7,7 +7,9 @@ from flask import request
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.utils.functions import cache_type_roles
+from app.utils import DatabaseHandler
 
+mongodb = DatabaseHandler.DatabaseHandler()
 
 # En este archivo se registran las rutas de la API para los tipos de contenido
 
@@ -83,6 +85,7 @@ def create():
         500:
             description: Error al crear el tipo de contenido
     """
+
     # Obtener el body de la request
     body = request.json
 
@@ -104,24 +107,22 @@ def create():
         body['slug'] = body['slug'].replace('--', '-')
 
         # Llamar al servicio para obtener un tipo de contenido por su slug
-        slug_exists = services.get_by_slug(body['slug'])
-
+        slug_exists = mongodb.get_record('post_types', {'slug': body['slug']}, {'slug': 1})
+        
         # Mientras el slug exista, agregar un número al final
         index = 1
-        while 'msg' not in slug_exists:
+        while slug_exists:
             body['slug'] = body['slug'] + '-' + str(index)
             slug_exists = services.get_by_slug(body['slug'])
+            slug_exists = slug_exists[0] if type(slug_exists) == list else slug_exists
             index += 1
 
         # Llamar al servicio para crear un tipo de contenido
         return services.create(body, current_user)
     else:
-        slug_exists = services.get_by_slug(body['slug'])
-        # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
-        if 'msg' in slug_exists:
-            if slug_exists['msg'] == 'Tipo de post no existe':
-                # Llamar al servicio para crear un tipo de contenido
-                return services.create(body, current_user)
+        slug_exists = mongodb.get_record('post_types', {'slug': body['slug']}, {'slug': 1})
+        if not slug_exists:
+            return services.create(body, current_user)
         else:
             return {'msg': 'El slug ya existe'}, 400
 
@@ -252,4 +253,8 @@ def delete_by_slug(slug):
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return {'msg': 'No tiene permisos para eliminar un tipo de contenido'}, 401
     # Llamar al servicio para eliminar un tipo de contenido por su slug
-    return services.delete_by_slug(slug, current_user)
+    resp = services.delete_by_slug(slug, current_user)
+    if isinstance(resp, dict):
+        return resp
+    else:
+        return tuple(resp)

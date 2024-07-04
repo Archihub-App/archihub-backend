@@ -55,9 +55,6 @@ def create(body, user):
     try:
         # Crear instancia de PostType con el body del request
         post_type = PostType(**body)
-        # se valida que el slug no exista
-        if mongodb.get_record('post_types', {'slug': post_type.slug}):
-            return {'msg': 'El slug ya existe'}, 400
         # Insertar el tipo de post en la base de datos
         new_post_type = mongodb.insert_record('post_types', post_type)
         # Registrar el log
@@ -82,7 +79,7 @@ def get_by_slug(slug):
         post_type = mongodb.get_record('post_types', {'slug': slug})
         # Si el tipo de post no existe, retornar error
         if not post_type:
-            return {'msg': 'Tipo de post no existe'}
+            return {'msg': 'Tipo de post no existe'}, 404
         # quitamos el id del tipo de post
         post_type.pop('_id')
 
