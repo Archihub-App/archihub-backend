@@ -12,8 +12,8 @@ from app.api.system.services import get_access_rights_id
 from app.utils.functions import verify_role_exists
 from app.utils.functions import clear_cache
 
-mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+mongodb = DatabaseHandler.DatabaseHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 

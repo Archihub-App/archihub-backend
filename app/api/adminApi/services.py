@@ -33,9 +33,13 @@ def create_type(body, user):
     return create(body, user)
 
 def get_type(slug, user):
-    from app.api.types.services import get_by_slug
-    return get_by_slug(slug)
+    try:
+        from app.api.types.services import get_by_slug
+        return get_by_slug(slug)
+    except Exception as e:
+        print(str(e))
+        return {'msg': str(e)}, 500
 
-def update_type(slug, body, user):
+def update_type(body, user):
     from app.api.types.services import update_by_slug
-    return update_by_slug(slug, body, user)
+    return update_by_slug(body['slug'], body, user)
