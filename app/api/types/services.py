@@ -53,6 +53,8 @@ def get_all():
 
 def create(body, user):
     try:
+        if body['name'] == '' or body['slug'] == '':
+            return {'msg': 'El nombre y el slug no pueden estar vacíos'}, 400
         # Crear instancia de PostType con el body del request
         post_type = PostType(**body)
         # Insertar el tipo de post en la base de datos

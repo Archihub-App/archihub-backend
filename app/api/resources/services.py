@@ -116,8 +116,12 @@ def get_all(post_type, body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user, files):
     try:
+
+        print(body)
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
+
+        print(body)
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': 'El recurso debe tener metadata'}, 400
@@ -208,7 +212,9 @@ def create(body, user, files):
             hookHandler.call('resource_files_create', body)
 
         # Retornar el resultado
-        return {'msg': 'Recurso creado exitosamente'}, 201
+        resp = {'msg': 'Recurso creado exitosamente', 'id': str(new_resource.inserted_id), 'post_type': body['post_type']}
+        print("resp",resp)
+        return resp, 201
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
