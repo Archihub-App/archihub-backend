@@ -4,8 +4,87 @@ from flask import jsonify, request
 from app.api.views import services
 from app.api.users import services as user_services
 
+#Nuevo GET endpoint para obtener todas las vistas de consulta
+@bp.route('', methods=['GET'])
+@jwt_required()
+def get_views():
+    """
+    Obtener todas las vistas de consulta
+    ---
+    tags:
+        - Vistas
+    responses:
+        200:
+            description: Retorna todas las vistas de consulta
+        500:
+            description: Error al obtener las vistas de consulta
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Llamar al servicio para obtener todas las vistas de consulta
+    return services.get_all(current_user)
+
+@bp.route('/<view_id>', methods=['GET'])
+@jwt_required()
+def get_view(view_id):
+    """
+    Obtener una vista de consulta
+    ---
+    tags:
+        - Vistas
+    parameters:
+        - in: path
+          name: view_id
+          type: string
+          required: true
+    responses:
+        200:
+            description: Retorna la vista de consulta
+        500:
+            description: Error al obtener la vista de consulta
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Llamar al servicio para obtener una vista de consulta
+    return services.get(view_id, current_user)
+
+@bp.route('/<view_id>', methods=['PUT'])
+@jwt_required()
+def update_view(view_id):
+    """
+    Actualizar una vista de consulta
+    ---
+    tags:
+        - Vistas
+    parameters:
+        - in: path
+          name: view_id
+          type: string
+          required: true
+    responses:
+        200:
+            description: Vista de consulta actualizada exitosamente
+        500:
+            description: Error al actualizar la vista de consulta
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Obtener el body del request
+    body = request.json
+    # Llamar al servicio para actualizar una vista de consulta
+    return services.update(view_id, body, current_user)
+
 # Nuevo POST endpoint para crear una nueva vista de consulta
-@bp.route('/create', methods=['POST'])
+@bp.route('', methods=['POST'])
 @jwt_required()
 def new_view():
     """

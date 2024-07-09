@@ -23,4 +23,5 @@ log_actions = {
     'system_update': 'SYSTEM_UPDATE',
     'snap_create': 'SNAP_CREATE',
     'snap_delete': 'SNAP_DELETE',
+    'view_create': 'VIEW_CREATE',
 }
