@@ -175,9 +175,6 @@ def get_parents(post_type, first=True, fields=['name', 'slug', 'icon'], post_typ
     if post_type['slug'] in ids:
         ids.remove(post_type['slug'])
 
-    if post_type['slug'] in post_types and not first:
-        return []
-
     # Buscar el padre del tipo de post
     parent = list(mongodb.get_all_records(
         'post_types', {'slug': {'$in': ids}}))
@@ -185,6 +182,14 @@ def get_parents(post_type, first=True, fields=['name', 'slug', 'icon'], post_typ
     if not parent and not parent['hierarchical']:
         return []
     # Retornar el padre y los padres del padre
+    parent_temp = []
+    for p in parent:
+        if p['slug'] in post_types and not first:
+            continue
+        parent_temp.append(p)
+
+    parent = parent_temp
+
     resp = []
     for p in parent:
         obj = {
@@ -196,7 +201,7 @@ def get_parents(post_type, first=True, fields=['name', 'slug', 'icon'], post_typ
 
         resp.append(obj)
 
-        temp = get_parents(p, False, fields, [r['slug'] for r in resp])
+        temp = get_parents(p, False, fields, list(set(post_types + [p['slug'] for p in parent])))
 
         for t in temp:
             if t['slug'] not in [r['slug'] for r in resp]:

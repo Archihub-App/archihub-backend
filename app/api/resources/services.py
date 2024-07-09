@@ -938,19 +938,20 @@ def get_resource_images(id, user):
     return resp, 200
 
 # Funcion para obtener los hijos de un recurso
-@cacheHandler.cache.cache(limit=3000)
+# @cacheHandler.cache.cache(limit=3000)
 def get_children(id, available, resp=False, post_type=None):
     try:
         list_available = available.split('|')
         if post_type:
             list_available = [post_type]
+
         # Obtener los recursos del tipo de contenido
         if not resp:
             resources = mongodb.get_record('resources', {'post_type': {
-                                           '$in': list_available}, 'parents.post_type': {'$in': list_available}, 'parents.id': id})
+                                           '$in': list_available}, 'parents.post_type': {'$in': available.split('|')}, 'parents.id': id})
         else:
             resources = mongodb.get_all_records('resources', {'post_type': {
-                                                '$in': list_available}, 'parents.post_type': {'$in': list_available}, 'parents.id': id}, limit=10)
+                                                '$in': list_available}, 'parents.post_type': {'$in': available.split('|')}, 'parents.id': id}, limit=10)
 
         if (resources and not resp):
             return True
@@ -967,7 +968,7 @@ def get_children(id, available, resp=False, post_type=None):
         return {'msg': str(e)}, 500
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
-@cacheHandler.cache.cache(limit=5000)
+# @cacheHandler.cache.cache(limit=5000)
 def get_tree(root, available, user, post_type=None):
     try:
         list_available = available.split('|')
