@@ -103,6 +103,10 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.tasks import bp as tasks_bp
     app.register_blueprint(tasks_bp, url_prefix='/tasks')
 
+    # Registrar views blueprint
+    from app.api.views import bp as views_bp
+    app.register_blueprint(views_bp, url_prefix='/views')
+
     # Registrar snaps blueprint
     from app.api.snaps import bp as snaps_bp
     app.register_blueprint(snaps_bp, url_prefix='/snaps')

@@ -164,7 +164,7 @@ def delete_by_slug(slug, user):
     return {'msg': 'Tipo de post eliminado exitosamente'}, 204
 
 # Funcion que devuelve recursivamente los padres de un tipo de post
-def get_parents(post_type, first=True, fields=['name', 'slug', 'icon']):
+def get_parents(post_type, first=True, fields=['name', 'slug', 'icon'], post_types=[]):
     # Si el tipo de post no tiene padre, retornar una lista vacia
     if len(post_type['parentType']) == 0:
         return []
@@ -182,6 +182,14 @@ def get_parents(post_type, first=True, fields=['name', 'slug', 'icon']):
     if not parent and not parent['hierarchical']:
         return []
     # Retornar el padre y los padres del padre
+    parent_temp = []
+    for p in parent:
+        if p['slug'] in post_types and not first:
+            continue
+        parent_temp.append(p)
+
+    parent = parent_temp
+
     resp = []
     for p in parent:
         obj = {
@@ -193,7 +201,7 @@ def get_parents(post_type, first=True, fields=['name', 'slug', 'icon']):
 
         resp.append(obj)
 
-        temp = get_parents(p, False, fields)
+        temp = get_parents(p, False, fields, list(set(post_types + [p['slug'] for p in parent])))
 
         for t in temp:
             if t['slug'] not in [r['slug'] for r in resp]:

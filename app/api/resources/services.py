@@ -938,17 +938,20 @@ def get_resource_images(id, user):
     return resp, 200
 
 # Funcion para obtener los hijos de un recurso
-@cacheHandler.cache.cache(limit=1000)
-def get_children(id, available, resp=False):
+# @cacheHandler.cache.cache(limit=3000)
+def get_children(id, available, resp=False, post_type=None):
     try:
         list_available = available.split('|')
+        if post_type:
+            list_available = [post_type]
+
         # Obtener los recursos del tipo de contenido
         if not resp:
             resources = mongodb.get_record('resources', {'post_type': {
-                                           '$in': list_available}, 'parents.post_type': {'$in': list_available}, 'parents.id': id})
+                                           '$in': list_available}, 'parents.post_type': {'$in': available.split('|')}, 'parents.id': id})
         else:
             resources = mongodb.get_all_records('resources', {'post_type': {
-                                                '$in': list_available}, 'parents.post_type': {'$in': list_available}, 'parents.id': id}, limit=10)
+                                                '$in': list_available}, 'parents.post_type': {'$in': available.split('|')}, 'parents.id': id}, limit=10)
 
         if (resources and not resp):
             return True
@@ -965,21 +968,13 @@ def get_children(id, available, resp=False):
         return {'msg': str(e)}, 500
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
-@cacheHandler.cache.cache(limit=2000)
-def get_tree(root, available, user):
+# @cacheHandler.cache.cache(limit=5000)
+def get_tree(root, available, user, post_type=None):
     try:
         list_available = available.split('|')
 
-        # Obtener los recursos del tipo de contenido
-
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
         if root == 'all':
-            # post_type = mongodb.get_record('post_types', {'slug': list_available[-1]})
-            # if not post_type:
-            #     return {'msg': 'Tipo de post no existe'}, 404
-            # parents = get_type_parents(post_type)
-            # parents = [p['slug'] for p in parents]
-            # parents = [*parents, post_type['slug']]
             
             resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
@@ -987,17 +982,12 @@ def get_tree(root, available, user):
         else:
             resources = list(mongodb.get_all_records('resources', {'post_type': {
                              "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
-        
-        # Obtener el icono del post type
-        # icon = mongodb.get_record(
-            # 'post_types', {'slug': list_available[-1]})['icon']
-        # Devolver solo los campos necesarios
 
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
 
         for resource in resources:
-            resource['children'] = get_children(resource['id'], available)
+            resource['children'] = get_children(resource['id'], available, False, post_type)
             resource['icon'] = get_icon(resource['post_type'])
 
         # Retornar los recursos y los padres
