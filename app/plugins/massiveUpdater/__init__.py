@@ -40,9 +40,7 @@ class ExtendedPluginClass(PluginClass):
 
             files = request.files.getlist('files')
 
-
-            if len(data['files']) == 0:
-                return {'msg': 'No se subió un archivo'}, 400
+            self.validate_fields(data, 'lunch')
             
             for f in files:
                 try:
@@ -440,7 +438,7 @@ plugin_info = {
             },
             {
                 'type': 'file',
-                'name': 'file',
+                'id': 'file',
                 'label': 'Archivo Excel',
                 'required': True,
                 'limit': 1,
@@ -448,7 +446,7 @@ plugin_info = {
             },
             {
                 'type': 'checkbox',
-                'name': 'overwrite',
+                'id': 'overwrite',
                 'label': 'Espacio en blanco como borrado de contenido',
                 'instructions': 'Si se selecciona esta opción, los campos en blanco en el archivo Excel se interpretarán como borrado de contenido.',
                 'default': False

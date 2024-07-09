@@ -25,16 +25,11 @@ class ExtendedPluginClass(PluginClass):
         @self.route('/bulk', methods=['POST'])
         @jwt_required()
         def create_inventory():
-            # get the current user
             current_user = get_jwt_identity()
-
-            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user) and not self.has_role('editor', current_user):
-                return {'msg': 'No tiene permisos suficientes'}, 401
-            
             body = request.get_json()
 
-            if 'post_type' not in body:
-                return {'msg': 'No se especificó el tipo de contenido'}, 400
+            self.validate_roles(current_user, ['admin', 'processing', 'editor'])
+            self.validate_fields(body, 'bulk')
             
             post_type_roles = cache_type_roles(body['post_type'])
             if post_type_roles['viewRoles']:

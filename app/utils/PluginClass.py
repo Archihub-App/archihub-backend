@@ -68,12 +68,14 @@ class PluginClass(Blueprint):
         return filename_new
     
     def validate_fields(self, body, slug):
-        if 'post_type' not in body:
+        if 'post_type' not in body and slug == 'bulk':
             return {'msg': 'No se especificó el tipo de contenido'}, 400
         
         settings = self.settings['settings_' + slug]
         for setting in settings:
             if setting['required'] and setting['id'] not in body:
+                return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
+            if setting['type'] == 'file' and setting['required'] and len(body[setting['id']]) == 0:
                 return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
             
     def validate_roles(self, user, roles):
