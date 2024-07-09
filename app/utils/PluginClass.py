@@ -67,6 +67,25 @@ class PluginClass(Blueprint):
         
         return filename_new
     
+    def validate_fields(self, body, slug):
+        if 'post_type' not in body:
+            return {'msg': 'No se especificó el tipo de contenido'}, 400
+        
+        settings = self.settings['settings_' + slug]
+        for setting in settings:
+            if setting['required'] and setting['id'] not in body:
+                return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
+            
+    def validate_roles(self, user, roles):
+        temp = []
+        for role in roles:
+            if has_role(user, role):
+                temp.append(role)
+        
+        if len(temp) == 0:
+            return {'msg': 'No tiene permisos suficientes'}, 401
+        
+    
     def get_plugin_settings(self):
         settings = mongodb.get_record('system', {'name': 'active_plugins'}, fields={'plugins_settings': 1})
         if 'plugins_settings' not in settings:
