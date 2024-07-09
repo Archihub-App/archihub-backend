@@ -164,7 +164,7 @@ def delete_by_slug(slug, user):
     return {'msg': 'Tipo de post eliminado exitosamente'}, 204
 
 # Funcion que devuelve recursivamente los padres de un tipo de post
-def get_parents(post_type, first=True, fields=['name', 'slug', 'icon']):
+def get_parents(post_type, first=True, fields=['name', 'slug', 'icon'], post_types=[]):
     # Si el tipo de post no tiene padre, retornar una lista vacia
     if len(post_type['parentType']) == 0:
         return []
@@ -174,6 +174,9 @@ def get_parents(post_type, first=True, fields=['name', 'slug', 'icon']):
 
     if post_type['slug'] in ids:
         ids.remove(post_type['slug'])
+
+    if post_type['slug'] in post_types and not first:
+        return []
 
     # Buscar el padre del tipo de post
     parent = list(mongodb.get_all_records(
@@ -193,7 +196,7 @@ def get_parents(post_type, first=True, fields=['name', 'slug', 'icon']):
 
         resp.append(obj)
 
-        temp = get_parents(p, False, fields)
+        temp = get_parents(p, False, fields, [r['slug'] for r in resp])
 
         for t in temp:
             if t['slug'] not in [r['slug'] for r in resp]:

@@ -324,6 +324,8 @@ def get_tree():
         type = body['postType']
         from app.api.types.services import get_by_slug
         type = get_by_slug(type)
+        if isinstance(type, list):
+            type = type[0]
         from app.api.types.services import get_parents
         parents = get_parents(type)
         
@@ -341,7 +343,7 @@ def get_tree():
             else:
                 return_slugs.append(s)
         
-        resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user)
+        resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'])
 
         if isinstance(resp, list):
             resp = tuple(resp)
