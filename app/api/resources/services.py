@@ -938,7 +938,7 @@ def get_resource_images(id, user):
     return resp, 200
 
 # Funcion para obtener los hijos de un recurso
-# @cacheHandler.cache.cache(limit=3000)
+@cacheHandler.cache.cache(limit=3000)
 def get_children(id, available, resp=False, post_type=None):
     try:
         list_available = available.split('|')
@@ -968,7 +968,7 @@ def get_children(id, available, resp=False, post_type=None):
         return {'msg': str(e)}, 500
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
-# @cacheHandler.cache.cache(limit=5000)
+@cacheHandler.cache.cache(limit=5000)
 def get_tree(root, available, user, post_type=None):
     try:
         list_available = available.split('|')
