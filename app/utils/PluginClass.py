@@ -73,6 +73,8 @@ class PluginClass(Blueprint):
         
         settings = self.settings['settings_' + slug]
         for setting in settings:
+            if 'required' not in setting:
+                setting['required'] = False
             if setting['required'] and setting['id'] not in body:
                 return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
             if setting['type'] == 'file' and setting['required'] and len(body[setting['id']]) == 0:
