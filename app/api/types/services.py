@@ -209,7 +209,7 @@ def get_parents(post_type, first=True, fields=['name', 'slug', 'icon'], post_typ
     return resp
 
 # Funcion para obtener recursivamente los hijos de un tipo de post
-def get_children(post_type, first=True, fields=['name', 'slug', 'icon']):
+def get_children(post_type, first=True, fields=['name', 'slug', 'icon'], post_types=[]):
     # Buscar los tipos de post que tengan como padre el tipo de post
     children = list(mongodb.get_all_records(
         'post_types', {'parentType.id': post_type['slug']}))
@@ -223,13 +223,16 @@ def get_children(post_type, first=True, fields=['name', 'slug', 'icon']):
             'direct': True if first else False,
         }
 
+        if c['slug'] in post_types and not first:
+            continue
+
         for f in fields:
             obj[f] = c[f]
 
         resp.append(obj)
 
     for c in resp:
-        temp = get_children(c, False, fields)
+        temp = get_children(c, False, fields, list(set(post_types + [c['slug']])))
 
         if len(temp) == 0:
             c['is_last'] = True
@@ -328,6 +331,15 @@ def get_form_by_slug(slug):
 
 @cacheHandler.cache.cache()
 def get_types_info(post_type):
+    def remove_duplicates_by_slug(dicts):
+        unique_list = []
+        seen_slugs = set()
+        for d in dicts:
+            if d['slug'] not in seen_slugs:
+                unique_list.append(d)
+                seen_slugs.add(d['slug'])
+        return unique_list
+
     try:
         # Obtener el tipo de post en la base de datos
         pt = mongodb.get_record('post_types', {'slug': post_type})
@@ -378,6 +390,8 @@ def get_types_info(post_type):
                 },
                 *post_types_children
             ]
+
+            post_types = remove_duplicates_by_slug(post_types)
 
             for p in post_types:
                 p['count'] = get_count(p['slug'])
