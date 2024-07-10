@@ -52,3 +52,17 @@ def create(body, user):
         return {'msg': 'Vista de consulta creada exitosamente'}, 201
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+def delete(id, user):
+    try:
+        view_deleted = mongodb.delete_record('views', {'_id': ObjectId(id)})
+
+        log = {
+            'data': view_deleted.raw_result
+        }
+
+        register_log(user, log_actions['view_delete'], log)
+
+        return {'msg': 'Vista de consulta eliminada exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500

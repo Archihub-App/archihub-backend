@@ -83,6 +83,33 @@ def update_view(view_id):
     # Llamar al servicio para actualizar una vista de consulta
     return services.update(view_id, body, current_user)
 
+@bp.route('/<view_id>', methods=['DELETE'])
+@jwt_required()
+def delete_view(view_id):
+    """
+    Eliminar una vista de consulta
+    ---
+    tags:
+        - Vistas
+    parameters:
+        - in: path
+          name: view_id
+          type: string
+          required: true
+    responses:
+        200:
+            description: Vista de consulta eliminada exitosamente
+        500:
+            description: Error al eliminar la vista de consulta
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Llamar al servicio para eliminar una vista de consulta
+    return services.delete(view_id, current_user)
+
 # Nuevo POST endpoint para crear una nueva vista de consulta
 @bp.route('', methods=['POST'])
 @jwt_required()
