@@ -1,8 +1,9 @@
 from app.api.types import bp
 from app.api.types import services
+from flask import request
 
-@bp.route('/info/<post_type>', methods=['GET'])
-def get_types_info(post_type):
+@bp.route('/info', methods=['POST'])
+def get_types_info():
     """
     Obtener información de los tipos de contenido
     ---
@@ -14,7 +15,8 @@ def get_types_info(post_type):
         500:
             description: Error al obtener la información de los tipos de contenido
     """
-    resp = services.get_types_info(post_type)
+    body = request.get_json()
+    resp = services.get_types_info(body)
 
     if isinstance(resp, list):
         return tuple(resp)

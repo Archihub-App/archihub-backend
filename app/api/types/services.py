@@ -330,7 +330,7 @@ def get_form_by_slug(slug):
 
 
 @cacheHandler.cache.cache()
-def get_types_info(post_type):
+def get_types_info(body):
     def remove_duplicates_by_slug(dicts):
         unique_list = []
         seen_slugs = set()
@@ -341,6 +341,7 @@ def get_types_info(post_type):
         return unique_list
 
     try:
+        post_type = body['post_type']
         # Obtener el tipo de post en la base de datos
         pt = mongodb.get_record('post_types', {'slug': post_type})
         # verificar si el tipo de post es padre de otro

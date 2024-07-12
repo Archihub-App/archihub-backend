@@ -18,4 +18,8 @@ def get_view_info(view_slug):
             description: Error al obtener la información de la vista de consulta
     """
     # Llamar al servicio para obtener la información de una vista de consulta
-    return services.get_view_info(view_slug)
+    resp = services.get_view_info(view_slug)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
