@@ -52,10 +52,19 @@ def get_view_info(view_slug):
             })
 
     types = sorted(types, key=lambda x: x['count'], reverse=False)
+    last = types[-1]
+
+    for p in types:
+        if p['count'] == 0:
+            p['percent'] = 0
+        else:
+            p['percent'] = round((p['count'] / last['count']) * 100)
 
     view.pop('_id')
     view.pop('visible')
     view['types'] = types
+    from app.api.types.services import get_icon
+    view['icon'] = get_icon(view['root'])
 
     filter_condition = {'parent.post_type': {'$in': [p['slug'] for p in types]}}
     if view['parent'] != '':
@@ -65,7 +74,7 @@ def get_view_info(view_slug):
                 {'parent.id': view['parent']}
             ]
         }
-        
+
     records_count = mongodb.count(
             'records', filter_condition)
 
