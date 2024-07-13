@@ -30,9 +30,65 @@ def get_view_info(view_slug):
 
     if not view:
         return {'msg': 'Vista de consulta no encontrada'}, 404
+    
+
+    types = []
+    filters = {}
+    if view['parent'] != '':
+        filters = {'parents.id': view['parent']}
+
+    for v in view['visible']:
+        if v != view['root']:
+            from app.api.types.services import get_count
+            from app.api.types.services import get_by_slug
+            pt = get_by_slug(v)
+            count = get_count(v, filters)
+            types.append({
+                'slug': v,
+                'count': count,
+                'description': pt['description'],
+                'name': pt['name'],
+                'icon': pt['icon']
+            })
+
+    types = sorted(types, key=lambda x: x['count'], reverse=False)
+    last = types[-1]
+
+    for p in types:
+        if p['count'] == 0:
+            p['percent'] = 0
+        else:
+            p['percent'] = round((p['count'] / last['count']) * 100)
 
     view.pop('_id')
+    view.pop('visible')
+    view['types'] = types
+    from app.api.types.services import get_icon
+    view['icon'] = get_icon(view['root'])
 
+    filter_condition = {'parent.post_type': {'$in': [p['slug'] for p in types]}}
+    if view['parent'] != '':
+        filter_condition = {
+            '$or': [
+                {'parents.id': view['parent']},
+                {'parent.id': view['parent']}
+            ]
+        }
+
+    records_count = mongodb.count(
+            'records', filter_condition)
+
+    records_types = list(mongodb.aggregate('records', [
+            {'$match': filter_condition},
+            {'$group': {'_id': '$processing.fileProcessing.type', 'count': {'$sum': 1}}},
+            {'$sort': {'count': -1}}
+        ]))
+    
+    view['files'] = {
+        'total': records_count,
+        'data': records_types
+    }
+    
     return view, 200
 
 def update(id, body, user):

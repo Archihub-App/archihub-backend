@@ -431,10 +431,11 @@ def get_types_info(body):
 
 
 @cacheHandler.cache.cache()
-def get_count(type):
+def get_count(type, filters = {}):
     try:
         # Obtener todos los tipos de post en orden alfabetico ascendente por el campo name
-        count = mongodb.count('resources', {'post_type': type, 'status': 'published'})
+
+        count = mongodb.count('resources', {'post_type': type, 'status': 'published', **filters})
 
         # Retornar post_types
         return count
