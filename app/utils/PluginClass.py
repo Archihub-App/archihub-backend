@@ -75,10 +75,11 @@ class PluginClass(Blueprint):
         for setting in settings:
             if 'required' not in setting:
                 setting['required'] = False
-            if setting['required'] and setting['id'] not in body:
-                return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
-            if setting['type'] == 'file' and setting['required'] and len(body[setting['id']]) == 0:
-                return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
+            else:
+                if setting['required'] and setting['id'] not in body:
+                    return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
+                if setting['type'] == 'file' and setting['required'] and len(body[setting['id']]) == 0:
+                    return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
             
     def validate_roles(self, user, roles):
         temp = []
