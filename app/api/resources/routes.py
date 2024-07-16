@@ -10,9 +10,9 @@ from app.utils.functions import cache_type_roles
 # En este archivo se registran las rutas de la API para los recursos
 
 # Nuevo endpoint para obtener todos los recursos dado un tipo de contenido y un body de filtros
-@bp.route('/<post_type>', methods=['POST'])
+@bp.route('/getall', methods=['POST'])
 @jwt_required()
-def get_all(post_type):
+def get_all():
     """
     Obtener todos los recursos dado un tipo de contenido y un body de filtros
     ---
@@ -51,7 +51,7 @@ def get_all(post_type):
     body = json.dumps(body)
 
     # Llamar al servicio para obtener los recursos
-    resp = services.get_all(post_type, body, current_user)
+    resp = services.get_all(body, current_user)
 
     if isinstance(resp, list):
         return tuple(resp)

@@ -51,23 +51,28 @@ def parse_result(result):
 
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
 @cacheHandler.cache.cache(limit=5000)
-def get_all(post_type, body, user):
+def get_all(body, user):
     try:
+        print(body)
         body = json.loads(body)
-        post_type_roles = cache_type_roles(post_type)
-        if post_type_roles['viewRoles']:
-            canView = False
-            for r in post_type_roles['viewRoles']:
-                if has_role(user, r) or has_role(user, 'admin'):
-                    canView = True
-                    break
-            if not canView:
-                return {'msg': 'No tiene permisos para obtener los recursos'}, 401
+        post_types = body['post_type']
+        body.pop('post_type')
+        for p in post_types:
+            post_type_roles = cache_type_roles(p)
+            if post_type_roles['viewRoles']:
+                canView = False
+                for r in post_type_roles['viewRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canView = True
+                        break
+                if not canView:
+                    return {'msg': 'No tiene permisos para obtener los recursos'}, 401
 
         filters = {}
         limit = 20
         skip = 0
-        filters['post_type'] = post_type
+        filters['post_type'] = {"$in": post_types}
+
 
         if 'parents' in body:
             if body['parents']:
