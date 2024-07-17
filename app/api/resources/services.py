@@ -976,9 +976,11 @@ def get_children(id, available, resp=False, post_type=None):
 @cacheHandler.cache.cache(limit=5000)
 def get_tree(root, available, user, post_type=None):
     try:
+        print(root, available, post_type)
         list_available = available.split('|')
 
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
+
         if root == 'all':
             
             resources = list(mongodb.get_all_records('resources', {
@@ -988,6 +990,7 @@ def get_tree(root, available, user, post_type=None):
             resources = list(mongodb.get_all_records('resources', {'post_type': {
                              "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
 
+        print(resources)
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
 

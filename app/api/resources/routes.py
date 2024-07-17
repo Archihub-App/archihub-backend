@@ -312,6 +312,7 @@ def get_tree():
                         return_slugs.append(s)
             else:
                 return_slugs.append(s)
+
         # Llamar al servicio para obtener la estructura de arból
         resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user)
         

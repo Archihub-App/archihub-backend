@@ -124,6 +124,8 @@ def get_by_id(id):
     # Llamar al servicio para obtener el listado por su id
     resp = services.get_by_id(id)
 
+    print(resp)
+
     # Si el listado no existe, retornar error
     if 'msg' in resp:
         if resp['msg'] == 'Listado no existe':
