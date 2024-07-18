@@ -50,10 +50,11 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
-@cacheHandler.cache.cache(limit=5000)
+# @cacheHandler.cache.cache(limit=5000)
 def get_all(body, user):
     try:
         body = json.loads(body)
+        print(body)
         post_types = body['post_type']
         body.pop('post_type')
         for p in post_types:
