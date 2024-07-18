@@ -27,4 +27,7 @@ log_actions = {
     'view_create': 'VIEW_CREATE',
     'view_update': 'VIEW_UPDATE',
     'view_delete': 'VIEW_DELETE',
+    'docseg_extraction': 'DOCSEG_EXTRACTION',
+    'av_transcribe': 'AV_TRANSCRIBE',
+    'lt_extraction': 'LT_EXTRACTION',
 }
