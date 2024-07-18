@@ -322,16 +322,20 @@ def get_tree():
         return resp
     
     elif body['view'] == 'list':
-        type = body['postType']
-        from app.api.types.services import get_by_slug
-        type = get_by_slug(type)
-        if isinstance(type, list):
-            type = type[0]
-        from app.api.types.services import get_parents
-        parents = get_parents(type)
-        
-        slugs = [item['slug'] for item in parents]
-        slugs = [type['slug'], *slugs]
+        print(body)
+        if 'postType' in body:
+            type = body['postType']
+            from app.api.types.services import get_by_slug
+            type = get_by_slug(type)
+            if isinstance(type, list):
+                type = type[0]
+            from app.api.types.services import get_parents
+            parents = get_parents(type)
+            
+            slugs = [item['slug'] for item in parents]
+            slugs = [type['slug'], *slugs]
+        elif 'root' in body:
+            slugs = body['activeTypes']
 
         return_slugs = []
 
@@ -344,7 +348,7 @@ def get_tree():
             else:
                 return_slugs.append(s)
         
-        resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'])
+        resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'] if 'postType' in body else None)
 
         if isinstance(resp, list):
             resp = tuple(resp)

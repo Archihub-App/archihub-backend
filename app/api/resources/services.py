@@ -53,7 +53,6 @@ def parse_result(result):
 @cacheHandler.cache.cache(limit=5000)
 def get_all(body, user):
     try:
-        print(body)
         body = json.loads(body)
         post_types = body['post_type']
         body.pop('post_type')
@@ -121,15 +120,14 @@ def get_all(body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user, files):
     try:
-
         print(body)
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
 
-        print(body)
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': 'El recurso debe tener metadata'}, 400
+
 
         status = body['status']
         if status == 'published':
@@ -147,6 +145,7 @@ def create(body, user, files):
         errors = {}
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
+        print(body)
 
         update_relations_children(body, metadata['fields'], True)
 
@@ -976,7 +975,6 @@ def get_children(id, available, resp=False, post_type=None):
 @cacheHandler.cache.cache(limit=5000)
 def get_tree(root, available, user, post_type=None):
     try:
-        print(root, available, post_type)
         list_available = available.split('|')
 
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
@@ -990,7 +988,6 @@ def get_tree(root, available, user, post_type=None):
             resources = list(mongodb.get_all_records('resources', {'post_type': {
                              "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
 
-        print(resources)
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
 
