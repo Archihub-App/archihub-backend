@@ -51,23 +51,26 @@ def parse_result(result):
 
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
 @cacheHandler.cache.cache(limit=5000)
-def get_all(post_type, body, user):
+def get_all(body, user):
     try:
         body = json.loads(body)
-        post_type_roles = cache_type_roles(post_type)
-        if post_type_roles['viewRoles']:
-            canView = False
-            for r in post_type_roles['viewRoles']:
-                if has_role(user, r) or has_role(user, 'admin'):
-                    canView = True
-                    break
-            if not canView:
-                return {'msg': 'No tiene permisos para obtener los recursos'}, 401
+        post_types = body['post_type']
+        body.pop('post_type')
+        for p in post_types:
+            post_type_roles = cache_type_roles(p)
+            if post_type_roles['viewRoles']:
+                canView = False
+                for r in post_type_roles['viewRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canView = True
+                        break
+                if not canView:
+                    return {'msg': 'No tiene permisos para obtener los recursos'}, 401
 
         filters = {}
         limit = 20
         skip = 0
-        filters['post_type'] = post_type
+        filters['post_type'] = {"$in": post_types}
 
         if 'parents' in body:
             if body['parents']:
@@ -116,15 +119,14 @@ def get_all(post_type, body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user, files):
     try:
-
         print(body)
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
 
-        print(body)
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': 'El recurso debe tener metadata'}, 400
+
 
         status = body['status']
         if status == 'published':
@@ -142,6 +144,7 @@ def create(body, user, files):
         errors = {}
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
+        print(body)
 
         update_relations_children(body, metadata['fields'], True)
 
@@ -974,6 +977,7 @@ def get_tree(root, available, user, post_type=None):
         list_available = available.split('|')
 
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
+
         if root == 'all':
             
             resources = list(mongodb.get_all_records('resources', {

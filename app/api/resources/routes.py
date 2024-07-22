@@ -10,9 +10,9 @@ from app.utils.functions import cache_type_roles
 # En este archivo se registran las rutas de la API para los recursos
 
 # Nuevo endpoint para obtener todos los recursos dado un tipo de contenido y un body de filtros
-@bp.route('/<post_type>', methods=['POST'])
+@bp.route('/getall', methods=['POST'])
 @jwt_required()
-def get_all(post_type):
+def get_all():
     """
     Obtener todos los recursos dado un tipo de contenido y un body de filtros
     ---
@@ -51,7 +51,7 @@ def get_all(post_type):
     body = json.dumps(body)
 
     # Llamar al servicio para obtener los recursos
-    resp = services.get_all(post_type, body, current_user)
+    resp = services.get_all(body, current_user)
 
     if isinstance(resp, list):
         return tuple(resp)
@@ -312,6 +312,7 @@ def get_tree():
                         return_slugs.append(s)
             else:
                 return_slugs.append(s)
+
         # Llamar al servicio para obtener la estructura de arból
         resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user)
         
@@ -321,16 +322,22 @@ def get_tree():
         return resp
     
     elif body['view'] == 'list':
-        type = body['postType']
-        from app.api.types.services import get_by_slug
-        type = get_by_slug(type)
-        if isinstance(type, list):
-            type = type[0]
-        from app.api.types.services import get_parents
-        parents = get_parents(type)
-        
-        slugs = [item['slug'] for item in parents]
-        slugs = [type['slug'], *slugs]
+        if 'postType' in body:
+            if body['postType']:
+                type = body['postType']
+                from app.api.types.services import get_by_slug
+                type = get_by_slug(type)
+                if isinstance(type, list):
+                    type = type[0]
+                from app.api.types.services import get_parents
+                parents = get_parents(type)
+                
+                slugs = [item['slug'] for item in parents]
+                slugs = [type['slug'], *slugs]
+            else:
+                slugs = body['activeTypes']
+        elif 'root' in body:
+            slugs = body['activeTypes']
 
         return_slugs = []
 
@@ -343,7 +350,7 @@ def get_tree():
             else:
                 return_slugs.append(s)
         
-        resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'])
+        resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'] if 'postType' in body else None)
 
         if isinstance(resp, list):
             resp = tuple(resp)

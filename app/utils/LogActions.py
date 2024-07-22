@@ -20,6 +20,7 @@ log_actions = {
     'record_update': 'RECORD_UPDATE',
     'record_delete': 'RECORD_DELETE',
     'record_get_all': 'RECORD_GET_ALL',
+    'record_get': 'RECORD_GET',
     'system_update': 'SYSTEM_UPDATE',
     'snap_create': 'SNAP_CREATE',
     'snap_delete': 'SNAP_DELETE',

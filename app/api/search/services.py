@@ -13,26 +13,28 @@ ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
 def get_resources_by_filters(body, user):
     try:
-        print(body)
-        post_type_roles = cache_type_roles(body['post_type'])
-        user_accessRights = get_user_rights(user)
-        user_accessRights = user_accessRights + ['public']
+        post_types = body['post_type']
 
-        if post_type_roles['viewRoles']:
-            canView = False
-            for r in post_type_roles['viewRoles']:
-                if has_role(user, r) or has_role(user, 'admin'):
-                    canView = True
-                    break
-            if not canView:
-                return {'msg': 'No tiene permisos para obtener los recursos'}, 401
+        for p in post_types:
+            post_type_roles = cache_type_roles(p)
+            user_accessRights = get_user_rights(user)
+            user_accessRights = user_accessRights + ['public']
+
+            if post_type_roles['viewRoles']:
+                canView = False
+                for r in post_type_roles['viewRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canView = True
+                        break
+                if not canView:
+                    return {'msg': 'No tiene permisos para obtener los recursos'}, 401
             
         query = {
             'query': {
                 'bool': {
                     'filter': [
                         {
-                            'term': {
+                            'terms': {
                                 'post_type.keyword': body['post_type']
                             }
                         },
