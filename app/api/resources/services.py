@@ -34,6 +34,7 @@ from dateutil import parser
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
+children_cache = {}
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado
 def change_value(body, route, value):
     route = route.split('.')
@@ -970,9 +971,38 @@ def get_children(id, available, resp=False, post_type=None):
     except Exception as e:
         return {'msg': str(e)}, 500
 
+@cacheHandler.cache.cache(limit=15000)
+def get_children_cache(root, available, post_type=None):
+    list_available = available.split('|')
+
+    fields = {'metadata.firstLevel.title': 1, 'post_type': 1}
+
+    resp = []
+
+    if root == 'all':
+        
+        resources = list(mongodb.get_all_records('resources', {
+                            'post_type': {
+                            "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=35))
+    else:
+        resources = list(mongodb.get_all_records('resources', {'post_type': {
+                            "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=35))
+        
+        resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
+            re['_id'])} for re in resources]
+
+        for resource in resources:
+            resource['children'] = get_children(resource['id'], available, False, post_type)
+            if resource['children']:
+                resource['icon'] = get_icon(resource['post_type'])
+                resp.append(resource)
+
+    return resp
+    
+
 # Funcion para obtener los hijos de un recurso en forma de arbol
-@cacheHandler.cache.cache(limit=5000)
-def get_tree(root, available, user, post_type=None):
+@cacheHandler.cache.cache(limit=15000)
+def get_tree(root, available, user, post_type=None, page=0):
     try:
         list_available = available.split('|')
 
@@ -982,10 +1012,10 @@ def get_tree(root, available, user, post_type=None):
             
             resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
-                             "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page))
         else:
             resources = list(mongodb.get_all_records('resources', {'post_type': {
-                             "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page))
 
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
@@ -994,6 +1024,14 @@ def get_tree(root, available, user, post_type=None):
             resource['children'] = get_children(resource['id'], available, False, post_type)
             resource['icon'] = get_icon(resource['post_type'])
 
+        if page == 0:
+            children_cache = get_children_cache(root, available, post_type)
+            count = len([re for re in resources if not re['children']])
+            
+            if len(children_cache) < 35 and len(children_cache) > 0:
+                resources = children_cache
+            elif count <= 10:
+                resources = [*children_cache, *resources]
         # Retornar los recursos y los padres
         return resources, 200
     except Exception as e:
@@ -1256,4 +1294,5 @@ def update_cache():
     get_resource_files.invalidate_all()
     get_all.invalidate_all()
     get_resource_images.invalidate_all()
+    get_children_cache.invalidate_all()
     clear_cache()

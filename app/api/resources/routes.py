@@ -350,7 +350,7 @@ def get_tree():
             else:
                 return_slugs.append(s)
         
-        resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'] if 'postType' in body else None)
+        resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'] if 'postType' in body else None, int(body['page']) if 'page' in body else 0)
 
         if isinstance(resp, list):
             resp = tuple(resp)
