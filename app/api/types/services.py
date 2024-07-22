@@ -284,7 +284,7 @@ def get_icon(post_type_slug):
 # Funcion para devolver los campos del metadato de un tipo de post
 
 
-# @cacheHandler.cache.cache()
+@cacheHandler.cache.cache()
 def get_metadata(post_type_slug):
     print(post_type_slug)
     # Buscar el tipo de post en la base de datos
@@ -371,11 +371,13 @@ def get_types_info(body):
             post_types = sorted(post_types, key=lambda k: k['count'], reverse=False)
             last = post_types[-1]
 
+            total = sum([p['count'] for p in post_types])
+
             for p in post_types:
                 if p['count'] == 0:
                     p['percent'] = 0
                 else:
-                    p['percent'] = round((p['count'] / last['count']) * 100)
+                    p['percent'] = round((p['count'] / total) * 100)
 
         else:
             post_types_children = get_children(pt, True, ['name', 'slug', 'icon', 'description'])
@@ -400,12 +402,13 @@ def get_types_info(body):
 
             post_types = sorted(post_types, key=lambda k: k['count'], reverse=False)
             last = post_types[-1]
+            total = sum([p['count'] for p in post_types])
 
             for p in post_types:
                 if p['count'] == 0:
                     p['percent'] = 0
                 else:
-                    p['percent'] = round((p['count'] / last['count']) * 100)
+                    p['percent'] = round((p['count'] / total) * 100)
 
 
         filter_condition = {'parent.post_type': {'$in': [p['slug'] for p in post_types]}}
