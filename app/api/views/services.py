@@ -52,7 +52,6 @@ def get_view_info(view_slug):
             })
 
     types = sorted(types, key=lambda x: x['count'], reverse=False)
-    last = types[-1]
     total = sum([p['count'] for p in types])
 
     for p in types:
