@@ -300,26 +300,27 @@ def get_tree():
     # Obtener el body del request
     body = request.json
 
-    if body['view'] == 'tree':
-        slugs = [item['slug'] for item in body['tree']]
-        return_slugs = []
+    if 'view' in body:
+        if body['view'] == 'tree':
+            slugs = [item['slug'] for item in body['tree']]
+            return_slugs = []
 
-        for s in slugs:
-            roles = cache_type_roles(s)
-            if roles['viewRoles']:
-                for r in roles['viewRoles']:
-                    if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
-                        return_slugs.append(s)
-            else:
-                return_slugs.append(s)
+            for s in slugs:
+                roles = cache_type_roles(s)
+                if roles['viewRoles']:
+                    for r in roles['viewRoles']:
+                        if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
+                            return_slugs.append(s)
+                else:
+                    return_slugs.append(s)
 
-        # Llamar al servicio para obtener la estructura de arból
-        resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user)
-        
-        if isinstance(resp, list):
-            resp = tuple(resp)
-        
-        return resp
+            # Llamar al servicio para obtener la estructura de arból
+            resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user)
+            
+            if isinstance(resp, list):
+                resp = tuple(resp)
+            
+            return resp
     
     elif body['view'] == 'list':
         if 'postType' in body:
