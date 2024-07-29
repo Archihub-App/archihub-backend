@@ -30,6 +30,7 @@ def update_cache():
     get_count.invalidate_all()
     get_icon.invalidate_all()
     get_form_by_slug.invalidate_all()
+    get_type_viz.invalidate_all()
     clear_cache()
 
 # Nuevo servicio para obtener todos los tipos de
@@ -445,3 +446,18 @@ def get_count(type, filters = {}):
         return count
     except Exception as e:
         raise Exception(str(e))
+
+@cacheHandler.cache.cache(limit=1000)
+def get_type_viz(slug, type):
+    try:
+        if type == 'timeCreated':
+            data = list(mongodb.aggregate('resources', [
+                {'$match': {'post_type': slug}},
+                {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$createdAt'}}, 'count': {'$sum': 1}}},
+                {'$sort': {'_id': 1}}
+            ]))
+            
+            return data, 200
+        return {'msg': 'ok'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
