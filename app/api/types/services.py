@@ -458,6 +458,13 @@ def get_type_viz(slug, type):
             ]))
             
             return data, 200
+        elif type == 'statusCount':
+            data = list(mongodb.aggregate('resources', [
+                {'$match': {'post_type': slug}},
+                {'$group': {'_id': '$status', 'count': {'$sum': 1}}},
+            ]))
+            return data, 200
+        
         return {'msg': 'ok'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
