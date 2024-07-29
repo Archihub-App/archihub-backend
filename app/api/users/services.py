@@ -165,7 +165,8 @@ def update_user(body, current_user):
         body['roles'] = verify_role_exists(body['roles'])
         body['accessRights'] = verify_accessright_exists(body['accessRights'])
 
-        body.pop('lastRequest')
+        if 'lastRequest' in body:
+            body.pop('lastRequest')
 
         # Crear instancia de UserUpdate con el body del request
         user_update = UserUpdate(**body)
