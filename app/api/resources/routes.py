@@ -322,41 +322,42 @@ def get_tree():
             
             return resp
     
-    elif body['view'] == 'list':
-        if 'postType' in body:
-            if body['postType']:
-                type = body['postType']
-                from app.api.types.services import get_by_slug
-                type = get_by_slug(type)
-                if isinstance(type, list):
-                    type = type[0]
-                from app.api.types.services import get_parents
-                parents = get_parents(type)
-                
-                slugs = [item['slug'] for item in parents]
-                slugs = [type['slug'], *slugs]
-            else:
+        elif body['view'] == 'list':
+            if 'postType' in body:
+                if body['postType']:
+                    type = body['postType']
+                    from app.api.types.services import get_by_slug
+                    type = get_by_slug(type)
+                    if isinstance(type, list):
+                        type = type[0]
+                    from app.api.types.services import get_parents
+                    parents = get_parents(type)
+                    
+                    slugs = [item['slug'] for item in parents]
+                    slugs = [type['slug'], *slugs]
+                else:
+                    slugs = body['activeTypes']
+            elif 'root' in body:
                 slugs = body['activeTypes']
-        elif 'root' in body:
-            slugs = body['activeTypes']
 
-        return_slugs = []
+            return_slugs = []
 
-        for s in slugs:
-            roles = cache_type_roles(s)
-            if roles['viewRoles']:
-                for r in roles['viewRoles']:
-                    if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
-                        return_slugs.append(s)
-            else:
-                return_slugs.append(s)
+            for s in slugs:
+                roles = cache_type_roles(s)
+                if roles['viewRoles']:
+                    for r in roles['viewRoles']:
+                        if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
+                            return_slugs.append(s)
+                else:
+                    return_slugs.append(s)
+            
+            resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'] if 'postType' in body else None, int(body['page']) if 'page' in body else 0)
+
+            if isinstance(resp, list):
+                resp = tuple(resp)
+            
+            return resp
         
-        resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'] if 'postType' in body else None, int(body['page']) if 'page' in body else 0)
-
-        if isinstance(resp, list):
-            resp = tuple(resp)
-        
-        return resp
 
 
 # Nuevo endpoint para obtener los recursos de un recurso padre

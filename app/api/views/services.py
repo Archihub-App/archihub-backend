@@ -38,21 +38,19 @@ def get_view_info(view_slug):
         filters = {'parents.id': view['parent']}
 
     for v in view['visible']:
-        if v != view['root']:
-            from app.api.types.services import get_count
-            from app.api.types.services import get_by_slug
-            pt = get_by_slug(v)
-            count = get_count(v, filters)
-            types.append({
-                'slug': v,
-                'count': count,
-                'description': pt['description'],
-                'name': pt['name'],
-                'icon': pt['icon']
-            })
+        from app.api.types.services import get_count
+        from app.api.types.services import get_by_slug
+        pt = get_by_slug(v)
+        count = get_count(v, filters)
+        types.append({
+            'slug': v,
+            'count': count,
+            'description': pt['description'],
+            'name': pt['name'],
+            'icon': pt['icon']
+        })
 
     types = sorted(types, key=lambda x: x['count'], reverse=False)
-    last = types[-1]
     total = sum([p['count'] for p in types])
 
     for p in types:
