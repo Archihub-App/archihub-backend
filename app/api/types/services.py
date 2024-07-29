@@ -456,12 +456,19 @@ def get_type_viz(slug, type):
                 {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$createdAt'}}, 'count': {'$sum': 1}}},
                 {'$sort': {'_id': 1}}
             ]))
-            
             return data, 200
         elif type == 'statusCount':
             data = list(mongodb.aggregate('resources', [
                 {'$match': {'post_type': slug}},
                 {'$group': {'_id': '$status', 'count': {'$sum': 1}}},
+                {'$sort': {'count': -1}}
+            ]))
+            return data, 200
+        elif type == 'authorCount':
+            data = list(mongodb.aggregate('resources', [
+                {'$match': {'post_type': slug}},
+                {'$group': {'_id': '$createdBy', 'count': {'$sum': 1}}},
+                {'$sort': {'count': -1}}
             ]))
             return data, 200
         
