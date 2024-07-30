@@ -468,7 +468,8 @@ def get_type_viz(slug, type):
             data = list(mongodb.aggregate('resources', [
                 {'$match': {'post_type': slug}},
                 {'$group': {'_id': '$createdBy', 'count': {'$sum': 1}}},
-                {'$sort': {'count': -1}}
+                {'$sort': {'count': -1}},
+                {'$limit': 10}
             ]))
             return data, 200
         
