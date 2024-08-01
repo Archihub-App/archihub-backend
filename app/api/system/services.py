@@ -573,6 +573,7 @@ def clear_cache():
     from app.api.users.services import update_cache as update_cache_users
     from app.api.snaps.services import update_cache as update_cache_snaps
     from app.api.views.services import update_cache as update_cache_views
+    from app.api.geosystem.services import update_cache as update_cache_geosystem
 
     try:
         update_cache_function()
@@ -584,6 +585,7 @@ def clear_cache():
         update_cache_users()
         update_cache_snaps()
         update_cache_views()
+        update_cache_geosystem()
 
         return {'msg': 'Cache limpiada exitosamente'}, 200
     except Exception as e:

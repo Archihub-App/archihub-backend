@@ -111,6 +111,10 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.snaps import bp as snaps_bp
     app.register_blueprint(snaps_bp, url_prefix='/snaps')
 
+    # Registrar geosystem blueprint
+    from app.api.geosystem import bp as geosystem_bp
+    app.register_blueprint(geosystem_bp, url_prefix='/geosystem')
+
     # verificar en la base de datos si la admin API está activa
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 
