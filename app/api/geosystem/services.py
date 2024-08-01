@@ -19,9 +19,7 @@ def upload_shapes():
         for f in admin_folders:
             level = int(f.split('admin_')[1])
             admin_folder_path = os.path.join(path, f)
-            print(level, admin_folder_path)
             for shape_ in os.listdir(admin_folder_path):
-                print(shape_)
                 # open json file
                 with open(os.path.join(admin_folder_path, shape_)) as json_file:
                     data = json.load(json_file)
@@ -47,9 +45,7 @@ def upload_shapes():
                             for s in shape_intersect:
                                 candidate = shape(s['geometry'])
                                 feature_shape = shape(feature['geometry'])
-                                # get feature shape centroid
                                 centroid = feature_shape.centroid
-                                # check if centroid is inside the candidate shape
                                 if candidate.contains(centroid):
                                     feature['properties']['parent'] = s['properties']['ident']
                                     feature['properties']['parent_name'] = s['properties']['name']
@@ -64,7 +60,7 @@ def upload_shapes():
                             mongodb.insert_record('shapes', Polygon(**feature))
                         
 
-        return {'msg': 'Shapes uploaded'}, 200
+        return {'msg': 'Polígonos geográficos actualizados'}, 200
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
