@@ -320,7 +320,6 @@ def validate_text_regex(value, field):
 
         # Si el campo tiene regex, validar que el valor cumpla con el regex
         if 'pattern' in field:
-            print("1", field['pattern'])
 
             # regex para validar una url
             regex = field['pattern']
@@ -629,7 +628,6 @@ def index_resources_task(body = {}):
             post_type = resource['post_type']
             fields = get_metadata(post_type)['fields']
             for f in fields:
-                # print(f)
                 if f['type'] != 'file' and f['type'] != 'simple-date':
                     destiny = f['destiny']
                     if destiny != '':
