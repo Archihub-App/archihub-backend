@@ -56,7 +56,11 @@ def get_view(view_id):
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener una vista de consulta
-    return services.get(view_id, current_user)
+    resp = services.get(view_id, current_user)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 @bp.route('/<view_id>', methods=['PUT'])
 @jwt_required()

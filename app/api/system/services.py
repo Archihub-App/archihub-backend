@@ -613,6 +613,7 @@ def regenerate_index_task(mapping, user):
 def index_resources_task(body = {}):
     skip = 0
     filters = {}
+    print(body)
     if '_id' in body:
         filters['_id'] = ObjectId(body['_id'])
 

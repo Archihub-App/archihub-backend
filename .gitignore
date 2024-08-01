@@ -14,3 +14,5 @@ requirements.txt.bak
 !/app/plugins/filesProcessing
 !/app/plugins/inventoryMaker
 !/app/plugins/massiveUpdater
+
+/app/utils/geo/*

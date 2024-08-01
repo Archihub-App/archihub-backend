@@ -343,3 +343,31 @@ def node_clear_cache(user):
     
     # Llamar al servicio para limpiar la cache
     return services.clear_cache()
+
+@bp.route('/geo-load', methods=['GET'])
+@jwt_required()
+def geo_load():
+    """
+    Cargar poligonos de georeferenciación
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Cache limpiada exitosamente
+        401:
+            description: No tiene permisos para limpiar la cache
+        500:
+            description: Error al limpiar la cache
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de procesamiento o administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para actualizar los poligonos'}, 401
+    
+    
+    from app.api.geosystem.services import upload_shapes
+    return upload_shapes()
