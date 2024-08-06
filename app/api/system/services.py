@@ -615,7 +615,7 @@ def regenerate_index_task(mapping, user):
 def index_resources_task(body = {}):
     skip = 0
     filters = {}
-    print(body)
+    loop = True
     if '_id' in body:
         filters['_id'] = ObjectId(body['_id'])
 
@@ -624,7 +624,7 @@ def index_resources_task(body = {}):
     if body == {}:
         index_handler.delete_all_documents(ELASTIC_INDEX_PREFIX + '-resources')
 
-    while len(resources) > 0:
+    while len(resources) > 0 and loop:
         for resource in resources:
             document = {}
             post_type = resource['post_type']
@@ -658,9 +658,12 @@ def index_resources_task(body = {}):
             if r.status_code != 201 and r.status_code != 200:
                 raise Exception('Error al indexar el recurso ' + str(resource['_id']))
 
-
+        if len(resources) < 1000:
+            loop = False
+            
         skip += 1000
         resources = list(mongodb.get_all_records('resources', {}, limit=1000, skip=skip))
+        
 
     return 'ok'
 
