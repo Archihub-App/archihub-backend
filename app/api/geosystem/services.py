@@ -4,9 +4,13 @@ from app.api.geosystem.models import Polygon
 from app.api.geosystem.models import PolygonUpdate
 import os
 import json
-from shapely.geometry import shape
+from shapely.geometry import shape, mapping
 
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
+
+def update_cache():
+    get_level.invalidate_all()
 
 def upload_shapes():
     try:
@@ -58,9 +62,34 @@ def upload_shapes():
                                             mongodb.insert_record('shapes', Polygon(**feature))
                         elif level == 0:
                             mongodb.insert_record('shapes', Polygon(**feature))
+
+                        get_level.invalidate_all()
                         
 
         return {'msg': 'Polígonos geográficos actualizados'}, 200
     except Exception as e:
         print(str(e))
+        return {'msg': str(e)}, 500
+
+@cacheHandler.cache.cache(limit=5000)
+def get_level(body):
+    try:
+        level = body['level']
+        filters = {
+            'properties.admin_level': int(level)
+        }
+        if 'parent' in body:
+            filters['properties.parent'] = body['parent']
+            
+        shapes = list(mongodb.get_all_records('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1}, sort=[('properties.name', 1)]))
+
+        for s in shapes:
+            shape_ = shape(s['geometry'])
+            s.pop('_id')
+            s['centroid'] = mapping(shape_.centroid)
+            geo = shape_.simplify(.85, preserve_topology=True)
+            s['geometry'] = mapping(geo)
+
+        return shapes, 200
+    except Exception as e:
         return {'msg': str(e)}, 500
