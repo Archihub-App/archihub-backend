@@ -120,7 +120,6 @@ def get_all(body, user):
 # Nuevo servicio para crear un recurso
 def create(body, user, files):
     try:
-        print(body)
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
 
@@ -145,7 +144,6 @@ def create(body, user, files):
         errors = {}
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
-        print(body)
 
         update_relations_children(body, metadata['fields'], True)
 
@@ -173,7 +171,6 @@ def create(body, user, files):
         body['filesObj'] = []
         body['createdAt'] = datetime.now()
         # Crear instancia de Resource con el body del request
-
         resource = Resource(**body)
 
         # Insertar el recurso en la base de datos
@@ -318,6 +315,7 @@ def update_by_id(id, body, user, files):
 
 # Funcion para actualizar los recursos relacionados si el post_type es igual al del padre
 def update_relations_children(body, metadata, new = False):
+    print("update_relations_children")
     for f in metadata:
         if f['type'] == 'relation':
             if f['relation_type'] == body['post_type'] and get_value_by_path(body, f['destiny']):

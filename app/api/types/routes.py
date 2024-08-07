@@ -258,3 +258,38 @@ def delete_by_slug(slug):
         return resp
     else:
         return tuple(resp)
+    
+@bp.route('/moreinfo', methods=['POST'])
+@jwt_required()
+def get_type_viz():
+    """
+    Obtener información de los tipos de contenido
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Tipos de contenido
+    responses:
+        200:
+            description: Información de los tipos de contenido
+        400:
+            description: Error al obtener la información de los tipos de contenido
+        401:
+            description: No tiene permisos para obtener la información de los tipos de contenido
+        500:
+            description: Error al obtener la información de los tipos de contenido
+    """
+    body = request.get_json()
+
+    if 'slug' not in body or 'type' not in body:
+        return {'msg': 'Debe enviar el slug y el tipo de contenido'}, 400
+    
+    if not user_services.has_role(get_jwt_identity(), 'admin') and not user_services.has_role(get_jwt_identity(), 'editor'):
+        return {'msg': 'No tiene permisos para obtener la información de los tipos de contenido'}, 401
+    
+    resp = services.get_type_viz(body['slug'], body['type'])
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp

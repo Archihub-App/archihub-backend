@@ -320,7 +320,6 @@ def validate_text_regex(value, field):
 
         # Si el campo tiene regex, validar que el valor cumpla con el regex
         if 'pattern' in field:
-            print("1", field['pattern'])
 
             # regex para validar una url
             regex = field['pattern']
@@ -574,6 +573,7 @@ def clear_cache():
     from app.api.users.services import update_cache as update_cache_users
     from app.api.snaps.services import update_cache as update_cache_snaps
     from app.api.views.services import update_cache as update_cache_views
+    from app.api.geosystem.services import update_cache as update_cache_geosystem
 
     try:
         update_cache_function()
@@ -585,6 +585,7 @@ def clear_cache():
         update_cache_users()
         update_cache_snaps()
         update_cache_views()
+        update_cache_geosystem()
 
         return {'msg': 'Cache limpiada exitosamente'}, 200
     except Exception as e:
@@ -614,6 +615,7 @@ def regenerate_index_task(mapping, user):
 def index_resources_task(body = {}):
     skip = 0
     filters = {}
+    loop = True
     if '_id' in body:
         filters['_id'] = ObjectId(body['_id'])
 
@@ -622,13 +624,12 @@ def index_resources_task(body = {}):
     if body == {}:
         index_handler.delete_all_documents(ELASTIC_INDEX_PREFIX + '-resources')
 
-    while len(resources) > 0:
+    while len(resources) > 0 and loop:
         for resource in resources:
             document = {}
             post_type = resource['post_type']
             fields = get_metadata(post_type)['fields']
             for f in fields:
-                # print(f)
                 if f['type'] != 'file' and f['type'] != 'simple-date':
                     destiny = f['destiny']
                     if destiny != '':
@@ -657,9 +658,12 @@ def index_resources_task(body = {}):
             if r.status_code != 201 and r.status_code != 200:
                 raise Exception('Error al indexar el recurso ' + str(resource['_id']))
 
-
+        if len(resources) < 1000:
+            loop = False
+            
         skip += 1000
         resources = list(mongodb.get_all_records('resources', {}, limit=1000, skip=skip))
+        
 
     return 'ok'
 
