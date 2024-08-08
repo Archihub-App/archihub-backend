@@ -229,7 +229,10 @@ class ExtendedPluginClass(PluginClass):
 
         size = len(records)
         for file in records:
-            process_file(file)
+            try:
+                process_file(file)
+            except Exception as e:
+                print(str(e))
 
         instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
         instance.clear_cache()

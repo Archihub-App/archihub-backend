@@ -4,7 +4,12 @@ import os
 
 def main(filepath, output):
     try:
+        if not os.path.exists(filepath):
+            raise Exception('El archivo no existe')
+        
         metadata = ffprobe3.FFProbe(filepath)
+
+        print(len(metadata.streams))
 
         video = False
         audio = False
@@ -54,4 +59,5 @@ def main(filepath, output):
 
         return audio, video
     except Exception as e:
+        print(str(e))
         raise Exception('Error al convertir el archivo: ' + str(e))
