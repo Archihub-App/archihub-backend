@@ -867,7 +867,7 @@ def get_resource_files(id, user, page, groupImages = False):
 
         resp = {
             'data': temp,
-            'total': len(ids)
+            'total': len(r_)
         }
         # Retornar el recurso
         return resp, 200
