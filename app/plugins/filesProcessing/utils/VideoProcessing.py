@@ -4,15 +4,24 @@ import os
 
 def main(filepath, output):
     try:
-        metadata = ffprobe3.FFProbe(filepath)
-
+        if not os.path.exists(filepath):
+            raise Exception('El archivo no existe')
+        
         video = False
         audio = False
-        for stream in metadata.streams:
-            if stream.is_video():
-                video = True
-            if stream.is_audio():
-                audio = True
+
+        try:
+            metadata = ffprobe3.FFProbe(filepath)
+        except:
+            metadata = None
+            video = True
+        
+        if metadata:
+            for stream in metadata.streams:
+                if stream.is_video():
+                    video = True
+                if stream.is_audio():
+                    audio = True
 
         if video:
             output_file = output + ".mp4"
@@ -33,7 +42,7 @@ def main(filepath, output):
                 .run()
             )
 
-        if audio:
+        if audio and not video:
             output_file = output + ".mp3"
             (
                 ffmpeg
@@ -54,4 +63,5 @@ def main(filepath, output):
 
         return audio, video
     except Exception as e:
+        print(str(e))
         raise Exception('Error al convertir el archivo: ' + str(e))

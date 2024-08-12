@@ -28,6 +28,24 @@ def get(id, user):
 def get_view_info(view_slug):
     view = mongodb.get_record('views', {'slug': view_slug})
 
+    forms = []
+    fields= []
+    for v in view['visible']:
+        from app.api.types.services import get_by_slug
+        pt = get_by_slug(v)
+        form = pt['metadata']['slug']
+        if form not in [f['slug'] for f in forms]:
+            forms.append({
+                'slug': form,
+                'name': pt['metadata']['name']
+            })
+            fields.append(pt['metadata']['fields'])
+
+    view['forms'] = {
+        'forms': forms,
+        'fields': fields
+    }
+
     if not view:
         return {'msg': 'Vista de consulta no encontrada'}, 404
     

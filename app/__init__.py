@@ -1,6 +1,6 @@
 '''
 ARCHIHUB herramienta de gestión documental
-Versión 0.2
+Versión 0.7.0
 Autor: Néstor Andrés Peña
 Hecho con <3 en Colombia
 '''
@@ -139,7 +139,8 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             index_handler.start()
             from app.api.system.services import hookHandlerIndex
             hookHandlerIndex()
-        except:
+        except Exception as e:
+            print(str(e))
             print('No se pudo iniciar el indexador de documentos')
             index_management['data'][0]['value'] = False
             update_option('index_management', {'index_activation': False})
