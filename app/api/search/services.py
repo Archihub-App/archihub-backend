@@ -13,6 +13,7 @@ ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
 def get_resources_by_filters(body, user):
     try:
+        print(body)
         post_types = body['post_type']
 
         for p in post_types:
@@ -62,6 +63,10 @@ def get_resources_by_filters(body, user):
             'size': 20,
             '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id']
         }
+
+        if 'input_filters' in body:
+            if len(body['input_filters']) > 0:
+                query['query']['bool']['must'][0]['query_string']['fields'] = body['input_filters']
 
         if 'parents' in body:
             if body['parents']:

@@ -34,7 +34,7 @@ def get_view_info(view_slug):
         from app.api.types.services import get_by_slug
         pt = get_by_slug(v)
         form = pt['metadata']['slug']
-        if form not in forms:
+        if form not in [f['slug'] for f in forms]:
             forms.append({
                 'slug': form,
                 'name': pt['metadata']['name']
