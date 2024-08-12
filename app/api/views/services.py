@@ -35,7 +35,10 @@ def get_view_info(view_slug):
         pt = get_by_slug(v)
         form = pt['metadata']['slug']
         if form not in forms:
-            forms.append(form)
+            forms.append({
+                'slug': form,
+                'name': pt['metadata']['name']
+            })
             fields.append(pt['metadata']['fields'])
 
     view['forms'] = {
