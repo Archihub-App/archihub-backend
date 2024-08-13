@@ -31,6 +31,7 @@ def clear_cache():
     cache_get_pages_by_id.invalidate_all()
     cache_get_imgs_gallery_by_id.invalidate_all()
     cache_type_roles.invalidate_all()
+    cache_get_processing_metadata.invalidate_all()
     has_right.invalidate_all()
     has_role.invalidate_all()
 
@@ -257,6 +258,25 @@ def cache_get_record_stream(id):
 
     return path, type
 
+
+@cacheHandler.cache.cache()
+def cache_get_processing_metadata(id, slug):
+    # Buscar el record en la base de datos
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
+
+    # Si el record no existe, retornar error
+    if not record:
+        raise Exception('Record no existe')
+    # si el record no se ha procesado, retornar error
+    if 'processing' not in record:
+        raise Exception('Record no ha sido procesado')
+    if slug not in record['processing']:
+        raise Exception('Record no ha sido procesado con el slug ' + slug)
+    if 'metadata' not in record['processing'][slug]['result']:
+        raise Exception('Record no tiene metadata')
+
+    return record['processing'][slug]['result']['metadata']
 
 @cacheHandler.cache.cache()
 def cache_get_record_transcription(id, slug):

@@ -30,4 +30,5 @@ log_actions = {
     'docseg_extraction': 'DOCSEG_EXTRACTION',
     'av_transcribe': 'AV_TRANSCRIBE',
     'lt_extraction': 'LT_EXTRACTION',
+    'img_analyze': 'IMG_ANALYZE',
 }
