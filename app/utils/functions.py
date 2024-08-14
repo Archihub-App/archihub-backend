@@ -31,6 +31,7 @@ def clear_cache():
     cache_get_pages_by_id.invalidate_all()
     cache_get_imgs_gallery_by_id.invalidate_all()
     cache_type_roles.invalidate_all()
+    cache_get_processing_metadata.invalidate_all()
     has_right.invalidate_all()
     has_role.invalidate_all()
 
@@ -259,6 +260,25 @@ def cache_get_record_stream(id):
 
 
 @cacheHandler.cache.cache()
+def cache_get_processing_metadata(id, slug):
+    # Buscar el record en la base de datos
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
+
+    # Si el record no existe, retornar error
+    if not record:
+        raise Exception('Record no existe')
+    # si el record no se ha procesado, retornar error
+    if 'processing' not in record:
+        raise Exception('Record no ha sido procesado')
+    if slug not in record['processing']:
+        raise Exception('Record no ha sido procesado con el slug ' + slug)
+    if 'metadata' not in record['processing'][slug]['result']:
+        raise Exception('Record no tiene metadata')
+
+    return record['processing'][slug]['result']['metadata']
+
+@cacheHandler.cache.cache()
 def cache_get_record_transcription(id, slug):
     # Buscar el record en la base de datos
     record = mongodb.get_record(
@@ -380,13 +400,24 @@ def cache_get_record_document_detail(id):
         }
     
 @cacheHandler.cache.cache()
-def cache_get_block_by_page_id(id, page, slug, block=None):
+def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
     record = mongodb.get_record(
         'records', {'_id': ObjectId(id)}, fields={'processing': 1})
     
     # Si el record no existe, retornar error
     if not record:
-        raise Exception('Record no existe')
+        from app.api.records.services import get_by_index_gallery
+        record, status = get_by_index_gallery({
+            'id': id,
+            'index': page
+        }, user)
+
+        if status != 200:
+            raise Exception(record['msg'])
+        
+        record = mongodb.get_record(
+        'records', {'_id': ObjectId(record['_id']['$oid'])}, fields={'processing': 1})
+        
     # si el record no se ha procesado, retornar error
     if 'processing' not in record:
         raise Exception('Record no ha sido procesado')
@@ -433,6 +464,13 @@ def cache_get_block_by_page_id(id, page, slug, block=None):
             return {'msg': 'Record no tiene bloques o palabras'}, 400
     
         return resp, 200
+    elif record['processing']['fileProcessing']['type'] == 'image':
+        resp = record['processing'][slug]['result']
+
+        if 'blocks' in resp:
+            return resp['blocks'], 200
+        else:
+            return {'msg': 'Record no tiene bloques'}, 400
     else:
         return {'msg': 'Record no es de tipo document'}, 400    
 

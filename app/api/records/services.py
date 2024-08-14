@@ -10,7 +10,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.users.services import has_right
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id
+from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata
 from werkzeug.utils import secure_filename
 import os
 import shutil
@@ -407,7 +407,12 @@ def get_by_id(id, current_user):
 
         # Si el record no existe, retornar error
         if not record:
-            return {'msg': 'Record no existe'}, 404
+            record = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'_id': 1})
+
+            if not record:
+                return {'msg': 'Record no existe'}, 404
+            else:
+                return parse_result(record), 200
         
         if 'accessRights' in record:
             if record['accessRights']:
@@ -493,6 +498,18 @@ def get_stream(id, current_user):
     except Exception as e:
         return {'msg': str(e)}, 500
     
+def get_processing_metadata(id, slug, current_user):
+    try:
+        resp_, status = get_by_id(id, current_user)
+        if status != 200:
+            return {'msg': resp_['msg']}, 500
+        
+        resp = cache_get_processing_metadata(id, slug)
+
+        return resp, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
 # Nuevo servicio para devolver la transcripcion de un plugin
 def get_transcription(id, slug, current_user):
     try:
@@ -550,7 +567,8 @@ def get_document_block_by_page(current_user, id, page, slug, block=None):
         if status != 200:
             return {'msg': resp_['msg']}, 500
         
-        return cache_get_block_by_page_id(id, page, slug, block)
+        print(id, page, slug, block)
+        return cache_get_block_by_page_id(id, page, slug, block, current_user)
     except Exception as e:
         return {'msg': str(e)}, 500
     

@@ -924,6 +924,9 @@ def delete_by_id(id, user):
 def get_resource_images(id, user):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
 
+    if not resource:
+        return {'msg': 'Recurso no existe'}, 404
+
     ids = []
     if 'filesObj' in resource:
         for r in resource['filesObj']:
