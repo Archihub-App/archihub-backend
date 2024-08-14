@@ -407,7 +407,12 @@ def get_by_id(id, current_user):
 
         # Si el record no existe, retornar error
         if not record:
-            return {'msg': 'Record no existe'}, 404
+            record = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'_id': 1})
+
+            if not record:
+                return {'msg': 'Record no existe'}, 404
+            else:
+                return parse_result(record), 200
         
         if 'accessRights' in record:
             if record['accessRights']:
@@ -562,7 +567,8 @@ def get_document_block_by_page(current_user, id, page, slug, block=None):
         if status != 200:
             return {'msg': resp_['msg']}, 500
         
-        return cache_get_block_by_page_id(id, page, slug, block)
+        print(id, page, slug, block)
+        return cache_get_block_by_page_id(id, page, slug, block, current_user)
     except Exception as e:
         return {'msg': str(e)}, 500
     
