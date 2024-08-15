@@ -12,6 +12,7 @@ class UserTask(BaseModel):
     description: str
     comments: list[dict] = None
     created_by: str
+    reviewed: bool = False
     created_at: datetime = datetime.now()
     updated_at: datetime = datetime.now()
 
@@ -30,6 +31,7 @@ class UserTaskUpdate(BaseModel):
     status: Optional[str]
     comments: Optional[list[dict]] = None
     updated_at: Optional[datetime] = datetime.now()
+    reviewed: Optional[bool] = False
 
     class Config:
         allow_population_by_field_name = True
