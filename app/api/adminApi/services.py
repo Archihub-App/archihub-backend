@@ -12,7 +12,7 @@ def update(id, body, user):
 
 def get_id(body, user):
     resource = None
-    resource = mongodb.get_record('resources', body, {'_id': 1, 'post_type': 1})
+    resource = mongodb.get_record('resources', body, {'_id': 1, 'post_type': 1, 'metadata': 1, 'filesObj': 1})
 
     if resource is None:
         return {'msg': 'No existe ese recurso'}, 400
