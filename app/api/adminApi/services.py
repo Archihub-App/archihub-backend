@@ -6,9 +6,9 @@ def create(body, user, files):
     from app.api.resources.services import create as create_resource
     return create_resource(body, user, files)
 
-def update(id, body, user):
+def update(id, body, user, files):
     from app.api.resources.services import update_by_id as update_resource
-    return update_resource(id, body, user, body['files'])
+    return update_resource(id, body, user, files)
 
 def get_id(body, user):
     resource = None
