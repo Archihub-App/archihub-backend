@@ -223,7 +223,10 @@ def create(body, user, files):
 def update_by_id(id, body, user, files):
     try:
         body = validate_parent(body)
-        has_new_parent = has_changed_parent(id, body)
+        if 'parents' in body and 'parent' in body:
+            has_new_parent = has_changed_parent(id, body)
+        else:
+            has_new_parent = False
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 
@@ -306,7 +309,7 @@ def update_by_id(id, body, user, files):
         # Registrar el log
         register_log(user, log_actions['resource_update'], {'resource': body})
         # limpiar la cache
-        update_cache()
+        # update_cache()
         # Retornar el resultado
         return {'msg': 'Recurso actualizado exitosamente'}, 200
     except Exception as e:
