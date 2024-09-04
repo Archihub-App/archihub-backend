@@ -17,7 +17,7 @@ def get_id(body, user):
     if resource is None:
         return {'msg': 'No existe ese recurso'}, 400
 
-    return {'id': str(resource['_id']), 'post_type': resource['post_type'], 'metadata': resource['metadata'], 'filesObj': resource['filesObj']}, 200
+    return {'id': str(resource['_id']), 'post_type': resource['post_type'], 'metadata': resource['metadata'], 'filesObj': resource['filesObj'], 'parent': resource['parent'], 'parents': resource['parents']}, 200
 
 def get_opts_id(body, user):
     options = mongodb.get_record('options', {'term': body['term']}, {'_id': 1})

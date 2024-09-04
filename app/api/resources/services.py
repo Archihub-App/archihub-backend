@@ -223,10 +223,7 @@ def create(body, user, files):
 def update_by_id(id, body, user, files):
     try:
         body = validate_parent(body)
-        if 'parents' in body and 'parent' in body:
-            has_new_parent = has_changed_parent(id, body)
-        else:
-            has_new_parent = False
+        has_new_parent = has_changed_parent(id, body)
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
 
@@ -240,7 +237,7 @@ def update_by_id(id, body, user, files):
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
         
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'files': 1, 'filesObj': 1})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
 
         validate_files([*body['filesIds'], *resource['filesObj']], metadata, errors)
 
