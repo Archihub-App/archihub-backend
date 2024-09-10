@@ -83,6 +83,10 @@ def get_all(body, user):
         if 'page' in body:
             skip = body['page'] * limit
 
+        if 'files' in body:
+            if body['files']:
+                filters['filesObj'] = {'$exists': True, '$ne': []}
+
         filters['status'] = body['status']
 
         if filters['status'] == 'draft':
