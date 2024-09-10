@@ -95,13 +95,17 @@ def get_all(body, user):
 
         # Obtener todos los recursos dado un tipo de contenido
         resources = list(mongodb.get_all_records(
-            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1}, sort=[('metadata.firstLevel.title', 1)]))
+            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1}, sort=[('metadata.firstLevel.title', 1)]))
         # Obtener el total de recursos dado un tipo de contenido
         total = get_total(json.dumps(filters))
         # Para cada recurso, obtener el formulario asociado y quitar los campos _id
         for resource in resources:
             resource['id'] = str(resource['_id'])
             resource.pop('_id')
+            if 'filesObj' in resource:
+                resource['files'] = len(resource['filesObj'])
+                resource.pop('filesObj')
+
             resource['accessRights'] = get_option_by_id(resource['accessRights'])
             if 'term' in resource['accessRights']:
                 resource['accessRights'] = resource['accessRights']['term']
