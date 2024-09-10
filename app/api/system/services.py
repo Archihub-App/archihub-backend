@@ -650,6 +650,7 @@ def index_resources_task(body = {}):
             document['ident'] = resource['ident']
             document['status'] = resource['status']
             document['accessRights'] = 'public'
+            document['files'] = len(resource['filesObj']) if 'filesObj' in resource else 0
             if 'accessRights' in resource:
                 if resource['accessRights']:
                     document['accessRights'] = resource['accessRights']

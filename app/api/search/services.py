@@ -68,6 +68,16 @@ def get_resources_by_filters(body, user):
             if len(body['input_filters']) > 0:
                 query['query']['bool']['must'][0]['query_string']['fields'] = body['input_filters']
 
+        if 'files' in body:
+            if body['files']:
+                query['query']['bool']['filter'].append({
+                    'range': {
+                        'files': {
+                            'gte': 1
+                        }
+                    }
+                })
+
         if 'parents' in body:
             if body['parents']:
                 query['query']['bool']['filter'].append({
