@@ -1,6 +1,6 @@
 from flask import Blueprint, send_file, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.api.tasks.services import add_task
+from app.api.tasks.services import add_task, has_task
 from app.api.users.services import has_role
 from app.api.system.models import OptionUpdate
 from app.utils import DatabaseHandler
@@ -45,6 +45,9 @@ class PluginClass(Blueprint):
     
     def add_task_to_user(self, taskId, taskName, user, resultType):
         add_task(taskId, taskName, user, resultType)
+
+    def has_task(self, taskName, user):
+        return has_task(user, taskName)
 
     def allowedFile(self, filename, allowed_extensions):
         return '.' in filename and \

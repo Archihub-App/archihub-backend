@@ -14,10 +14,14 @@ cacheHandler = CacheHandler.CacheHandler()
 USER_FILES_PATH = os.environ.get('USER_FILES_PATH', '')
 
 # Funcion para parsear el resultado de una consulta a la base de datos
+
+
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para recuperar las tasks de un usuario
+
+
 def get_tasks(user, body):
     try:
         limit = 10
@@ -31,7 +35,8 @@ def get_tasks(user, body):
             user_array = ['automatic']
 
         # Obtener las tasks de un usuario
-        tasks = mongodb.get_all_records('tasks', {'user': {'$in': user_array}}, sort=[('date', -1)], fields={'_id': 0, 'user': 0}, limit=limit, skip=skip)
+        tasks = mongodb.get_all_records('tasks', {'user': {'$in': user_array}}, sort=[
+                                        ('date', -1)], limit=limit, skip=skip)
         # Parsear el resultado
         tasks = parse_result(tasks)
 
@@ -48,7 +53,8 @@ def get_tasks(user, body):
 
                         task = TaskUpdate(**update)
 
-                        mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
+                        mongodb.update_record(
+                            'tasks', {'taskId': t['taskId']}, task)
 
                         t['status'] = 'completed'
                         t['result'] = result.result
@@ -60,7 +66,8 @@ def get_tasks(user, body):
 
                         task = TaskUpdate(**update)
 
-                        mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
+                        mongodb.update_record(
+                            'tasks', {'taskId': t['taskId']}, task)
 
                         t['status'] = 'failed'
                         t['result'] = ''
@@ -73,7 +80,8 @@ def get_tasks(user, body):
 
                     task = TaskUpdate(**update)
 
-                    mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
+                    mongodb.update_record(
+                        'tasks', {'taskId': t['taskId']}, task)
 
                     t['status'] = 'failed'
                     t['result'] = ''
@@ -83,11 +91,77 @@ def get_tasks(user, body):
     except Exception as e:
         return {'msg': str(e)}, 500
 
+
+def has_task(user, name):
+    try:
+        # Obtener la tarea
+        task = mongodb.get_record(
+            'tasks', {'user': user, 'name': name, 'status': 'pending'})
+
+        if task:
+            result = AsyncResult(task['taskId'])
+
+            if result.successful() and result.ready():
+                if type(result.result) == str:
+                    update = {
+                        'status': 'completed',
+                        'result': result.result,
+                    }
+
+                    task = TaskUpdate(**update)
+
+                    mongodb.update_record(
+                        'tasks', {'taskId': task['taskId']}, task)
+
+                    t['status'] = 'completed'
+                    t['result'] = result.result
+                    return False
+                else:
+                    update = {
+                        'status': 'failed',
+                        'result': '',
+                    }
+
+                    task = TaskUpdate(**update)
+
+                    mongodb.update_record(
+                        'tasks', {'taskId': task['taskId']}, task)
+
+                    t['status'] = 'failed'
+                    t['result'] = ''
+                
+                return False
+            elif not result.successful() and result.ready():
+                update = {
+                    'status': 'failed',
+                    'result': '',
+                }
+
+                task = TaskUpdate(**update)
+
+                mongodb.update_record(
+                    'tasks', {'taskId': task['taskId']}, task)
+
+                t['status'] = 'failed'
+                t['result'] = ''
+                return False
+        # Verificar si la tarea existe
+        if not task:
+            return False
+        # Verificar si el usuario es el dueño de la tarea
+        if task['user'] != user:
+            return False
+    except Exception as e:
+        print(str(e))
+        return True
+
 # Nuevo servicio para agregar una tarea a la base de datos asignandola a un usuario
+
+
 def add_task(taskId, taskName, username, resultType):
     # Verificar si el usuario existe
     user = mongodb.get_record('users', {'username': username})
-    if not user and username != 'automatic':
+    if not user and username != 'automatic' and username != 'system':
         return {'msg': 'El usuario no existe'}, 404
 
     new_task = {
@@ -105,6 +179,7 @@ def add_task(taskId, taskName, username, resultType):
     mongodb.insert_record('tasks', task)
     get_tasks_total.invalidate_all()
 
+
 @cacheHandler.cache.cache()
 def get_tasks_total(user):
     try:
@@ -114,8 +189,10 @@ def get_tasks_total(user):
         return total
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
 # funcion para detener una tarea dado su id
+
+
 def stop_task(taskId, user):
     try:
         # Obtener la tarea
@@ -123,7 +200,7 @@ def stop_task(taskId, user):
         # Verificar si la tarea existe
         if not task:
             return {'msg': 'La tarea no existe'}, 404
-        
+
         # verificar que el usuario sea el dueño de la tarea
         if task['user'] != user:
             return {'msg': 'No tiene permisos para detener la tarea'}, 401
