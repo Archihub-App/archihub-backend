@@ -29,12 +29,16 @@ cacheHandler = CacheHandler.CacheHandler()
 
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
+
 def hookHandlerIndex():
     hookHandler.register('resource_create', index_resources_task, queue=101)
     hookHandler.register('resource_update', index_resources_task, queue=101)
-    hookHandler.register('resource_delete', index_resources_delete_task, queue=101)
+    hookHandler.register(
+        'resource_delete', index_resources_delete_task, queue=101)
 
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado. Si el valor no existe, lo crea
+
+
 def change_value(body, path, value):
     try:
         keys = path.split('.')
@@ -49,6 +53,7 @@ def change_value(body, path, value):
         return body
     except Exception as e:
         raise Exception(f'Error al cambiar el valor del campo {key}')
+
 
 def parse_result(result):
     return json.loads(json_util.dumps(result))
@@ -150,6 +155,8 @@ def get_default_visible_type():
             'Error al obtener el tipo por defecto del modulo de catalogacion')
 
 # Funcion para actualizar el registro resources-schema en la colección system
+
+
 def update_resources_schema(schema):
     try:
         # Obtener el registro resources-schema de la colección system
@@ -169,8 +176,10 @@ def update_resources_schema(schema):
         return {'msg': 'Schema actualizado exitosamente'}
     except Exception as e:
         raise Exception('Error al actualizar el schema de los recursos')
-    
+
 # Funcio para obtener el schema de los recursos
+
+
 @cacheHandler.cache.cache()
 def get_resources_schema():
     try:
@@ -186,6 +195,8 @@ def get_resources_schema():
         raise Exception('Error al obtener el schema de los recursos')
 
 # Funcion para obtener el valor de un dict dado un path
+
+
 def get_value_by_path(dict, path):
     try:
         keys = path.split('.')
@@ -201,7 +212,7 @@ def get_value_by_path(dict, path):
 
     except Exception as e:
         raise Exception(f'Error al obtener el valor del campo {key}')
-    
+
 
 def set_value_in_dict(d, path, value):
     keys = path.split('.')
@@ -435,6 +446,7 @@ def change_plugin_status(plugin, user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
+
 def regenerate_index(user):
     try:
         # Obtener el registro index_management de la colección system
@@ -455,21 +467,45 @@ def regenerate_index(user):
         mapping.pop('file', None)
 
         mapping['post_type'] = {
-            'type': 'keyword'
+            'type': 'text',
+            'fields': {
+                'keyword': {
+                    'type': 'keyword',
+                    'ignore_above': 256
+                }
+            }
         }
 
         mapping['status'] = {
-            'type': 'keyword'
+            'type': 'text',
+            'fields': {
+                'keyword': {
+                    'type': 'keyword',
+                    'ignore_above': 256
+                }
+            }
         }
 
         mapping['parents'] = {
             'type': 'object',
             'properties': {
                 'id': {
-                    'type': 'keyword'
+                    'type': 'text',
+                    'fields': {
+                        'keyword': {
+                            'type': 'keyword',
+                            'ignore_above': 256
+                        }
+                    }
                 },
                 'post_type': {
-                    'type': 'keyword'
+                    'type': 'text',
+                    'fields': {
+                        'keyword': {
+                            'type': 'keyword',
+                            'ignore_above': 256
+                        }
+                    }
                 }
             }
         }
@@ -478,20 +514,48 @@ def regenerate_index(user):
             'type': 'object',
             'properties': {
                 'id': {
-                    'type': 'keyword'
+                    'type': 'text',
+                    'fields': {
+                        'keyword': {
+                            'type': 'keyword',
+                            'ignore_above': 256
+                        }
+                    }
                 },
                 'post_type': {
-                    'type': 'keyword'
+                    'type': 'text',
+                    'fields': {
+                        'keyword': {
+                            'type': 'keyword',
+                            'ignore_above': 256
+                        }
+                    }
                 }
             }
         }
 
         mapping['ident'] = {
-            'type': 'keyword'
+            'type': 'text',
+            'fields': {
+                'keyword': {
+                    'type': 'keyword',
+                    'ignore_above': 256
+                }
+            },
         }
 
         mapping['status'] = {
-            'type': 'keyword'
+            'type': 'text',
+            'fields': {
+                'keyword': {
+                    'type': 'keyword',
+                    'ignore_above': 256
+                }
+            }
+        }
+
+        mapping['files'] = {
+            'type': 'integer'
         }
 
         mapping = {
@@ -532,6 +596,10 @@ def transform_dict_to_mapping(dict_input):
                         mapping[key]['analyzer'] = 'analyzer_spanish'
                     elif mapping[key]['type'] == 'simple-date':
                         mapping[key]['type'] = 'date'
+                    elif mapping[key]['type'] == 'select':
+                        mapping[key]['type'] = 'keyword'
+                    elif mapping[key]['type'] in ['location', 'author']:
+                        mapping.pop(key, None)
             else:
                 mapping[key] = dict_input[key]
 
@@ -560,7 +628,7 @@ def index_resources(user):
 
     except Exception as e:
         return {'msg': str(e)}, 500
-        
+
 
 def clear_cache():
     print('clearing cache')
@@ -592,34 +660,41 @@ def clear_cache():
         print(str(e))
         return {'msg': str(e)}, 500
 
+
 @shared_task(ignore_result=False, name='system.regenerate_index')
 def regenerate_index_task(mapping, user):
-    keys = index_handler.get_alias_indexes(ELASTIC_INDEX_PREFIX + '-resources').keys()
+    keys = index_handler.get_alias_indexes(
+        ELASTIC_INDEX_PREFIX + '-resources').keys()
     if len(keys) == 1:
         name = list(keys)[0]
         number = name.split('_')[1]
         number = int(number) + 1
         new_name = ELASTIC_INDEX_PREFIX + '-resources_' + str(number)
-        index_handler.create_index(new_name, mapping=mapping, settings=spanish_settings)
-        index_handler.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', new_name)
+        index_handler.create_index(
+            new_name, settings=spanish_settings, mapping=mapping)
+        index_handler.add_to_alias(
+            ELASTIC_INDEX_PREFIX + '-resources', new_name)
         index_handler.reindex(name, new_name)
-        index_handler.remove_from_alias(ELASTIC_INDEX_PREFIX + '-resources', name)
+        index_handler.remove_from_alias(
+            ELASTIC_INDEX_PREFIX + '-resources', name)
         index_handler.delete_index(name)
 
         return 'ok'
     else:
-        index_handler.start_new_index()
+        index_handler.start_new_index(mapping)
         return 'ok'
-    
+
+
 @shared_task(ignore_result=False, name='system.index_resources')
-def index_resources_task(body = {}):
+def index_resources_task(body={}):
     skip = 0
     filters = {}
     loop = True
     if '_id' in body:
         filters['_id'] = ObjectId(body['_id'])
 
-    resources = list(mongodb.get_all_records('resources', filters, limit=1000, skip=skip))
+    resources = list(mongodb.get_all_records(
+        'resources', filters, limit=1000, skip=skip))
 
     if body == {}:
         index_handler.delete_all_documents(ELASTIC_INDEX_PREFIX + '-resources')
@@ -635,7 +710,8 @@ def index_resources_task(body = {}):
                     if destiny != '':
                         value = get_value_by_path(resource, destiny)
                         if value != None:
-                            document = change_value(document, f['destiny'], value)
+                            document = change_value(
+                                document, f['destiny'], value)
                 elif f['type'] == 'simple-date':
                     destiny = f['destiny']
                     if destiny != '':
@@ -650,28 +726,34 @@ def index_resources_task(body = {}):
             document['ident'] = resource['ident']
             document['status'] = resource['status']
             document['accessRights'] = 'public'
-            document['files'] = len(resource['filesObj']) if 'filesObj' in resource else 0
+            document['files'] = len(
+                resource['filesObj']) if 'filesObj' in resource else 0
+
             if 'accessRights' in resource:
                 if resource['accessRights']:
                     document['accessRights'] = resource['accessRights']
 
-            r = index_handler.index_document(ELASTIC_INDEX_PREFIX + '-resources', str(resource['_id']), document)
+            r = index_handler.index_document(
+                ELASTIC_INDEX_PREFIX + '-resources', str(resource['_id']), document)
             if r.status_code != 201 and r.status_code != 200:
-                raise Exception('Error al indexar el recurso ' + str(resource['_id']))
+                raise Exception(
+                    'Error al indexar el recurso ' + str(resource['_id']))
 
         if len(resources) < 1000:
             loop = False
-            
+
         skip += 1000
-        resources = list(mongodb.get_all_records('resources', {}, limit=1000, skip=skip))
-        
+        resources = list(mongodb.get_all_records(
+            'resources', {}, limit=1000, skip=skip))
 
     return 'ok'
 
+
 @shared_task(ignore_result=False, name='system.index_resources_delete')
-def index_resources_delete_task(body = {}):
-    r = index_handler.delete_document(ELASTIC_INDEX_PREFIX + '-resources', body['_id'])
+def index_resources_delete_task(body={}):
+    r = index_handler.delete_document(
+        ELASTIC_INDEX_PREFIX + '-resources', body['_id'])
     if r.result != 'deleted':
-            raise Exception('Error al indexar el recurso ' + str(body['_id']))
-    
+        raise Exception('Error al indexar el recurso ' + str(body['_id']))
+
     return 'ok'
