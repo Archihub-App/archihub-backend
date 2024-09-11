@@ -35,10 +35,10 @@ class IndexHandler:
             for k in self.get_aliases():
                 print(k)
 
-    def start_new_index(self):
+    def start_new_index(self, mapping=None):
         index_name = self.elastic_index_prefix + '-resources_1'
         from .index.spanish_settings import settings
-        self.create_index(index_name, settings=settings)
+        self.create_index(index_name, settings=settings, mapping=mapping)
         self.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', index_name)
 
     def get_aliases(self):

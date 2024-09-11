@@ -61,7 +61,7 @@ def get_resources_by_filters(body, user):
                 }
             },
             'size': 20,
-            '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id']
+            '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id', 'ident', 'files']
         }
 
         if 'input_filters' in body:
@@ -87,6 +87,7 @@ def get_resources_by_filters(body, user):
                 })
 
 
+        print(query)
         response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
         response = clean_elastic_response(response)
 
