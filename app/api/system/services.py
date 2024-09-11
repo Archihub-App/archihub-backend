@@ -562,8 +562,6 @@ def regenerate_index(user):
             'properties': mapping
         }
 
-        mapping = None
-
         task = regenerate_index_task.delay(mapping, user)
         add_task(task.id, 'system.regenerate_index', user, 'msg')
 
