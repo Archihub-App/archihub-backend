@@ -147,9 +147,6 @@ def process_file(file):
             update = RecordUpdate(**update)
             mongodb.update_record('records', {'_id': file['_id']}, update)
 
-    
-
-
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type, settings):
         super().__init__(path, __file__, import_name, name, description, version, author, type, settings)
@@ -213,29 +210,37 @@ class ExtendedPluginClass(PluginClass):
             if len(body['resources']) > 0:
                 filters = {'_id': {'$in': [ObjectId(resource) for resource in body['resources']]}, **filters}
 
-        # obtenemos los recursos
-        resources = list(mongodb.get_all_records('resources', filters, fields={'_id': 1}))
-        resources = [str(resource['_id']) for resource in resources]
-
-        records_filters = {
-            'parent.id': {'$in': resources}
-        }
-        if body['overwrite']:
-            records_filters = {"$or": [{"processing.fileProcessing": {"$exists": False}, **records_filters}, {"processing.fileProcessing": {"$exists": True}, **records_filters}]}
-        else:
-            records_filters['processing.fileProcessing'] = {'$exists': False}
-        
-        records = list(mongodb.get_all_records('records', records_filters, fields={'_id': 1, 'mime': 1, 'filepath': 1}))
-
-        size = len(records)
-        for file in records:
-            try:
-                process_file(file)
-            except Exception as e:
-                print(str(e))
-
+        step = 0
+        size = 0
+        loop = True
         instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
-        instance.clear_cache()
+        # obtenemos los recursos
+        while loop:
+            resources = list(mongodb.get_all_records('resources', filters, fields={'_id': 1}).limit(100).skip(step))
+            resources = [str(resource['_id']) for resource in resources]
+
+            records_filters = {
+                'parent.id': {'$in': resources}
+            }
+            if body['overwrite']:
+                records_filters = {"$or": [{"processing.fileProcessing": {"$exists": False}, **records_filters}, {"processing.fileProcessing": {"$exists": True}, **records_filters}]}
+            else:
+                records_filters['processing.fileProcessing'] = {'$exists': False}
+            
+            records = list(mongodb.get_all_records('records', records_filters, fields={'_id': 1, 'mime': 1, 'filepath': 1}))
+
+            size += len(records)
+            for file in records:
+                try:
+                    process_file(file)
+                except Exception as e:
+                    print(str(e))
+
+            step += 100
+            if len(resources) < 100:
+                loop = False
+
+            instance.clear_cache()
         return 'Se procesaron ' + str(size) + ' archivos'
         
       

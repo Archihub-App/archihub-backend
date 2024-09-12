@@ -85,9 +85,7 @@ def get_resources_by_filters(body, user):
                         'parents.id': body['parents']['id']
                     }
                 })
-
-
-        print(query)
+                
         response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
         response = clean_elastic_response(response)
 
