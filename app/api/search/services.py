@@ -5,6 +5,8 @@ from app.utils.functions import get_resource_records, cache_type_roles, clear_ca
 from app.api.resources.services import get_accessRights, get_resource_type, get_children
 from app.api.types.services import get_icon
 from app.utils.functions import get_access_rights
+from app.utils.LogActions import log_actions
+from app.api.logs.services import register_log
 import os
 
 index_handler = IndexHandler.IndexHandler()
@@ -13,7 +15,6 @@ ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
 def get_resources_by_filters(body, user):
     try:
-        print(body)
         post_types = body['post_type']
 
         for p in post_types:
@@ -85,9 +86,11 @@ def get_resources_by_filters(body, user):
                         'parents.id': body['parents']['id']
                     }
                 })
-                
+
         response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
         response = clean_elastic_response(response)
+
+        register_log(user, log_actions['search'], {'filters': body})
 
         return jsonify(response), 200
     except Exception as e:

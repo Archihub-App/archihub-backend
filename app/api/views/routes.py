@@ -21,9 +21,6 @@ def get_views():
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
-    
-    # if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
-    #     return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener todas las vistas de consulta
     resp = services.get_all(current_user)
     if isinstance(resp, list):
