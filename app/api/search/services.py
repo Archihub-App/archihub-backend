@@ -30,7 +30,7 @@ def get_resources_by_filters(body, user):
                         break
                 if not canView:
                     return {'msg': 'No tiene permisos para obtener los recursos'}, 401
-            
+
         query = {
             'query': {
                 'bool': {
