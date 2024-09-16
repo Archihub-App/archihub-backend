@@ -56,7 +56,7 @@ def login():
     access_token = create_access_token(identity=username, expires_delta=expires_delta)
 
     # Registrar el log de login
-    register_log(username, log_actions['user_login'])
+    register_log(username, log_actions['user_login'], {})
 
     # Retornar el token de acceso
     return jsonify({'access_token': access_token}), 200
