@@ -31,4 +31,5 @@ log_actions = {
     'av_transcribe': 'AV_TRANSCRIBE',
     'lt_extraction': 'LT_EXTRACTION',
     'img_analyze': 'IMG_ANALYZE',
+    'search': 'SEARCH',
 }

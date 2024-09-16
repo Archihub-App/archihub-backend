@@ -186,4 +186,4 @@ celery_app = celery_init_app(app)
 app.celery_app = celery_app
 
 if __name__ == '__main__':
-    app.run()
+    app.run(threaded=True)
