@@ -44,6 +44,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     # agregar CORS
     CORS(app, resources={
         r"/adminApi/*": {"origins": "*"},
+        r"/publicApi/*": {"origins": "*"},
         r"/*": {"origins": os.environ.get('URL_FRONTEND', '*')}
     })
     
@@ -118,18 +119,6 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.geosystem import bp as geosystem_bp
     app.register_blueprint(geosystem_bp, url_prefix='/geosystem')
 
-    # verificar en la base de datos si la admin API está activa
-    admin_api = mongodb.get_record('system', {'name': 'api_activation'})
-
-    if(admin_api['data'][0]['value']):
-        print('Administrators API is active')
-        from app.api.adminApi import bp as adminApi_bp
-        app.register_blueprint(adminApi_bp, url_prefix='/adminApi')
-
-    if(admin_api['data'][1]['value']):
-        print('Public API is active')
-        from app.api.publicApi import bp as publicApi_bp
-        app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
     
     index_management = mongodb.get_record('system', {'name': 'index_management'})
 

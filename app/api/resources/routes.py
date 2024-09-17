@@ -295,68 +295,72 @@ def get_tree():
         500:
             description: Error al obtener la estructura de arból
     """
-    # Obtener el usuario actual
-    current_user = get_jwt_identity()
-    # Obtener el body del request
-    body = request.json
+    try:
+        # Obtener el usuario actual
+        current_user = get_jwt_identity()
+        # Obtener el body del request
+        body = request.json
 
-    if 'view' in body:
-        if body['view'] == 'tree':
-            slugs = [item['slug'] for item in body['tree']]
-            return_slugs = []
+        if 'view' in body:
+            if body['view'] == 'tree':
+                slugs = [item['slug'] for item in body['tree']]
+                return_slugs = []
 
-            for s in slugs:
-                roles = cache_type_roles(s)
-                if roles['viewRoles']:
-                    for r in roles['viewRoles']:
-                        if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
-                            return_slugs.append(s)
-                else:
-                    return_slugs.append(s)
+                for s in slugs:
+                    roles = cache_type_roles(s)
+                    if roles['viewRoles']:
+                        for r in roles['viewRoles']:
+                            if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
+                                return_slugs.append(s)
+                    else:
+                        return_slugs.append(s)
 
-            # Llamar al servicio para obtener la estructura de arból
-            resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user)
-            
-            if isinstance(resp, list):
-                resp = tuple(resp)
-            
-            return resp
-    
-        elif body['view'] == 'list':
-            if 'postType' in body:
-                if body['postType']:
-                    type = body['postType']
-                    from app.api.types.services import get_by_slug
-                    type = get_by_slug(type)
-                    if isinstance(type, list):
-                        type = type[0]
-                    from app.api.types.services import get_parents
-                    parents = get_parents(type)
-                    
-                    slugs = [item['slug'] for item in parents]
-                    slugs = [type['slug'], *slugs]
-                else:
+                # Llamar al servicio para obtener la estructura de arból
+                resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user)
+                
+                if isinstance(resp, list):
+                    resp = tuple(resp)
+                
+                return resp
+        
+            elif body['view'] == 'list':
+                if 'postType' in body:
+                    if body['postType']:
+                        type = body['postType']
+                        from app.api.types.services import get_by_slug
+                        type = get_by_slug(type)
+                        if isinstance(type, list):
+                            type = type[0]
+                        from app.api.types.services import get_parents
+                        parents = get_parents(type)
+                        
+                        slugs = [item['slug'] for item in parents]
+                        slugs = [type['slug'], *slugs]
+                    else:
+                        slugs = body['activeTypes']
+                elif 'root' in body:
                     slugs = body['activeTypes']
-            elif 'root' in body:
-                slugs = body['activeTypes']
 
-            return_slugs = []
+                return_slugs = []
 
-            for s in slugs:
-                roles = cache_type_roles(s)
-                if roles['viewRoles']:
-                    for r in roles['viewRoles']:
-                        if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
-                            return_slugs.append(s)
-                else:
-                    return_slugs.append(s)
-            
-            resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'] if 'postType' in body else None, int(body['page']) if 'page' in body else 0)
+                for s in slugs:
+                    roles = cache_type_roles(s)
+                    if roles['viewRoles']:
+                        for r in roles['viewRoles']:
+                            if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
+                                return_slugs.append(s)
+                    else:
+                        return_slugs.append(s)
+                
+                resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'] if 'postType' in body else None, int(body['page']) if 'page' in body else 0)
 
-            if isinstance(resp, list):
-                resp = tuple(resp)
-            
-            return resp
+                if isinstance(resp, list):
+                    resp = tuple(resp)
+                
+                return resp
+    except Exception as e:
+        print(str(e))
+        return jsonify({'msg': str(e)}), 500
         
 
 
