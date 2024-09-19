@@ -124,8 +124,8 @@ def update(id, body, user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
-@cacheHandler.cache.cache()
-def get_all(user):
+# @cacheHandler.cache.cache()
+def get_all():
     views = mongodb.get_all_records('views', {}, [('name', 1), ('description', 1), ('slug', 1)])
 
     resp = [{ 'name': view['name'], 'id': str(view['_id']), 'description': view['description'], 'slug': view['slug'] } for view in views]
