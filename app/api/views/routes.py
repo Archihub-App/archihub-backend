@@ -4,30 +4,6 @@ from flask import jsonify, request
 from app.api.views import services
 from app.api.users import services as user_services
 
-#Nuevo GET endpoint para obtener todas las vistas de consulta
-@bp.route('', methods=['GET'])
-@jwt_required()
-def get_views():
-    """
-    Obtener todas las vistas de consulta
-    ---
-    tags:
-        - Vistas
-    responses:
-        200:
-            description: Retorna todas las vistas de consulta
-        500:
-            description: Error al obtener las vistas de consulta
-    """
-    # Obtener el usuario actual
-    current_user = get_jwt_identity()
-    # Llamar al servicio para obtener todas las vistas de consulta
-    resp = services.get_all(current_user)
-    if isinstance(resp, list):
-        return tuple(resp)
-    else:
-        return resp
-
 @bp.route('/<view_id>', methods=['GET'])
 @jwt_required()
 def get_view(view_id):
