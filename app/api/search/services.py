@@ -62,6 +62,7 @@ def get_resources_by_filters(body, user):
                 }
             },
             'size': 20,
+            'from': body['page'] * 20,
             '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id', 'ident', 'files']
         }
 
