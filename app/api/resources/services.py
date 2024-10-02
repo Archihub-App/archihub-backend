@@ -51,7 +51,7 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
-@cacheHandler.cache.cache(limit=5000)
+# @cacheHandler.cache.cache(limit=5000)
 def get_all(body, user):
     try:
         body = json.loads(body)
@@ -97,6 +97,7 @@ def get_all(body, user):
                     o['createdBy'] = user
             filters = filters_
 
+        print(filters)
         # Obtener todos los recursos dado un tipo de contenido
         resources = list(mongodb.get_all_records(
             'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1}, sort=[('metadata.firstLevel.title', 1)]))

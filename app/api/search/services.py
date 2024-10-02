@@ -42,7 +42,7 @@ def get_resources_by_filters(body, user):
                         },
                         {
                             'term': {
-                                'status.keyword': body['status']
+                                'status.keyword': body['status'] if 'status' in body else 'published'
                             }
                         },
                         {
@@ -66,9 +66,12 @@ def get_resources_by_filters(body, user):
             '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id', 'ident', 'files']
         }
 
-        if 'input_filters' in body:
-            if len(body['input_filters']) > 0:
-                query['query']['bool']['must'][0]['query_string']['fields'] = body['input_filters']
+        if 'keyword' in body:
+            if len(body['keyword']) < 1:
+                del query['query']['bool']['must']
+            elif 'input_filters' in body:
+                if len(body['input_filters']) > 0:
+                    query['query']['bool']['must'][0]['query_string']['fields'] = body['input_filters']
 
         if 'files' in body:
             if body['files']:
@@ -87,6 +90,18 @@ def get_resources_by_filters(body, user):
                         'parents.id': body['parents']['id']
                     }
                 })
+
+        if 'date_filters' in body:
+            if len(body['date_filters']) > 0:
+                for date_filter in body['date_filters']:
+                    query['query']['bool']['filter'].append({
+                        'range': {
+                            date_filter['destiny']: {
+                                'gte': date_filter['range'][0],
+                                'lte': date_filter['range'][1]
+                            }
+                        }
+                    })
 
         response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
         response = clean_elastic_response(response)

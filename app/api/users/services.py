@@ -484,7 +484,8 @@ def set_favorite(user, body):
             '$addToSet': {
                 'favorites': {
                     'type': body['type'],
-                    'id': body['id']
+                    'id': body['id'],
+                    'view': body['view'] if 'view' in body else None
                 }
             }
         }
@@ -569,6 +570,8 @@ def get_favorites(user, body):
         resp = list(mongodb.get_all_records(body['type'], filters, limit=20, skip=body['page'] * 20, fields=fields, sort=sort))
         for r in resp:
             r['id'] = str(r['_id'])
+            fav = next((fav for fav in user_fav if fav['id'] == r['id']), None)
+            r['view'] = fav['view'] if 'view' in fav else None
             r.pop('_id')
 
         resp = {

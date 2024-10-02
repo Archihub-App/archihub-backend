@@ -11,7 +11,7 @@ import json
 
 # Nuevo endpoint para obtener todos los resources dado un body de filtros
 @bp.route('', methods=['POST'])
-@jwt_required()
+# @jwt_required()
 def get_all():
     """
     Obtener todos los resources dado un body de filtros
@@ -43,7 +43,7 @@ def get_all():
             description: Error al obtener los resources
     """
     # Obtener el usuario actual
-    current_user = get_jwt_identity()
+    current_user = 'beta'
     # Obtener el body del request
     body = request.json
     # Llamar al servicio para obtener los resources
