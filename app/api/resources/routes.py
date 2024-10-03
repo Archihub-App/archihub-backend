@@ -359,7 +359,6 @@ def get_tree():
                 
                 return resp
     except Exception as e:
-        print(str(e))
         return jsonify({'msg': str(e)}), 500
         
 

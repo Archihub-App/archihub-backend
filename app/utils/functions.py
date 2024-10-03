@@ -175,7 +175,7 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 
-@cacheHandler.cache.cache()
+@cacheHandler.cache.cache(limit=500)
 def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
     ids = json.loads(ids)
     ids_filter = []
@@ -232,8 +232,66 @@ def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
         return r_
 
     except Exception as e:
-        print(str(e))
         raise Exception(str(e))
+
+@cacheHandler.cache.cache(limit=500)
+def get_resource_records_public(ids, page=0, limit=10, groupImages=False):
+    ids = json.loads(ids)
+    ids_filter = []
+    for i in range(len(ids)):
+        ids_filter.append(ObjectId(ids[i]['id']))
+
+    try:
+        filters = {
+            '_id': {'$in': ids_filter},
+        }
+        if groupImages:
+            filters['$or'] = [{'processing.fileProcessing.type': {'$exists': False}}, {'processing.fileProcessing.type': {'$ne': 'image'}}]
+
+        r_ = list(mongodb.get_all_records('records', filters=filters, fields={
+                  'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}).skip(page * limit).limit(limit))
+        
+        for r in r_:
+            r['_id'] = str(r['_id'])
+            r['tag'] = [x['tag'] for x in ids if x['id'] == r['_id']][0]
+
+            if 'accessRights' in r:
+                if r['accessRights']:
+                    r['name'] = 'No tiene permisos para ver este archivo'
+                    r['displayName'] = 'No tiene permisos para ver este archivo'
+                    r['_id'] = None
+
+            pro_dict = {}
+            if 'processing' in r:
+                if 'fileProcessing' in r['processing']:
+                    pro_dict['fileProcessing'] = {
+                        'type': r['processing']['fileProcessing']['type'],
+                    }
+
+            r['processing'] = pro_dict
+
+        if groupImages:
+            img = mongodb.count('records', {'_id': {'$in': ids_filter}, 'processing.fileProcessing.type': 'image'})
+            
+            if img > 0:
+                r_.append({
+                    '_id': 'imgGallery',
+                    'displayName': f'{str(img)} imágenes',
+                    'hash': '',
+                    'id': 'imgGallery',
+                    'processing': {
+                        'fileProcessing': {
+                            'type': 'image gallery'
+                        }
+                    },
+                    'tag': 'Galería de imágenes',
+                })
+
+        return r_
+
+    except Exception as e:
+        raise Exception(str(e))
+
 
 @cacheHandler.cache.cache()
 def cache_get_record_stream(id):
