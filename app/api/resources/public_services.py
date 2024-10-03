@@ -37,6 +37,13 @@ cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
 children_cache = {}
 
+def update_cache():
+    get_all.invalidate_all()
+    get_tree.invalidate_all()
+    get_resource.invalidate_all()
+    get_resource_files.invalidate_all()
+    get_resource_images.invalidate_all()
+
 @cacheHandler.cache.cache(limit=5000)
 def get_all(body):
     try:

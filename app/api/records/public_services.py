@@ -34,6 +34,8 @@ ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'oga', 'ogg
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 
+def update_cache():
+    get_by_id.invalidate_all()
 
 def parse_result(result):
     return json.loads(json_util.dumps(result))

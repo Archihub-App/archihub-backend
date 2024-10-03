@@ -18,7 +18,7 @@ import os
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from app.utils import IndexHandler
-from app.api.system.services import update_option
+from app.api.system.services import update_option, clear_cache
 
 # leer variables de entorno desde el archivo .env
 from dotenv import load_dotenv
@@ -138,6 +138,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             update_option('index_management', {'index_activation': False})
 
 
+    clear_cache()
     return app
 
 # función para registrar plugins de forma dinámica
