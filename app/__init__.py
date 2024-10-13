@@ -45,7 +45,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     CORS(app, resources={
         r"/adminApi/*": {"origins": "*"},
         r"/publicApi/*": {"origins": "*"},
-        r"/*": {"origins": os.environ.get('URL_FRONTEND', '*')}
+        r"/*": {"origins": os.environ.get('URL_FRONTEND', '*').split(',')}
     })
     
     # Inicializar JWT
