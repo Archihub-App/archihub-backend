@@ -1,14 +1,14 @@
 from app.api.publicApi import bp
 from flask import jsonify
 from flask import request
-from app.utils.FernetAuth import fernetAuthenticate
+from app.utils.FernetAuth import publicFernetAuthenticate as fernetAuthenticate
 
 # En este archivo se registran las rutas de la API para los logs
 
 # Nuevo POST endpoint para obtener los logs de acuerdo a un filtro
 @bp.route('', methods=['GET'])
 @fernetAuthenticate
-def filter():
+def filter(username, isAdmin):
     """
     Obtener los logs de acuerdo a un filtro
     ---
@@ -33,4 +33,4 @@ def filter():
             description: No se encontraron logs
     """
     
-    return 'ok'
+    return jsonify({'msg': 'Logs obtenidos exitosamente'}), 200
