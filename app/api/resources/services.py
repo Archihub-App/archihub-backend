@@ -1221,6 +1221,8 @@ def delete_children(id):
                 # eliminar el recurso de la base de datos
                 mongodb.delete_record(
                     'resources', {'_id': ObjectId(child['id'])})
+                
+                hookHandler.call('resource_delete', {'_id': child['id']})
 
     except Exception as e:
         raise Exception(str(e))
