@@ -120,6 +120,7 @@ class IndexHandler:
         url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index + '/_doc/' + id
         response = requests.delete(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
+        
         return response.json()
     
     def reindex(self, source, dest):

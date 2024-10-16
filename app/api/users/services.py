@@ -86,7 +86,7 @@ def add_request(username):
             user['lastRequest'] = datetime.datetime.now()
         else:
             raise Exception('Límite de requests excedido')
-        
+
         user_update = UserUpdate(requests=user['requests'], lastRequest=user['lastRequest'])
         # Actualizar el usuario
         mongodb.update_record('users', {'username': username}, update_model=user_update)
