@@ -25,7 +25,9 @@ class MongoConector:
     def getMongoURI(self):
         mongourl = "mongodb://"
         for x in range(len(self.ip_server)):
-            if self.user == '':
+            if(x > 0):
+                mongourl = mongourl + "," + self.ip_server[x] +":" + self.port
+            elif self.user == '':
                 mongourl = mongourl + "admin:"+self.admin+"@"+self.ip_server[x]+":" + self.port
             elif self.user != '':
                 mongourl = mongourl + self.user + ":"+self.admin+"@"+self.ip_server[x]+":" + self.port
