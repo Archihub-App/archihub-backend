@@ -33,9 +33,9 @@ class MongoConector:
                 mongourl = mongourl + self.user + ":"+self.admin+"@"+self.ip_server[x]+":" + self.port
 
         if len(self.ip_server) > 1:
-            mongourl = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&retryWrites=true&w=majority&replicaSet=mongo-cluster&ssl=false"
+            mongourl = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&retryWrites=true&w=majority&replicaSet=" + os.environ.get(MONGO_RS, 'rs0') + "&ssl=false"
         else:
-            mongourl = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&appname=MongoDB%20Compass&ssl=false"
+            mongourl = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&ssl=false"
 
         return mongourl
         
