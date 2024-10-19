@@ -127,7 +127,7 @@ def get_all(body, user):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para crear un recurso
-def create(body, user, files):
+def create(body, user, files, updateCache = True):
     try:
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
@@ -189,7 +189,8 @@ def create(body, user, files):
         register_log(user, log_actions['resource_create'], {'resource': body})
 
         # limpiar la cache
-        update_cache()
+        if updateCache:
+            update_cache()
         
         hookHandler.call('resource_create', body)
 
@@ -209,27 +210,25 @@ def create(body, user, files):
                 'filesObj': records
             }
 
-            print(update)
-
             update_ = ResourceUpdate(**update)
 
             mongodb.update_record(
                 'resources', {'_id': ObjectId(body['_id'])}, update_)
             
             # limpiar la cache
-            update_cache()
+            if updateCache:
+                update_cache()
             
             hookHandler.call('resource_files_create', body)
 
         # Retornar el resultado
         resp = {'msg': 'Recurso creado exitosamente', 'id': str(new_resource.inserted_id), 'post_type': body['post_type']}
-        print("resp",resp)
         return resp, 201
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
 
-def update_by_id(id, body, user, files):
+def update_by_id(id, body, user, files, updateCache = True):
     try:
         body = validate_parent(body)
         has_new_parent = has_changed_parent(id, body)
@@ -315,7 +314,8 @@ def update_by_id(id, body, user, files):
         # Registrar el log
         register_log(user, log_actions['resource_update'], {'resource': body})
         # limpiar la cache
-        # update_cache()
+        if updateCache:
+            update_cache()
         # Retornar el resultado
         return {'msg': 'Recurso actualizado exitosamente'}, 200
     except Exception as e:
