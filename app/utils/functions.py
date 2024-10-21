@@ -548,6 +548,12 @@ def cache_get_imgs_gallery_by_id(id, pages, size):
 
     img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}, sort=[('name', 1)]).skip(pages[0]).limit(len(pages)))
     
+    order_dict = {file['id']: file['order'] for file in resource['filesObj']}
+
+    img_sorted = sorted(img, key=lambda x: order_dict.get(x['_id'], float('inf')))
+
+    img = img_sorted
+    
     response = []
     
     for i in range(len(img)):
