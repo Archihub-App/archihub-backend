@@ -293,7 +293,7 @@ def get_resource_records_public(ids, page=0, limit=10, groupImages=False):
         raise Exception(str(e))
 
 
-@cacheHandler.cache.cache()
+@cacheHandler.cache.cache(limit=1000)
 def cache_get_record_stream(id):
     # Buscar el record en la base de datos
     record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={
@@ -318,7 +318,7 @@ def cache_get_record_stream(id):
     return path, type
 
 
-@cacheHandler.cache.cache()
+@cacheHandler.cache.cache(limit=1000)
 def cache_get_processing_metadata(id, slug):
     # Buscar el record en la base de datos
     record = mongodb.get_record(
@@ -337,7 +337,7 @@ def cache_get_processing_metadata(id, slug):
 
     return record['processing'][slug]['result']['metadata']
 
-@cacheHandler.cache.cache()
+@cacheHandler.cache.cache(limit=1000)
 def cache_get_record_transcription(id, slug):
     # Buscar el record en la base de datos
     record = mongodb.get_record(
@@ -406,7 +406,7 @@ def cache_get_record_transcription(id, slug):
     return transcription
 
 
-@cacheHandler.cache.cache()
+@cacheHandler.cache.cache(limit=1000)
 def cache_get_record_document_detail(id):
     # Buscar el record en la base de datos
     record = mongodb.get_record(
@@ -458,7 +458,7 @@ def cache_get_record_document_detail(id):
             'aspect_ratio': aspect_ratio
         }
     
-@cacheHandler.cache.cache()
+@cacheHandler.cache.cache(limit=1000)
 def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
     record = mongodb.get_record(
         'records', {'_id': ObjectId(id)}, fields={'processing': 1})
@@ -548,7 +548,7 @@ def cache_get_imgs_gallery_by_id(id, pages, size):
 
     img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}))
     
-    order_dict = {file['id']: file['order'] for file in resource['filesObj']}
+    order_dict = {file['id']: file['order'] if 'order' in file else 0 for file in resource['filesObj']}
 
     img_sorted = sorted(img, key=lambda x: order_dict.get(x['_id'], float('inf')))
 
@@ -579,7 +579,7 @@ def cache_get_imgs_gallery_by_id(id, pages, size):
     return response
         
 
-@cacheHandler.cache.cache()
+@cacheHandler.cache.cache(limit=5000)
 def cache_get_pages_by_id(id, pages, size):
     pages = json.loads(pages)
     
