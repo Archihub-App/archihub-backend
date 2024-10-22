@@ -62,20 +62,10 @@ def get_view_info(view_slug):
         count = get_count(v, filters)
         types.append({
             'slug': v,
-            'count': count,
             'description': pt['description'],
             'name': pt['name'],
             'icon': pt['icon']
         })
-
-    types = sorted(types, key=lambda x: x['count'], reverse=False)
-    total = sum([p['count'] for p in types])
-
-    for p in types:
-        if p['count'] == 0:
-            p['percent'] = 0
-        else:
-            p['percent'] = round((p['count'] / total) * 100)
 
     view.pop('_id')
     view.pop('visible')

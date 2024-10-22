@@ -13,9 +13,12 @@ from datetime import datetime
 from io import BytesIO
 from PIL import Image
 import base64
+import os
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+
+WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
@@ -39,6 +42,8 @@ def create(user, body):
             'data': body['data'],
             'createdAt': datetime.now(),
         }
+
+        print(snap)
 
         snap = Snap(**snap)
         # Insertar el snap en la base de datos
@@ -137,6 +142,8 @@ def get_by_id(id, user):
         
         if snap['type'] == 'document':
             return get_document_snap(user, snap['record_id'], snap['data'])
+        elif snap['type'] == 'image':
+            return get_image_snap(user, snap['record_id'], snap['data'])
 
         snap['_id'] = str(snap['_id'])
         
@@ -159,6 +166,7 @@ def get_document_snap(user, record_id, data):
 
     image = Image.open(BytesIO(img_data))
     width, height = image.size
+    aspect_ratio = width / height
 
     left = width * data['bbox']['x']
     top = height * data['bbox']['y']
@@ -171,3 +179,45 @@ def get_document_snap(user, record_id, data):
     img_io.seek(0)
 
     return send_file(img_io, mimetype='image/jpeg')
+
+def get_image_snap(user, record_id, data):
+    from app.api.records.services import get_by_id
+    record, status = get_by_id(record_id, user)
+    if status != 200:
+        return {'msg': f'Error al obtener el archivo: {record["msg"]}'} , 500
+
+    file = mongodb.get_record('records', {'_id': ObjectId(record_id)}, {'processing': 1})
+    if file is None:
+        return {'msg': 'Archivo no encontrado'}, 404
+    if 'processing' not in file:
+        return {'msg': 'Archivo no encontrado'}, 404
+    if 'fileProcessing' not in file['processing']:
+        return {'msg': 'Archivo no encontrado'}, 404
+    if 'type' not in file['processing']['fileProcessing']:
+        return {'msg': 'Archivo no encontrado'}, 404
+    if file['processing']['fileProcessing']['type'] != 'image':
+        return {'msg': 'Archivo no encontrado'}, 404
+
+    path = file['processing']['fileProcessing']['path']
+    path_img = os.path.join(WEB_FILES_PATH, path)
+    path_img = path_img + '_large.jpg'
+
+    if not os.path.exists(path_img):
+        return {'msg': 'Archivo no encontrado'}, 404
+
+    image = Image.open(path_img)
+    width, height = image.size
+    aspect_ratio = width / height
+
+    left = width * data['bbox']['x']
+    top = height * data['bbox']['y']
+    right = width * (data['bbox']['x'] + data['bbox']['width'])
+    bottom = height * (data['bbox']['y'] + data['bbox']['height'])
+    image = image.crop((left, top, right, bottom))
+
+    img_io = BytesIO()
+    image.save(img_io, 'JPEG', quality=70)
+    img_io.seek(0)
+
+    return send_file(img_io, mimetype='image/jpeg')
+    

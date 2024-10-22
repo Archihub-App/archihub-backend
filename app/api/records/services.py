@@ -27,7 +27,7 @@ if not os.path.exists(ORIGINAL_FILES_PATH):
     os.makedirs(ORIGINAL_FILES_PATH)
 
 
-ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'oga', 'ogg', 'ogv',
+ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'oga', 'ogg', 'ogv', 'tif', 'tiff',
                           'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'csv', 'zip', 'rar', '7z', 'mp4',
                           'mp3', 'wav', 'avi', 'mkv', 'flv', 'mov', 'wmv', 'm4a', 'mxf', 'cr2', 'arw', 'mts', 'nef', 'json', 'html', 'wma', 'aac', 'flac'])
 
@@ -262,11 +262,14 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
             if record:
                 # eliminar el archivo que se subio
                 os.remove(os.path.join(path, filename_new))
-
-                resp.append({
+                
+                obj_resp = {
                     'id': str(record['_id']),
                     'tag': filesTags[index]['filetag']
-                })
+                }
+                if 'order' in filesTags[index]:
+                    obj_resp['order'] = filesTags[index]['order']
+                resp.append(obj_resp)
 
                 new_parent = [{
                     'id': resource_id,
@@ -331,10 +334,13 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                     })
                     # insertar el record en la base de datos
                     new_record = mongodb.insert_record('records', record)
-                    resp.append({
+                    obj_resp = {
                         'id': str(new_record.inserted_id),
                         'tag': filesTags[index]['filetag']
-                    })
+                    }
+                    if 'order' in filesTags[index]:
+                        obj_resp['order'] = filesTags[index]['order']
+                    resp.append(obj_resp)
                 else:
                     # crear un nuevo record
                     record = FileRecord(**{
@@ -356,15 +362,21 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                     if not record_exists:
                         # insertar el record en la base de datos
                         new_record = mongodb.insert_record('records', record)
-                        resp.append({
+                        obj_resp = {
                             'id': str(new_record.inserted_id),
                             'tag': filesTags[index]['filetag']
-                        })
+                        }
+                        if 'order' in filesTags[index]:
+                            obj_resp['order'] = filesTags[index]['order']
+                        resp.append(obj_resp)
                     else:
-                        resp.append({
-                            'id': str(record_exists['_id']),
+                        obj_resp = {
+                            'id': str(new_record.inserted_id),
                             'tag': filesTags[index]['filetag']
-                        })
+                        }
+                        if 'order' in filesTags[index]:
+                            obj_resp['order'] = filesTags[index]['order']
+                        resp.append(obj_resp)
 
                 # registrar el log
                 register_log(current_user, log_actions['record_create'], {'record': {

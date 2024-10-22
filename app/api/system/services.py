@@ -642,6 +642,9 @@ def clear_cache():
     from app.api.snaps.services import update_cache as update_cache_snaps
     from app.api.views.services import update_cache as update_cache_views
     from app.api.geosystem.services import update_cache as update_cache_geosystem
+    
+    from app.api.resources.public_services import update_cache as update_cache_resources_public
+    from app.api.records.public_services import update_cache as update_cache_records_public
 
     try:
         update_cache_function()
@@ -654,6 +657,8 @@ def clear_cache():
         update_cache_snaps()
         update_cache_views()
         update_cache_geosystem()
+        update_cache_resources_public()
+        update_cache_records_public()
 
         return {'msg': 'Cache limpiada exitosamente'}, 200
     except Exception as e:
@@ -753,7 +758,7 @@ def index_resources_task(body={}):
 def index_resources_delete_task(body={}):
     r = index_handler.delete_document(
         ELASTIC_INDEX_PREFIX + '-resources', body['_id'])
-    if r.result != 'deleted':
+    if r['result'] != 'deleted':
         raise Exception('Error al indexar el recurso ' + str(body['_id']))
 
     return 'ok'
