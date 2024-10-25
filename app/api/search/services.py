@@ -32,6 +32,7 @@ def get_resources_by_filters(body, user):
                     return {'msg': 'No tiene permisos para obtener los recursos'}, 401
 
         query = {
+            'track_total_hits': True,
             'query': {
                 'bool': {
                     'filter': [
