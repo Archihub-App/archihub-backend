@@ -150,6 +150,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
 
     if os.environ.get('FLASK_ENV') == 'DEV':
         clear_cache()
+        
     return app
 
 # función para registrar plugins de forma dinámica
