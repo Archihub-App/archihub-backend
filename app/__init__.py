@@ -148,7 +148,8 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             index_management['data'][0]['value'] = False
             update_option('index_management', {'index_activation': False})
 
-    clear_cache()
+    if os.environ.get('FLASK_ENV') == 'DEV':
+        clear_cache()
     return app
 
 # función para registrar plugins de forma dinámica

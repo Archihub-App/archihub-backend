@@ -35,7 +35,6 @@ mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 
 def update_cache():
-    get_all.invalidate_all()
     get_total.invalidate_all()
     get_by_id.invalidate_all()
 
@@ -43,20 +42,6 @@ def update_cache():
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
-# Nuevo servicio para obtener todos los records para un recurso
-@cacheHandler.cache.cache(limit=1000)
-def get_all(resource_id, current_user):
-    try:
-        # Buscar el recurso en la base de datos
-        record = mongodb.get_record('records', {'parents.id': resource_id})
-        # Si el recurso no existe, retornar error
-        if not record:
-            return {'msg': 'Recurso no existe'}, 404
-        # retornar los records
-        return jsonify(record['records']), 200
-
-    except Exception as e:
-        return {'msg': str(e)}, 500
 
 
 def allowedFile(filename):
@@ -177,7 +162,7 @@ def delete_parent(resource_id, parent_id, current_user):
         register_log(current_user, log_actions['record_update'], {
                      'record': parent_id})
         # Limpiar la cache
-        get_all.invalidate_all()
+        
 
         # Retornar el resultado
         return {'msg': 'Parent eliminado exitosamente'}, 200
@@ -203,7 +188,7 @@ def update_parent(parent_id, current_user, parents):
     register_log(current_user, log_actions['record_update'], {
         'record': parent_id})
     # Limpiar la cache
-    get_all.invalidate_all()
+    
 
 
 # Nuevo servicio para crear un record para un recurso
@@ -308,7 +293,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                 register_log(current_user, log_actions['record_update'], {
                                 'record': str(record['_id'])})
                 # limpiar la cache
-                get_all.invalidate_all()
+                
             else:
                 if upload:
                     # obtener el tamaño del archivo
@@ -386,7 +371,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                     'filepath': record.filepath
                 }})
                 # limpiar la cache
-                get_all.invalidate_all()
+                
                 get_hash.invalidate_all()
         else:
             raise Exception('Tipo de archivo no permitido')
