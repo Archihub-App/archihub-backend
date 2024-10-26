@@ -125,11 +125,11 @@ def delete_parent(resource_id, parent_id, current_user):
         record['parent'] = [x for x in record['parent']
                             if x['id'] != resource_id]
         
-        array_parents = set(x['id'] for x in record['parent'])
+        array_parent = set(x['id'] for x in record['parent'])
 
         array_parents_temp = []
         # iterar sobre parent y en un nuevo array ir guardando los padres de cada parent
-        for p in array_parents:
+        for p in array_parent:
             r = mongodb.get_record('resources', {'_id': ObjectId(p)})
 
             if r:
@@ -148,10 +148,10 @@ def delete_parent(resource_id, parent_id, current_user):
         # Si el record no tiene parents, cambiar el status a deleted
         if len(record['parent']) == 0:
             status = 'deleted'
-
+            
         # Actualizar el record
         update = FileRecordUpdate(**{
-            'parent': record['parent'],
+            'parent': array_parent,
             'parents': array_parents,
             'status': status
         })
