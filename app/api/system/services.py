@@ -2,6 +2,7 @@ import datetime
 from flask import jsonify, request
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import VectorDatabaseHandler
 from bson import json_util
 import json
 import re
@@ -26,15 +27,21 @@ hookHandler = HookHandler.HookHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
 index_handler = IndexHandler.IndexHandler()
 cacheHandler = CacheHandler.CacheHandler()
+vectorHandler = VectorDatabaseHandler.VectorDatabaseHandler()
 
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
-
 
 def hookHandlerIndex():
     hookHandler.register('resource_create', index_resources_task, queue=101)
     hookHandler.register('resource_update', index_resources_task, queue=101)
     hookHandler.register(
         'resource_delete', index_resources_delete_task, queue=101)
+    
+def hookHandlerVector():
+    hookHandler.register('resource_create', vector_resources_task, queue=102)
+    hookHandler.register('resource_update', vector_resources_task, queue=102)
+    hookHandler.register(
+        'resource_delete', vector_resources_delete_task, queue=102)
 
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado. Si el valor no existe, lo crea
 
@@ -631,7 +638,8 @@ def index_resources(user):
 
 
 def clear_cache():
-    print('clearing cache')
+    print('-'*50)
+    print('🧹 ♻️  💾 Clearing cache')
     from app.utils.functions import clear_cache as update_cache_function
     from app.api.lists.services import update_cache as update_cache_lists
     from app.api.forms.services import update_cache as update_cache_forms
@@ -660,9 +668,11 @@ def clear_cache():
         update_cache_resources_public()
         update_cache_records_public()
 
+        print('-'*50)
         return {'msg': 'Cache limpiada exitosamente'}, 200
     except Exception as e:
         print(str(e))
+        print('-'*50)
         return {'msg': str(e)}, 500
 
 
@@ -752,6 +762,8 @@ def index_resources_task(body={}):
             'resources', {}, limit=1000, skip=skip))
 
     return 'ok'
+
+
 
 
 @shared_task(ignore_result=False, name='system.index_resources_delete')

@@ -31,9 +31,9 @@ class IndexHandler:
         keys = self.get_aliases().keys()
         if len(keys) == 0:
             self.start_new_index()
-        else:
-            for k in self.get_aliases():
-                print(k)
+        # else:
+        #     for k in self.get_aliases():
+        #         print(k)
 
     def start_new_index(self, mapping=None):
         index_name = self.elastic_index_prefix + '-resources_1'

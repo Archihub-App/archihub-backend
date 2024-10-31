@@ -19,7 +19,8 @@ class VectorDatabaseHandler:
             cls._instance = super().__new__(cls)
             cls._instance.vector_host = VECTOR_HOST
             cls._instance.vector_port = VECTOR_PORT
-            cls._instance.embedding_model = SentenceTransformer("jinaai/jina-embeddings-v2-base-es", trust_remote_code=True)
+            if os.environ.get('CELERY_WORKER'):
+                cls._instance.embedding_model = SentenceTransformer("jinaai/jina-embeddings-v2-base-es", trust_remote_code=True)
             cls._instance.qdrant = QdrantClient(host=cls._instance.vector_host, port=cls._instance.vector_port)
             
             if not cls._instance.qdrant.collection_exists(METADATA_RESOURCES):
@@ -51,7 +52,7 @@ class VectorDatabaseHandler:
         vector = self.embedding_model.encode(text)
         self.qdrant.upsert(
             collection_name=collection,
-            points=vector,
+            points=vector[0],
             payload=payload
         )
         
@@ -59,7 +60,7 @@ class VectorDatabaseHandler:
         vector = self.embedding_model.encode(text)
         return self.qdrant.search(
             collection_name=collection,
-            query=vector,
+            query=vector[0],
             limit=limit,
             search_params=models.SearchRequest(
                 hnsw_ef=128,
