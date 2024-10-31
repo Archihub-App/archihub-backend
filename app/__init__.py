@@ -17,7 +17,6 @@ from flask import Flask
 import os
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
-from app.utils import IndexHandler
 from app.api.system.services import update_option, clear_cache
 
 # leer variables de entorno desde el archivo .env
@@ -136,6 +135,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     if index_management['data'][0]['value']:
         print('Indexing is active')
         try:
+            from app.utils import IndexHandler
             index_handler = IndexHandler.IndexHandler()
             from app.api.search import bp as search_bp
             app.register_blueprint(search_bp, url_prefix='/search')
@@ -143,10 +143,21 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             from app.api.system.services import hookHandlerIndex
             hookHandlerIndex()
         except Exception as e:
-            print(str(e))
             print('No se pudo iniciar el indexador de documentos')
             index_management['data'][0]['value'] = False
             update_option('index_management', {'index_activation': False})
+            
+    if index_management['data'][1]['value']:
+        print('Vector indexing is active')
+        try:
+            from app.utils import VectorDatabaseHandler
+            vector_handler = VectorDatabaseHandler.VectorDatabaseHandler()
+            
+        except Exception as e:
+            print(str(e))
+            print('No se pudo iniciar el indexador de vectores')
+            index_management['data'][1]['value'] = False
+            update_option('index_management', {'vector_activation': False})
 
     if os.environ.get('FLASK_ENV') == 'DEV':
         clear_cache()
