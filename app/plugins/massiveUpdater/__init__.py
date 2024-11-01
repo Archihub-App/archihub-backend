@@ -128,24 +128,35 @@ class ExtendedPluginClass(PluginClass):
             df.columns = new_header
 
             for index, row in df.iterrows():
-                # recuperamos el recurso
-                resource = mongodb.get_record('resources', {'_id': ObjectId(row['id'])}, {'_id': 1, 'metadata': 1, 'post_type': 1, 'status': 1})
+                doUpdate = False
+                if not pd.isna(row['id']):
+                    doUpdate = True
+                    resource = mongodb.get_record('resources', {'_id': ObjectId(row['id'])}, {'_id': 1, 'metadata': 1, 'post_type': 1, 'status': 1})
 
-                status = resource['status']
+                    status = resource['status']
 
-                update = {}
-                
-                if resource == None:
-                    error = {
-                        'index': index,
-                        'id': row['id'],
-                        'error': 'Recurso no encontrado'
+                    update = {}
+                    
+                    if resource == None:
+                        error = {
+                            'index': index,
+                            'id': row['id'],
+                            'error': 'Recurso no encontrado'
+                        }
+                        errores.append(error)
+                        continue
+
+                    # recuperamos el tipo de contenido
+                    type = get_by_slug(resource['post_type'])
+                else:
+                    doUpdate = False
+                    update = {
+                        'status': 'published',
+                        'post_type': row['post_type'],
+                        'metadata': {},
+                        'filesIds': [],
                     }
-                    errores.append(error)
-                    continue
-
-                # recuperamos el tipo de contenido
-                type = get_by_slug(resource['post_type'])
+                    type = get_by_slug(row['post_type'])
 
                 fields = type['metadata']['fields']
 
@@ -204,13 +215,18 @@ class ExtendedPluginClass(PluginClass):
                         continue
 
                 
-                # actualizamos el recurso
-                resource = ResourceUpdate(**update)
-                updated_resource = mongodb.update_record('resources', {'_id': ObjectId(row['id'])}, resource)
-                reporte.append({
-                    'id': row['id'],
-                    'status': 'Actualizado'
-                })
+                if doUpdate:
+                    # actualizamos el recurso
+                    resource = ResourceUpdate(**update)
+                    updated_resource = mongodb.update_record('resources', {'_id': ObjectId(row['id'])}, resource)
+                    reporte.append({
+                        'id': row['id'],
+                        'status': 'Actualizado'
+                    })
+                else:
+                    from app.api.resources.services import create as create_resource
+                    created_resource = create_resource(update, user, [], True)
+                    
 
         elif content_type == 'Tipo':
             # abrir la hoja de excel
