@@ -188,8 +188,11 @@ class ExtendedPluginClass(PluginClass):
                                         if option['term'] == v:
                                             resp.append(option['id'])
                                             break
-                                        
-                            set_value_in_dict(update, field['destiny'], resp)
+                            
+                            if field['type'] == 'select':
+                                set_value_in_dict(update, field['destiny'], resp[0])
+                            else:
+                                set_value_in_dict(update, field['destiny'], resp)
 
                     except Exception as e:
                         error = {
