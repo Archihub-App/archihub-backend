@@ -8,12 +8,14 @@ from app.api.resources.services import get_value_by_path
 import os
 from werkzeug.utils import secure_filename
 import uuid
+import re
 import pandas as pd
 import json
 from dotenv import load_dotenv
 from bson.objectid import ObjectId
-from app.api.system.services import set_value_in_dict, validate_text
+from app.api.system.services import set_value_in_dict, validate_text, validate_simple_date
 from app.api.resources.models import ResourceUpdate
+from dateutil import parser
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -37,6 +39,7 @@ class ExtendedPluginClass(PluginClass):
             body = request.form.to_dict()
             data = body['data']
             data = json.loads(data)
+            overwrite = data['overwrite'] if 'overwrite' in data else False
 
             files = request.files.getlist('files')
 
@@ -48,7 +51,7 @@ class ExtendedPluginClass(PluginClass):
                     if self.allowedFile(filename, ['xlsx']):
                         filename_new = self.save_temp_file(f, filename)
                         path = os.path.join(TEMPORAL_FILES_PATH, filename_new)
-                        task = self.update.delay(path, data['overwrite'], current_user)
+                        task = self.update.delay(path, overwrite, current_user)
                         self.add_task_to_user(task.id, 'massiveUpdater.update_inventory', current_user, 'file_download')
                     
                     else:
@@ -159,6 +162,34 @@ class ExtendedPluginClass(PluginClass):
                         if field['type'] == 'text' or field['type'] == 'text-area':
                             validate_text(row[field['destiny']], field)
                             set_value_in_dict(update, field['destiny'], row[field['destiny']])
+                        elif field['type'] == 'simple-date':
+                            value = row[field['destiny']]
+                            if len(value) == 4:
+                                value = value + '-01-01'
+                            parsed_date = parser.parse(value)
+                            validate_simple_date(parsed_date, field)
+                            set_value_in_dict(update, field['destiny'], parsed_date)
+                        elif field['type'] == 'select' or field['type'] == 'select-multiple2':
+                            value = row[field['destiny']].split(',')
+                            
+                            from app.api.lists.services import get_by_id as get_list
+                            list = get_list(field['list'])
+                            options = list['options']
+                            
+                            resp = []
+                            for v in value:
+                                if bool(re.fullmatch(r'[0-9a-fA-F]{24}', v)):
+                                    for option in options:
+                                        if option['id'] == v:
+                                            resp.append(option['id'])
+                                            break
+                                else:
+                                    for option in options:
+                                        if option['term'] == v:
+                                            resp.append(option['id'])
+                                            break
+                                        
+                            set_value_in_dict(update, field['destiny'], resp)
 
                     except Exception as e:
                         error = {

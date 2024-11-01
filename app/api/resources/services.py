@@ -97,7 +97,6 @@ def get_all(body, user):
                     o['createdBy'] = user
             filters = filters_
 
-        print(filters)
         # Obtener todos los recursos dado un tipo de contenido
         resources = list(mongodb.get_all_records(
             'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1}, sort=[('metadata.firstLevel.title', 1)]))
