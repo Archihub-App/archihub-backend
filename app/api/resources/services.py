@@ -855,12 +855,17 @@ def get_resource_files(id, user, page, groupImages = False):
 
         temp = []
         ids = []
+        
+        imgsTotal = 0
         if 'filesObj' in resource:
             for r in resource['filesObj']:
                 ids.append(r)
 
         r_ = get_resource_records(json.dumps(ids), user, page, groupImages=groupImages)
         for _ in r_:
+            if _['_id'] == 'imgGallery':
+                imgsTotal = int(_['displayName'].split(' ')[0])
+
             obj = {
                 'id': str(_['_id']),
                 'hash': _['hash'],
@@ -874,9 +879,13 @@ def get_resource_files(id, user, page, groupImages = False):
 
             temp.append(obj)
 
+        total = len(resource['filesObj'])
+        if imgsTotal > 0:
+            total = total - imgsTotal + 1
+            
         resp = {
             'data': temp,
-            'total': len(r_)
+            'total': total
         }
         # Retornar el recurso
         return resp, 200

@@ -160,7 +160,6 @@ def get_by_id(id):
         return tuple(resp)
     else:
         return resp
-    
 
 # Nuevo endpoint para actualizar un recurso por su id
 @bp.route('/<id>', methods=['PUT'])
@@ -361,8 +360,6 @@ def get_tree():
     except Exception as e:
         return jsonify({'msg': str(e)}), 500
         
-
-
 # Nuevo endpoint para obtener los recursos de un recurso padre
 @bp.route('/<resource_id>/records', methods=['POST'])
 @jwt_required()
