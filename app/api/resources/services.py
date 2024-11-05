@@ -31,6 +31,7 @@ from app.utils.functions import get_resource_records, cache_type_roles, clear_ca
 import os
 from datetime import datetime
 from dateutil import parser
+import numbers
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
@@ -486,7 +487,7 @@ def validate_fields(body, metadata, errors):
                     elif field['type'] == 'number':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
-                            if not isinstance(get_value_by_path(body, field['destiny']), int):
+                            if not isinstance(get_value_by_path(body, field['destiny']), numbers.Number):
                                 errors[field['destiny']
                                     ] = f'El campo {field["label"]} debe ser un número'
                         elif field['required'] and body['status'] == 'published':
