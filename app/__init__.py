@@ -153,12 +153,11 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             update_option('index_management', {'index_activation': False})
             
     if index_management['data'][1]['value']:
-        print('-'*50)
-        print('🧬 📐 📈 Vector indexing is active')
         try:
             from app.utils import VectorDatabaseHandler
             vector_handler = VectorDatabaseHandler.VectorDatabaseHandler()
-            
+            print('-'*50)
+            print('🧬 📐 📈 Vector indexing is active')
         except Exception as e:
             print('-'*50)
             print('No se pudo iniciar el indexador de vectores')

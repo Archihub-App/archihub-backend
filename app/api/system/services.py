@@ -26,7 +26,6 @@ from bson.objectid import ObjectId
 hookHandler = HookHandler.HookHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
-vectorHandler = VectorDatabaseHandler.VectorDatabaseHandler()
 
 def hookHandlerIndex():
     from app.api.system.tasks.elasticTasks import index_resources_task, index_resources_delete_task, regenerate_index_task
