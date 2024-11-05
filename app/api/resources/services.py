@@ -812,6 +812,14 @@ def get_resource(id, user):
                         'value': value,
                         'type': 'simple-date'
                     })
+            elif f['type'] == 'number':
+                value = get_value_by_path(resource, f['destiny'])
+                if value:
+                    temp.append({
+                        'label': f['label'],
+                        'value': value,
+                        'type': 'number'
+                    })
             elif f['type'] == 'relation':
                 value = get_value_by_path(resource, f['destiny'])
 
