@@ -1028,9 +1028,10 @@ def get_children_cache(root, available, post_type=None):
     
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
-@cacheHandler.cache.cache(limit=5000)
+# @cacheHandler.cache.cache(limit=5000)
 def get_tree(root, available, user, post_type=None, page=0):
     try:
+        print(root, available, post_type, page)
         list_available = available.split('|')
 
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
@@ -1051,14 +1052,6 @@ def get_tree(root, available, user, post_type=None, page=0):
             resource['children'] = get_children(resource['id'], available, False, post_type)
             resource['icon'] = get_icon(resource['post_type'])
 
-        if page == 0:
-            children_cache = get_children_cache(root, available, post_type)
-            count = len([re for re in resources if not re['children']])
-            
-            if len(children_cache) < 35 and len(children_cache) > 0:
-                resources = children_cache
-            elif count <= 10:
-                resources = [*children_cache, *resources]
         # Retornar los recursos y los padres
         return resources, 200
     except Exception as e:
