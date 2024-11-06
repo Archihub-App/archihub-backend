@@ -1028,7 +1028,7 @@ def get_children_cache(root, available, post_type=None):
     
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
-# @cacheHandler.cache.cache(limit=5000)
+@cacheHandler.cache.cache(limit=5000)
 def get_tree(root, available, user, post_type=None, page=0):
     try:
         print(root, available, post_type, page)
