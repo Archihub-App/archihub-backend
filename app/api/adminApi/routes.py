@@ -48,7 +48,6 @@ def new_resource(username, isAdmin):
     body = request.form.to_dict()
     files = request.files.getlist('files')
     data = json.loads(body['data'])
-
     # Llamar al servicio para crear el recurso
     return services.create(data, username, files)
 

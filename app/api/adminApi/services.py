@@ -2,22 +2,34 @@ from app.utils import DatabaseHandler
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
-def create(body, user, files):
-    from app.api.resources.services import create as create_resource
-    updateCache = False
-    if 'updateCache' in body:
-        updateCache = body['updateCache']
-        del body['updateCache']
+def autoComplete(body):
+    if 'filesIds' not in body:
+        body['filesIds'] = []
+    if 'post_type' not in body:
+        from app.api.system.services import get_default_cataloging_type
+        postType, status = get_default_cataloging_type()
+        if status != 200:
+            return jsonify({'msg': 'Error al obtener el tipo de contenido por defecto'}), 500
+        body['post_type'] = postType
+    if 'status' not in body:
+        body['status'] = 'published'
+    if 'parent' not in body:
+        body['parent'] = None
+    if 'parents' not in body:
+        body['parents'] = []
+    if 'updateCache' not in body:
+        body['updateCache'] = False
         
+    return body
+
+def create(body, user, files):
+    body = autoComplete(body)
+    from app.api.resources.services import create as create_resource
     return create_resource(body, user, files, updateCache)
 
 def update(id, body, user, files):
+    body = autoComplete(body)
     from app.api.resources.services import update_by_id as update_resource
-    updateCache = False
-    if 'updateCache' in body:
-        updateCache = body['updateCache']
-        del body['updateCache']
-        
     return update_resource(id, body, user, files, updateCache)
 
 def get_id(body, user):
