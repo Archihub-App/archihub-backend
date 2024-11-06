@@ -1029,7 +1029,7 @@ def get_children_cache(root, available, post_type=None):
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
 @cacheHandler.cache.cache(limit=5000)
-def get_tree(root, available, user, post_type=None, page=0):
+def get_tree(root, available, user, post_type=None, page=None):
     try:
         print(root, available, post_type, page)
         list_available = available.split('|')
@@ -1037,13 +1037,21 @@ def get_tree(root, available, user, post_type=None, page=0):
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
 
         if root == 'all':
-            
-            resources = list(mongodb.get_all_records('resources', {
+            if page:
+                resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
                              "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
+            else:
+                resources = list(mongodb.get_all_records('resources', {
+                             'post_type': {
+                             "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         else:
-            resources = list(mongodb.get_all_records('resources', {'post_type': {
+            if page:
+                resources = list(mongodb.get_all_records('resources', {'post_type': {
                              "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
+            else:
+                resources = list(mongodb.get_all_records('resources', {'post_type': {
+                             "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
 
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
