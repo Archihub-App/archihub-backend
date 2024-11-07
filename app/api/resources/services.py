@@ -1031,7 +1031,6 @@ def get_children_cache(root, available, post_type=None):
 @cacheHandler.cache.cache(limit=5000)
 def get_tree(root, available, user, post_type=None, page=None):
     try:
-        print(root, available, post_type, page)
         list_available = available.split('|')
 
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
