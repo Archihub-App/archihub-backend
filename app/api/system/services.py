@@ -64,7 +64,6 @@ def parse_result(result):
 
 # Funcion para obtener todos los recursos de la coleccion system
 
-
 def get_all_settings():
     try:
         # Obtener todos los recursos de la coleccion system
@@ -364,7 +363,7 @@ def validate_simple_date(value, field):
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
 
-
+@cacheHandler.cache.cache()
 def get_plugins():
     try:
         # Obtener el registro active_plugins de la colección system
@@ -414,6 +413,8 @@ def activate_plugin(body, current_user):
         update_schema = OptionUpdate(**update_dict)
         mongodb.update_record(
             'system', {'name': 'active_plugins'}, update_schema)
+        
+        get_plugins.invalidate_all()
 
         # Retornar el resultado
         return {'msg': 'Plugins instalados exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200
@@ -443,6 +444,8 @@ def change_plugin_status(plugin, user):
         update_schema = OptionUpdate(**update_dict)
         mongodb.update_record(
             'system', {'name': 'active_plugins'}, update_schema)
+        
+        get_plugins.invalidate_all()
 
         # Retornar el resultado
         return {'msg': 'Plugin actualizado exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200

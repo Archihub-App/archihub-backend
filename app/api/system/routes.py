@@ -121,7 +121,10 @@ def get_plugins():
     # Verificar si el usuario tiene el rol de administrador
     if user_services.has_role(current_user, 'processing') or user_services.has_role(current_user, 'admin'):
         # Llamar al servicio para obtener el listado de plugins en la carpeta plugins
-        return services.get_plugins()
+        resp = services.get_plugins()
+        if isinstance(resp, list):
+            return tuple(resp)
+        return resp	
     
     else:
         return {'msg': 'No tiene permisos para obtener el listado de plugins en la carpeta plugins'}, 401
