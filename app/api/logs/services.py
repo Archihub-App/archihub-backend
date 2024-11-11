@@ -33,7 +33,8 @@ def register_log(username, action, metadata=None):
 def filter(body):
     try:
         # Obtener todos los logs de la coleccion logs
-        logs = mongodb.get_all_records('logs', body['filters'], limit=20, skip=body['page'] * 20)
+        logs = mongodb.get_all_records('logs', body['filters'], limit=20, sort=[
+                                        ('date', -1)], skip=body['page'] * 20, fields={'_id': 0, 'metadata': 0})
         # Si no hay logs, retornar error
         if not logs:
             return {'msg': 'No se encontraron logs'}, 400

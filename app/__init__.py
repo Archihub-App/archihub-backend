@@ -117,6 +117,10 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     # Registrar geosystem blueprint
     from app.api.geosystem import bp as geosystem_bp
     app.register_blueprint(geosystem_bp, url_prefix='/geosystem')
+    
+    # Registrar usertasks blueprint
+    from app.api.usertasks import bp as usertasks_bp
+    app.register_blueprint(usertasks_bp, url_prefix='/usertasks')
 
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 

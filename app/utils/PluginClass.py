@@ -4,12 +4,14 @@ from app.api.tasks.services import add_task, has_task
 from app.api.users.services import has_role
 from app.api.system.models import OptionUpdate
 from app.utils import DatabaseHandler
+from app.utils import CacheHandler
 import uuid
 import os.path
 import requests
 import json
 
 mongodb = DatabaseHandler.DatabaseHandler()
+cacheHandler = CacheHandler.CacheHandler()
 
 TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', '')
 CLEAR_CACHE_PATH = os.environ.get('MASTER_HOST', '') + '/system/node-clear-cache'
