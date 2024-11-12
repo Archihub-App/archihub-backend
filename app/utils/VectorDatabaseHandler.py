@@ -1,6 +1,5 @@
 from qdrant_client import QdrantClient, models
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer, util
 import os
 load_dotenv()
 
@@ -20,6 +19,7 @@ class VectorDatabaseHandler:
             cls._instance.vector_host = VECTOR_HOST
             cls._instance.vector_port = VECTOR_PORT
             if os.environ.get('CELERY_WORKER'):
+                from sentence_transformers import SentenceTransformer, util
                 cls._instance.embedding_model = SentenceTransformer("jinaai/jina-embeddings-v2-base-es", trust_remote_code=True)
             cls._instance.qdrant = QdrantClient(host=cls._instance.vector_host, port=cls._instance.vector_port)
             
