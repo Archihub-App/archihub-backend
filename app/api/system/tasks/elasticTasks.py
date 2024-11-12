@@ -104,7 +104,10 @@ def index_resources_task(body={}):
                 document['parents'] = resource['parents']
             if 'parent' in resource:
                 document['parent'] = resource['parent']
-            document['ident'] = resource['ident']
+            if 'ident' in resource:
+                document['ident'] = resource['ident']
+            if 'status' not in resource:
+                continue
             document['status'] = resource['status']
             document['accessRights'] = 'public'
             document['files'] = len(
