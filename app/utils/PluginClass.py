@@ -97,9 +97,9 @@ class PluginClass(Blueprint):
     def get_plugin_settings(self):
         settings = mongodb.get_record('system', {'name': 'active_plugins'}, fields={'plugins_settings': 1})
         if 'plugins_settings' not in settings:
-            return None
+            return {}
         elif self.slug not in settings['plugins_settings']:
-            return None
+            return {}
         else:
             return settings['plugins_settings'][self.slug]
         
