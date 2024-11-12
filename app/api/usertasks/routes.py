@@ -22,14 +22,19 @@ def get_tasks():
     """
     current_user = get_jwt_identity()
     body = request.json
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead'):
+    
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not body['user']:
+        return jsonify({'msg': 'No tiene permisos suficientes'}), 401
+    
+    if body['user'] != current_user and not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead'):
         return jsonify({'msg': 'No tiene permisos suficientes'}), 401
     
     if 'status' not in body:
         return jsonify({'msg': 'Debe especificar el estado de las tareas'}), 400
     
     params ={
-        'status': body['status']
+        'status': body['status'],
+        'user': body['user'] if 'user' in body else None
     }
     
     return services.get_all_tasks(params)

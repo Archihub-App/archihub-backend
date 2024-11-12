@@ -2,6 +2,7 @@ from celery import shared_task
 from app.utils import DatabaseHandler
 from app.utils import IndexHandler
 import os
+from bson.objectid import ObjectId
 
 index_handler = IndexHandler.IndexHandler()
 mongodb = DatabaseHandler.DatabaseHandler()

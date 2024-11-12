@@ -35,7 +35,8 @@ def get_resource_tasks(resourceId):
 def get_all_tasks(filters):
     try:
         f = {
-            'status': {'$in': filters['status']}
+            'status': {'$in': filters['status']},
+            'user': filters['user'] if filters['user'] else {'$exists': True}
         }
         tasks = list(mongodb.get_all_records('usertasks', f, fields={'user': 1, 'status': 1 ,'createdAt': 1, 'resourceId': 1}))
         for task in tasks:
