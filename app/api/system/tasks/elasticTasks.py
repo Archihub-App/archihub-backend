@@ -3,6 +3,7 @@ from app.utils import DatabaseHandler
 from app.utils import IndexHandler
 import os
 from bson.objectid import ObjectId
+from app.utils.index.spanish_settings import settings as spanish_settings
 
 index_handler = IndexHandler.IndexHandler()
 mongodb = DatabaseHandler.DatabaseHandler()

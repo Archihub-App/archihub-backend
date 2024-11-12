@@ -15,20 +15,19 @@ from app.utils.functions import get_access_rights_id, get_roles_id, get_access_r
 import os
 import importlib
 from app.utils import IndexHandler
-from app.utils.index.spanish_settings import settings as spanish_settings
 from celery import shared_task
 from app.api.tasks.services import add_task
 from app.api.types.services import get_metadata
 from functools import reduce
 from app.utils import HookHandler
 from bson.objectid import ObjectId
+from app.api.system.tasks.elasticTasks import index_resources_task, index_resources_delete_task, regenerate_index_task
 
 hookHandler = HookHandler.HookHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 
 def hookHandlerIndex():
-    from app.api.system.tasks.elasticTasks import index_resources_task, index_resources_delete_task, regenerate_index_task
     hookHandler.register('resource_create', index_resources_task, queue=101)
     hookHandler.register('resource_update', index_resources_task, queue=101)
     hookHandler.register(
