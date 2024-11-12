@@ -100,8 +100,10 @@ def index_resources_task(body={}):
                             change_value(document, f['destiny'], value)
 
             document['post_type'] = post_type
-            document['parents'] = resource['parents']
-            document['parent'] = resource['parent']
+            if 'parents' in resource:
+                document['parents'] = resource['parents']
+            if 'parent' in resource:
+                document['parent'] = resource['parent']
             document['ident'] = resource['ident']
             document['status'] = resource['status']
             document['accessRights'] = 'public'

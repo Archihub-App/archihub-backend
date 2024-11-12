@@ -40,8 +40,6 @@ def hookHandlerVector():
         'resource_delete', vector_resources_delete_task, queue=102)
 
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado. Si el valor no existe, lo crea
-
-
 def change_value(body, path, value):
     try:
         keys = path.split('.')
@@ -62,7 +60,6 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Funcion para obtener todos los recursos de la coleccion system
-
 def get_all_settings():
     try:
         # Obtener todos los recursos de la coleccion system
