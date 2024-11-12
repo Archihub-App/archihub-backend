@@ -4,10 +4,42 @@ from app.utils import IndexHandler
 import os
 from bson.objectid import ObjectId
 from app.utils.index.spanish_settings import settings as spanish_settings
+from app.api.types.services import get_metadata
 
 index_handler = IndexHandler.IndexHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
+
+def get_value_by_path(dict, path):
+    try:
+        keys = path.split('.')
+        value = dict
+        for key in keys:
+            if key in value:
+                value = value.get(key)
+            else:
+                value = None
+                break
+
+        return value
+
+    except Exception as e:
+        raise Exception(f'Error al obtener el valor del campo {key}')
+    
+def change_value(body, path, value):
+    try:
+        keys = path.split('.')
+        temp = body
+        for key in keys:
+            if key not in temp:
+                temp[key] = {}
+            if key == keys[-1]:
+                temp[key] = value
+            else:
+                temp = temp[key]
+        return body
+    except Exception as e:
+        raise Exception(f'Error al cambiar el valor del campo {key}')
 
 @shared_task(ignore_result=False, name='system.regenerate_index')
 def regenerate_index_task(mapping, user):
