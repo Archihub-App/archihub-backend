@@ -25,9 +25,31 @@ def get_resource_tasks(resourceId):
         if task:
             task['_id'] = str(task['_id'])
             task['comment'] = process_comments(task['comment'])
+            
             return task, 200
         else:
             return jsonify({'msg': 'No hay tareas pendientes para este recurso'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
+def get_all_tasks(filters):
+    try:
+        f = {
+            'status': {'$in': filters['status']}
+        }
+        tasks = list(mongodb.get_all_records('usertasks', f, fields={'user': 1, 'status': 1 ,'createdAt': 1, 'resourceId': 1}))
+        for task in tasks:
+            task['_id'] = str(task['_id'])
+            task['createdAt'] = task['createdAt'].strftime('%Y-%m-%d %H:%M:%S')
+            from app.api.resources.services import get_resource_type
+            task['resourceType'] = get_resource_type(task['resourceId'])
+            
+        total = mongodb.count('usertasks', f)
+        resp = {
+            'results': tasks,
+            'total': total
+        }
+        return jsonify(resp), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
@@ -121,7 +143,7 @@ def update_task(id, body, user, isTeamLead):
         updated_task['comment'] = process_comments(updated_task['comment'])
         
         if body['status'] == 'approved':
-            return jsonify({'error': "No hay tareas sin completar"}), 500
+            return jsonify({'error': "No hay tareas sin completar"}), 400
         else:
             return jsonify(updated_task), 200
     except Exception as e:

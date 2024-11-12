@@ -6,6 +6,34 @@ from flask_jwt_extended import jwt_required
 from flask_jwt_extended import get_jwt_identity
 from app.api.users import services as user_services
 
+@bp.route('/tasks', methods=['POST'])
+@jwt_required()
+def get_tasks():
+    """
+    Obtener las tareas
+    ---
+    tags:
+        - Tareas
+    responses:
+        200:
+            description: Tareas obtenidas exitosamente
+        500:
+            description: Error al obtener las tareas
+    """
+    current_user = get_jwt_identity()
+    body = request.json
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead'):
+        return jsonify({'msg': 'No tiene permisos suficientes'}), 401
+    
+    if 'status' not in body:
+        return jsonify({'msg': 'Debe especificar el estado de las tareas'}), 400
+    
+    params ={
+        'status': body['status']
+    }
+    
+    return services.get_all_tasks(params)
+
 @bp.route('/<resourceId>', methods=['GET'])
 @jwt_required()
 def get_resource_tasks(resourceId):
