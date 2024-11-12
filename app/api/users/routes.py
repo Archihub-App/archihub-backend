@@ -306,7 +306,7 @@ def generate_admin_token():
         return jsonify({'msg': 'Falta el campo password en el body'}), 400
     if 'duration' not in request.json:
         body['duration'] = 2
-    if not isinstance(body['duration'], int) or body['duration'] != False:
+    if not isinstance(body['duration'], int) and body['duration'] != False:
         return jsonify({'msg': 'duration debe ser un entero o False'}), 400
     
     # Llamar al servicio para generar el token
