@@ -356,7 +356,11 @@ def get_user_rights(username):
     return user['accessRights']
 
 # Nuevo servicio para generar un token de autenticación para usar la API publica
-def generate_token(username, password, admin = False):
+def generate_token(username, password, admin = False, expiration = 2):
+    if expiration:
+        expiration = timedelta(days=expiration)
+    else:
+        expiration = False
     # Buscar el usuario en la base de datos
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
@@ -378,7 +382,7 @@ def generate_token(username, password, admin = False):
 
         update = UserUpdate(token=cipher)
     else:
-        access_token = create_access_token(identity=username, expires_delta=timedelta(days=2))
+        access_token = create_access_token(identity=username, expires_delta=expiration)
         # usamos Fernet para encriptar el token de acceso
         cipher = fernet.encrypt(access_token.encode('utf-8'))
 
