@@ -40,6 +40,9 @@ def get_by_id(id):
             return {'msg': 'Recurso no existe'}, 404
         
         user['_id'] = str(user['_id'])
+        
+        if 'favorites' not in user:
+            user['favorites'] = []
 
         # Retornar el resultado
         return user, 200
@@ -57,6 +60,8 @@ def get_by_username(username):
             return {'msg': 'Recurso no existe'}
         
         user['_id'] = str(user['_id'])
+        if 'favorites' not in user:
+            user['favorites'] = []
         # Retornar el resultado
         return user
     except Exception as e:
@@ -311,6 +316,10 @@ def get_user(username):
     # retornar el resultado
     if not user:
         return None
+    
+    if 'favorites' not in user:
+        user['favorites'] = []
+            
     return parse_result(user)
 
 # Nuevo servicio para aceptar el compromiso de un usuario
