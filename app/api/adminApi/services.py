@@ -25,12 +25,12 @@ def autoComplete(body):
 def create(body, user, files):
     body = autoComplete(body)
     from app.api.resources.services import create as create_resource
-    return create_resource(body, user, files, updateCache)
+    return create_resource(body, user, files, body['updateCache'])
 
 def update(id, body, user, files):
     body = autoComplete(body)
     from app.api.resources.services import update_by_id as update_resource
-    return update_resource(id, body, user, files, updateCache)
+    return update_resource(id, body, user, files, body['updateCache'])
 
 def get_id(body, user):
     resource = None
