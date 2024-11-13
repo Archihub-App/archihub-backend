@@ -1,8 +1,8 @@
 '''
-ARCHIHUB herramienta de gestión documental
-Versión 0.7.0
-Autor: Néstor Andrés Peña
-Hecho con <3 en Colombia
+ARCHIHUB Document management tool
+Versión 0.7.2
+Author: Néstor Andrés Peña
+Made with ❤️ in Colombia
 '''
 
 from flask import Flask
@@ -17,7 +17,6 @@ from flask import Flask
 import os
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
-from app.utils import IndexHandler
 from app.api.system.services import update_option, clear_cache
 
 # leer variables de entorno desde el archivo .env
@@ -118,24 +117,32 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     # Registrar geosystem blueprint
     from app.api.geosystem import bp as geosystem_bp
     app.register_blueprint(geosystem_bp, url_prefix='/geosystem')
+    
+    # Registrar usertasks blueprint
+    from app.api.usertasks import bp as usertasks_bp
+    app.register_blueprint(usertasks_bp, url_prefix='/usertasks')
 
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 
     if(admin_api['data'][0]['value']):
-        print('Administrators API is active')
+        print('-'*50)
+        print('👨‍💼 🔧 📡 Administrators API is active')
         from app.api.adminApi import bp as adminApi_bp
         app.register_blueprint(adminApi_bp, url_prefix='/adminApi')
 
     if(admin_api['data'][1]['value']):
-        print('Public API is active')
+        print('-'*50)
+        print('🌐 🟢 🚀 Public API is active')
         from app.api.publicApi import bp as publicApi_bp
         app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
     
     index_management = mongodb.get_record('system', {'name': 'index_management'})
 
     if index_management['data'][0]['value']:
-        print('Indexing is active')
+        print('-'*50)
+        print('🗂️  ⚙️  📊 Indexing is active')
         try:
+            from app.utils import IndexHandler
             index_handler = IndexHandler.IndexHandler()
             from app.api.search import bp as search_bp
             app.register_blueprint(search_bp, url_prefix='/search')
@@ -143,12 +150,28 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             from app.api.system.services import hookHandlerIndex
             hookHandlerIndex()
         except Exception as e:
+            print('-'*50)
             print(str(e))
             print('No se pudo iniciar el indexador de documentos')
             index_management['data'][0]['value'] = False
             update_option('index_management', {'index_activation': False})
+            
+    if index_management['data'][1]['value']:
+        try:
+            from app.utils import VectorDatabaseHandler
+            vector_handler = VectorDatabaseHandler.VectorDatabaseHandler()
+            print('-'*50)
+            print('🧬 📐 📈 Vector indexing is active')
+        except Exception as e:
+            print('-'*50)
+            print('No se pudo iniciar el indexador de vectores')
+            print(str(e))
+            index_management['data'][1]['value'] = False
+            update_option('index_management', {'vector_activation': False})
 
-    clear_cache()
+    if os.environ.get('FLASK_ENV') == 'DEV':
+        clear_cache()
+        
     return app
 
 # función para registrar plugins de forma dinámica
@@ -186,6 +209,17 @@ def celery_init_app(app: Flask) -> Celery:
 app = create_app()
 celery_app = celery_init_app(app)
 app.celery_app = celery_app
+
+print('''
+:::'###::::'########:::'######::'##::::'##:'####:'##::::'##:'##::::'##:'########::
+::'## ##::: ##.... ##:'##... ##: ##:::: ##:. ##:: ##:::: ##: ##:::: ##: ##.... ##:
+:'##:. ##:: ##:::: ##: ##:::..:: ##:::: ##:: ##:: ##:::: ##: ##:::: ##: ##:::: ##:
+'##:::. ##: ########:: ##::::::: #########:: ##:: #########: ##:::: ##: ########::
+ #########: ##.. ##::: ##::::::: ##.... ##:: ##:: ##.... ##: ##:::: ##: ##.... ##:
+ ##.... ##: ##::. ##:: ##::: ##: ##:::: ##:: ##:: ##:::: ##: ##:::: ##: ##:::: ##:
+ ##:::: ##: ##:::. ##:. ######:: ##:::: ##:'####: ##:::: ##:. #######:: ########::
+..:::::..::..:::::..:::......:::..:::::..::....::..:::::..:::.......:::........:::
+''')
 
 if __name__ == '__main__':
     app.run(threaded=True)

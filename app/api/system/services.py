@@ -2,6 +2,7 @@ import datetime
 from flask import jsonify, request
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import VectorDatabaseHandler
 from bson import json_util
 import json
 import re
@@ -14,31 +15,31 @@ from app.utils.functions import get_access_rights_id, get_roles_id, get_access_r
 import os
 import importlib
 from app.utils import IndexHandler
-from app.utils.index.spanish_settings import settings as spanish_settings
 from celery import shared_task
 from app.api.tasks.services import add_task
 from app.api.types.services import get_metadata
 from functools import reduce
 from app.utils import HookHandler
 from bson.objectid import ObjectId
+from app.api.system.tasks.elasticTasks import index_resources_task, index_resources_delete_task, regenerate_index_task
 
 hookHandler = HookHandler.HookHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
-index_handler = IndexHandler.IndexHandler()
 cacheHandler = CacheHandler.CacheHandler()
-
-ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
-
 
 def hookHandlerIndex():
     hookHandler.register('resource_create', index_resources_task, queue=101)
     hookHandler.register('resource_update', index_resources_task, queue=101)
     hookHandler.register(
         'resource_delete', index_resources_delete_task, queue=101)
+    
+def hookHandlerVector():
+    hookHandler.register('resource_create', vector_resources_task, queue=102)
+    hookHandler.register('resource_update', vector_resources_task, queue=102)
+    hookHandler.register(
+        'resource_delete', vector_resources_delete_task, queue=102)
 
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado. Si el valor no existe, lo crea
-
-
 def change_value(body, path, value):
     try:
         keys = path.split('.')
@@ -59,8 +60,6 @@ def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Funcion para obtener todos los recursos de la coleccion system
-
-
 def get_all_settings():
     try:
         # Obtener todos los recursos de la coleccion system
@@ -360,7 +359,7 @@ def validate_simple_date(value, field):
     except Exception as e:
         raise Exception(f'Error al validar el campo {label}')
 
-
+@cacheHandler.cache.cache()
 def get_plugins():
     try:
         # Obtener el registro active_plugins de la colección system
@@ -410,6 +409,8 @@ def activate_plugin(body, current_user):
         update_schema = OptionUpdate(**update_dict)
         mongodb.update_record(
             'system', {'name': 'active_plugins'}, update_schema)
+        
+        get_plugins.invalidate_all()
 
         # Retornar el resultado
         return {'msg': 'Plugins instalados exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200
@@ -439,6 +440,8 @@ def change_plugin_status(plugin, user):
         update_schema = OptionUpdate(**update_dict)
         mongodb.update_record(
             'system', {'name': 'active_plugins'}, update_schema)
+        
+        get_plugins.invalidate_all()
 
         # Retornar el resultado
         return {'msg': 'Plugin actualizado exitosamente, favor reiniciar el sistema para que surtan efecto'}, 200
@@ -631,7 +634,8 @@ def index_resources(user):
 
 
 def clear_cache():
-    print('clearing cache')
+    print('-'*50)
+    print('🧹 ♻️  💾 Clearing cache')
     from app.utils.functions import clear_cache as update_cache_function
     from app.api.lists.services import update_cache as update_cache_lists
     from app.api.forms.services import update_cache as update_cache_forms
@@ -660,105 +664,12 @@ def clear_cache():
         update_cache_resources_public()
         update_cache_records_public()
 
+        print('-'*50)
         return {'msg': 'Cache limpiada exitosamente'}, 200
     except Exception as e:
         print(str(e))
+        print('-'*50)
         return {'msg': str(e)}, 500
 
 
-@shared_task(ignore_result=False, name='system.regenerate_index')
-def regenerate_index_task(mapping, user):
-    keys = index_handler.get_alias_indexes(
-        ELASTIC_INDEX_PREFIX + '-resources').keys()
-    if len(keys) == 1:
-        name = list(keys)[0]
-        number = name.split('_')[1]
-        number = int(number) + 1
-        new_name = ELASTIC_INDEX_PREFIX + '-resources_' + str(number)
-        index_handler.create_index(
-            new_name, settings=spanish_settings, mapping=mapping)
-        index_handler.add_to_alias(
-            ELASTIC_INDEX_PREFIX + '-resources', new_name)
-        index_handler.reindex(name, new_name)
-        index_handler.remove_from_alias(
-            ELASTIC_INDEX_PREFIX + '-resources', name)
-        index_handler.delete_index(name)
 
-        return 'ok'
-    else:
-        index_handler.start_new_index(mapping)
-        return 'ok'
-
-
-@shared_task(ignore_result=False, name='system.index_resources')
-def index_resources_task(body={}):
-    skip = 0
-    filters = {}
-    loop = True
-    if '_id' in body:
-        filters['_id'] = ObjectId(body['_id'])
-
-    resources = list(mongodb.get_all_records(
-        'resources', filters, limit=1000, skip=skip))
-
-    if body == {}:
-        index_handler.delete_all_documents(ELASTIC_INDEX_PREFIX + '-resources')
-
-    while len(resources) > 0 and loop:
-        for resource in resources:
-            document = {}
-            post_type = resource['post_type']
-            fields = get_metadata(post_type)['fields']
-            for f in fields:
-                if f['type'] != 'file' and f['type'] != 'simple-date':
-                    destiny = f['destiny']
-                    if destiny != '':
-                        value = get_value_by_path(resource, destiny)
-                        if value != None:
-                            document = change_value(
-                                document, f['destiny'], value)
-                elif f['type'] == 'simple-date':
-                    destiny = f['destiny']
-                    if destiny != '':
-                        value = get_value_by_path(resource, destiny)
-                        if value != None:
-                            value = value.strftime('%Y-%m-%d')
-                            change_value(document, f['destiny'], value)
-
-            document['post_type'] = post_type
-            document['parents'] = resource['parents']
-            document['parent'] = resource['parent']
-            document['ident'] = resource['ident']
-            document['status'] = resource['status']
-            document['accessRights'] = 'public'
-            document['files'] = len(
-                resource['filesObj']) if 'filesObj' in resource else 0
-
-            if 'accessRights' in resource:
-                if resource['accessRights']:
-                    document['accessRights'] = resource['accessRights']
-
-            r = index_handler.index_document(
-                ELASTIC_INDEX_PREFIX + '-resources', str(resource['_id']), document)
-            if r.status_code != 201 and r.status_code != 200:
-                raise Exception(
-                    'Error al indexar el recurso ' + str(resource['_id']))
-
-        if len(resources) < 1000:
-            loop = False
-
-        skip += 1000
-        resources = list(mongodb.get_all_records(
-            'resources', {}, limit=1000, skip=skip))
-
-    return 'ok'
-
-
-@shared_task(ignore_result=False, name='system.index_resources_delete')
-def index_resources_delete_task(body={}):
-    r = index_handler.delete_document(
-        ELASTIC_INDEX_PREFIX + '-resources', body['_id'])
-    if r['result'] != 'deleted':
-        raise Exception('Error al indexar el recurso ' + str(body['_id']))
-
-    return 'ok'

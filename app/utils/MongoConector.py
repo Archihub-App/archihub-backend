@@ -31,11 +31,13 @@ class MongoConector:
                 mongourl = mongourl + "admin:"+self.admin+"@"+self.ip_server[x]+":" + self.port
             elif self.user != '':
                 mongourl = mongourl + self.user + ":"+self.admin+"@"+self.ip_server[x]+":" + self.port
+                
+        timeout = "&socketTimeoutMS=300000&connectTimeoutMS=300000"
 
         if len(self.ip_server) > 1:
-            mongourl = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&retryWrites=true&w=majority&replicaSet=" + os.environ.get('MONGO_RS', 'rs0') + "&ssl=false"
+            mongourl = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&retryWrites=true&w=majority&replicaSet=" + os.environ.get('MONGO_RS', 'rs0') + "&ssl=false" + timeout
         else:
-            mongourl = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&ssl=false"
+            mongourl = mongourl + "/" + self.database + "?authSource=admin&readPreference=primary&ssl=false" + timeout
 
         return mongourl
         

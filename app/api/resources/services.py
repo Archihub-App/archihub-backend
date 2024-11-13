@@ -863,12 +863,17 @@ def get_resource_files(id, user, page, groupImages = False):
 
         temp = []
         ids = []
+        
+        imgsTotal = 0
         if 'filesObj' in resource:
             for r in resource['filesObj']:
                 ids.append(r)
 
         r_ = get_resource_records(json.dumps(ids), user, page, groupImages=groupImages)
         for _ in r_:
+            if _['_id'] == 'imgGallery':
+                imgsTotal = int(_['displayName'].split(' ')[0])
+
             obj = {
                 'id': str(_['_id']),
                 'hash': _['hash'],
@@ -882,9 +887,13 @@ def get_resource_files(id, user, page, groupImages = False):
 
             temp.append(obj)
 
+        total = len(resource['filesObj'])
+        if imgsTotal > 0:
+            total = total - imgsTotal + 1
+            
         resp = {
             'data': temp,
-            'total': len(r_)
+            'total': total
         }
         # Retornar el recurso
         return resp, 200
@@ -1020,20 +1029,28 @@ def get_children_cache(root, available, post_type=None):
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
 @cacheHandler.cache.cache(limit=5000)
-def get_tree(root, available, user, post_type=None, page=0):
+def get_tree(root, available, user, post_type=None, page=None):
     try:
         list_available = available.split('|')
 
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
 
         if root == 'all':
-            
-            resources = list(mongodb.get_all_records('resources', {
+            if page is not None:
+                resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
                              "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
+            else:
+                resources = list(mongodb.get_all_records('resources', {
+                             'post_type': {
+                             "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         else:
-            resources = list(mongodb.get_all_records('resources', {'post_type': {
+            if page is not None:
+                resources = list(mongodb.get_all_records('resources', {'post_type': {
                              "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
+            else:
+                resources = list(mongodb.get_all_records('resources', {'post_type': {
+                             "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
 
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
@@ -1042,14 +1059,6 @@ def get_tree(root, available, user, post_type=None, page=0):
             resource['children'] = get_children(resource['id'], available, False, post_type)
             resource['icon'] = get_icon(resource['post_type'])
 
-        if page == 0:
-            children_cache = get_children_cache(root, available, post_type)
-            count = len([re for re in resources if not re['children']])
-            
-            if len(children_cache) < 35 and len(children_cache) > 0:
-                resources = children_cache
-            elif count <= 10:
-                resources = [*children_cache, *resources]
         # Retornar los recursos y los padres
         return resources, 200
     except Exception as e:

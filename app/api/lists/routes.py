@@ -28,7 +28,7 @@ def get_all():
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
-    if not user_services.has_role(current_user, 'admin'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener todos los listados
     resp = services.get_all()
@@ -84,7 +84,7 @@ def create():
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
-    if not user_services.has_role(current_user, 'admin'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     
     # Llamar al servicio para crear un listado nuevo
@@ -182,7 +182,7 @@ def update_by_id(id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
-    if not user_services.has_role(current_user, 'admin'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # parseamos el body
     try:
@@ -223,7 +223,7 @@ def delete_by_id(id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
-    if not user_services.has_role(current_user, 'admin'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para eliminar el listado por su slug
     return services.delete_by_id(id, current_user)
