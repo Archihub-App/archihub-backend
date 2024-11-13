@@ -174,7 +174,7 @@ class ExtendedPluginClass(PluginClass):
 
     def activate_settings(self):
         current = self.get_plugin_settings()
-        if current is None:
+        if 'types_activation' not in current:
             return
         
         types = current['types_activation']
