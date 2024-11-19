@@ -50,10 +50,12 @@ def ldap_login(username, password):
             'accessRights': [],
         }
         
-        from app.api.users.services import get_user, create_user
+        from app.api.users.services import get_user, register_user
         local_user = get_user(user['username'])
         if not local_user:
-            create_user(user)
+            newuser, status = register_user(user)
+            if status != 201:
+                return None
         else:
             user = local_user
         

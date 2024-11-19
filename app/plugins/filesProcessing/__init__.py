@@ -203,12 +203,14 @@ class ExtendedPluginClass(PluginClass):
             'post_type': body['post_type']
         }
 
-        if body['parent'] and len(body['resources']) == 0:
-            filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}], **filters}
+        if 'parent' in body:
+            if body['parent'] and len(body['resources']) == 0:
+                filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}], **filters}
         
-        if body['resources']:
-            if len(body['resources']) > 0:
-                filters = {'_id': {'$in': [ObjectId(resource) for resource in body['resources']]}, **filters}
+        if 'resources' in body:
+            if body['resources']:
+                if len(body['resources']) > 0:
+                    filters = {'_id': {'$in': [ObjectId(resource) for resource in body['resources']]}, **filters}
 
         step = 0
         size = 0
