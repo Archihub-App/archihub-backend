@@ -43,18 +43,19 @@ def ldap_login(username, password):
         # Create or update local user
         user = {
             'username': user_attributes.get('mail', [b''])[0].decode('utf-8'),
-            # 'email': user_attributes.get('mail', [b''])[0].decode('utf-8'),
             'name': user_attributes.get('cn', [b''])[0].decode('utf-8'),
-            'loginType': 'ldap'
+            'password': '',
+            'loginType': 'ldap',
+            'roles': ['user'],
+            'accessRights': [],
         }
         
-        # Update or create user in MongoDB
-        # mongodb.update_record(
-        #     'users',
-        #     {'username': username},
-        #     user,
-        #     upsert=True
-        # )
+        from app.api.users.services import get_user, create_user
+        local_user = get_user(user['username'])
+        if not local_user:
+            create_user(user)
+        else:
+            user = local_user
         
         return user
         

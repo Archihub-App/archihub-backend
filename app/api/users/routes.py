@@ -77,7 +77,7 @@ def register():
     body = request.json
 
     # Llamar al servicio para registrar el usuario
-    return services.register_user(body, current_user)
+    return services.register_user(body)
 
 # Nuevo endpoint para actualizar un usuario
 @bp.route('/update', methods=['PUT'])
