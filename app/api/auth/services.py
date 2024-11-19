@@ -1,0 +1,94 @@
+import os
+from flask_jwt_extended import create_access_token
+from datetime import timedelta
+from app.api.logs.services import register_log
+from app.utils.LogActions import log_actions
+from flask import jsonify, request
+from app.api.users.services import get_user
+import bcrypt
+
+LDAP_HOST = os.environ.get('LDAP_HOST', False)
+LDAP_BASE_DN = os.environ.get('LDAP_BASE_DN', 'dc=example,dc=com')
+LDAP_USER_DN = os.environ.get('LDAP_USER_DN', 'ou=users')
+LDAP_GROUP_DN = os.environ.get('LDAP_GROUP_DN', 'ou=groups')
+
+def ldap_login(username, password):
+    try:
+        import ldap
+        # Initialize LDAP connection
+        ldap_client = ldap.initialize(LDAP_HOST)
+        ldap_client.set_option(ldap.OPT_REFERRALS, 0)
+        
+        # Create user DN
+        user_dn = f"uid={username},{LDAP_USER_DN},{LDAP_BASE_DN}"
+        
+        # Attempt to bind with user credentials
+        ldap_client.simple_bind_s(user_dn, password)
+        
+        # Search for user attributes
+        search_filter = f"(uid={username})"
+        result = ldap_client.search_s(
+            LDAP_BASE_DN,
+            ldap.SCOPE_SUBTREE,
+            search_filter,
+            ['cn', 'mail']
+        )
+
+        if not result:
+            return None
+            
+        # Get user details from LDAP
+        user_attributes = result[0][1]
+        
+        # Create or update local user
+        user = {
+            'username': user_attributes.get('mail', [b''])[0].decode('utf-8'),
+            # 'email': user_attributes.get('mail', [b''])[0].decode('utf-8'),
+            'name': user_attributes.get('cn', [b''])[0].decode('utf-8'),
+            'loginType': 'ldap'
+        }
+        
+        # Update or create user in MongoDB
+        # mongodb.update_record(
+        #     'users',
+        #     {'username': username},
+        #     user,
+        #     upsert=True
+        # )
+        
+        return user
+        
+    except ldap.INVALID_CREDENTIALS:
+        return None
+    except Exception as e:
+        print(f"LDAP Error: {str(e)}")
+        return None
+    finally:
+        try:
+            ldap_client.unbind()
+        except:
+            pass
+        
+def archihub_login(username, password):
+    expires_delta = timedelta(days=1)
+    if LDAP_HOST:
+        ldap_user = ldap_login(username, password)
+        if ldap_user:
+            access_token = create_access_token(identity=username, expires_delta=expires_delta)
+            register_log(username, log_actions['user_login'], {})
+            
+            return jsonify({'access_token': access_token}), 200
+        
+    user = get_user(username)
+    
+    if not user:
+        return jsonify({'msg': 'Usuario inválido'}), 401
+    if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
+        return jsonify({'msg': 'Contraseña inválida'}), 401
+    
+    access_token = create_access_token(identity=username, expires_delta=expires_delta)
+    
+    register_log(username, log_actions['user_login'], {})
+    
+    return jsonify({'access_token': access_token}), 200
+            
