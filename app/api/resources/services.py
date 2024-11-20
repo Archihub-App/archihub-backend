@@ -759,7 +759,7 @@ def get_resource(id, user):
                 value = get_option_by_id(value)
                 if value and 'term' in value:
                     temp.append({
-                        'label': value['term'],
+                        'label': f['label'],
                         'value': [value['term']],
                         'type': 'select'
                     })
