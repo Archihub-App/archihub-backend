@@ -185,6 +185,8 @@ def validate_form(form):
             
             if field['destiny'] == 'metadata.firstLevel.title':
                 hasTitle = True
+                if field['type'] != 'text':
+                    raise Exception("Error: el campo con destino igual a metadata.firstLevel.title debe ser de tipo texto")
             
         if field['type'] == 'file':
             if not 'filetag' in field:
