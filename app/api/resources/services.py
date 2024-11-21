@@ -179,6 +179,7 @@ def create(body, user, files, updateCache = True):
         del body['filesIds']
         body['filesObj'] = []
         body['createdAt'] = datetime.now()
+        
         # Crear instancia de Resource con el body del request
         resource = Resource(**body)
 
@@ -241,6 +242,7 @@ def update_by_id(id, body, user, files, updateCache = True):
         body = validate_fields(body, metadata, errors)
 
         update_relations_children(body, metadata['fields'])
+        
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
@@ -270,7 +272,10 @@ def update_by_id(id, body, user, files, updateCache = True):
         del body['filesIds']
 
         # Crear instancia de ResourceUpdate con el body del request
-        resource = ResourceUpdate(**body)
+        try:
+            resource = ResourceUpdate(**body)
+        except Exception as e:
+            print("Validation error details:", e.errors() if hasattr(e, 'errors') else str(e))
 
         # Actualizar el recurso en la base de datos
         updated_resource = mongodb.update_record(
