@@ -38,15 +38,15 @@ class Record(BaseModel):
 
 # Modelo para la actualización de un recurso
 class RecordUpdate(BaseModel):
-    metadata: Optional[dict]
-    parents: Optional[list[dict]]
-    processing: Optional[dict]
-    name: Optional[str]
-    parent: Optional[list[dict]]
-    status: Optional[str]
-    displayName: Optional[str]
-    accessRights: Optional[str]
-    favCount: Optional[int]
+    metadata: Optional[dict] = None
+    parents: Optional[list[dict]] = None
+    processing: Optional[dict] = None
+    name: Optional[str] = None
+    parent: Optional[list[dict]] = None
+    status: Optional[str] = None
+    displayName: Optional[str] = None
+    accessRights: Optional[str] = None
+    favCount: Optional[int] = None
 
     class Config:
         allow_population_by_field_name = True

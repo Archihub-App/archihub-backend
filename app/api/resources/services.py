@@ -539,51 +539,52 @@ def validate_fields(body, metadata, errors):
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'repeater':
                         value = get_value_by_path(body, field['destiny'])
-                        for v in value:
-                            for subfield in field['subfields']:
-                                if subfield['type'] == 'text':
-                                    exists = v[subfield['destiny']]
-                                    if exists:
-                                        subfield['label'] = subfield['name']
-                                        validate_text(v[subfield['destiny']], subfield)
-                                    elif subfield['required'] and body['status'] == 'published':
-                                        errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
-                                elif subfield['type'] == 'text-area':
-                                    exists = v[subfield['destiny']]
-                                    if exists:
-                                        subfield['label'] = subfield['name']
-                                        validate_text(v[subfield['destiny']], subfield)
-                                    elif subfield['required'] and body['status'] == 'published':
-                                        errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
-                                elif subfield['type'] == 'number':
-                                    exists = v[subfield['destiny']]
-                                    if exists:
-                                        if not isinstance(v[subfield['destiny']], numbers.Number):
-                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} debe ser un número'
-                                    elif subfield['required'] and body['status'] == 'published':
-                                        errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
-                                elif subfield['type'] == 'checkbox':
-                                    exists = v[subfield['destiny']]
-                                    if exists:
-                                        if not isinstance(v[subfield['destiny']], bool):
-                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} debe ser un booleano'
-                                    elif subfield['required'] and body['status'] == 'published':
-                                        errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
-                                elif subfield['type'] == 'simple-date':
-                                    exists = v[subfield['destiny']]
-                                    # the date is a string YYYY-MM-DD, so we need to parse it
-                                    if exists:
-                                        if isinstance(exists, str):
-                                            value = v[subfield['destiny']]
-                                            value = value.replace('"', '')
-                                            value = parser.isoparse(value)
-                                            value = value
-                                        else:
-                                            value = v[subfield['destiny']]
-                                        
-                                        subfield['label'] = subfield['name']
-                                        validate_simple_date(value, subfield)
-                                        v[subfield['destiny']] = value
+                        if value:
+                            for v in value:
+                                for subfield in field['subfields']:
+                                    if subfield['type'] == 'text':
+                                        exists = v[subfield['destiny']]
+                                        if exists:
+                                            subfield['label'] = subfield['name']
+                                            validate_text(v[subfield['destiny']], subfield)
+                                        elif subfield['required'] and body['status'] == 'published':
+                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                    elif subfield['type'] == 'text-area':
+                                        exists = v[subfield['destiny']]
+                                        if exists:
+                                            subfield['label'] = subfield['name']
+                                            validate_text(v[subfield['destiny']], subfield)
+                                        elif subfield['required'] and body['status'] == 'published':
+                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                    elif subfield['type'] == 'number':
+                                        exists = v[subfield['destiny']]
+                                        if exists:
+                                            if not isinstance(v[subfield['destiny']], numbers.Number):
+                                                errors[subfield['destiny']] = f'El campo {subfield["label"]} debe ser un número'
+                                        elif subfield['required'] and body['status'] == 'published':
+                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                    elif subfield['type'] == 'checkbox':
+                                        exists = v[subfield['destiny']]
+                                        if exists:
+                                            if not isinstance(v[subfield['destiny']], bool):
+                                                errors[subfield['destiny']] = f'El campo {subfield["label"]} debe ser un booleano'
+                                        elif subfield['required'] and body['status'] == 'published':
+                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                    elif subfield['type'] == 'simple-date':
+                                        exists = v[subfield['destiny']]
+                                        # the date is a string YYYY-MM-DD, so we need to parse it
+                                        if exists:
+                                            if isinstance(exists, str):
+                                                value = v[subfield['destiny']]
+                                                value = value.replace('"', '')
+                                                value = parser.isoparse(value)
+                                                value = value
+                                            else:
+                                                value = v[subfield['destiny']]
+                                            
+                                            subfield['label'] = subfield['name']
+                                            validate_simple_date(value, subfield)
+                                            v[subfield['destiny']] = value
                     elif field['type'] == 'relation':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
