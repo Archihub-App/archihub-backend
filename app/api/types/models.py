@@ -18,8 +18,8 @@ class PostType(BaseModel):
     viewRoles: list[str] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Post",
                 "description": "Publicación de texto"
@@ -38,8 +38,8 @@ class PostTypeUpdate(BaseModel):
     viewRoles: Optional[list[str]]
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Post",
                 "description": "Publicación de texto"

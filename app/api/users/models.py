@@ -23,8 +23,8 @@ class User(BaseModel):
     loginType: str = "local"
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "John Doe",
                 "email": "johndoe@loquesea.com"
@@ -49,8 +49,8 @@ class UserUpdate(BaseModel):
     loginType: Optional[str] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "John Doe",
                 "email": "johndoe@loquesea.com"

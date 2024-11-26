@@ -14,8 +14,8 @@ class Snap(BaseModel):
     createdAt: datetime
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "user": "user",
                 "type": "snap_type",
@@ -30,8 +30,8 @@ class SnapUpdate(BaseModel):
     data: Optional[dict]
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "user": "user",
                 "type": "snap_type",

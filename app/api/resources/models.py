@@ -19,8 +19,8 @@ class Resource(BaseModel):
     favCount: int = 0
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "post_type": "post",
                 "metadata": {
@@ -47,8 +47,8 @@ class ResourceUpdate(BaseModel):
     favCount: Optional[int] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "post_type": "post",
                 "metadata": {

@@ -11,8 +11,8 @@ class Form(BaseModel):
     fields: list[dict] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Formulario",
                 "description": "Formulario de registro de datos"
@@ -26,8 +26,8 @@ class FormUpdate(BaseModel):
     fields: Optional[list[dict]]
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Formulario",
                 "description": "Formulario de registro de datos"

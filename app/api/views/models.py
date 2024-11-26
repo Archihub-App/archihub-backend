@@ -12,8 +12,8 @@ class View(BaseModel):
     visible: list[str]
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "John Doe",
                 "email": "johndoe@test.com"
@@ -21,15 +21,15 @@ class View(BaseModel):
         }
 
 class ViewUpdate(BaseModel):
-    name: Optional[str]
-    description: Optional[str]
-    parent: Optional[str]
-    root: Optional[str]
-    visible: Optional[list[str]]
+    name: Optional[str] = None
+    description: Optional[str] = None
+    parent: Optional[str] = None
+    root: Optional[str] = None
+    visible: Optional[list[str]] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "John Doe",
                 "email": "johndoe@test.com"

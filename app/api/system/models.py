@@ -12,8 +12,8 @@ class Option(BaseModel):
     plugins_settings: dict = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Opción",
                 "data": {
@@ -28,8 +28,8 @@ class OptionUpdate(BaseModel):
     plugins_settings: Optional[dict] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "data": {
                     "key": "value"
