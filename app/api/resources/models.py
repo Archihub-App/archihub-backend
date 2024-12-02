@@ -8,8 +8,8 @@ class Resource(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
     post_type: str
     metadata: dict
-    parents: list[dict] = None
-    parent: dict = None
+    parents: Optional[list[dict]] = None
+    parent: Optional[dict] = None
     filesObj: list[dict] = []
     ident: str
     status: str = 'created'
