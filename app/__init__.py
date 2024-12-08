@@ -36,6 +36,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             result_backend=os.environ.get(
                 "CELERY_BROKER_URL", "redis://localhost"),
             task_ignore_result=True,
+            broker_connection_retry_on_startup=True
         ),
     )
     app.config.from_object(config_class)

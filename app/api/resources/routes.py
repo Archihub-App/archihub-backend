@@ -398,7 +398,46 @@ def get_all_records(resource_id):
         return tuple(resp)
     else:
         return resp
-    
+ 
+@bp.route('/<resource_id>/download_records', methods=['POST'])
+@jwt_required()
+def download_all_records(resource_id):
+    """
+    Obtener los archivos de un recurso padre
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: resource_id
+          schema:
+              type: string
+    responses:
+        200:
+            description: Recursos obtenidos exitosamente
+        401:
+            description: No tiene permisos para obtener los recursos
+        500:
+            description: Error al obtener los recursos
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    body = request.json
+
+    if 'groupImages' not in body:
+        resp = services.get_resource_files(resource_id, current_user, body['page'])
+    else:
+        resp = services.get_resource_files(resource_id, current_user, body['page'], body['groupImages'])
+        
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
+ 
+   
 @bp.route('/<resource_id>/imgs', methods=['GET'])
 @jwt_required()
 def get_imgs(resource_id):

@@ -950,6 +950,58 @@ def get_resource(id, user):
 def get_resource_files(id, user, page, groupImages = False):
     try:
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        # check if the user has access to the resource
+        accessRights = get_accessRights(id)
+        if accessRights:
+            if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
+                return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': 'Recurso no existe'}, 404
+
+        temp = []
+        ids = []
+        
+        imgsTotal = 0
+        if 'filesObj' in resource:
+            for r in resource['filesObj']:
+                ids.append(r)
+
+        r_ = get_resource_records(json.dumps(ids), user, page, groupImages=groupImages)
+        for _ in r_:
+            if _['_id'] == 'imgGallery':
+                imgsTotal = int(_['displayName'].split(' ')[0])
+
+            obj = {
+                'id': str(_['_id']),
+                'hash': _['hash'],
+                'tag': _['tag'],
+            }
+
+            if 'displayName' in _: obj['displayName'] = _['displayName']
+            else : obj['displayName'] = _['name']
+            if 'accessRights' in _: obj['accessRights'] = _['accessRights']
+            if 'processing' in _: obj['processing'] = _['processing']
+
+            temp.append(obj)
+
+        total = len(resource['filesObj'])
+        if imgsTotal > 0:
+            total = total - imgsTotal + 1
+            
+        resp = {
+            'data': temp,
+            'total': total
+        }
+        # Retornar el recurso
+        return resp, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+@cacheHandler.cache.cache(limit=1000)
+def download_resource_files(id, user, page, groupImages = False):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         # Si el recurso no existe, retornar error
         if not resource:
             return {'msg': 'Recurso no existe'}, 404
