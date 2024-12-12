@@ -20,9 +20,9 @@ class List(BaseModel):
 
 # Modelo para la actualización de listados
 class ListUpdate(BaseModel):
-    name: Optional[str]
-    description: Optional[str]
-    options: Optional[list[str]]
+    name: Optional[str] = None
+    description: Optional[str] = None
+    options: Optional[list[str]] = None
 
     class Config:
         populate_by_name = True
@@ -48,7 +48,7 @@ class Option(BaseModel):
 
 # Modelo para la actualización de opciones
 class OptionUpdate(BaseModel):
-    term: Optional[str]
+    term: Optional[str] = None
 
     class Config:
         populate_by_name = True

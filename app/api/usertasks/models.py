@@ -22,9 +22,9 @@ class UserTask(BaseModel):
         }
         
 class UserTaskUpdate(BaseModel):
-    user: Optional[str]
-    status: Optional[str]
-    comment: Optional[list[dict]]
+    user: Optional[str] = None
+    status: Optional[str] = None
+    comment: Optional[list[dict]] = None
     
     class Config:
         populate_by_name = True

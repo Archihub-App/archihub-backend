@@ -35,8 +35,8 @@ class Polygon(BaseModel):
 
 # Modelo para la actualización de poligonos geográficos
 class PolygonUpdate(BaseModel):
-    properties: Optional[dict]
-    geometry: Optional[dict]
+    properties: Optional[dict] = None
+    geometry: Optional[dict] = None
 
     class Config:
         populate_by_name = True

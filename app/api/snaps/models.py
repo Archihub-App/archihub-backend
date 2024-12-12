@@ -27,7 +27,7 @@ class Snap(BaseModel):
 
 # Modelo para la actualización de snaps
 class SnapUpdate(BaseModel):
-    data: Optional[dict]
+    data: Optional[dict] = None
 
     class Config:
         populate_by_name = True

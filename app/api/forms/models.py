@@ -21,9 +21,9 @@ class Form(BaseModel):
 
 # Modelo para la actualización de estándares de metadatos
 class FormUpdate(BaseModel):
-    name: Optional[str]
-    description: Optional[str]
-    fields: Optional[list[dict]]
+    name: Optional[str] = None
+    description: Optional[str] = None
+    fields: Optional[list[dict]] = None
 
     class Config:
         populate_by_name = True

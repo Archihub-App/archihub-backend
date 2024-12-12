@@ -20,8 +20,8 @@ class Task(BaseModel):
 
 # Modelo para la actualización de opciones del sistema
 class TaskUpdate(BaseModel):
-    status: Optional[str]
-    result: Optional[str]
+    status: Optional[str] = None
+    result: Optional[str] = None
 
     class Config:
         populate_by_name = True
