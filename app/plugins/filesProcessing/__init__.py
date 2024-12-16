@@ -259,6 +259,8 @@ class ExtendedPluginClass(PluginClass):
                 types = get_all_types()
                 if isinstance(types, list):
                     types = tuple(types)[0]
+                else:
+                    types = types[0]
 
                 current = self.get_plugin_settings()
 
@@ -280,7 +282,7 @@ class ExtendedPluginClass(PluginClass):
                     }
                 ]
                 
-                if current is None:
+                if current is None or current == {}:
                     resp['settings'][1]['default'] = []
                     
                 else:
