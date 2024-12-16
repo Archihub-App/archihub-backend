@@ -24,7 +24,7 @@ class Option(BaseModel):
 
 # Modelo para la actualización de opciones del sistema
 class OptionUpdate(BaseModel):
-    data: Any
+    data: Any = None
     plugins_settings: Optional[dict] = None
 
     class Config:

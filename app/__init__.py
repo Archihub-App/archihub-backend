@@ -1,7 +1,7 @@
 '''
-ARCHIHUB Document management tool
-Versión 0.7.2
-Author: Néstor Andrés Peña
+ARCHIHUB: A comprehensive tool for organizing and connecting information
+Versión 0.8.0
+Author: BITSOL
 Made with ❤️ in Colombia
 '''
 

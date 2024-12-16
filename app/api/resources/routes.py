@@ -427,10 +427,7 @@ def download_all_records(resource_id):
 
     body = request.json
 
-    if 'groupImages' not in body:
-        resp = services.get_resource_files(resource_id, current_user, body['page'])
-    else:
-        resp = services.get_resource_files(resource_id, current_user, body['page'], body['groupImages'])
+    resp = services.download_resource_files(resource_id, current_user)
         
     if isinstance(resp, list):
         return tuple(resp)
