@@ -467,28 +467,53 @@ def validate_fields(body, metadata, errors):
                                 body = change_value(body, field['destiny'], 'Sin título')
                     if field['type'] == 'text':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             validate_text(get_value_by_path(
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                            
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], '')
+                                    
                     elif field['type'] == 'text-area':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             validate_text(get_value_by_path(
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                            
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], '')
                     elif field['type'] == 'select':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             validate_text(get_value_by_path(
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published' and field['destiny'] != 'accessRights':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                        
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], '')
                     elif field['type'] == 'number':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
@@ -500,6 +525,8 @@ def validate_fields(body, metadata, errors):
                                    ] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'checkbox':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             if not isinstance(get_value_by_path(body, field['destiny']), bool):
                                 errors[field['destiny']
@@ -507,14 +534,28 @@ def validate_fields(body, metadata, errors):
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                            
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], False)
                     elif field['type'] == 'select-multiple2':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             validate_text_array(get_value_by_path(
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                            
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], [])
                     elif field['type'] == 'author':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
@@ -539,6 +580,8 @@ def validate_fields(body, metadata, errors):
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'repeater':
                         value = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if value:
                             for v in value:
                                 for subfield in field['subfields']:
@@ -572,7 +615,6 @@ def validate_fields(body, metadata, errors):
                                             errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
                                     elif subfield['type'] == 'simple-date':
                                         exists = v[subfield['destiny']]
-                                        # the date is a string YYYY-MM-DD, so we need to parse it
                                         if exists:
                                             if isinstance(exists, str):
                                                 value = v[subfield['destiny']]
@@ -585,6 +627,13 @@ def validate_fields(body, metadata, errors):
                                             subfield['label'] = subfield['name']
                                             validate_simple_date(value, subfield)
                                             v[subfield['destiny']] = value
+                        
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], [])
+                                
                     elif field['type'] == 'relation':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
