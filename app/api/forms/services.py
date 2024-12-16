@@ -191,6 +191,13 @@ def validate_form(form):
         if field['type'] == 'file':
             if not 'filetag' in field:
                 raise Exception("Error: el campo archivo debe tener una etiqueta")
+            
+        if 'setCondition' in field:
+            if not field['setCondition']:
+                field['setCondition'] = False
+                field.pop('conditionField', None)
+                field.pop('conditionType', None)
+                field.pop('conditionValueText', None)
 
         if 'accessRights' in field:
             if field['accessRights']:

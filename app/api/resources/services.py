@@ -513,7 +513,7 @@ def validate_fields(body, metadata, errors):
                             if conditionField['type'] == 'checkbox':
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
-                                    body = change_value(body, field['destiny'], '')
+                                    body = change_value(body, field['destiny'], None)
                     elif field['type'] == 'number':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
