@@ -378,6 +378,8 @@ class ExtendedPluginClass(PluginClass):
                         obj[f['label']] = date.strftime('%Y-%m-%d')
                     else:
                         obj[f['label']] = ''
+                elif f['type'] == 'number':
+                    obj[f['label']] = get_value_by_path(r, f['destiny'])
 
             resources_df.append(obj)
 
