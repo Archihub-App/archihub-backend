@@ -79,9 +79,18 @@ def update_option(name, data):
     update = OptionUpdate(**{'data': options['data']})
     mongodb.update_record('system', {'name': name}, update)
 
+
+def clear_system_cache():
+    get_default_cataloging_type.invalidate_all()
+    get_default_visible_type.invalidate_all()
+    get_roles.invalidate_all()
+    get_access_rights.invalidate_all()
+    get_roles_id.invalidate_all()
+    get_access_rights_id.invalidate_all()
+    get_resources_schema.invalidate_all()
+    get_plugins.invalidate_all()
+
 # Funcion para actualizar los ajustes del sistema
-
-
 def update_settings(settings, current_user):
     try:
         update_option('post_types_settings', settings)
@@ -94,13 +103,6 @@ def update_settings(settings, current_user):
             'settings': settings
         })
         # Limpiar la cache
-        get_default_cataloging_type.invalidate_all()
-        get_default_visible_type.invalidate_all()
-        get_roles.invalidate_all()
-        get_access_rights.invalidate_all()
-        get_roles_id.invalidate_all()
-        get_access_rights_id.invalidate_all()
-        get_resources_schema.invalidate_all()
         clear_cache()
 
         # Llamar al servicio para obtener todos los ajustes del sistema
@@ -651,6 +653,7 @@ def clear_cache():
     from app.api.records.public_services import update_cache as update_cache_records_public
 
     try:
+        clear_system_cache()
         update_cache_function()
         update_cache_lists()
         update_cache_forms()

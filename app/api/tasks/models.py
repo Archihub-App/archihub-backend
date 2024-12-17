@@ -16,12 +16,12 @@ class Task(BaseModel):
     date: datetime
 
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True
 
 # Modelo para la actualización de opciones del sistema
 class TaskUpdate(BaseModel):
-    status: Optional[str]
-    result: Optional[str]
+    status: Optional[str] = None
+    result: Optional[str] = None
 
     class Config:
-        allow_population_by_field_name = True
+        populate_by_name = True

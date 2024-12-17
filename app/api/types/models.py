@@ -18,8 +18,8 @@ class PostType(BaseModel):
     viewRoles: list[str] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Post",
                 "description": "Publicación de texto"
@@ -28,18 +28,18 @@ class PostType(BaseModel):
 
 # Modelo para la actualización de tipos de contenido
 class PostTypeUpdate(BaseModel):
-    name: Optional[str]
-    description: Optional[str]
-    icon: Optional[str]
-    hierarchical: Optional[bool]
-    parentType: Optional[list[dict]]
-    metadata: Optional[str]
-    editRoles: Optional[list[str]]
-    viewRoles: Optional[list[str]]
+    name: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    hierarchical: Optional[bool] = None
+    parentType: Optional[list[dict]] = None
+    metadata: Optional[str] = None
+    editRoles: Optional[list[str]] = None
+    viewRoles: Optional[list[str]] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Post",
                 "description": "Publicación de texto"

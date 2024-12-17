@@ -221,7 +221,7 @@ def update_me(body, current_user):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para registrar un usuario
-def register_user(body, user):
+def register_user(body):
     try:
         # Verificar si el usuario ya existe
         user = mongodb.get_record('users', {'username': body['username']})
@@ -253,7 +253,8 @@ def register_user(body, user):
 
         
         # Encriptar contraseña
-        password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        if password != '':
+            password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         body['password'] = password
         # Crear instancia de User con el body del request
         user = User(**body)

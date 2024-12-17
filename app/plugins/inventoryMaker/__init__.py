@@ -175,6 +175,7 @@ class ExtendedPluginClass(PluginClass):
                     'type': field['type'],
                     'destiny': field['destiny'],
                     'required': field['required'],
+                    'instructions': field['instructions'],
                 }
 
                 fields_df.append(obj)

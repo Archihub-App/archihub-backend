@@ -12,8 +12,8 @@ class UserTask(BaseModel):
     createdAt: datetime
     
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "resourceId": "123456",
                 "user": "johndoe",
@@ -22,13 +22,13 @@ class UserTask(BaseModel):
         }
         
 class UserTaskUpdate(BaseModel):
-    user: Optional[str]
-    status: Optional[str]
-    comment: Optional[list[dict]]
+    user: Optional[str] = None
+    status: Optional[str] = None
+    comment: Optional[list[dict]] = None
     
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "resourceId": "123456",
                 "user": "johndoe",

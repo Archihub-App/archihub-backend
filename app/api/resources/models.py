@@ -8,19 +8,19 @@ class Resource(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
     post_type: str
     metadata: dict
-    parents: list[dict] = None
-    parent: dict = None
+    parents: Optional[list[dict]] = None
+    parent: Optional[dict] = None
     filesObj: list[dict] = []
     ident: str
     status: str = 'created'
-    accessRights: str = None
+    accessRights: Optional[str] = None
     createdBy: str = None
     createdAt: datetime
     favCount: int = 0
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "post_type": "post",
                 "metadata": {
@@ -37,18 +37,18 @@ class Resource(BaseModel):
 
 # Modelo para la actualización de un recurso
 class ResourceUpdate(BaseModel):
-    post_type: Optional[str]
-    metadata: Optional[dict]
-    filesObj: Optional[list[dict]]
-    parents: Optional[list[dict]]
-    parent: Optional[dict]
-    status: Optional[str]
-    accessRights: Optional[str]
-    favCount: Optional[int]
+    post_type: Optional[str] = None
+    metadata: Optional[dict] = None
+    filesObj: Optional[list[dict]] = None
+    parents: Optional[list[dict]] = None
+    parent: Optional[dict] = None
+    status: Optional[str] = None
+    accessRights: Optional[str] = None
+    favCount: Optional[int] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "post_type": "post",
                 "metadata": {

@@ -300,6 +300,10 @@ def get_resource(id):
 def get_resource_files(id, page, groupImages = False):
     try:
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        # check accessRights
+        accessRights = get_accessRights(id)
+        if accessRights:
+            return {'msg': 'No tiene permisos para acceder al recurso'}, 401
         # Si el recurso no existe, retornar error
         if not resource:
             return {'msg': 'Recurso no existe'}, 404

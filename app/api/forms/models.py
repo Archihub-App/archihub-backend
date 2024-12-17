@@ -11,8 +11,8 @@ class Form(BaseModel):
     fields: list[dict] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Formulario",
                 "description": "Formulario de registro de datos"
@@ -21,13 +21,13 @@ class Form(BaseModel):
 
 # Modelo para la actualización de estándares de metadatos
 class FormUpdate(BaseModel):
-    name: Optional[str]
-    description: Optional[str]
-    fields: Optional[list[dict]]
+    name: Optional[str] = None
+    description: Optional[str] = None
+    fields: Optional[list[dict]] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Formulario",
                 "description": "Formulario de registro de datos"

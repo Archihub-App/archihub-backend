@@ -100,7 +100,7 @@ def get_all(body, user):
 
         # Obtener todos los recursos dado un tipo de contenido
         resources = list(mongodb.get_all_records(
-            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1}, sort=[('metadata.firstLevel.title', 1)]))
+            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1, 'post_type': 1}, sort=[('metadata.firstLevel.title', 1)]))
         # Obtener el total de recursos dado un tipo de contenido
         total = get_total(json.dumps(filters))
         # Para cada recurso, obtener el formulario asociado y quitar los campos _id
@@ -179,6 +179,7 @@ def create(body, user, files, updateCache = True):
         del body['filesIds']
         body['filesObj'] = []
         body['createdAt'] = datetime.now()
+        
         # Crear instancia de Resource con el body del request
         resource = Resource(**body)
 
@@ -241,6 +242,7 @@ def update_by_id(id, body, user, files, updateCache = True):
         body = validate_fields(body, metadata, errors)
 
         update_relations_children(body, metadata['fields'])
+        
 
         if errors:
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
@@ -270,7 +272,10 @@ def update_by_id(id, body, user, files, updateCache = True):
         del body['filesIds']
 
         # Crear instancia de ResourceUpdate con el body del request
-        resource = ResourceUpdate(**body)
+        try:
+            resource = ResourceUpdate(**body)
+        except Exception as e:
+            print("Validation error details:", e.errors() if hasattr(e, 'errors') else str(e))
 
         # Actualizar el recurso en la base de datos
         updated_resource = mongodb.update_record(
@@ -462,28 +467,53 @@ def validate_fields(body, metadata, errors):
                                 body = change_value(body, field['destiny'], 'Sin título')
                     if field['type'] == 'text':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             validate_text(get_value_by_path(
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                            
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], '')
+                                    
                     elif field['type'] == 'text-area':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             validate_text(get_value_by_path(
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                            
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], '')
                     elif field['type'] == 'select':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             validate_text(get_value_by_path(
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published' and field['destiny'] != 'accessRights':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                        
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], None)
                     elif field['type'] == 'number':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
@@ -495,6 +525,8 @@ def validate_fields(body, metadata, errors):
                                    ] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'checkbox':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             if not isinstance(get_value_by_path(body, field['destiny']), bool):
                                 errors[field['destiny']
@@ -502,14 +534,28 @@ def validate_fields(body, metadata, errors):
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                            
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], False)
                     elif field['type'] == 'select-multiple2':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             validate_text_array(get_value_by_path(
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                            
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], [])
                     elif field['type'] == 'author':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
@@ -532,6 +578,62 @@ def validate_fields(body, metadata, errors):
                             body = change_value(body, field['destiny'], value)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                    elif field['type'] == 'repeater':
+                        value = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
+                        if value:
+                            for v in value:
+                                for subfield in field['subfields']:
+                                    if subfield['type'] == 'text':
+                                        exists = v[subfield['destiny']]
+                                        if exists:
+                                            subfield['label'] = subfield['name']
+                                            validate_text(v[subfield['destiny']], subfield)
+                                        elif subfield['required'] and body['status'] == 'published':
+                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                    elif subfield['type'] == 'text-area':
+                                        exists = v[subfield['destiny']]
+                                        if exists:
+                                            subfield['label'] = subfield['name']
+                                            validate_text(v[subfield['destiny']], subfield)
+                                        elif subfield['required'] and body['status'] == 'published':
+                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                    elif subfield['type'] == 'number':
+                                        exists = v[subfield['destiny']]
+                                        if exists:
+                                            if not isinstance(v[subfield['destiny']], numbers.Number):
+                                                errors[subfield['destiny']] = f'El campo {subfield["label"]} debe ser un número'
+                                        elif subfield['required'] and body['status'] == 'published':
+                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                    elif subfield['type'] == 'checkbox':
+                                        exists = v[subfield['destiny']]
+                                        if exists:
+                                            if not isinstance(v[subfield['destiny']], bool):
+                                                errors[subfield['destiny']] = f'El campo {subfield["label"]} debe ser un booleano'
+                                        elif subfield['required'] and body['status'] == 'published':
+                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                    elif subfield['type'] == 'simple-date':
+                                        exists = v[subfield['destiny']]
+                                        if exists:
+                                            if isinstance(exists, str):
+                                                value = v[subfield['destiny']]
+                                                value = value.replace('"', '')
+                                                value = parser.isoparse(value)
+                                                value = value
+                                            else:
+                                                value = v[subfield['destiny']]
+                                            
+                                            subfield['label'] = subfield['name']
+                                            validate_simple_date(value, subfield)
+                                            v[subfield['destiny']] = value
+                        
+                        if hasCondition:                 
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], [])
+                                
                     elif field['type'] == 'relation':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
@@ -759,7 +861,7 @@ def get_resource(id, user):
                 value = get_option_by_id(value)
                 if value and 'term' in value:
                     temp.append({
-                        'label': value['term'],
+                        'label': f['label'],
                         'value': [value['term']],
                         'type': 'select'
                     })
@@ -839,6 +941,46 @@ def get_resource(id, user):
                         'value': temp_,
                         'type': 'relation'
                     })
+            elif f['type'] == 'repeater':
+                value = get_value_by_path(resource, f['destiny'])
+                if value:
+                    temp_ = []
+                    for v in value:
+                        temp__ = []
+                        for s in f['subfields']:
+                            if s['type'] == 'text' or s['type'] == 'text-area':
+                                temp__.append({
+                                    'label': s['name'],
+                                    'value': v[s['destiny']],
+                                    'type': s['type']
+                                })
+                            elif s['type'] == 'number':
+                                temp__.append({
+                                    'label': s['name'],
+                                    'value': v[s['destiny']],
+                                    'type': s['type']
+                                })
+                            elif s['type'] == 'checkbox':
+                                temp__.append({
+                                    'label': s['name'],
+                                    'value': v[s['destiny']],
+                                    'type': s['type']
+                                })
+                            elif s['type'] == 'simple-date':
+                                if isinstance(v[s['destiny']], datetime):
+                                    v[s['destiny']] = v[s['destiny']].strftime('%Y-%m-%d')
+                                temp__.append({
+                                    'label': s['name'],
+                                    'value': v[s['destiny']],
+                                    'type': s['type']
+                                })
+                        temp_.append(temp__)
+
+                    temp.append({
+                        'label': f['label'],
+                        'value': temp_,
+                        'type': 'repeater'
+                    })
             
 
     resource['fields'] = temp
@@ -855,6 +997,58 @@ def get_resource(id, user):
 
 @cacheHandler.cache.cache(limit=1000)
 def get_resource_files(id, user, page, groupImages = False):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        # check if the user has access to the resource
+        accessRights = get_accessRights(id)
+        if accessRights:
+            if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
+                return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': 'Recurso no existe'}, 404
+
+        temp = []
+        ids = []
+        
+        imgsTotal = 0
+        if 'filesObj' in resource:
+            for r in resource['filesObj']:
+                ids.append(r)
+
+        r_ = get_resource_records(json.dumps(ids), user, page, groupImages=groupImages)
+        for _ in r_:
+            if _['_id'] == 'imgGallery':
+                imgsTotal = int(_['displayName'].split(' ')[0])
+
+            obj = {
+                'id': str(_['_id']),
+                'hash': _['hash'],
+                'tag': _['tag'],
+            }
+
+            if 'displayName' in _: obj['displayName'] = _['displayName']
+            else : obj['displayName'] = _['name']
+            if 'accessRights' in _: obj['accessRights'] = _['accessRights']
+            if 'processing' in _: obj['processing'] = _['processing']
+
+            temp.append(obj)
+
+        total = len(resource['filesObj'])
+        if imgsTotal > 0:
+            total = total - imgsTotal + 1
+            
+        resp = {
+            'data': temp,
+            'total': total
+        }
+        # Retornar el recurso
+        return resp, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+@cacheHandler.cache.cache(limit=1000)
+def download_resource_files(id, user, page, groupImages = False):
     try:
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         # Si el recurso no existe, retornar error

@@ -10,8 +10,8 @@ class List(BaseModel):
     options: list[str]
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Listado",
                 "description": "Listado de registro de datos"
@@ -20,13 +20,13 @@ class List(BaseModel):
 
 # Modelo para la actualización de listados
 class ListUpdate(BaseModel):
-    name: Optional[str]
-    description: Optional[str]
-    options: Optional[list[str]]
+    name: Optional[str] = None
+    description: Optional[str] = None
+    options: Optional[list[str]] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "Listado",
                 "description": "Listado de registro de datos"
@@ -39,8 +39,8 @@ class Option(BaseModel):
     term: str
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "term": "Opción"
             }
@@ -48,11 +48,11 @@ class Option(BaseModel):
 
 # Modelo para la actualización de opciones
 class OptionUpdate(BaseModel):
-    term: Optional[str]
+    term: Optional[str] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "term": "Opción"
             }

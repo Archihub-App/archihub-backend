@@ -86,7 +86,6 @@ def create(body, user):
         # Retornar el resultado
         return {'msg': 'Formulario creado exitosamente'}, 201
     except Exception as e:
-            print(str(e))
             return {'msg': str(e)}, 500
 
 # Nuevo servicio para devolver un formulario por su slug
@@ -186,10 +185,19 @@ def validate_form(form):
             
             if field['destiny'] == 'metadata.firstLevel.title':
                 hasTitle = True
+                if field['type'] != 'text':
+                    raise Exception("Error: el campo con destino igual a metadata.firstLevel.title debe ser de tipo texto")
             
         if field['type'] == 'file':
             if not 'filetag' in field:
                 raise Exception("Error: el campo archivo debe tener una etiqueta")
+            
+        if 'setCondition' in field:
+            if not field['setCondition']:
+                field['setCondition'] = False
+                field.pop('conditionField', None)
+                field.pop('conditionType', None)
+                field.pop('conditionValueText', None)
 
         if 'accessRights' in field:
             if field['accessRights']:
@@ -250,6 +258,17 @@ def update_main_schema(new_form = None, updated_form = None):
         if updated_form:
             for field in updated_form['fields']:
                 tipo = field['type']
+                if tipo == 'repeater':
+                    if 'subfields' in field:
+                        from app.utils.operations import slugify
+                        seen = set()
+                        for f in field['subfields']:
+                            f['destiny'] = slugify(f['name'])
+                            f['required'] = False
+                            if f['destiny'] in seen:
+                                raise Exception("Error: el subcampo " + f['name'] + " en " + field['label'] + " ya existe en el formulario")
+                            seen.add(f['destiny'])
+                            
                 if 'destiny' in field and tipo != 'separator' and tipo != 'file':
                     if(field['destiny'] in resp):
                         if(resp[field['destiny']] != tipo):
@@ -285,6 +304,7 @@ def update_main_schema(new_form = None, updated_form = None):
         
 
     except Exception as e:
+        print(str(e))
         raise Exception(str(e))
     
 def duplicate_by_slug(slug, user):

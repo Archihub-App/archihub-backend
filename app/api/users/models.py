@@ -20,10 +20,11 @@ class User(BaseModel):
     requests: int = 0
     lastRequest: datetime = None
     favorites: list[dict] = None
+    loginType: str = "local"
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "John Doe",
                 "email": "johndoe@loquesea.com"
@@ -45,10 +46,11 @@ class UserUpdate(BaseModel):
     requests: Optional[int] = None
     lastRequest: Optional[datetime] = None
     favorites: Optional[list[dict]] = None
+    loginType: Optional[str] = None
 
     class Config:
-        allow_population_by_field_name = True
-        schema_extra = {
+        populate_by_name = True
+        json_schema_extra = {
             "example": {
                 "name": "John Doe",
                 "email": "johndoe@loquesea.com"

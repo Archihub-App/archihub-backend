@@ -1,7 +1,7 @@
 '''
-ARCHIHUB Document management tool
-Versión 0.7.2
-Author: Néstor Andrés Peña
+ARCHIHUB: A comprehensive tool for organizing and connecting information
+Versión 0.8.0
+Author: BITSOL
 Made with ❤️ in Colombia
 '''
 
@@ -36,6 +36,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             result_backend=os.environ.get(
                 "CELERY_BROKER_URL", "redis://localhost"),
             task_ignore_result=True,
+            broker_connection_retry_on_startup=True
         ),
     )
     app.config.from_object(config_class)

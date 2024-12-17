@@ -98,6 +98,17 @@ def index_resources_task(body={}):
                         if value != None:
                             value = value.strftime('%Y-%m-%d')
                             change_value(document, f['destiny'], value)
+                elif f['type'] == 'repeater':
+                    value = get_value_by_path(resource, f['destiny'])
+                    if value:
+                        for v in value:
+                            for s in f['subfields']:
+                                if s['type'] == 'simple-date':
+                                    date = get_value_by_path(v, s['destiny'])
+                                    if date:
+                                        date = date.strftime('%Y-%m-%d')
+                                        change_value(v, s['destiny'], date)
+                                    
 
             document['post_type'] = post_type
             if 'parents' in resource:
