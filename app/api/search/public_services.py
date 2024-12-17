@@ -58,7 +58,7 @@ def get_resources_by_filters(body):
             },
             'size': 20,
             'from': body['page'] * 20,
-            '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id', 'ident', 'files']
+            '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id', 'ident', 'files', 'createdAt']
         }
 
         if 'keyword' in body:

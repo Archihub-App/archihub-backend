@@ -64,7 +64,7 @@ def get_resources_by_filters(body, user):
             },
             'size': 20,
             'from': body['page'] * 20 if 'page' in body else 0,
-            '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id', 'ident', 'files']
+            '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id', 'ident', 'files', 'createdAt']
         }
 
         if 'keyword' in body:
@@ -135,7 +135,7 @@ def get_tree_by_query(body, root, available, user):
                 }
             },
             'size': 20,
-            '_source': ['post_type', 'metadata.firstLevel.title', 'parent', '_id']
+            '_source': ['post_type', 'metadata.firstLevel.title', 'parent', '_id', 'createdAt']
         }
 
         if root == 'all':

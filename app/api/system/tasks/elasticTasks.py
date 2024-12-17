@@ -111,6 +111,11 @@ def index_resources_task(body={}):
                                     
 
             document['post_type'] = post_type
+            
+            created_at = resource['createdAt']
+            created_at = created_at.strftime('%Y-%m-%dT%H:%M:%S')
+            document['createdAt'] = created_at
+            
             if 'parents' in resource:
                 document['parents'] = resource['parents']
             if 'parent' in resource:
