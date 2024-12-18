@@ -33,9 +33,9 @@ class User(BaseModel):
 
 # Modelo para la actualización de usuarios
 class UserUpdate(BaseModel):
-    name: Optional[str]
-    password: Optional[str]
-    compromise: Optional[bool]
+    name: Optional[str] = None
+    password: Optional[str] = None
+    compromise: Optional[bool] = None
     photo: Optional[str] = None
     roles: Optional[list[str]] = None
     accessRights: Optional[list[str]] = None
