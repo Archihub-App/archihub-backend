@@ -60,7 +60,7 @@ def get_resource_tasks(resourceId):
             description: Error al obtener las tareas del recurso
     """
     current_user = get_jwt_identity()
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': 'No tiene permisos suficientes'}), 401
     
     return services.get_resource_tasks(resourceId)

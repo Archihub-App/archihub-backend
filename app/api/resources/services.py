@@ -778,7 +778,7 @@ def get_resource(id, user):
     status = resource['status']
     if status == 'draft':
         if not has_role(user, 'publisher') or not has_role(user, 'admin'):
-            if resource['createdBy'] != user:
+            if resource['createdBy'] != user and not has_role(user, 'editor'):
                 raise Exception('No tiene permisos para ver este recurso')
         
     # Registrar el log
