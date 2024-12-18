@@ -1,6 +1,6 @@
 '''
 ARCHIHUB: A comprehensive tool for organizing and connecting information
-Versión 0.8.0
+Versión 0.8.1
 Author: BITSOL
 Made with ❤️ in Colombia
 '''
