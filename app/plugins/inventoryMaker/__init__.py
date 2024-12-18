@@ -337,6 +337,8 @@ class ExtendedPluginClass(PluginClass):
             from app.api.users.services import has_role
             if not has_role(user, 'publisher') or not has_role(user, 'admin'):
                 filters['createdBy'] = user
+        elif body['status'] == 'published':
+            filters['status'] = 'published'
  
         # buscamos los recursos con los filtros especificados
         resources = list(mongodb.get_all_records('resources', filters))
