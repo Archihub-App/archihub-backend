@@ -80,7 +80,7 @@ def get_editors():
             description: Error al obtener los editores de tareas
     """
     current_user = get_jwt_identity()
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': 'No tiene permisos suficientes'}), 401
     
     return services.get_editors()
@@ -151,7 +151,7 @@ def update_task(taskId):
             description: Error al actualizar la tarea
     """
     current_user = get_jwt_identity()
-    if not user_services.has_role(current_user, 'editor') or not user_services.has_role(current_user, 'team_lead'):
+    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'team_lead'):
         return jsonify({'msg': 'No tiene permisos suficientes'}), 401
     
     return services.update_task(taskId, request.json, current_user, user_services.has_role(current_user, 'team_lead'))
