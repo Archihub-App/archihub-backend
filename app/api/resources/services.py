@@ -100,8 +100,10 @@ def get_all(body, user):
 
         # Obtener todos los recursos dado un tipo de contenido
         sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
+        sortBy = body.get('sortBy', 'createdAt')
+        
         resources = list(mongodb.get_all_records(
-            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1, 'post_type': 1, 'createdAt': 1}, sort=[(body['sortBy'], sort_direction)]))
+            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1, 'post_type': 1, 'createdAt': 1}, sort=[(sortBy, sort_direction)]))
         # Obtener el total de recursos dado un tipo de contenido
         total = get_total(json.dumps(filters))
         # Para cada recurso, obtener el formulario asociado y quitar los campos _id
@@ -782,7 +784,7 @@ def get_resource(id, user):
     status = resource['status']
     if status == 'draft':
         if not has_role(user, 'publisher') or not has_role(user, 'admin'):
-            if resource['createdBy'] != user:
+            if resource['createdBy'] != user and not has_role(user, 'editor'):
                 raise Exception('No tiene permisos para ver este recurso')
         
     # Registrar el log
