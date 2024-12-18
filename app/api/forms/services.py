@@ -198,6 +198,11 @@ def validate_form(form):
                 field.pop('conditionField', None)
                 field.pop('conditionType', None)
                 field.pop('conditionValueText', None)
+        else:
+            field['setCondition'] = False
+            field.pop('conditionField', None)
+            field.pop('conditionType', None)
+            field.pop('conditionValueText', None)
 
         if 'accessRights' in field:
             if field['accessRights']:
