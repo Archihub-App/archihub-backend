@@ -976,15 +976,21 @@ def get_resource(id, user):
                         'ident': value['level_0']
                     })[0]['properties']['name']
                 if 'level_1' in value:
-                    resp += ', ' + get_level_info({
+                    level = get_level_info({
                         'level': 1,
-                        'ident': value['level_1']
-                    })[0]['properties']['name']
-                if 'level_2' in value:
-                    resp += ', ' + get_level_info({
+                        'ident': value['level_1'],
+                        'parent': value['level_0']
+                    })
+                    if level[1] != 500:
+                        resp += ', ' + level[0]['properties']['name']
+                if 'level_2' in value and level[1] != 500:
+                    level = get_level_info({
                         'level': 2,
-                        'ident': value['level_2']
-                    })[0]['properties']['name']
+                        'ident': value['level_2'],
+                        'parent': value['level_1']
+                    })
+                    if level[1] != 500:
+                        resp += ', ' + level[0]['properties']['name']
                 if value:
                     temp.append({
                         'label': f['label'],
