@@ -968,30 +968,31 @@ def get_resource(id, user):
                     })
             elif f['type'] == 'location':
                 value = get_value_by_path(resource, f['destiny'])
-                resp = ''
-                from app.api.geosystem.services import get_level_info
-                if 'level_0' in value:
-                    resp += get_level_info({
-                        'level': 0,
-                        'ident': value['level_0']
-                    })[0]['properties']['name']
-                if 'level_1' in value:
-                    level = get_level_info({
-                        'level': 1,
-                        'ident': value['level_1'],
-                        'parent': value['level_0']
-                    })
-                    if level[1] != 500:
-                        resp += ', ' + level[0]['properties']['name']
-                if 'level_2' in value and level[1] != 500:
-                    level = get_level_info({
-                        'level': 2,
-                        'ident': value['level_2'],
-                        'parent': value['level_1']
-                    })
-                    if level[1] != 500:
-                        resp += ', ' + level[0]['properties']['name']
+                
                 if value:
+                    resp = ''
+                    from app.api.geosystem.services import get_level_info
+                    if 'level_0' in value:
+                        resp += get_level_info({
+                            'level': 0,
+                            'ident': value['level_0']
+                        })[0]['properties']['name']
+                    if 'level_1' in value:
+                        level = get_level_info({
+                            'level': 1,
+                            'ident': value['level_1'],
+                            'parent': value['level_0']
+                        })
+                        if level[1] != 500:
+                            resp += ', ' + level[0]['properties']['name']
+                    if 'level_2' in value and level[1] != 500:
+                        level = get_level_info({
+                            'level': 2,
+                            'ident': value['level_2'],
+                            'parent': value['level_1']
+                        })
+                        if level[1] != 500:
+                            resp += ', ' + level[0]['properties']['name']
                     temp.append({
                         'label': f['label'],
                         'value': resp,
