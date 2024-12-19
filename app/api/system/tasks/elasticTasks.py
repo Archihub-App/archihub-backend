@@ -84,21 +84,21 @@ def index_resources_task(body={}):
             post_type = resource['post_type']
             fields = get_metadata(post_type)['fields']
             for f in fields:
-                if f['type'] != 'file' and f['type'] != 'simple-date':
+                if f['type'] != 'file' and f['type'] != 'simple-date' and f['type'] != 'repeater':
                     destiny = f['destiny']
                     if destiny != '':
                         value = get_value_by_path(resource, destiny)
                         if value != None:
                             document = change_value(
                                 document, f['destiny'], value)
-                elif f['type'] == 'simple-date':
+                if f['type'] == 'simple-date':
                     destiny = f['destiny']
                     if destiny != '':
                         value = get_value_by_path(resource, destiny)
                         if value != None:
                             value = value.strftime('%Y-%m-%d')
                             change_value(document, f['destiny'], value)
-                elif f['type'] == 'repeater':
+                if f['type'] == 'repeater':
                     value = get_value_by_path(resource, f['destiny'])
                     if value:
                         for v in value:

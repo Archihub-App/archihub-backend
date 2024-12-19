@@ -808,7 +808,7 @@ def get_resource(id, user):
         
     # Registrar el log
     resource['_id'] = str(resource['_id'])
-
+    
     if 'parents' in resource:
         if resource['parents']:
             for r in resource['parents']:
@@ -819,6 +819,7 @@ def get_resource(id, user):
     resource['icon'] = get_icon(resource['post_type'])
 
     default_visible_type = get_default_visible_type()
+    print(default_visible_type)
     resource['children'] = mongodb.distinct('resources', 'post_type', {
                                             'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
 

@@ -142,6 +142,7 @@ def get_default_visible_type():
         # Obtener el registro post_types_settings de la colección system
         post_types_settings = mongodb.get_record(
             'system', {'name': 'post_types_settings'})
+        
         # Si el registro no existe, retornar error
         if not post_types_settings:
             raise Exception(
