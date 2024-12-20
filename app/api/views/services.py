@@ -146,6 +146,9 @@ def delete(id, user):
         log = {
             'data': view_deleted.raw_result
         }
+        
+        
+        get_all.invalidate_all()
 
         register_log(user, log_actions['view_delete'], log)
         get_all.invalidate_all()

@@ -549,6 +549,10 @@ def regenerate_index(user):
                 }
             },
         }
+        
+        mapping['createdAt'] = {
+            'type': 'date'
+        }
 
         mapping['status'] = {
             'type': 'text',

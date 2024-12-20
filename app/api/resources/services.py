@@ -99,8 +99,11 @@ def get_all(body, user):
             filters = filters_
 
         # Obtener todos los recursos dado un tipo de contenido
+        sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
+        sortBy = body.get('sortBy', 'createdAt')
+        
         resources = list(mongodb.get_all_records(
-            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1, 'post_type': 1}, sort=[('metadata.firstLevel.title', 1)]))
+            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1, 'post_type': 1, 'createdAt': 1}, sort=[(sortBy, sort_direction)]))
         # Obtener el total de recursos dado un tipo de contenido
         total = get_total(json.dumps(filters))
         # Para cada recurso, obtener el formulario asociado y quitar los campos _id
@@ -116,6 +119,9 @@ def get_all(body, user):
                 resource['accessRights'] = resource['accessRights']['term']
             else:
                 resource['accessRights'] = None
+                
+            if 'createdAt' in resource:
+                resource['createdAt'] = resource['createdAt'].isoformat()
 
         response = {
             'total': total,

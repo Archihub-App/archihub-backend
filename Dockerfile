@@ -11,8 +11,6 @@ RUN sed -i 's/\r$//' start.sh
 
 RUN bash generateRequirements.sh
 
-RUN pip install torch==2.1.0
-
 RUN pip install -r requirements.txt
 
 RUN pip install gunicorn
