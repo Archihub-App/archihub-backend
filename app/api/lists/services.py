@@ -133,6 +133,8 @@ def get_by_id(id):
 @cacheHandler.cache.cache()
 def get_option_by_id(id):
     try:
+        if not id:
+            return None
         # Buscar la opcion en la base de datos
         option = mongodb.get_record('options', {'_id': ObjectId(id)})
         # Si la opcion no existe, retornar error

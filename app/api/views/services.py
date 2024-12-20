@@ -151,6 +151,7 @@ def delete(id, user):
         get_all.invalidate_all()
 
         register_log(user, log_actions['view_delete'], log)
+        get_all.invalidate_all()
 
         return {'msg': 'Vista de consulta eliminada exitosamente'}, 200
     except Exception as e:

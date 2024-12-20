@@ -471,6 +471,16 @@ def validate_fields(body, metadata, errors):
                                 errors[field['destiny']] = f'El campo {field["label"]} es requerido'
                             else:
                                 body = change_value(body, field['destiny'], 'Sin título')
+                    if field['type'] == 'location':
+                        exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
+                        
+                        if hasCondition:
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], None)
                     if field['type'] == 'text':
                         exists = get_value_by_path(body, field['destiny'])
                         hasCondition = int(field['conditionField']) if 'conditionField' in field else False
@@ -482,7 +492,7 @@ def validate_fields(body, metadata, errors):
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                             
-                        if hasCondition:                 
+                        if hasCondition:
                             if conditionField['type'] == 'checkbox':
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
@@ -499,7 +509,7 @@ def validate_fields(body, metadata, errors):
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                             
-                        if hasCondition:                 
+                        if hasCondition:
                             if conditionField['type'] == 'checkbox':
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
@@ -515,13 +525,15 @@ def validate_fields(body, metadata, errors):
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                         
-                        if hasCondition:                 
+                        if hasCondition:
                             if conditionField['type'] == 'checkbox':
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
                                     body = change_value(body, field['destiny'], None)
                     elif field['type'] == 'number':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             if not isinstance(get_value_by_path(body, field['destiny']), numbers.Number):
                                 errors[field['destiny']
@@ -529,6 +541,12 @@ def validate_fields(body, metadata, errors):
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
+                            
+                        if hasCondition:
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], None)
                     elif field['type'] == 'checkbox':
                         exists = get_value_by_path(body, field['destiny'])
                         hasCondition = int(field['conditionField']) if 'conditionField' in field else False
@@ -541,7 +559,7 @@ def validate_fields(body, metadata, errors):
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                             
-                        if hasCondition:                 
+                        if hasCondition:
                             if conditionField['type'] == 'checkbox':
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
@@ -557,7 +575,7 @@ def validate_fields(body, metadata, errors):
                             errors[field['destiny']
                                    ] = f'El campo {field["label"]} es requerido'
                             
-                        if hasCondition:                 
+                        if hasCondition:
                             if conditionField['type'] == 'checkbox':
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
@@ -572,6 +590,8 @@ def validate_fields(body, metadata, errors):
                                    ] = f'El campo {field["label"]} es requerido'
                     elif field['type'] == 'simple-date':
                         exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
                         if exists:
                             if isinstance(exists, str):
                                 value = get_value_by_path(body, field['destiny'])
@@ -584,6 +604,11 @@ def validate_fields(body, metadata, errors):
                             body = change_value(body, field['destiny'], value)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                        if hasCondition:
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], None)
                     elif field['type'] == 'repeater':
                         value = get_value_by_path(body, field['destiny'])
                         hasCondition = int(field['conditionField']) if 'conditionField' in field else False
@@ -634,7 +659,7 @@ def validate_fields(body, metadata, errors):
                                             validate_simple_date(value, subfield)
                                             v[subfield['destiny']] = value
                         
-                        if hasCondition:                 
+                        if hasCondition:
                             if conditionField['type'] == 'checkbox':
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
@@ -789,7 +814,7 @@ def get_resource(id, user):
         
     # Registrar el log
     resource['_id'] = str(resource['_id'])
-
+    
     if 'parents' in resource:
         if resource['parents']:
             for r in resource['parents']:
@@ -800,6 +825,7 @@ def get_resource(id, user):
     resource['icon'] = get_icon(resource['post_type'])
 
     default_visible_type = get_default_visible_type()
+    print(default_visible_type)
     resource['children'] = mongodb.distinct('resources', 'post_type', {
                                             'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
 
@@ -946,6 +972,38 @@ def get_resource(id, user):
                         'label': f['label'],
                         'value': temp_,
                         'type': 'relation'
+                    })
+            elif f['type'] == 'location':
+                value = get_value_by_path(resource, f['destiny'])
+                
+                if value:
+                    resp = ''
+                    from app.api.geosystem.services import get_level_info
+                    if 'level_0' in value:
+                        resp += get_level_info({
+                            'level': 0,
+                            'ident': value['level_0']
+                        })[0]['properties']['name']
+                    if 'level_1' in value:
+                        level = get_level_info({
+                            'level': 1,
+                            'ident': value['level_1'],
+                            'parent': value['level_0']
+                        })
+                        if level[1] != 500:
+                            resp += ', ' + level[0]['properties']['name']
+                    if 'level_2' in value and level[1] != 500:
+                        level = get_level_info({
+                            'level': 2,
+                            'ident': value['level_2'],
+                            'parent': value['level_1']
+                        })
+                        if level[1] != 500:
+                            resp += ', ' + level[0]['properties']['name']
+                    temp.append({
+                        'label': f['label'],
+                        'value': resp,
+                        'type': 'location'
                     })
             elif f['type'] == 'repeater':
                 value = get_value_by_path(resource, f['destiny'])

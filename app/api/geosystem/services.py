@@ -11,6 +11,7 @@ cacheHandler = CacheHandler.CacheHandler()
 
 def update_cache():
     get_level.invalidate_all()
+    get_level_info.invalidate_all()
 
 def upload_shapes():
     try:
@@ -91,5 +92,24 @@ def get_level(body):
             s['geometry'] = mapping(geo)
 
         return shapes, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+@cacheHandler.cache.cache(limit=5000)
+def get_level_info(body):
+    try:
+        level = body['level']
+        filters = {
+            'properties.admin_level': int(level)
+        }
+        if 'parent' in body:
+            filters['properties.parent'] = body['parent']
+        if 'ident' in body:
+            filters['properties.ident'] = body['ident']
+            
+        shape = mongodb.get_record('shapes', filters, fields={'properties.name': 1, 'properties.ident': 1})
+        shape.pop('_id')
+
+        return shape, 200
     except Exception as e:
         return {'msg': str(e)}, 500

@@ -214,7 +214,7 @@ def get_access_rights():
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
-    if not user_services.has_role(current_user, 'admin'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return {'msg': 'No tiene permisos para obtener el listado de access rights'}, 401
     # Llamar al servicio para obtener el listado de access rights
     return services.get_access_rights()
