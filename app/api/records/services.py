@@ -18,6 +18,7 @@ import hashlib
 import magic
 import uuid
 from dotenv import load_dotenv
+import zipfile
 load_dotenv()
 
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
@@ -768,3 +769,36 @@ def edit_transcription(id, body, user):
     cache_get_record_transcription.invalidate(id, slug)
 
     return {'msg': 'Transcripción editada'}, 200
+
+def download_records(body, user):
+    try:
+        if 'id' not in body:
+            return {'msg': 'id no definido'}, 400
+        
+        resp_, status = get_by_id(body['id'], user)
+        if status != 200:
+            return {'msg': resp_['msg']}, 500
+        
+        record = resp_
+        if 'processing' not in record:
+            return {'msg': 'El record no tiene procesamiento'}, 404
+        
+        if 'fileProcessing' not in record['processing']:
+            return {'msg': 'El record no tiene fileProcessing'}, 404
+        
+        if 'type' not in record['processing']['fileProcessing']:
+            return {'msg': 'El record no tiene type en fileProcessing'}, 404
+        
+        path = os.path.join(WEB_FILES_PATH, record['filepath'])
+        
+        if record['processing']['fileProcessing']['type'] == 'image':
+            path = path + '.jpg'
+        elif record['processing']['fileProcessing']['type'] == 'audio':
+            path = path + '.mp3'
+        elif record['processing']['fileProcessing']['type'] == 'video':
+            path = path + '.mp4'
+            
+        return send_file(path, as_attachment=True)
+        
+    except Exception as e:
+        return {'msg': str(e)}, 500

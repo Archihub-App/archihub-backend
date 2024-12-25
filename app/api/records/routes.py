@@ -166,6 +166,36 @@ def get_stream_by_id(id):
     
     return resp
 
+@bp.route('/download', methods=['POST'])
+@jwt_required()
+def download_records():
+    """
+    Descargar un conjunto de records
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: body
+            name: body
+            
+    responses:
+        200:
+            description: Records descargados exitosamente
+        401:
+            description: No tiene permisos para descargar los records
+        500:
+            description: Error al descargar los records
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    
+    # Llamar al servicio para obtener un record por su id
+    resp = services.download_records(request.json, current_user)
+    
+    return resp
+
 @bp.route('/<id>/transcription', methods=['POST'])
 @jwt_required()
 def get_transcription_by_id(id):
