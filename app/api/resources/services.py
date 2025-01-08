@@ -115,7 +115,7 @@ def get_all(body, user):
                 resource.pop('filesObj')
 
             resource['accessRights'] = get_option_by_id(resource['accessRights'])
-            if 'term' in resource['accessRights']:
+            if resource['accessRights'] and 'term' in resource['accessRights']:
                 resource['accessRights'] = resource['accessRights']['term']
             else:
                 resource['accessRights'] = None
