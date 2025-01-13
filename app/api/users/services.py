@@ -268,6 +268,43 @@ def register_user(body):
     except Exception as e:
         return jsonify({'msg': str(e)}), 500
     
+def register_me(body):
+    try:
+        # Verificar si el usuario ya existe
+        user = mongodb.get_record('users', {'username': body['username']})
+        # Si el usuario ya existe, retornar error
+        if user:
+            return jsonify({'msg': 'Usuario ya existe'}), 400
+        
+        password = body['password']
+       
+        roles = get_roles()['options']
+        rights = get_access_rights()['options']
+            
+        body['roles'] = ['user']
+        body['accessRights'] = []
+
+        errors = {}
+        validate_user_fields(body, errors)
+
+        if errors:
+            return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+        
+        # Encriptar contraseña
+        if password != '':
+            password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        body['password'] = password
+        # Crear instancia de User con el body del request
+        user = User(**body)
+
+        # Insertar usuario en la base de datos
+        mongodb.insert_record('users', user)
+    
+        return jsonify({'msg': 'Usuario registrado exitosamente'}), 201
+
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500
+    
 # Funcion para validar los campos de un usuario
 def validate_user_fields(body, errors):
     try:

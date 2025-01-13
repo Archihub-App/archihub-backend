@@ -79,6 +79,40 @@ def register():
     # Llamar al servicio para registrar el usuario
     return services.register_user(body)
 
+@bp.route('/register-me', methods=['POST'])
+def registerme():
+    """
+    Registrar un nuevo usuario
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                username:
+                    type: string
+                password:
+                    type: string
+            required:
+                - username
+                - password
+    responses:
+        201:
+            description: Usuario registrado exitosamente
+        400:
+            description: Usuario ya existe
+    """
+    # Obtener el usuario actual
+    body = request.json
+
+    # Llamar al servicio para registrar el usuario
+    return services.register_me(body)
+
 # Nuevo endpoint para actualizar un usuario
 @bp.route('/update', methods=['PUT'])
 @jwt_required()
