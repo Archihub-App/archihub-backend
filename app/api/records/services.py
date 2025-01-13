@@ -792,13 +792,17 @@ def download_records(body, user):
         path = os.path.join(WEB_FILES_PATH, record['filepath'])
         
         if record['processing']['fileProcessing']['type'] == 'image':
-            path = path + '.jpg'
+            path = path + '_large.jpg'
         elif record['processing']['fileProcessing']['type'] == 'audio':
             path = path + '.mp3'
         elif record['processing']['fileProcessing']['type'] == 'video':
             path = path + '.mp4'
             
-        return send_file(path, as_attachment=True)
+        if 'original' not in body:
+            return send_file(path, as_attachment=True)
+        else:
+            path = record['filepath']
+            return send_file(os.path.join(ORIGINAL_FILES_PATH, path), as_attachment=True)
         
     except Exception as e:
         return {'msg': str(e)}, 500
