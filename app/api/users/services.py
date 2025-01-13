@@ -20,6 +20,8 @@ mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 fernet = Fernet(fernet_key)
 
+REDIRECT_URL = os.environ['REDIRECT_URL']
+
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
     return json.loads(json_util.dumps(result))
@@ -268,6 +270,26 @@ def register_user(body):
     except Exception as e:
         return jsonify({'msg': str(e)}), 500
     
+def forgot_password(body):
+    try:
+        user = mongodb.get_record('users', {'username': body['username']})
+        if not user:
+            return {'msg': 'Usuario no existe'}, 404
+        
+        from app.api.email.services import send_email
+        from app.api.email.templates import forgot_password_template
+
+        token = create_access_token(identity=body['username'], expires_delta=timedelta(days=1))
+        token = fernet.encrypt(token.encode('utf-8'))
+
+        link = f"{REDIRECT_URL}/reset-password?token={token.decode('utf-8')}"
+
+        send_email(body['username'], 'Recuperación de contraseña', forgot_password_template(link))
+
+        return {'msg': 'Correo enviado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
 def register_me(body):
     try:
         # Verificar si el usuario ya existe
@@ -277,9 +299,6 @@ def register_me(body):
             return jsonify({'msg': 'Usuario ya existe'}), 400
         
         password = body['password']
-       
-        roles = get_roles()['options']
-        rights = get_access_rights()['options']
             
         body['roles'] = ['user']
         body['accessRights'] = []

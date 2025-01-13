@@ -825,7 +825,6 @@ def get_resource(id, user):
     resource['icon'] = get_icon(resource['post_type'])
 
     default_visible_type = get_default_visible_type()
-    print(default_visible_type)
     resource['children'] = mongodb.distinct('resources', 'post_type', {
                                             'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
 
