@@ -27,7 +27,7 @@ def send_email(to_email, subject, body):
         server = smtplib.SMTP(smtp_host, smtp_port)
         server.starttls() if use_tls else None
 
-        server.login(smtp_user, smtp_password)
+        server.login(smtp_user, smtp_password) if smtp_user and smtp_password else None
         server.sendmail(smtp_user, to_email, msg.as_string())
         server.quit()
 
