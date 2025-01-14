@@ -16,6 +16,8 @@ ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 def get_resources_by_filters(body, user):
     try:
         post_types = body['post_type']
+        sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
+        sortBy = body.get('sortBy', 'createdAt')
 
         for p in post_types:
             post_type_roles = cache_type_roles(p)
