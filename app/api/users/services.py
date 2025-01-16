@@ -318,9 +318,6 @@ def register_me(body):
         # Crear instancia de User con el body del request
         user = User(**body)
 
-        # Insertar usuario en la base de datos
-        mongodb.insert_record('users', user)
-        
         from app.api.email.services import send_email
         from app.api.email.templates import new_user_verification_template
         
@@ -330,8 +327,10 @@ def register_me(body):
         link = f"{REDIRECT_URL}/verify-account?token={token.decode('utf-8')}"
         
         send_email(body['username'], 'Verificación de cuenta', new_user_verification_template(link))
+        
+        mongodb.insert_record('users', user)
     
-        return jsonify({'msg': 'Usuario registrado exitosamente'}), 201
+        return jsonify({'msg': 'Usuario registrado exitosamente, por favor valida tu usuario con el enlace que te enviamos a tu correo.'}), 201
 
     except Exception as e:
         return jsonify({'msg': str(e)}), 500
