@@ -312,12 +312,24 @@ def register_me(body):
         # Encriptar contraseña
         if password != '':
             password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            
         body['password'] = password
+        body['verified'] = False
         # Crear instancia de User con el body del request
         user = User(**body)
 
         # Insertar usuario en la base de datos
         mongodb.insert_record('users', user)
+        
+        from app.api.email.services import send_email
+        from app.api.email.templates import new_user_verification_template
+        
+        token = create_access_token(identity=body['username'], expires_delta=timedelta(days=1))
+        token = fernet.encrypt(token.encode('utf-8'))
+        
+        link = f"{REDIRECT_URL}/verify-account?token={token.decode('utf-8')}"
+        
+        send_email(body['username'], 'Verificación de cuenta', new_user_verification_template(link))
     
         return jsonify({'msg': 'Usuario registrado exitosamente'}), 201
 
@@ -372,6 +384,11 @@ def get_user(username):
     user = mongodb.get_record('users', {'username': username}, fields={'status': 0, 'photo': 0, 'requests': 0, 'lastRequest': 0})
     # retornar el resultado
     if not user:
+        return None
+    
+    if 'verified' not in user:
+        user['verified'] = True
+    elif user['verified'] == False:
         return None
     
     if 'favorites' not in user:

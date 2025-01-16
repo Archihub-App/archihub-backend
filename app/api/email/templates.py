@@ -9,3 +9,14 @@ def forgot_password_template(link):
     </body>
     </html>
     """
+    
+def new_user_verification_template(link):
+    return f"""
+    <html>
+    <body>
+        <p>Hola,</p>
+        <p>Gracias por registrarte, haz clic en el siguiente enlace para verificar tu cuenta:</p>
+        <a href="{link}">Verificar cuenta</a>
+    </body>
+    </html>
+    """
