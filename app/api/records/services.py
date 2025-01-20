@@ -398,10 +398,10 @@ def get_hash(hash):
     
 # Nuevo servicio para obtener un record por su id verificando el usuario
 @cacheHandler.cache.cache(limit=5000)
-def get_by_id(id, current_user):
+def get_by_id(id, current_user, fullFields = False):
     try:
         # Buscar el record en la base de datos
-        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1})
+        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1, 'filepath': 1})
 
         # Si el record no existe, retornar error
         if not record:
@@ -420,14 +420,16 @@ def get_by_id(id, current_user):
         # get keys from record['processing']
         keys = {}
         fileProcessing = None
-        if 'processing' in record:
+        if 'processing' in record and not fullFields:
             # iterate over processing keys in record['processing']
             for key in record['processing']:
                 keys[key] = {}
                 keys[key]['type'] = record['processing'][key]['type']
 
-        record['processing'] = keys
-
+            record['processing'] = keys
+        
+        if not fullFields:
+            record.pop('filepath')
 
         from app.api.types.services import get_icon
 
@@ -775,7 +777,7 @@ def download_records(body, user):
         if 'id' not in body:
             return {'msg': 'id no definido'}, 400
         
-        resp_, status = get_by_id(body['id'], user)
+        resp_, status = get_by_id(body['id'], user, True)
         if status != 200:
             return {'msg': resp_['msg']}, 500
         
@@ -789,7 +791,7 @@ def download_records(body, user):
         if 'type' not in record['processing']['fileProcessing']:
             return {'msg': 'El record no tiene type en fileProcessing'}, 404
         
-        path = os.path.join(WEB_FILES_PATH, record['filepath'])
+        path = os.path.join(WEB_FILES_PATH, record['processing']['fileProcessing']['path'])
         
         if record['processing']['fileProcessing']['type'] == 'image':
             path = path + '_large.jpg'
@@ -798,11 +800,11 @@ def download_records(body, user):
         elif record['processing']['fileProcessing']['type'] == 'video':
             path = path + '.mp4'
             
-        if 'original' not in body:
+        if body['type'] == 'original':
+            path = os.path.join(ORIGINAL_FILES_PATH, record['filepath'])
             return send_file(path, as_attachment=True)
-        else:
-            path = record['filepath']
-            return send_file(os.path.join(ORIGINAL_FILES_PATH, path), as_attachment=True)
+        elif body['type'] == 'small':
+            return send_file(path, as_attachment=True)
         
     except Exception as e:
         return {'msg': str(e)}, 500
