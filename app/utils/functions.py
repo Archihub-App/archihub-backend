@@ -191,10 +191,10 @@ def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
             filters['$or'] = [{'processing.fileProcessing.type': {'$exists': False}}, {'processing.fileProcessing.type': {'$ne': 'image'}}]
 
         cursor = mongodb.get_all_records('records', filters=filters, fields={
-                  'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}).skip(page * limit)
+                  'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1, 'filepath': 1})
         
         if limit is not None:
-            cursor = cursor.limit(limit)
+            cursor = cursor.skip(page * limit).limit(limit)
             
         r_ = list(cursor)
         
@@ -208,6 +208,8 @@ def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
                         r['name'] = 'No tiene permisos para ver este archivo'
                         r['displayName'] = 'No tiene permisos para ver este archivo'
                         r['_id'] = None
+                        
+            
 
             pro_dict = {}
             if 'processing' in r:
@@ -215,8 +217,10 @@ def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
                     pro_dict['fileProcessing'] = {
                         'type': r['processing']['fileProcessing']['type'],
                     }
-
-            r['processing'] = pro_dict
+                    
+            if limit is not None:
+                r.pop('filepath', None)
+                r['processing'] = pro_dict
 
         if groupImages:
             img = mongodb.count('records', {'_id': {'$in': ids_filter}, 'processing.fileProcessing.type': 'image'})

@@ -1118,7 +1118,7 @@ def download_resource_files(body, user):
     try:
         resource = mongodb.get_record('resources', {'_id': ObjectId(body['id'])})
         # check if the user has access to the resource
-        accessRights = get_accessRights(id)
+        accessRights = get_accessRights(body['id'])
         if accessRights:
             if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
                 return {'msg': 'No tiene permisos para acceder al recurso'}, 401
@@ -1132,10 +1132,11 @@ def download_resource_files(body, user):
         if 'filesObj' in resource:
             for r in resource['filesObj']:
                 ids.append(r)
+                
 
-        r_ = get_resource_records(json.dumps(ids), user, None, False)
-        zippath = os.path.join(WEB_FILES_PATH, 'zipfiles', user + '-' + body['id'] + '.zip')
-
+        r_ = get_resource_records(json.dumps(ids), user, 0, None, False)
+        zippath = os.path.join(WEB_FILES_PATH, 'zipfiles', user + '-' + body['id'] + '-' + body['type'] + '.zip')
+        
         if not os.path.exists(zippath):
             os.makedirs(os.path.dirname(zippath), exist_ok=True)
 
@@ -1144,17 +1145,20 @@ def download_resource_files(body, user):
             
             for _ in r_:
                 if body['type'] == 'original':
-                    path = os.path.join(ORIGINAL_FILES_PATH. _['filepath'])
+                    path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
                     zipf.write(path, _['name'])
                     
                 elif body['type'] == 'small':
                     path = os.path.join(WEB_FILES_PATH, _['processing']['fileProcessing']['path'])
+                    
                     if _['processing']['fileProcessing']['type'] == 'image':
                         path = path + '_large.jpg'
                     elif _['processing']['fileProcessing']['type'] == 'audio':
                         path = path + '.mp3'
                     elif _['processing']['fileProcessing']['type'] == 'video':
                         path = path + '.mp4'
+                    elif _['processing']['fileProcessing']['type'] == 'document':
+                        path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
                     zipf.write(path, _['name'])
                     
             zipf.close()

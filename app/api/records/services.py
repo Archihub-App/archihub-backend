@@ -803,6 +803,8 @@ def download_records(body, user):
             path = path + '.mp3'
         elif record['processing']['fileProcessing']['type'] == 'video':
             path = path + '.mp4'
+        elif record['processing']['fileProcessing']['type'] == 'document':
+            path = os.path.join(ORIGINAL_FILES_PATH, record['filepath'])
             
         if body['type'] == 'original':
             path = os.path.join(ORIGINAL_FILES_PATH, record['filepath'])
