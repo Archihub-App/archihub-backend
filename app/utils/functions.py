@@ -190,8 +190,13 @@ def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
         if groupImages:
             filters['$or'] = [{'processing.fileProcessing.type': {'$exists': False}}, {'processing.fileProcessing.type': {'$ne': 'image'}}]
 
-        r_ = list(mongodb.get_all_records('records', filters=filters, fields={
-                  'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}).skip(page * limit).limit(limit))
+        cursor = mongodb.get_all_records('records', filters=filters, fields={
+                  'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1}).skip(page * limit)
+        
+        if limit is not None:
+            cursor = cursor.limit(limit)
+            
+        r_ = list(cursor)
         
         for r in r_:
             r['_id'] = str(r['_id'])

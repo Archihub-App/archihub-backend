@@ -10,7 +10,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.users.services import has_right
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata
+from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata, has_role
 from werkzeug.utils import secure_filename
 import os
 import shutil
@@ -18,7 +18,6 @@ import hashlib
 import magic
 import uuid
 from dotenv import load_dotenv
-import zipfile
 load_dotenv()
 
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
@@ -790,6 +789,11 @@ def download_records(body, user):
         
         if 'type' not in record['processing']['fileProcessing']:
             return {'msg': 'El record no tiene type en fileProcessing'}, 404
+        
+        if 'accessRights' in record:
+            if record['accessRights']:
+                if not has_right(user, record['accessRights']) and not has_role(user, 'admin'):
+                    return {'msg': 'No tiene permisos para acceder a este recurso'}, 401
         
         path = os.path.join(WEB_FILES_PATH, record['processing']['fileProcessing']['path'])
         

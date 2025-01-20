@@ -1,4 +1,4 @@
-from flask import jsonify, request
+from flask import jsonify, request, send_file
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from app.utils import HookHandler
@@ -36,6 +36,10 @@ mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
 children_cache = {}
+
+ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
+WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
+
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado
 def change_value(body, route, value):
     route = route.split('.')
@@ -1110,10 +1114,14 @@ def get_resource_files(id, user, page, groupImages = False):
     except Exception as e:
         return {'msg': str(e)}, 500
     
-@cacheHandler.cache.cache(limit=1000)
-def download_resource_files(id, user, page, groupImages = False):
+def download_resource_files(body, user):
     try:
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(body['id'])})
+        # check if the user has access to the resource
+        accessRights = get_accessRights(id)
+        if accessRights:
+            if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
+                return {'msg': 'No tiene permisos para acceder al recurso'}, 401
         # Si el recurso no existe, retornar error
         if not resource:
             return {'msg': 'Recurso no existe'}, 404
@@ -1121,39 +1129,39 @@ def download_resource_files(id, user, page, groupImages = False):
         temp = []
         ids = []
         
-        imgsTotal = 0
         if 'filesObj' in resource:
             for r in resource['filesObj']:
                 ids.append(r)
 
-        r_ = get_resource_records(json.dumps(ids), user, page, groupImages=groupImages)
-        for _ in r_:
-            if _['_id'] == 'imgGallery':
-                imgsTotal = int(_['displayName'].split(' ')[0])
+        r_ = get_resource_records(json.dumps(ids), user, None, False)
+        zippath = os.path.join(WEB_FILES_PATH, 'zipfiles', user + '-' + body['id'] + '.zip')
 
-            obj = {
-                'id': str(_['_id']),
-                'hash': _['hash'],
-                'tag': _['tag'],
-            }
+        if not os.path.exists(zippath):
+            os.makedirs(os.path.dirname(zippath), exist_ok=True)
 
-            if 'displayName' in _: obj['displayName'] = _['displayName']
-            else : obj['displayName'] = _['name']
-            if 'accessRights' in _: obj['accessRights'] = _['accessRights']
-            if 'processing' in _: obj['processing'] = _['processing']
-
-            temp.append(obj)
-
-        total = len(resource['filesObj'])
-        if imgsTotal > 0:
-            total = total - imgsTotal + 1
+            import zipfile
+            zipf = zipfile.ZipFile(zippath, 'w', zipfile.ZIP_DEFLATED)
             
-        resp = {
-            'data': temp,
-            'total': total
-        }
-        # Retornar el recurso
-        return resp, 200
+            for _ in r_:
+                if body['type'] == 'original':
+                    path = os.path.join(ORIGINAL_FILES_PATH. _['filepath'])
+                    zipf.write(path, _['name'])
+                    
+                elif body['type'] == 'small':
+                    path = os.path.join(WEB_FILES_PATH, _['processing']['fileProcessing']['path'])
+                    if _['processing']['fileProcessing']['type'] == 'image':
+                        path = path + '_large.jpg'
+                    elif _['processing']['fileProcessing']['type'] == 'audio':
+                        path = path + '.mp3'
+                    elif _['processing']['fileProcessing']['type'] == 'video':
+                        path = path + '.mp4'
+                    zipf.write(path, _['name'])
+                    
+            zipf.close()
+        
+        
+        return send_file(zippath, as_attachment=True)
+                    
     except Exception as e:
         return {'msg': str(e)}, 500
 
