@@ -427,12 +427,8 @@ def download_all_records():
 
     body = request.json
 
-    resp = services.download_resource_files(body, current_user)
-        
-    if isinstance(resp, list):
-        return tuple(resp)
-    else:
-        return resp
+    return services.download_resource_files(body, current_user)
+
  
    
 @bp.route('/<resource_id>/imgs', methods=['GET'])

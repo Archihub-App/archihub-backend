@@ -1,31 +1,15 @@
-from flask import jsonify, request
+from flask import jsonify, request, send_file
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from app.utils import HookHandler
 from bson import json_util
 import json
 from bson.objectid import ObjectId
-from app.api.resources.models import Resource
-from app.utils.LogActions import log_actions
-from app.api.logs.services import register_log
-from app.api.resources.models import ResourceUpdate
-from app.api.types.services import is_hierarchical
 from app.api.types.services import get_icon
 from app.api.types.services import get_metadata
-from app.api.types.services import get_parents as get_type_parents
-from app.api.system.services import validate_text
-from app.api.system.services import validate_text_array
-from app.api.system.services import validate_text_regex
 from app.api.system.services import get_value_by_path, set_value_in_dict
 from app.api.system.services import get_default_visible_type
-from app.api.system.services import validate_author_array
-from app.api.system.services import validate_simple_date
 from app.api.lists.services import get_option_by_id
-from app.api.records.services import delete_parent
-from app.api.records.services import update_parent
-from app.api.records.services import update_record
-from app.api.records.services import create as create_record
-from app.api.system.services import get_access_rights
 from app.utils.functions import get_resource_records_public, cache_type_roles, clear_cache
 import os
 from datetime import datetime
@@ -36,6 +20,9 @@ mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
 children_cache = {}
+
+ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
+WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 def update_cache():
     get_all.invalidate_all()
@@ -403,3 +390,58 @@ def get_resource_images(id):
     }
 
     return resp, 200
+
+def download_resource_files(body):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(body['id'])})
+        # check if the user has access to the resource
+        accessRights = get_accessRights(body['id'])
+        if accessRights:
+            return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+        
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': 'Recurso no existe'}, 404
+
+        temp = []
+        ids = []
+        
+        if 'filesObj' in resource:
+            for r in resource['filesObj']:
+                ids.append(r)
+                
+
+        r_ = get_resource_records_public(json.dumps(ids), 0, None, False)
+        zippath = os.path.join(WEB_FILES_PATH, 'zipfiles', 'public-' + body['id'] + '-' + body['type'] + '.zip')
+        
+        if not os.path.exists(zippath):
+            os.makedirs(os.path.dirname(zippath), exist_ok=True)
+
+            import zipfile
+            zipf = zipfile.ZipFile(zippath, 'w', zipfile.ZIP_DEFLATED)
+            
+            for _ in r_:
+                if _['filepath']:
+                    if body['type'] == 'original':
+                        path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
+                        zipf.write(path, _['name'])
+                        
+                    elif body['type'] == 'small':
+                        path = os.path.join(WEB_FILES_PATH, _['processing']['fileProcessing']['path'])
+                        
+                        if _['processing']['fileProcessing']['type'] == 'image':
+                            path = path + '_large.jpg'
+                        elif _['processing']['fileProcessing']['type'] == 'audio':
+                            path = path + '.mp3'
+                        elif _['processing']['fileProcessing']['type'] == 'video':
+                            path = path + '.mp4'
+                        elif _['processing']['fileProcessing']['type'] == 'document':
+                            path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
+                        zipf.write(path, _['name'])
+                    
+            zipf.close()
+        
+        return send_file(zippath, as_attachment=True)
+                    
+    except Exception as e:
+        return {'msg': str(e)}, 500

@@ -1144,22 +1144,23 @@ def download_resource_files(body, user):
             zipf = zipfile.ZipFile(zippath, 'w', zipfile.ZIP_DEFLATED)
             
             for _ in r_:
-                if body['type'] == 'original':
-                    path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
-                    zipf.write(path, _['name'])
-                    
-                elif body['type'] == 'small':
-                    path = os.path.join(WEB_FILES_PATH, _['processing']['fileProcessing']['path'])
-                    
-                    if _['processing']['fileProcessing']['type'] == 'image':
-                        path = path + '_large.jpg'
-                    elif _['processing']['fileProcessing']['type'] == 'audio':
-                        path = path + '.mp3'
-                    elif _['processing']['fileProcessing']['type'] == 'video':
-                        path = path + '.mp4'
-                    elif _['processing']['fileProcessing']['type'] == 'document':
+                if _['filepath']:
+                    if body['type'] == 'original':
                         path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
-                    zipf.write(path, _['name'])
+                        zipf.write(path, _['name'])
+                        
+                    elif body['type'] == 'small':
+                        path = os.path.join(WEB_FILES_PATH, _['processing']['fileProcessing']['path'])
+                        
+                        if _['processing']['fileProcessing']['type'] == 'image':
+                            path = path + '_large.jpg'
+                        elif _['processing']['fileProcessing']['type'] == 'audio':
+                            path = path + '.mp3'
+                        elif _['processing']['fileProcessing']['type'] == 'video':
+                            path = path + '.mp4'
+                        elif _['processing']['fileProcessing']['type'] == 'document':
+                            path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
+                        zipf.write(path, _['name'])
                     
             zipf.close()
         

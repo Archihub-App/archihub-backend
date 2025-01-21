@@ -218,3 +218,13 @@ def get_imgs_public(resource_id):
         return tuple(resp)
     else:
         return resp
+    
+@bp.route('/public/download_records', methods=['POST'])
+def download_public():
+    """
+    Descargar un record por su id
+    ---
+    """
+    body = request.json
+    
+    return public_services.download_resource_files(body)
