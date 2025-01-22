@@ -272,6 +272,11 @@ def register_user(body):
     
 def forgot_password(body):
     try:
+        admin_register_user = mongodb.get_record('system', {'name': 'user_management'})
+        admin_register_user = admin_register_user['data'][1]
+        if 'value' not in admin_register_user or not admin_register_user['value']:
+            return jsonify({'msg': 'Recuperación de contraseña deshabilitada'}), 400
+    
         user = mongodb.get_record('users', {'username': body['username']})
         if not user:
             return {'msg': 'Usuario no existe'}, 404
@@ -292,6 +297,11 @@ def forgot_password(body):
     
 def register_me(body):
     try:
+        admin_register_user = mongodb.get_record('system', {'name': 'user_management'})
+        admin_register_user = admin_register_user['data'][0]
+        if 'value' not in admin_register_user or not admin_register_user['value']:
+            return jsonify({'msg': 'Registro de usuario deshabilitado'}), 400
+        
         # Verificar si el usuario ya existe
         user = mongodb.get_record('users', {'username': body['username']})
         # Si el usuario ya existe, retornar error
