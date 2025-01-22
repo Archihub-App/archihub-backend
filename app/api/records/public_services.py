@@ -45,7 +45,8 @@ def get_document_gallery(id, pages, size):
         from app.api.resources.public_services import get_by_id as get_resource_by_id
         resp_, status = get_resource_by_id(id)
         if status != 200:
-            return {'msg': resp_['msg']}, 500
+            return resp_, status
+        
         pages = json.dumps(pages)
         resp = cache_get_imgs_gallery_by_id(id, pages, size)
         response = Response(json.dumps(resp).encode('utf-8'), mimetype='application/json', direct_passthrough=False)
@@ -83,10 +84,10 @@ def get_by_index_gallery(body):
         return {'msg': str(e)}, 500
 
 @cacheHandler.cache.cache(limit=5000)
-def get_by_id(id):
+def get_by_id(id, fullFields = False):
     try:
         # Buscar el record en la base de datos
-        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1})
+        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1, 'filepath': 1})
 
         # Si el record no existe, retornar error
         if not record:
@@ -104,14 +105,16 @@ def get_by_id(id):
         # get keys from record['processing']
         keys = {}
         fileProcessing = None
-        if 'processing' in record:
+        if 'processing' in record and not fullFields:
             # iterate over processing keys in record['processing']
             for key in record['processing']:
                 keys[key] = {}
                 keys[key]['type'] = record['processing'][key]['type']
 
-        record['processing'] = keys
+            record['processing'] = keys
 
+        if not fullFields:
+            record.pop('filepath', None)
 
         from app.api.types.services import get_icon
 
@@ -135,5 +138,43 @@ def get_by_id(id):
         return parse_result(record), 200
 
     except Exception as e:
-        print(str(e))
+        return {'msg': str(e)}, 500
+    
+def download_records(body):
+    try:
+        if 'id' not in body:
+            return {'msg': 'id no definido'}, 400
+        
+        resp_, status = get_by_id(body['id'], True)
+        if status != 200:
+            return resp_, status
+        
+        record = resp_
+        if 'processing' not in record:
+            return {'msg': 'El record no tiene procesamiento'}, 404
+        
+        if 'fileProcessing' not in record['processing']:
+            return {'msg': 'El record no tiene fileProcessing'}, 404
+        
+        if 'type' not in record['processing']['fileProcessing']:
+            return {'msg': 'El record no tiene type en fileProcessing'}, 404
+                
+        path = os.path.join(WEB_FILES_PATH, record['processing']['fileProcessing']['path'])
+        
+        if record['processing']['fileProcessing']['type'] == 'image':
+            path = path + '_large.jpg'
+        elif record['processing']['fileProcessing']['type'] == 'audio':
+            path = path + '.mp3'
+        elif record['processing']['fileProcessing']['type'] == 'video':
+            path = path + '.mp4'
+        elif record['processing']['fileProcessing']['type'] == 'document':
+            path = os.path.join(ORIGINAL_FILES_PATH, record['filepath'])
+            
+        if body['type'] == 'original':
+            path = os.path.join(ORIGINAL_FILES_PATH, record['filepath'])
+            return send_file(path, as_attachment=True)
+        elif body['type'] == 'small':
+            return send_file(path, as_attachment=True)
+        
+    except Exception as e:
         return {'msg': str(e)}, 500

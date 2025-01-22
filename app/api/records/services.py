@@ -10,7 +10,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.users.services import has_right
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata
+from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata, has_role
 from werkzeug.utils import secure_filename
 import os
 import shutil
@@ -397,10 +397,10 @@ def get_hash(hash):
     
 # Nuevo servicio para obtener un record por su id verificando el usuario
 @cacheHandler.cache.cache(limit=5000)
-def get_by_id(id, current_user):
+def get_by_id(id, current_user, fullFields = False):
     try:
         # Buscar el record en la base de datos
-        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1})
+        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1, 'filepath': 1})
 
         # Si el record no existe, retornar error
         if not record:
@@ -419,14 +419,16 @@ def get_by_id(id, current_user):
         # get keys from record['processing']
         keys = {}
         fileProcessing = None
-        if 'processing' in record:
+        if 'processing' in record and not fullFields:
             # iterate over processing keys in record['processing']
             for key in record['processing']:
                 keys[key] = {}
                 keys[key]['type'] = record['processing'][key]['type']
 
-        record['processing'] = keys
-
+            record['processing'] = keys
+        
+        if not fullFields:
+            record.pop('filepath')
 
         from app.api.types.services import get_icon
 
@@ -768,3 +770,47 @@ def edit_transcription(id, body, user):
     cache_get_record_transcription.invalidate(id, slug)
 
     return {'msg': 'Transcripción editada'}, 200
+
+def download_records(body, user):
+    try:
+        if 'id' not in body:
+            return {'msg': 'id no definido'}, 400
+        
+        resp_, status = get_by_id(body['id'], user, True)
+        if status != 200:
+            return {'msg': resp_['msg']}, 500
+        
+        record = resp_
+        if 'processing' not in record:
+            return {'msg': 'El record no tiene procesamiento'}, 404
+        
+        if 'fileProcessing' not in record['processing']:
+            return {'msg': 'El record no tiene fileProcessing'}, 404
+        
+        if 'type' not in record['processing']['fileProcessing']:
+            return {'msg': 'El record no tiene type en fileProcessing'}, 404
+        
+        if 'accessRights' in record:
+            if record['accessRights']:
+                if not has_right(user, record['accessRights']) and not has_role(user, 'admin'):
+                    return {'msg': 'No tiene permisos para acceder a este recurso'}, 401
+        
+        path = os.path.join(WEB_FILES_PATH, record['processing']['fileProcessing']['path'])
+        
+        if record['processing']['fileProcessing']['type'] == 'image':
+            path = path + '_large.jpg'
+        elif record['processing']['fileProcessing']['type'] == 'audio':
+            path = path + '.mp3'
+        elif record['processing']['fileProcessing']['type'] == 'video':
+            path = path + '.mp4'
+        elif record['processing']['fileProcessing']['type'] == 'document':
+            path = os.path.join(ORIGINAL_FILES_PATH, record['filepath'])
+            
+        if body['type'] == 'original':
+            path = os.path.join(ORIGINAL_FILES_PATH, record['filepath'])
+            return send_file(path, as_attachment=True)
+        elif body['type'] == 'small':
+            return send_file(path, as_attachment=True)
+        
+    except Exception as e:
+        return {'msg': str(e)}, 500

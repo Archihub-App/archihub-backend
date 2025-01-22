@@ -1,4 +1,4 @@
-from flask import jsonify, request
+from flask import jsonify, request, send_file
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from app.utils import HookHandler
@@ -36,6 +36,10 @@ mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
 children_cache = {}
+
+ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
+WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
+
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado
 def change_value(body, route, value):
     route = route.split('.')
@@ -622,28 +626,29 @@ def validate_fields(body, metadata, errors):
                                             subfield['label'] = subfield['name']
                                             validate_text(v[subfield['destiny']], subfield)
                                         elif subfield['required'] and body['status'] == 'published':
-                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                            errors[subfield['destiny']] = f'El campo {subfield["name"]} es requerido'
                                     elif subfield['type'] == 'text-area':
                                         exists = v[subfield['destiny']]
                                         if exists:
                                             subfield['label'] = subfield['name']
                                             validate_text(v[subfield['destiny']], subfield)
                                         elif subfield['required'] and body['status'] == 'published':
-                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                            errors[subfield['destiny']] = f'El campo {subfield["name"]} es requerido'
                                     elif subfield['type'] == 'number':
                                         exists = v[subfield['destiny']]
                                         if exists:
+                                            v[subfield['destiny']] = float(v[subfield['destiny']])
                                             if not isinstance(v[subfield['destiny']], numbers.Number):
-                                                errors[subfield['destiny']] = f'El campo {subfield["label"]} debe ser un número'
+                                                errors[subfield['destiny']] = f'El campo {subfield["name"]} debe ser un número'
                                         elif subfield['required'] and body['status'] == 'published':
-                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                            errors[subfield['destiny']] = f'El campo {subfield["name"]} es requerido'
                                     elif subfield['type'] == 'checkbox':
                                         exists = v[subfield['destiny']]
                                         if exists:
                                             if not isinstance(v[subfield['destiny']], bool):
-                                                errors[subfield['destiny']] = f'El campo {subfield["label"]} debe ser un booleano'
+                                                errors[subfield['destiny']] = f'El campo {subfield["name"]} debe ser un booleano'
                                         elif subfield['required'] and body['status'] == 'published':
-                                            errors[subfield['destiny']] = f'El campo {subfield["label"]} es requerido'
+                                            errors[subfield['destiny']] = f'El campo {subfield["name"]} es requerido'
                                     elif subfield['type'] == 'simple-date':
                                         exists = v[subfield['destiny']]
                                         if exists:
@@ -825,7 +830,6 @@ def get_resource(id, user):
     resource['icon'] = get_icon(resource['post_type'])
 
     default_visible_type = get_default_visible_type()
-    print(default_visible_type)
     resource['children'] = mongodb.distinct('resources', 'post_type', {
                                             'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
 
@@ -1111,10 +1115,14 @@ def get_resource_files(id, user, page, groupImages = False):
     except Exception as e:
         return {'msg': str(e)}, 500
     
-@cacheHandler.cache.cache(limit=1000)
-def download_resource_files(id, user, page, groupImages = False):
+def download_resource_files(body, user):
     try:
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(body['id'])})
+        # check if the user has access to the resource
+        accessRights = get_accessRights(body['id'])
+        if accessRights:
+            if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
+                return {'msg': 'No tiene permisos para acceder al recurso'}, 401
         # Si el recurso no existe, retornar error
         if not resource:
             return {'msg': 'Recurso no existe'}, 404
@@ -1122,39 +1130,44 @@ def download_resource_files(id, user, page, groupImages = False):
         temp = []
         ids = []
         
-        imgsTotal = 0
         if 'filesObj' in resource:
             for r in resource['filesObj']:
                 ids.append(r)
+                
 
-        r_ = get_resource_records(json.dumps(ids), user, page, groupImages=groupImages)
-        for _ in r_:
-            if _['_id'] == 'imgGallery':
-                imgsTotal = int(_['displayName'].split(' ')[0])
+        r_ = get_resource_records(json.dumps(ids), user, 0, None, False)
+        zippath = os.path.join(WEB_FILES_PATH, 'zipfiles', user + '-' + body['id'] + '-' + body['type'] + '.zip')
+        
+        if not os.path.exists(zippath):
+            os.makedirs(os.path.dirname(zippath), exist_ok=True)
 
-            obj = {
-                'id': str(_['_id']),
-                'hash': _['hash'],
-                'tag': _['tag'],
-            }
-
-            if 'displayName' in _: obj['displayName'] = _['displayName']
-            else : obj['displayName'] = _['name']
-            if 'accessRights' in _: obj['accessRights'] = _['accessRights']
-            if 'processing' in _: obj['processing'] = _['processing']
-
-            temp.append(obj)
-
-        total = len(resource['filesObj'])
-        if imgsTotal > 0:
-            total = total - imgsTotal + 1
+            import zipfile
+            zipf = zipfile.ZipFile(zippath, 'w', zipfile.ZIP_DEFLATED)
             
-        resp = {
-            'data': temp,
-            'total': total
-        }
-        # Retornar el recurso
-        return resp, 200
+            for _ in r_:
+                if _['filepath']:
+                    if body['type'] == 'original':
+                        path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
+                        zipf.write(path, _['name'])
+                        
+                    elif body['type'] == 'small':
+                        path = os.path.join(WEB_FILES_PATH, _['processing']['fileProcessing']['path'])
+                        
+                        if _['processing']['fileProcessing']['type'] == 'image':
+                            path = path + '_large.jpg'
+                        elif _['processing']['fileProcessing']['type'] == 'audio':
+                            path = path + '.mp3'
+                        elif _['processing']['fileProcessing']['type'] == 'video':
+                            path = path + '.mp4'
+                        elif _['processing']['fileProcessing']['type'] == 'document':
+                            path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
+                        zipf.write(path, _['name'])
+                    
+            zipf.close()
+        
+        
+        return send_file(zippath, as_attachment=True)
+                    
     except Exception as e:
         return {'msg': str(e)}, 500
 

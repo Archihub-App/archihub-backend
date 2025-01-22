@@ -1,6 +1,6 @@
 '''
 ARCHIHUB: A comprehensive tool for organizing and connecting information
-Versión 0.8.1
+Versión 0.8.2
 Author: BITSOL
 Made with ❤️ in Colombia
 '''
@@ -122,6 +122,9 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     # Registrar usertasks blueprint
     from app.api.usertasks import bp as usertasks_bp
     app.register_blueprint(usertasks_bp, url_prefix='/usertasks')
+    
+    from app.api.system.services import set_system_setting
+    set_system_setting()
 
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 
@@ -212,6 +215,7 @@ celery_app = celery_init_app(app)
 app.celery_app = celery_app
 
 print('''
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 :::'###::::'########:::'######::'##::::'##:'####:'##::::'##:'##::::'##:'########::
 ::'## ##::: ##.... ##:'##... ##: ##:::: ##:. ##:: ##:::: ##: ##:::: ##: ##.... ##:
 :'##:. ##:: ##:::: ##: ##:::..:: ##:::: ##:: ##:: ##:::: ##: ##:::: ##: ##:::: ##:
@@ -220,6 +224,11 @@ print('''
  ##.... ##: ##::. ##:: ##::: ##: ##:::: ##:: ##:: ##:::: ##: ##:::: ##: ##:::: ##:
  ##:::: ##: ##:::. ##:. ######:: ##:::: ##:'####: ##:::: ##:. #######:: ########::
 ..:::::..::..:::::..:::......:::..:::::..::....::..:::::..:::.......:::........:::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+v0.8.2::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+Author: BITSOL::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+Made with ❤️  in Colombia::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 ''')
 
 if __name__ == '__main__':

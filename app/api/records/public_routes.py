@@ -82,3 +82,13 @@ def get_by_gallery_index_public():
         return tuple(resp)
     else:
         return resp
+    
+@bp.route('/public/download', methods=['POST'])
+def download_public():
+    """
+    Descargar un record por su id
+    ---
+    """
+    body = request.json
+    # Llamar al servicio para obtener un record por su id
+    return public_services.download_records(body)

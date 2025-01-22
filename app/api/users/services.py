@@ -20,6 +20,8 @@ mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 fernet = Fernet(fernet_key)
 
+REDIRECT_URL = os.environ['REDIRECT_URL']
+
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
     return json.loads(json_util.dumps(result))
@@ -268,6 +270,81 @@ def register_user(body):
     except Exception as e:
         return jsonify({'msg': str(e)}), 500
     
+def forgot_password(body):
+    try:
+        admin_register_user = mongodb.get_record('system', {'name': 'user_management'})
+        admin_register_user = admin_register_user['data'][1]
+        if 'value' not in admin_register_user or not admin_register_user['value']:
+            return jsonify({'msg': 'Recuperación de contraseña deshabilitada'}), 400
+    
+        user = mongodb.get_record('users', {'username': body['username']})
+        if not user:
+            return {'msg': 'Usuario no existe'}, 404
+        
+        from app.api.email.services import send_email
+        from app.api.email.templates import forgot_password_template
+
+        token = create_access_token(identity=body['username'], expires_delta=timedelta(days=1))
+        token = fernet.encrypt(token.encode('utf-8'))
+
+        link = f"{REDIRECT_URL}/reset-password?token={token.decode('utf-8')}"
+
+        send_email(body['username'], 'Recuperación de contraseña', forgot_password_template(link))
+
+        return {'msg': 'Correo enviado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def register_me(body):
+    try:
+        admin_register_user = mongodb.get_record('system', {'name': 'user_management'})
+        admin_register_user = admin_register_user['data'][0]
+        if 'value' not in admin_register_user or not admin_register_user['value']:
+            return jsonify({'msg': 'Registro de usuario deshabilitado'}), 400
+        
+        # Verificar si el usuario ya existe
+        user = mongodb.get_record('users', {'username': body['username']})
+        # Si el usuario ya existe, retornar error
+        if user:
+            return jsonify({'msg': 'Usuario ya existe'}), 400
+        
+        password = body['password']
+            
+        body['roles'] = ['user']
+        body['accessRights'] = []
+
+        errors = {}
+        validate_user_fields(body, errors)
+
+        if errors:
+            return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+        
+        # Encriptar contraseña
+        if password != '':
+            password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            
+        body['password'] = password
+        body['verified'] = False
+        # Crear instancia de User con el body del request
+        user = User(**body)
+
+        from app.api.email.services import send_email
+        from app.api.email.templates import new_user_verification_template
+        
+        token = create_access_token(identity=body['username'], expires_delta=timedelta(days=1))
+        token = fernet.encrypt(token.encode('utf-8'))
+        
+        link = f"{REDIRECT_URL}/verify-account?token={token.decode('utf-8')}"
+        
+        send_email(body['username'], 'Verificación de cuenta', new_user_verification_template(link))
+        
+        mongodb.insert_record('users', user)
+    
+        return jsonify({'msg': 'Usuario registrado exitosamente, por favor valida tu usuario con el enlace que te enviamos a tu correo.'}), 201
+
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500
+    
 # Funcion para validar los campos de un usuario
 def validate_user_fields(body, errors):
     try:
@@ -316,6 +393,11 @@ def get_user(username):
     user = mongodb.get_record('users', {'username': username}, fields={'status': 0, 'photo': 0, 'requests': 0, 'lastRequest': 0})
     # retornar el resultado
     if not user:
+        return None
+    
+    if 'verified' not in user:
+        user['verified'] = True
+    elif user['verified'] == False:
         return None
     
     if 'favorites' not in user:

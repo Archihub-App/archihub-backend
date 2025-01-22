@@ -399,9 +399,9 @@ def get_all_records(resource_id):
     else:
         return resp
  
-@bp.route('/<resource_id>/download_records', methods=['POST'])
+@bp.route('/download_records', methods=['POST'])
 @jwt_required()
-def download_all_records(resource_id):
+def download_all_records():
     """
     Obtener los archivos de un recurso padre
     ---
@@ -427,12 +427,8 @@ def download_all_records(resource_id):
 
     body = request.json
 
-    resp = services.download_resource_files(resource_id, current_user)
-        
-    if isinstance(resp, list):
-        return tuple(resp)
-    else:
-        return resp
+    return services.download_resource_files(body, current_user)
+
  
    
 @bp.route('/<resource_id>/imgs', methods=['GET'])

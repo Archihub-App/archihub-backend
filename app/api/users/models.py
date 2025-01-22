@@ -21,6 +21,7 @@ class User(BaseModel):
     lastRequest: datetime = None
     favorites: list[dict] = None
     loginType: str = "local"
+    verified: bool = False
 
     class Config:
         populate_by_name = True
@@ -47,6 +48,7 @@ class UserUpdate(BaseModel):
     lastRequest: Optional[datetime] = None
     favorites: Optional[list[dict]] = None
     loginType: Optional[str] = None
+    verified: Optional[bool] = None
 
     class Config:
         populate_by_name = True

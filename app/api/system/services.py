@@ -638,6 +638,22 @@ def index_resources(user):
 
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+    
+def set_system_setting():
+    try:
+        from app.api.system.default_settings import settings
+        for setting in settings:
+            setting_db = mongodb.get_record('system', {'name': setting['name']})
+            if not setting_db:
+                new = Option(**setting)
+                mongodb.insert_record('system', new)
+            
+            
+
+    except Exception as e:
+        print(str(e))
+        return {'msg': str(e)}, 500
 
 
 def clear_cache():

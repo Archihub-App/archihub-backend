@@ -17,6 +17,9 @@ ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 def get_resources_by_filters(body):
     try:
         post_types = body['post_type']
+        sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
+        sortBy = body.get('sortBy', 'createdAt')
+        page = body.get('page', 0)
 
         for p in post_types:
             post_type_roles = cache_type_roles(p)
@@ -57,7 +60,7 @@ def get_resources_by_filters(body):
                 }
             },
             'size': 20,
-            'from': body['page'] * 20,
+            'from': page * 20,
             '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id', 'ident', 'files', 'createdAt']
         }
 
