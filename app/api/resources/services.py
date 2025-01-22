@@ -1049,7 +1049,7 @@ def get_resource(id, user):
 
     resource['fields'] = temp
     resource['accessRights'] = get_option_by_id(resource['accessRights'])
-    if 'term' in resource['accessRights']:
+    if resource['accessRights'] and 'term' in resource['accessRights']:
         resource['accessRights'] = str(resource['accessRights']['_id'])
     else:
         resource['accessRights'] = None
