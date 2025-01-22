@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 class Option(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
     name: str
-    data: dict = None
+    data: list = []
     label: str = None
     plugins_settings: dict = None
 

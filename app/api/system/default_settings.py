@@ -114,5 +114,23 @@ settings = [
                 'btn_label': 'Cargar polígonos'
             }
         ]
-    }
+    },
+    {
+        'name': 'user_management',
+        'label': 'Ajustes de usuario',
+        'data': [
+            {
+                'type': 'checkbox_single',
+                'label': 'Activar el registro de usuarios',
+                'id': 'user_registration',
+                'instructions': 'Activa el registro de usuarios en la aplicación. Los usuarios pueden registrarse y acceder a la información de la aplicación.'
+            },
+            {
+                'type': 'checkbox_single',
+                'label': 'Activar la recuperación de contraseña',
+                'id': 'user_password_recovery',
+                'instructions': 'Activa la recuperación de contraseña para los usuarios. Los usuarios pueden recuperar su contraseña en caso de olvido.'
+            }
+        ]
+    },
 ]
