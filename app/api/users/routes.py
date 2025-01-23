@@ -183,6 +183,45 @@ def update():
     # Llamar al servicio para actualizar el usuario
     return services.update_user(body, current_user)
 
+@bp.route('/delete', methods=['DELETE'])
+@jwt_required()
+def delete():
+    """
+    Eliminar un usuario
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Usuarios
+    parameters:
+        - in: body
+            name: body
+            schema:
+                type: object
+                properties:
+                    id:
+                        type: string
+                required:
+                    - id
+    responses:
+        200:
+            description: Usuario eliminado exitosamente
+        400:
+            description: Usuario no existe
+        401:
+            description: No tienes permisos para realizar esta acción
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de administrador
+    if not services.has_role(current_user, 'admin'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    
+    body = request.json
+
+    # Llamar al servicio para eliminar el usuario
+    return services.delete_user(body, current_user)
+
 @bp.route('/update-me', methods=['PUT'])
 @jwt_required()
 def updateme():

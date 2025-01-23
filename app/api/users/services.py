@@ -295,6 +295,21 @@ def forgot_password(body):
     except Exception as e:
         return {'msg': str(e)}, 500
     
+def delete_user(body, user):
+    try:
+        if body['username'] == user:
+            return {'msg': 'No puedes eliminarte a ti mismo'}, 400
+        
+        user = mongodb.get_record('users', {'username': body['username']})
+        if not user:
+            return {'msg': 'Usuario no existe'}, 404
+        
+        mongodb.delete_record('users', {'username': body['username']})
+        
+        return {'msg': 'Usuario eliminado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
 def register_me(body):
     try:
         admin_register_user = mongodb.get_record('system', {'name': 'user_management'})
