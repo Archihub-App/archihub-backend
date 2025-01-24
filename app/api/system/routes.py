@@ -374,3 +374,30 @@ def geo_load():
     
     from app.api.geosystem.services import upload_shapes
     return upload_shapes()
+
+@bp.route('/zip-files-delete', methods=['GET'])
+@jwt_required()
+def zip_files_delete():
+    """
+    Eliminar archivos zip
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Archivos eliminados exitosamente
+        401:
+            description: No tiene permisos para eliminar los archivos
+        500:
+            description: Error al eliminar los archivos
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de procesamiento o administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': 'No tiene permisos para eliminar los archivos'}, 401
+    
+    from app.api.resources.services import delete_zip_files
+    return delete_zip_files()

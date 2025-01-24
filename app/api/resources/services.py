@@ -1170,6 +1170,17 @@ def download_resource_files(body, user):
                     
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+def delete_zip_files():
+    try:
+        zippath = os.path.join(WEB_FILES_PATH, 'zipfiles')
+        for f in os.listdir(zippath):
+            os.remove(os.path.join(zippath, f))
+            
+        return {'msg': 'Archivos eliminados'}, 200
+    except Exception as e:
+        print(str(e))
+        return {'msg': str(e)}, 500
 
 # Nuevo servicio para eliminar un recurso
 def delete_by_id(id, user):
