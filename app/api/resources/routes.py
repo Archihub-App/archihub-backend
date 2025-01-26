@@ -488,3 +488,42 @@ def favcount(resource_id):
     """
     # Llamar al servicio para obtener el contador de favoritos
     return services.get_favCount(resource_id)
+
+
+@bp.route('/change-post-type', methods=['POST'])
+@jwt_required()
+def change_post_type():
+    """
+    Cambiar el tipo de contenido de un recurso
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                id:
+                    type: string
+                post_type:
+                    type: string
+    responses:
+        200:
+            description: Tipo de contenido cambiado exitosamente
+        401:
+            description: No tiene permisos para cambiar el tipo de contenido
+        500:
+            description: Error al cambiar el tipo de contenido
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+    # Obtener el body del request
+    body = request.json
+    # Llamar al servicio para cambiar el tipo de contenido
+    return services.change_post_type(body, current_user)
