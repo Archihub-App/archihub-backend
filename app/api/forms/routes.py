@@ -20,9 +20,11 @@ def get_all():
         - Estándares de metadatos
     responses:
         200:
-            description: Lista de estándares de metadatos
+            description: Lista de estándares de metadatos obtenida exitosamente
         401:
             description: No tienes permisos para realizar esta acción
+        500:
+            description: Error al obtener los estándares de metadatos
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()

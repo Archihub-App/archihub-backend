@@ -14,9 +14,27 @@ def get_tasks():
     ---
     tags:
         - Tareas
+    parameters:
+        - in: path
+          name: Usuario actual
+          type: string
+          required: true
+        - in: body
+          name: body
+          type: object
+          required: true
+          properties:
+                user:
+                    type: string
+                status:
+                    type: string
     responses:
         200:
             description: Tareas obtenidas exitosamente
+        400:
+            description: Debe especificar el estado de las tareas
+        401:
+            description: No tiene permisos suficientes
         500:
             description: Error al obtener las tareas
     """
@@ -56,6 +74,8 @@ def get_resource_tasks(resourceId):
     responses:
         200:
             description: Tareas del recurso obtenidas exitosamente
+        401:
+            description: No tiene permisos suficientes
         500:
             description: Error al obtener las tareas del recurso
     """
@@ -76,6 +96,8 @@ def get_editors():
     responses:
         200:
             description: Editores de tareas obtenidos exitosamente
+        401:
+            description: No tiene permisos suficientes
         500:
             description: Error al obtener los editores de tareas
     """
@@ -108,6 +130,8 @@ def create_task():
     responses:
         200:
             description: Tarea creada exitosamente
+        401:
+            description: No tiene permisos suficientes
         500:
             description: Error al crear la tarea
     """
@@ -147,6 +171,8 @@ def update_task(taskId):
     responses:
         200:
             description: Tarea actualizada exitosamente
+        401:
+            description: No tiene permisos suficientes
         500:
             description: Error al actualizar la tarea
     """

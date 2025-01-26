@@ -359,11 +359,11 @@ def geo_load():
         - Ajustes del sistema
     responses:
         200:
-            description: Cache limpiada exitosamente
+            description: Polígonos geográficos actualizados
         401:
-            description: No tiene permisos para limpiar la cache
+            description: No tiene permisos para actualizar los poligonos
         500:
-            description: Error al limpiar la cache
+            description: Error al actualizar los poligonos
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
