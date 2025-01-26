@@ -18,13 +18,20 @@ def get_by_id(id):
         - JWT: []
     tags:
         - Usuarios
+    parameters:
+        - in: path
+          name: id
+          type: string
+          required: true
     responses:
         200:
             description: Usuario obtenido exitosamente
-        400:
-            description: Usuario no existe
         401:
             description: No tienes permisos para realizar esta acción
+        404:
+            description: Usuario no existe
+        500:
+            description: Error obteniendo el usuario
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -63,10 +70,12 @@ def register():
                 - username
                 - password
     responses:
-        200:
+        201:
             description: Usuario registrado exitosamente
         400:
             description: Usuario ya existe
+        500:
+            description: Error registrando el usuario
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -267,6 +276,11 @@ def get_compromise():
         - JWT: []
     tags:
         - Usuarios
+    parameters:
+        - in: path
+          name: Usuario actual
+          type: string
+          required: true
     responses:
         200:
             description: Compromise obtenido exitosamente
@@ -292,6 +306,11 @@ def accept_compromise():
         - JWT: []
     tags:
         - Usuarios
+    parameters:
+        - in: path
+          name: Usuario actual
+          type: string
+          required: true
     responses:
         200:
             description: Compromise aceptado exitosamente
@@ -318,6 +337,11 @@ def get_user():
         - JWT: []
     tags:
         - Usuarios
+    parameters:
+        - in: path
+          name: Usuario actual
+          type: string
+          required: true
     responses:
         200:
             description: Usuario obtenido exitosamente
@@ -548,6 +572,11 @@ def get_requests():
         - JWT: []
     tags:
         - Usuarios
+    parameters:
+        - in: path
+          name: Usuario actual
+          type: string
+          required: true
     responses:
         200:
             description: Requests obtenidos exitosamente
@@ -571,6 +600,22 @@ def set_favorite():
         - JWT: []
     tags:
         - Usuarios
+    parameters:
+        - in: path
+          name: Usuario actual
+          type: string
+          required: true
+        - in: body
+          name: body
+          type: object
+          required: true
+          properties:
+                id:
+                    type: string
+                type:
+                    type: string
+                view:
+                    type: string
     responses:
         200:
             description: Requests obtenidos exitosamente
@@ -595,6 +640,20 @@ def delete_favorite():
         - JWT: []
     tags:
         - Usuarios
+    parameters:
+        - in: path
+          name: Usuario actual
+          type: string
+          required: true
+        - in: body
+          name: body
+          type: object
+          required: true
+          properties:
+                id:
+                    type: string
+                type:
+                    type: string
     responses:
         200:
             description: Requests obtenidos exitosamente
@@ -620,6 +679,20 @@ def get_favorites():
         - JWT: []
     tags:
         - Usuarios
+    parameters:
+        - in: path
+          name: Usuario actual
+          type: string
+          required: true
+        - in: body
+          name: body
+          type: object
+          required: true
+          properties:
+                type:
+                    type: string
+                page:
+                    type: integer
     responses:
         200:
             description: Favoritos obtenidos exitosamente
@@ -643,6 +716,20 @@ def get_snaps():
         - JWT: []
     tags:
         - Usuarios
+    parameters:
+        - in: path
+          name: Usuario actual
+          type: string
+          required: true
+        - in: body
+          name: body
+          type: object
+          required: true
+          properties:
+                type:
+                    type: string
+                page:
+                    type: integer
     responses:
         200:
             description: Snaps obtenidos exitosamente

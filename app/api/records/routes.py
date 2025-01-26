@@ -38,6 +38,8 @@ def get_all():
             description: Records obtenidos exitosamente
         401:
             description: No tiene permisos para obtener los records
+        404:
+            description: Records no encontrados
         500:
             description: Error al obtener los records
     """
@@ -111,6 +113,8 @@ def get_by_gallery_index():
     responses:
         200:
             description: Record
+        400:
+            description: ID o index no especificado
         401:
             description: No tiene permisos para obtener un record
         404:
@@ -178,13 +182,25 @@ def download_records():
         - Records
     parameters:
         - in: body
-            name: body
+          name: body
+          schema:
+            type: object
+            properties:
+                id:
+                    type: string
+                    required: true
+                    description: id del record a obtener
+                type:
+                    type: string
+                    description: archivo a descargar (original, small, medium, large)
             
     responses:
         200:
             description: Records descargados exitosamente
         401:
             description: No tiene permisos para descargar los records
+        404:
+            description: Records con problemas en los procesamientos
         500:
             description: Error al descargar los records
     """
@@ -215,7 +231,7 @@ def get_transcription_by_id(id):
             description: id del record a obtener
     responses:
         200:
-            description: Record
+            description: Record obtenido exitosamente
         401:
             description: No tiene permisos para obtener un record
         404:
@@ -245,18 +261,18 @@ def edit_document_transcription(id):
         - Records
     parameters:
         - in: path
-            name: id
-            schema:
-                type: string
-                required: true
-                description: id del record a obtener
+          name: id
+          schema:
+            type: string
+            required: true
+            description: id del record a obtener
     responses:
         200:
             description: Record
         401:
-            description: No tiene permisos para obtener un record
+            description: No tiene permisos para editar un record
         404:
-            description: Record no existe
+            description: Record no existe o no tiene transcripción
         500:
             description: Error al obtener el record
     """
@@ -286,18 +302,18 @@ def delete_document_transcription(id):
         - Records
     parameters:
         - in: path
-            name: id
-            schema:
-                type: string
-                required: true
-                description: id del record a obtener
+          name: id
+          schema:
+            type: string
+            required: true
+            description: id del record a obtener
     responses:
         200:
             description: Record
         401:
             description: No tiene permisos para obtener un record
         404:
-            description: Record no existe
+            description: Record no existe o no tiene transcripción
         500:
             description: Error al obtener el record
     """
@@ -327,11 +343,11 @@ def get_metadata_by_id(id):
         - Records
     parameters:
         - in: path
-            name: id
-            schema:
-                type: string
-                required: true
-                description: id del record a obtener
+          name: id
+          schema:  
+            type: string
+            required: true
+            description: id del record a obtener
     responses:
         200:
             description: Record
@@ -399,20 +415,23 @@ def get_page_by_id(id):
         - in: path
           name: id
           schema:
-            type: string
-            required: true
-            description: id del record a obtener
+              type: string
+          required: true
+          description: id del record a obtener
         - in: query
-            name: pages
-            schema:
-                type: array
-                required: true
-                description: número de páginas a obtener
-            name: size
-            schema:
-                type: string
-                required: true
-                description: tamaño de la página a obtener small/large
+          name: pages
+          schema:
+              type: array
+              items:
+                  type: string
+          required: true
+          description: número de páginas a obtener
+        - in: query
+          name: size
+          schema:
+              type: string
+          required: true
+          description: tamaño de la página a obtener (small/large)
     responses:
         200:
             description: Imagen de la página
@@ -448,15 +467,15 @@ def get_blocks_by_id(id):
         - in: path
           name: id
           schema:
-            type: string
-            required: true
-            description: id del record a obtener
+              type: string
+              required: true
+              description: id del record a obtener
         - in: query
-            name: blocks
-            schema:
-                type: array
-                required: true
-                description: número de bloques a obtener
+          name: blocks
+          schema:
+              type: array
+              required: true
+              description: número de bloques a obtener
     responses:
         200:
             description: Bloques del record
@@ -490,7 +509,7 @@ def get_blocks_by_id(id):
 @jwt_required()
 def post_label():
     """
-    Agregar un bloque de un record
+    Agregar un bloque a un record
     ---
     security:
         - JWT: []
@@ -504,13 +523,19 @@ def post_label():
             properties:
                 id:
                     type: string
-                label:
+                type_block:
                     type: string
+                page:
+                    type: integer
+                data:
+                    type: object
     responses:
-        200:
+        201:
             description: Label asignado exitosamente
         401:
             description: No tiene permisos para asignar un label a un record
+        404:
+            description: Record no existe
         500:
             description: Error al asignar un label a un record
     """
@@ -544,15 +569,21 @@ def set_label():
             properties:
                 id:
                     type: string
-                label:
+                type_block:
                     type: string
+                page:
+                    type: integer
+                data:
+                    type: object
     responses:
         200:
-            description: Label asignado exitosamente
+            description: Bloque actualizado exitosamente
         401:
-            description: No tiene permisos para asignar un label a un record
+            description: No tiene permisos para actualizar un bloque de un record
+        404:
+            description: Record no existe
         500:
-            description: Error al asignar un label a un record
+            description: Error al actualizar un bloque de un record
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -570,7 +601,7 @@ def set_label():
 @jwt_required()
 def delete_label():
     """
-    Actualizar un bloque de un record
+    Eliminar un bloque de un record
     ---
     security:
         - JWT: []
@@ -584,15 +615,15 @@ def delete_label():
             properties:
                 id:
                     type: string
-                label:
-                    type: string
     responses:
         200:
-            description: Label asignado exitosamente
+            description: Bloque eliminado exitosamente
         401:
-            description: No tiene permisos para asignar un label a un record
+            description: No tiene permisos para eliminar un bloque de un record
+        404:
+            description: Record no existe
         500:
-            description: Error al asignar un label a un record
+            description: Error al eliminar un bloque de un record
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -626,6 +657,8 @@ def favcount(record_id):
     responses:
         200:
             description: FavCount del record
+        404:
+            description: Record no existe
         500:
             description: Error al obtener el record
     """

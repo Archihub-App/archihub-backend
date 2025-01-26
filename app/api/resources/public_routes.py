@@ -10,7 +10,7 @@ def get_all_public():
     Obtener todos los resources dado un body de filtros
     ---
     tags:
-        - Resources
+        - Recursos
     parameters:
         - in: body
           name: body
@@ -192,7 +192,7 @@ def get_tree_public():
 @bp.route('/public/<resource_id>/imgs', methods=['GET'])
 def get_imgs_public(resource_id):
     """
-    Obtener los archivos de un recurso padre
+    Obtener las imagenes de un recurso padre
     ---
     security:
         - JWT: []
@@ -224,6 +224,24 @@ def download_public():
     """
     Descargar un record por su id
     ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: resource_id
+          schema:
+              type: string
+    responses:
+        200:
+            description: Recursos obtenidos exitosamente
+        401:
+            description: No tiene permisos para obtener los recursos
+        404:
+            description: Recurso no encontrado
+        500:
+            description: Error al obtener los recursos
     """
     body = request.json
     

@@ -29,6 +29,8 @@ def login():
             description: Login exitoso
         401:
             description: Usuario o contraseña inválidos
+        500:
+            description: Error en el servidor
     """
     try:
         # Obtener username y password del request

@@ -11,14 +11,16 @@ def create_snap():
     Crear un nuevo recorte
     ---
     tags:
-      - snaps
+      - Recortes
     responses:
-        200:
+        201:
             description: Recorte creado
-        400:
-            description: Error en la petición
         401:
             description: Token inválido
+        404:
+            description: Archivo no encontrado
+        500:
+            description: Error creando el recorte
     """
     user = get_jwt_identity()
     body = request.json
@@ -32,7 +34,7 @@ def delete_snap(id):
     Eliminar un recorte por su id
     ---
     tags:
-      - snaps
+      - Recortes
     parameters:
       - in: path
         name: id
@@ -41,12 +43,14 @@ def delete_snap(id):
         required: true
         description: Id del recorte
     responses:
-        200:
-            description: Recorte eliminado
-        400:
-            description: Error en la petición
+        204:
+            description: Recorte eliminado exitosamente
         401:
-            description: Token inválido
+            description: No tienes permisos para eliminar este recorte
+        404:
+            description: Recorte no encontrado
+        500:
+            description: Error eliminando el recorte
     """
     user = get_jwt_identity()
 
@@ -59,7 +63,7 @@ def get_snap(id):
     Obtener un recorte por su id
     ---
     tags:
-      - snaps
+      - Recortes
     parameters:
       - in: path
         name: id
@@ -70,10 +74,12 @@ def get_snap(id):
     responses:
         200:
             description: Recorte encontrado
-        400:
-            description: Error en la petición
         401:
-            description: Token inválido
+            description: No tienes permisos para ver este recorte
+        404:
+            description: Recorte no encontrado
+        500:
+            description: Error obteniendo el recorte
     """
     user = get_jwt_identity()
 

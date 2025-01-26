@@ -94,6 +94,8 @@ def create():
     responses:
         201:
             description: Recurso creado exitosamente
+        40:
+            description: Error con los metadatos o campos del recurso
         401:
             description: No tiene permisos para crear un recurso
         500:
@@ -198,6 +200,8 @@ def update_by_id(id):
     responses:
         200:
             description: Recurso actualizado exitosamente
+        400:
+            description: Error al validar los campos del recurso
         401:
             description: No tiene permisos para actualizar el recurso
         500:
@@ -381,6 +385,8 @@ def get_all_records(resource_id):
             description: Recursos obtenidos exitosamente
         401:
             description: No tiene permisos para obtener los recursos
+        404:
+            description: Recurso no encontrado
         500:
             description: Error al obtener los recursos
     """
@@ -403,7 +409,7 @@ def get_all_records(resource_id):
 @jwt_required()
 def download_all_records():
     """
-    Obtener los archivos de un recurso padre
+    Descargar los archivos de un recurso padre
     ---
     security:
         - JWT: []
@@ -419,6 +425,8 @@ def download_all_records():
             description: Recursos obtenidos exitosamente
         401:
             description: No tiene permisos para obtener los recursos
+        404:
+            description: Recurso no encontrado
         500:
             description: Error al obtener los recursos
     """
@@ -429,13 +437,12 @@ def download_all_records():
 
     return services.download_resource_files(body, current_user)
 
- 
    
 @bp.route('/<resource_id>/imgs', methods=['GET'])
 @jwt_required()
 def get_imgs(resource_id):
     """
-    Obtener los archivos de un recurso padre
+    Obtener las im'agenes de un recurso padre
     ---
     security:
         - JWT: []
@@ -451,6 +458,8 @@ def get_imgs(resource_id):
             description: Recursos obtenidos exitosamente
         401:
             description: No tiene permisos para obtener los recursos
+        404:
+            description: No hay imágenes asociadas al recurso
         500:
             description: Error al obtener los recursos
     """

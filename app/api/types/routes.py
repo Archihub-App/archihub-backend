@@ -236,7 +236,12 @@ def delete_by_slug(slug):
     tags:
         - Tipos de contenido
     parameters:
-        - slug (string): slug del tipo de contenido a eliminar
+        - in: path
+          name: slug
+          schema:
+            type: string
+          required: true
+          description: slug del tipo de contenido a eliminar
     responses:
         200:
             description: Tipo de contenido eliminado

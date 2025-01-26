@@ -19,7 +19,7 @@ def get_all():
     security:
         - JWT: []
     tags:
-        - Resources
+        - Recursos
     parameters:
         - in: body
           name: body
@@ -59,7 +59,7 @@ def get_tree():
     security:
         - JWT: []
     tags:
-        - Resources
+        - Recursos
     parameters:
         - in: body
           name: body
