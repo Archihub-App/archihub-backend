@@ -20,9 +20,25 @@ def get_tasks(user):
     ---
     tags:
         - Tareas de procesamiento
+    parameters:
+        - in: path
+          name: user
+          required: true
+          type: string
+          description: Nombre de usuario
+        - in: body
+          name: body
+          required: true
+          schema:
+            properties:
+                page:
+                    type: integer
+                    description: Página de resultados
     responses:
         200:
             description: Lista de tasks
+        401:
+            description: No tiene permisos para obtener las tareas
         500:
             description: Error al obtener las tasks
     """
@@ -44,9 +60,17 @@ def get_tasks_total(user):
     ---
     tags:
         - Tareas de procesamiento
+    parameters:
+        - in: path
+          name: user
+          required: true
+          type: string
+          description: Nombre de usuario
     responses:
         200:
             description: Total de tasks
+        401:
+            description: No tiene permisos para obtener el total de tareas
         500:
             description: Error al obtener el total de tasks
     """
@@ -71,6 +95,8 @@ def test_celery_result_all():
     responses:
         200:
             description: Listado de tasks
+        401:
+            description: No tiene permisos para obtener las tareas en ejecución
         500:
             description: Error al recuperar las tasks
     """
@@ -96,9 +122,21 @@ def delete_task(user, taskId):
     ---
     tags:
         - Tareas de procesamiento
+    parameters:
+        - in: path
+          name: taskId
+          required: true
+          type: string
+          description: ID de la tarea
     responses:
         200:
-            description: Task eliminada
+            description: La tarea se detuvo correctamente
+        400:
+            description: No se puede detener la tarea
+        401:
+            description: No tiene permisos para eliminar la tarea
+        404:
+            description: La tarea no existe
         500:
             description: Error al eliminar la task
     """

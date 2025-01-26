@@ -34,6 +34,10 @@ def filter():
             description: Logs obtenidos exitosamente
         400:
             description: No se encontraron logs
+        403:
+            description: No tienes permisos para realizar esta acción
+        500:
+            description: Error obteniendo logs
     """
     # Obtener el body del request
     body = request.json

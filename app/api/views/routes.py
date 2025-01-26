@@ -20,6 +20,8 @@ def get_view(view_id):
     responses:
         200:
             description: Retorna la vista de consulta
+        401:
+            description: No tienes permisos para realizar esta acción
         500:
             description: Error al obtener la vista de consulta
     """
@@ -51,6 +53,8 @@ def update_view(view_id):
     responses:
         200:
             description: Vista de consulta actualizada exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
         500:
             description: Error al actualizar la vista de consulta
     """
@@ -80,6 +84,8 @@ def delete_view(view_id):
     responses:
         200:
             description: Vista de consulta eliminada exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
         500:
             description: Error al eliminar la vista de consulta
     """
@@ -123,6 +129,8 @@ def new_view():
     responses:
         200:
             description: Vista de consulta creada exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
         500:
             description: Error al crear la vista de consulta
     """

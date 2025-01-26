@@ -17,20 +17,23 @@ def get_page_by_id_public(id):
         - in: path
           name: id
           schema:
-            type: string
-            required: true
-            description: id del record a obtener
+              type: string
+          required: true
+          description: id del record a obtener
         - in: query
-            name: pages
-            schema:
-                type: array
-                required: true
-                description: número de páginas a obtener
-            name: size
-            schema:
-                type: string
-                required: true
-                description: tamaño de la página a obtener small/large
+          name: pages
+          schema:
+              type: array
+              items:
+                  type: string
+          required: true
+          description: número de páginas a obtener
+        - in: query
+          name: size
+          schema:
+              type: string
+          required: true
+          description: tamaño de la página a obtener (small/large)
     responses:
         200:
             description: Imagen de la página
@@ -88,6 +91,33 @@ def download_public():
     """
     Descargar un record por su id
     ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                id:
+                    type: string
+                    required: true
+                    description: id del record a obtener
+                type:
+                    type: string
+                    description: archivo a descargar (original, small, medium, large)
+            
+    responses:
+        200:
+            description: Record descargado exitosamente
+        400:
+            description: ID no definido
+        404:
+            description: Records con problemas en los procesamientos
+        500:
+            description: Error al descargar los records
     """
     body = request.json
     # Llamar al servicio para obtener un record por su id
