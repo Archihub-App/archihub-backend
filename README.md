@@ -16,7 +16,7 @@ Para instalar la herramienta debes seguir los pasos indicados en la [documentaci
 
 En cuanto al uso del aplicativo, te recomendamos revisar las [guías en video](https://www.youtube.com/watch?v=XrH0VRjUpys&list=PLzh6tCpowSeuJ7QOqjVL_lM5ASIcBdQXu) para el uso de ArchiHUB.
 
-## *Para desarrolladores*
+## Documentación de la Api de la herramienta. *Para desarrolladores*
 
 Como se mencionó anteriormente, como usuario puedes desarrollar una interfaz completamente personalizada. Para facilitar esta tarea, hemos puesto a disposición de los usuarios de la herramienta la documentación de la Api de ArchiHUB. Para acceder a ella, el aplicativo se debe [haber iniciado](https://archihub-app.github.io/archihub.github.io/es/install_local/#arrancar-el-aplicativo).
 
