@@ -204,14 +204,14 @@ def delete():
         - Usuarios
     parameters:
         - in: body
-            name: body
-            schema:
-                type: object
-                properties:
-                    id:
-                        type: string
-                required:
-                    - id
+          name: body
+          schema:
+            type: object
+            properties:
+                id:
+                    type: string
+            required:
+                - id
     responses:
         200:
             description: Usuario eliminado exitosamente
