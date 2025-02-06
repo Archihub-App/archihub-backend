@@ -13,7 +13,7 @@ def new_resource(username, isAdmin):
     Crear un nuevo recurso
     ---
     tags:
-        - Recursos
+        - Api de administrador
     parameters:
         - in: body
           name: body
@@ -35,8 +35,10 @@ def new_resource(username, isAdmin):
                 parentType:
                     type: string
     responses:
-        200:
+        201:
             description: Recurso creado exitosamente
+        400:
+            description: El recurso no tiene metadata
         401:
             description: No tiene permisos para crear un recurso
         500:
@@ -59,7 +61,7 @@ def update_resource(username, isAdmin):
     Actualizar un recurso
     ---
     tags:
-        - Recursos
+        - Api de administrador
     parameters:
         - in: body
           name: body
@@ -108,7 +110,7 @@ def get_resource_id(username, isAdmin):
     Obtener el id de un recurso por su nombre
     ---
     tags:
-        - Recursos
+        - Api de administrador
     parameters:
         - in: body
           name: body
@@ -120,6 +122,8 @@ def get_resource_id(username, isAdmin):
     responses:
         200:
             description: Id del recurso obtenido exitosamente
+        400:
+            description: El recurso no existe
         401:
             description: No tiene permisos para obtener el id del recurso
         500:
@@ -141,7 +145,7 @@ def get_opts_id(username, isAdmin):
     Obtener el id de un recurso por su nombre
     ---
     tags:
-        - Recursos
+        - Api de administrador
     parameters:
         - in: body
           name: body
@@ -153,6 +157,8 @@ def get_opts_id(username, isAdmin):
     responses:
         200:
             description: Id del recurso obtenido exitosamente
+        400:
+            description: El recurso no existe
         401:
             description: No tiene permisos para obtener el id del recurso
         500:
@@ -173,7 +179,7 @@ def create_type(username, isAdmin):
     Crear un nuevo tipo de contenido
     ---
     tags:
-        - Recursos
+        - Api de administrador
     parameters:
         - in: body
           name: body
@@ -193,8 +199,10 @@ def create_type(username, isAdmin):
                 icon:
                     type: string
     responses:
-        200:
+        201:
             description: Tipo de contenido creado exitosamente
+        400:
+            description: El nombre o el slug del tipo de contenido está vacío
         401:
             description: No tiene permisos para crear un tipo de contenido
         500:
@@ -216,7 +224,7 @@ def update_type(username, isAdmin):
     Actualizar un tipo de contenido
     ---
     tags:
-        - Recursos
+        - Api de administrador
     parameters:
         - in: body
           name: body
@@ -242,6 +250,8 @@ def update_type(username, isAdmin):
             description: Tipo de contenido actualizado exitosamente
         401:
             description: No tiene permisos para actualizar un tipo de contenido
+        404:
+            description: El tipo de contenido no existe
         500:
             description: Error al actualizar el tipo de contenido
     """
@@ -261,7 +271,7 @@ def get_type(username, isAdmin, slug):
     Obtener el tipo de contenido por su slug
     ---
     tags:
-        - Recursos
+        - Api de administrador
     parameters:
         - in: path
           name: slug
@@ -274,6 +284,8 @@ def get_type(username, isAdmin, slug):
             description: Tipo del recurso obtenido exitosamente
         401:
             description: No tiene permisos para obtener el tipo del recurso
+        404:
+            description: El tipo de contenido no existe
         500:
             description: Error al obtener el tipo del recurso
     """

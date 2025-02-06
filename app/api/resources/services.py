@@ -1170,6 +1170,17 @@ def download_resource_files(body, user):
                     
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+def delete_zip_files():
+    try:
+        zippath = os.path.join(WEB_FILES_PATH, 'zipfiles')
+        for f in os.listdir(zippath):
+            os.remove(os.path.join(zippath, f))
+            
+        return {'msg': 'Archivos eliminados'}, 200
+    except Exception as e:
+        print(str(e))
+        return {'msg': str(e)}, 500
 
 # Nuevo servicio para eliminar un recurso
 def delete_by_id(id, user):
@@ -1579,6 +1590,27 @@ def get_total(obj):
         return total
     except Exception as e:
         raise Exception(str(e))
+    
+def change_post_type(body, user):
+    try:
+        post_type = get_resource_type(body['id'])
+        post_type_roles = cache_type_roles(post_type)
+
+        if post_type_roles['editRoles']:
+            canEdit = False
+            for r in post_type_roles['editRoles']:
+                if has_role(user, r) or has_role(user, 'admin'):
+                    canEdit = True
+                    break
+            if not canEdit:
+                return {'msg': 'No tiene permisos para cambiar el tipo de post'}, 401
+
+        
+
+        # Retornar el resultado
+        return {'msg': 'Tipo de post cambiado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
 
 def update_cache():
     get_access_rights.invalidate_all()

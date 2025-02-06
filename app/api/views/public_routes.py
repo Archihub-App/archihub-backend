@@ -31,9 +31,16 @@ def get_view_info(view_slug):
     ---
     tags:
         - Vistas
+    parameters:
+        - in: path
+          name: view_slug
+          type: string
+          required: true
     responses:
         200:
             description: Información de la vista de consulta
+        404:
+            description: Vista de consulta no encontrada
         500:
             description: Error al obtener la información de la vista de consulta
     """

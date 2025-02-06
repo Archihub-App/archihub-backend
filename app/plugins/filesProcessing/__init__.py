@@ -160,8 +160,8 @@ class ExtendedPluginClass(PluginClass):
         
         records_filters = {
             'parent.id': {'$in': [str(body['_id'])]},
+            'processing.fileProcessing': {'$exists': False}
         }
-        records_filters['processing.fileProcessing'] = {'$exists': False}
         
         records = list(mongodb.get_all_records('records', records_filters, fields={'_id': 1, 'mime': 1, 'filepath': 1}))
         size = len(records)

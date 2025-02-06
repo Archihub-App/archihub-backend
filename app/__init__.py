@@ -51,6 +51,27 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     # Inicializar JWT
     jwt = JWTManager(app)
     # Inicializar Swagger
+
+    app.config['SWAGGER'] = {
+        'title': 'ARCHIHUB: A comprehensive tool for organizing and connecting information',
+        'uiversion': 3,
+        'info': {
+            'title': 'ARCHIHUB: A comprehensive tool for organizing and connecting information',
+            'version': '0.8.3',
+            'description': 'This is the API documentation for [ArchiHub](https://www.instagram.com/archihub_app/). Additional information and general project documentation can be found [here](https://archihub-app.github.io/archihub.github.io/es/archihub/).<br /><br />Made with ❤️ in Colombia<br />',
+            'termsOfService': 'https://archihub-app.github.io/archihub.github.io/es/conducta/',
+            'contact': {
+                'name': 'BITSOL SAS',
+                'url': 'https://bit-sol.xyz/'#,
+                #'email': 'bitsol@gmail.com'
+            },
+            'license': {
+                'name': 'MIT',
+                'url': 'https://archihub-app.github.io/archihub.github.io/es/licencia/'
+            }
+        }
+    }
+
     swagger = Swagger(app)
 
     # agregar security definition para JWT Bearer type para que aparezca en la documentación la opción de agregar el token

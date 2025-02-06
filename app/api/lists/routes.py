@@ -19,7 +19,7 @@ def get_all():
         - Listados
     responses:
         200:
-            description: Lista de listados
+            description: Lista de listados obtenida exitosamente
         401:
             description: No tienes permisos para realizar esta acción
         500:
@@ -123,8 +123,6 @@ def get_by_id(id):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener el listado por su id
     resp = services.get_by_id(id)
-
-    print(resp)
 
     # Si el listado no existe, retornar error
     if 'msg' in resp:

@@ -8,7 +8,7 @@ def get_all_public():
     Obtener todos los resources dado un body de filtros
     ---
     tags:
-        - Resources
+        - Recursos
     parameters:
         - in: body
           name: body

@@ -78,14 +78,16 @@ settings = [
                 'label': 'Regenerar el índice para la búsqueda de los recursos',
                 'id': 'index_resources_remake',
                 'instructions': 'Realizar esta acción si se acaba de activar el índice o si se modificaron los estándares de metadatos.',
-                'btn_label': 'Regenerar índice'
+                'btn_label': 'Regenerar índice',
+                'value': 'regenerate-index'
             },
             {
                 'type': 'button_single',
                 'label': 'Volver a indexar los recursos',
                 'id': 'index_resources_reindex',
                 'instructions': 'Esta acción vuelve a indexar todos los recursos sobreescribiendo las versiones anteriores y creando las que no están.',
-                'btn_label': 'Volver a indexar'
+                'btn_label': 'Volver a indexar',
+                'value': 'index-resources'
             }
         ]
     },
@@ -98,7 +100,8 @@ settings = [
                 'label': 'Limpiar la caché de la aplicación',
                 'id': 'cache_clean',
                 'instructions': 'Esta acción limpia la caché de la aplicación. Realizar esta acción si se han hecho cambios en la configuración de la aplicación.',
-                'btn_label': 'Limpiar caché'
+                'btn_label': 'Limpiar caché',
+                'value': 'clear-cache'
             }
         ]
     },
@@ -111,7 +114,8 @@ settings = [
                 'label': 'Cargar polígonos geográficos',
                 'id': 'geo_load',
                 'instructions': 'Cargar los polígonos geográficos para la visualización de mapas en la aplicación.',
-                'btn_label': 'Cargar polígonos'
+                'btn_label': 'Cargar polígonos',
+                'value': 'geo-load'
             }
         ]
     },
@@ -130,6 +134,20 @@ settings = [
                 'label': 'Activar la recuperación de contraseña',
                 'id': 'user_password_recovery',
                 'instructions': 'Activa la recuperación de contraseña para los usuarios. Los usuarios pueden recuperar su contraseña en caso de olvido.'
+            }
+        ]
+    },
+    {
+        'name': 'files_management',
+        'label': 'Ajustes de los archivos',
+        'data': [
+            {
+                'type': 'button_single',
+                'label': 'Borrar archivos zipeados',
+                'id': 'zip_files_delete',
+                'instructions': 'Borrar los archivos zipeados que se han generado en la aplicación.',
+                'btn_label': 'Borrar archivos',
+                'value': 'zip-files-delete'
             }
         ]
     },
