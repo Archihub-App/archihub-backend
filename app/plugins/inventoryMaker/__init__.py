@@ -22,6 +22,50 @@ class ExtendedPluginClass(PluginClass):
         super().__init__(path, __file__, import_name, name, description, version, author, type, settings)
 
     def add_routes(self):
+        @self.route('/public/downloadInventory', methods=['POST'])
+        def download_inventory():
+            try:
+                body = request.get_json()
+                
+                if 'post_type' not in body:
+                    return {'msg': 'No se especificó el tipo de contenido'}, 400
+                if 'view' not in body:
+                    return {'msg': 'No se especificó la vista'}, 400
+                
+                view = mongodb.get_record('views', {'slug': body['view']})
+                
+                if not view:
+                    return {'msg': 'Vista no existe'}, 404
+                
+                view_post_type = view['visible']
+                
+                if isinstance(body['post_type'], list):
+                    for pt in body['post_type']:
+                        if pt not in view_post_type:
+                            return {'msg': 'No tiene permisos para obtener un recurso'}, 401
+                elif body['post_type'] == '*':
+                    body['post_type'] = view_post_type
+                elif isinstance(body['post_type'], str):
+                    if body['post_type'] not in view_post_type:
+                        return {'msg': 'No tiene permisos para obtener un recurso'}, 401
+                    body['post_type'] = [body['post_type']]
+                    
+                filters = {
+                    'post_type': {'$in': body['post_type']}
+                }
+                
+                if view['root']:
+                    if view['parent']:
+                        filters['parent'] = view['parent']
+                        
+                from .services import generateResourceInventory
+                path = USER_FILES_PATH
+                filename = 'public_'+body['view']+'-'.join(body['post_type'])
+                file = generateResourceInventory(filters, None, path, filename)
+                return send_file(file, as_attachment=True)
+            except Exception as e:
+                return {'msg': str(e)}, 500
+        
         @self.route('/bulk', methods=['POST'])
         @jwt_required()
         def create_inventory():
