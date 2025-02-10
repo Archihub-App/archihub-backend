@@ -648,6 +648,12 @@ def set_system_setting():
             if not setting_db:
                 new = Option(**setting)
                 mongodb.insert_record('system', new)
+            else:
+                for d in setting['data']:
+                    if d['id'] not in [s['id'] for s in setting_db['data']]:
+                        setting_db['data'].append(d)
+                update = OptionUpdate(**{'data': setting_db['data']})
+                mongodb.update_record('system', {'name': setting['name']}, update)
             
             
 

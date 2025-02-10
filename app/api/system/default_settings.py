@@ -134,6 +134,23 @@ settings = [
                 'label': 'Activar la recuperación de contraseña',
                 'id': 'user_password_recovery',
                 'instructions': 'Activa la recuperación de contraseña para los usuarios. Los usuarios pueden recuperar su contraseña en caso de olvido.'
+            },
+            {
+                'type': 'select',
+                'label': 'Idioma por defecto de los usuarios',
+                'id': 'user_languages',
+                'instructions': 'Seleccionar el idioma por defecto para los usuarios de la aplicación.',
+                'options': [
+                    {
+                        'label': 'Español',
+                        'value': 'es'
+                    },
+                    {
+                        'label': 'Inglés',
+                        'value': 'en'
+                    }
+                ],
+                'value': 'es'
             }
         ]
     },
