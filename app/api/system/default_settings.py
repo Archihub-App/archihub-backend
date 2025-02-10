@@ -165,6 +165,14 @@ settings = [
                 'instructions': 'Borrar los archivos zipeados que se han generado en la aplicación.',
                 'btn_label': 'Borrar archivos',
                 'value': 'zip-files-delete'
+            },
+            {
+                'type': 'button_single',
+                'label': 'Borrar inventarios públicos',
+                'id': 'inventory_files_delete',
+                'instructions': 'Borrar los inventarios públicos que se han generado en la aplicación.',
+                'btn_label': 'Borrar archivos',
+                'value': 'inventory_files_delete'
             }
         ]
     },

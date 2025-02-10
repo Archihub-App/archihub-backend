@@ -1,0 +1,154 @@
+# English translations for PROJECT.
+# Copyright (C) 2025 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2025-02-10 08:24-0500\n"
+"PO-Revision-Date: 2025-02-10 08:25-0500\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: es\n"
+"Language-Team: es <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.16.0\n"
+
+
+#: __init__.py:165
+msgid "Administrators API is active"
+msgstr ""
+
+#: __init__.py:171
+msgid "API pública activa"
+msgstr ""
+
+#: api/system/services.py:57
+msgid "Error while changing the value of the field {key}"
+msgstr ""
+
+#: api/system/services.py:71
+msgid "Error while getting the resources: {e}"
+msgstr ""
+
+#: api/system/services.py:110
+msgid "System updates applied successfully"
+msgstr ""
+
+#: api/system/services.py:126
+msgid "There si no default cataloging type"
+msgstr ""
+
+#: api/system/services.py:133
+msgid "Error while getting the default cataloging type"
+msgstr ""
+
+#: api/system/services.py:147
+msgid "The default type of the cataloging module does not exist"
+msgstr ""
+
+#: api/system/services.py:154
+msgid "Error while getting the default type of the cataloging module"
+msgstr ""
+
+#: api/system/services.py:172
+msgid "Resources schema updated successfully"
+msgstr ""
+
+#: api/system/services.py:174
+msgid "Error while updating the resources schema"
+msgstr ""
+
+#: api/system/services.py:187
+msgid "There is no resources schema uploaded"
+msgstr ""
+
+#: api/system/services.py:191
+msgid "Error while getting the resources schema"
+msgstr ""
+
+#: api/system/services.py:210
+msgid "Error while getting the value of the field {key}"
+msgstr ""
+
+#: api/system/services.py:227 api/system/services.py:243
+#: api/system/services.py:276 api/system/services.py:295
+#: api/system/services.py:320
+msgid "The field {label} must be of type string"
+msgstr ""
+
+#: api/system/services.py:230 api/system/services.py:246
+#: api/system/services.py:265 api/system/services.py:292
+#: api/system/services.py:323 api/system/services.py:351
+msgid "The field {label} is required"
+msgstr ""
+
+#: api/system/services.py:233 api/system/services.py:252
+#: api/system/services.py:279 api/system/services.py:310
+#: api/system/services.py:338 api/system/services.py:354
+msgid "Error while validating the field {label}"
+msgstr ""
+
+#: api/system/services.py:249
+msgid "The field {label} must be an email"
+msgstr ""
+
+#: api/system/services.py:262 api/system/services.py:289
+msgid "The field {label} must be of type array"
+msgstr ""
+
+#: api/system/services.py:268
+msgid "The field {label} must have at least {min_items} items"
+msgstr ""
+
+#: api/system/services.py:271
+msgid "The field {label} must have at most {max_items} items"
+msgstr ""
+
+#: api/system/services.py:334
+msgid "The field {label} must be a valid URL"
+msgstr ""
+
+#: api/system/services.py:348
+msgid "The field {label} must be of type date"
+msgstr ""
+
+#: api/system/services.py:387
+msgid "Error while getting the plugins: {e}"
+msgstr ""
+
+#: api/system/services.py:410
+msgid "Plugins successfully updated, please restart the system"
+msgstr ""
+
+#: api/system/services.py:412
+msgid "Error while activating the plugins: {e}"
+msgstr ""
+
+#: api/system/services.py:441
+msgid "Plugin successfully updated, please restart the system"
+msgstr ""
+
+#: api/system/services.py:454
+msgid "The field for the index management doesn't exists in the system"
+msgstr ""
+
+#: api/system/services.py:457
+msgid "Indexing is deactivated"
+msgstr ""
+
+#: api/system/services.py:570
+msgid "The process has been added to the processing queue"
+msgstr ""
+
+#: api/system/services.py:573
+msgid "Error: {e}"
+msgstr ""
+
+#: api/system/services.py:689
+msgid "Cache cleaned successfully"
+msgstr "Cache limpiada con éxito"
