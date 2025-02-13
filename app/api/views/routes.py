@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask import jsonify, request
 from app.api.views import services
 from app.api.users import services as user_services
+from flask_babel import _
 
 @bp.route('/<view_id>', methods=['GET'])
 @jwt_required()
@@ -29,7 +30,7 @@ def get_view(view_id):
     current_user = get_jwt_identity()
     
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Llamar al servicio para obtener una vista de consulta
     resp = services.get(view_id, current_user)
     if isinstance(resp, list):
@@ -62,7 +63,7 @@ def update_view(view_id):
     current_user = get_jwt_identity()
     
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
     # Llamar al servicio para actualizar una vista de consulta
@@ -93,7 +94,7 @@ def delete_view(view_id):
     current_user = get_jwt_identity()
     
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Llamar al servicio para eliminar una vista de consulta
     return services.delete(view_id, current_user)
 
@@ -138,7 +139,7 @@ def new_view():
     current_user = get_jwt_identity()
 
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
     # Llamar al servicio para crear la vista de consulta

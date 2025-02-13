@@ -12,6 +12,7 @@ from app.api.system.services import get_default_visible_type
 from app.api.lists.services import get_option_by_id
 from app.utils.functions import get_resource_records_public, cache_type_roles, clear_cache
 import os
+from flask_babel import _
 from datetime import datetime
 from dateutil import parser
 from app.api.resources.services import get_total, get_accessRights, get_resource_type, get_children, get_children_cache
@@ -40,7 +41,7 @@ def get_all(body):
         for p in post_types:
             post_type_roles = cache_type_roles(p)
             if post_type_roles['viewRoles']:
-                return {'msg': 'No tiene permisos para obtener los recursos'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
 
         filters = {}
         limit = 20
@@ -100,13 +101,13 @@ def get_by_id(id):
         # Obtener los accessRights del recurso
         accessRights = get_accessRights(id)
         if accessRights:
-            return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+            return {'msg': _('You don\'t have the required authorization')}, 401
 
         post_type = get_resource_type(id)
         post_type_roles = cache_type_roles(post_type)
 
         if post_type_roles['viewRoles']:
-            return {'msg': 'No tiene permisos para obtener un recurso'}, 401
+            return {'msg': _('You don\'t have the required authorization')}, 401
 
         resource = get_resource(id)
 
@@ -125,7 +126,7 @@ def get_resource(id):
     
     status = resource['status']
     if status == 'draft':
-        raise Exception('No tiene permisos para ver este recurso')
+        raise Exception(_('You don\'t have the required authorization'))
         
     # Registrar el log
     resource['_id'] = str(resource['_id'])
@@ -183,10 +184,10 @@ def get_resource(id):
                 canView = False
             
             if not canView:
-                set_value_in_dict(resource, f['destiny'], 'No tiene permisos para ver este campo')
+                set_value_in_dict(resource, f['destiny'], _('You don\'t have the required authorization'))
                 temp.append({
                     'label': f['label'],
-                    'value': 'No tiene permisos para ver este campo',
+                    'value': _('You don\'t have the required authorization'),
                     'type': 'text'
                 })
                 continue
@@ -298,10 +299,10 @@ def get_resource_files(id, page, groupImages = False):
         # check accessRights
         accessRights = get_accessRights(id)
         if accessRights:
-            return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+            return {'msg': _('You don\'t have the required authorization')}, 401
         # Si el recurso no existe, retornar error
         if not resource:
-            return {'msg': 'Recurso no existe'}, 404
+            return {'msg': _('Resource does not exist')}, 404
 
         temp = []
         ids = []
@@ -374,7 +375,7 @@ def get_resource_images(id):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
 
     if not resource:
-        return {'msg': 'Recurso no existe'}, 404
+        return {'msg': _('Resource does not exist')}, 404
 
     ids = []
     if 'filesObj' in resource:
@@ -383,7 +384,7 @@ def get_resource_images(id):
 
     img = mongodb.count('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'})
     if img == 0:
-        return {'msg': 'No hay imágenes asociadas al recurso'}, 404
+        return {'msg': _('Resource does not have images')}, 404
     
     resp = {
         'pages': img
@@ -397,11 +398,11 @@ def download_resource_files(body):
         # check if the user has access to the resource
         accessRights = get_accessRights(body['id'])
         if accessRights:
-            return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+            return {'msg': _('You don\'t have the required authorization')}, 401
         
         # Si el recurso no existe, retornar error
         if not resource:
-            return {'msg': 'Recurso no existe'}, 404
+            return {'msg': _('Resource does not exist')}, 404
 
         temp = []
         ids = []

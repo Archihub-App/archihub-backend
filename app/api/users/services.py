@@ -14,6 +14,7 @@ from config import config
 import os
 import datetime
 from app.utils.functions import get_access_rights, get_roles, verify_accessright_exists, verify_role_exists
+from flask_babel import _
 
 fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -39,7 +40,7 @@ def get_by_id(id):
 
         # Si el usuario no existe, retornar error
         if not user:
-            return {'msg': 'Recurso no existe'}, 404
+            return {'msg': _('User not found')}, 404
         
         user['_id'] = str(user['_id'])
         
@@ -59,7 +60,7 @@ def get_by_username(username):
 
         # Si el usuario no existe, retornar error
         if not user:
-            return {'msg': 'Recurso no existe'}
+            return {'msg': _('User not found')}, 404
         
         user['_id'] = str(user['_id'])
         if 'favorites' not in user:
@@ -77,7 +78,7 @@ def add_request(username):
 
         # Si el usuario no existe, retornar error
         if not user:
-            return {'msg': 'Usuario no existe'}
+            return {'msg': _('User not found')}, 404
         
         # Verificar que lastRequest sea una fecha y que sea de la semana actual
         if not 'lastRequest' in user:
@@ -92,7 +93,7 @@ def add_request(username):
             user['requests'] += 1
             user['lastRequest'] = datetime.datetime.now()
         else:
-            raise Exception('Límite de requests excedido')
+            raise Exception(_('You have reached the limit of requests for this week'))
 
         user_update = UserUpdate(requests=user['requests'], lastRequest=user['lastRequest'])
         # Actualizar el usuario
@@ -164,10 +165,10 @@ def update_user(body, current_user):
         user = mongodb.get_record('users', {'_id': ObjectId(body['_id'])}, fields={'lastRequest': 0})
         # Si el usuario no existe, retornar error
         if not user:
-            return {'msg': 'Usuario no existe'}, 404
+            return {'msg': _('User not found')}, 404
         
         if user['username'] != body['username']:
-            return {'msg': 'Error con la equivalencia del usuario'}, 400
+            return {'msg': _('You cannot change the username')}, 400
             
         body['roles'] = verify_role_exists(body['roles'])
         body['accessRights'] = verify_accessright_exists(body['accessRights'])
@@ -182,7 +183,7 @@ def update_user(body, current_user):
 
         update_cache()
         # Retornar mensaje de éxito
-        return {'msg': 'Usuario actualizado exitosamente'}, 200
+        return {'msg': _('User updated successfully')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -192,12 +193,12 @@ def update_me(body, current_user):
         user = mongodb.get_record('users', {'username': current_user}, fields={'password': 1, 'name': 1})
         # Si el usuario no existe, retornar error
         if not user:
-            return jsonify({'msg': 'Usuario no existe'}), 400
+            return jsonify({'msg': _('User not found')}), 404
         
         password = body['password']
         # Si la contraseña no coincide, retornar error
         if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
-            return jsonify({'msg': 'Contraseña incorrecta'}), 400
+            return jsonify({'msg': _('Incorrect password')}), 400
         
         update = False
         update_payload = {}
@@ -208,16 +209,16 @@ def update_me(body, current_user):
 
         if body['new_password'] != '' and body['new_password_confirmation'] != '':
             if body['new_password'] != body['new_password_confirmation']:
-                return jsonify({'msg': 'Las contraseñas no coinciden'}), 400
+                return jsonify({'msg': _('Passwords do not match')}), 400
             update_payload['password'] = bcrypt.hashpw(body['new_password'].encode('utf-8'), bcrypt.gensalt())
             update = True
 
         if update:
             user_update = UserUpdate(**update_payload)
             mongodb.update_record('users', {'username': current_user}, user_update)
-            return jsonify({'msg': 'Usuario actualizado exitosamente'}), 200
+            return jsonify({'msg': _('User updated successfully')}), 200
         else:
-            return jsonify({'msg': 'No hay cambios para guardar'}), 400
+            return jsonify({'msg': _('No changes were made')}), 400
         
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -229,7 +230,7 @@ def register_user(body):
         user = mongodb.get_record('users', {'username': body['username']})
         # Si el usuario ya existe, retornar error
         if user:
-            return jsonify({'msg': 'Usuario ya existe'}), 400
+            return jsonify({'msg': _('User already exists')}), 400
         
         password = body['password']
        
@@ -238,11 +239,11 @@ def register_user(body):
 
         for role in body['roles']:
             if role['id'] not in [r['id'] for r in roles]:
-                return {'msg': 'Rol no existe'}, 400
+                return {'msg': _('Role does not exist')}, 400
             
         for right in body['accessRights']:
             if right['id'] not in [r['id'] for r in rights]:
-                return {'msg': 'Permiso no existe'}, 400
+                return {'msg': _('Access right does not exist')}, 400
             
         body['roles'] = [role['id'] for role in body['roles']]
         body['accessRights'] = [right['id'] for right in body['accessRights']]
@@ -251,7 +252,7 @@ def register_user(body):
         validate_user_fields(body, errors)
 
         if errors:
-            return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+            return {'msg': _('Error validating fields'), 'errors': errors}, 400
 
         
         # Encriptar contraseña
@@ -265,7 +266,7 @@ def register_user(body):
         mongodb.insert_record('users', user)
     
     
-        return jsonify({'msg': 'Usuario registrado exitosamente'}), 201
+        return jsonify({'msg': _('User registered successfully')}), 201
 
     except Exception as e:
         return jsonify({'msg': str(e)}), 500
@@ -275,11 +276,11 @@ def forgot_password(body):
         admin_register_user = mongodb.get_record('system', {'name': 'user_management'})
         admin_register_user = admin_register_user['data'][1]
         if 'value' not in admin_register_user or not admin_register_user['value']:
-            return jsonify({'msg': 'Recuperación de contraseña deshabilitada'}), 400
+            return jsonify({'msg': _('Password recovery disabled')}), 400
     
         user = mongodb.get_record('users', {'username': body['username']})
         if not user:
-            return {'msg': 'Usuario no existe'}, 404
+            return {'msg': _('User does not exist')}, 404
         
         from app.api.email.services import send_email
         from app.api.email.templates import forgot_password_template
@@ -289,24 +290,24 @@ def forgot_password(body):
 
         link = f"{REDIRECT_URL}/reset-password?token={token.decode('utf-8')}"
 
-        send_email(body['username'], 'Recuperación de contraseña', forgot_password_template(link))
+        send_email(body['username'], _('Password recovery'), forgot_password_template(link))
 
-        return {'msg': 'Correo enviado exitosamente'}, 200
+        return {'msg': _('Password recovery email sent')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
 def delete_user(body, user):
     try:
         if body['username'] == user:
-            return {'msg': 'No puedes eliminarte a ti mismo'}, 400
+            return {'msg': _('You cannot delete yourself')}, 400
         
         user = mongodb.get_record('users', {'username': body['username']})
         if not user:
-            return {'msg': 'Usuario no existe'}, 404
+            return {'msg': _('User does not exist')}, 404
         
         mongodb.delete_record('users', {'username': body['username']})
         
-        return {'msg': 'Usuario eliminado exitosamente'}, 200
+        return {'msg': _('User deleted successfully')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -315,13 +316,13 @@ def register_me(body):
         admin_register_user = mongodb.get_record('system', {'name': 'user_management'})
         admin_register_user = admin_register_user['data'][0]
         if 'value' not in admin_register_user or not admin_register_user['value']:
-            return jsonify({'msg': 'Registro de usuario deshabilitado'}), 400
+            return jsonify({'msg': _('User registration disabled')}), 400
         
         # Verificar si el usuario ya existe
         user = mongodb.get_record('users', {'username': body['username']})
         # Si el usuario ya existe, retornar error
         if user:
-            return jsonify({'msg': 'Usuario ya existe'}), 400
+            return jsonify({'msg': _('User already exists')}), 400
         
         password = body['password']
             
@@ -332,7 +333,7 @@ def register_me(body):
         validate_user_fields(body, errors)
 
         if errors:
-            return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+            return {'msg': _('Error validating fields'), 'errors': errors}, 400
         
         # Encriptar contraseña
         if password != '':
@@ -351,11 +352,11 @@ def register_me(body):
         
         link = f"{REDIRECT_URL}/verify-account?token={token.decode('utf-8')}"
         
-        send_email(body['username'], 'Verificación de cuenta', new_user_verification_template(link))
+        send_email(body['username'], _('Account verification'), new_user_verification_template(link))
         
         mongodb.insert_record('users', user)
     
-        return jsonify({'msg': 'Usuario registrado exitosamente, por favor valida tu usuario con el enlace que te enviamos a tu correo.'}), 201
+        return jsonify({'msg': _('User registered successfully. Please verify your account by clicking the link sent to your email')}), 201
 
     except Exception as e:
         return jsonify({'msg': str(e)}), 500
@@ -366,10 +367,10 @@ def validate_user_fields(body, errors):
         value = body['name']
         label = 'Nombre'
         if not isinstance(value, str):
-            raise Exception(f'El campo {label} debe ser de tipo string')
+            raise Exception(_(u'The field {label} must be of type string', label=label))
         # Si field.required entonces el valor no puede ser vacío o == ''
         if value == '' or value == None:
-            raise Exception(f'El campo {label} es requerido')
+            raise Exception(_(u'The field {label} is required', label=label))
     except Exception as e:
         errors['name'] = str(e)
 
@@ -377,10 +378,10 @@ def validate_user_fields(body, errors):
         value = body['username']
         label = 'Nombre'
         if not isinstance(value, str):
-            raise Exception(f'El campo {label} debe ser de tipo string')
+            raise Exception(_(u'The field {label} must be of type string', label=label))
         # Si field.required entonces el valor no puede ser vacío o == ''
         if value == '' or value == None:
-            raise Exception(f'El campo {label} es requerido')
+            raise Exception(_(u'The field {label} is required', label=label))
     except Exception as e:
         errors['username'] = str(e)
 
@@ -388,18 +389,18 @@ def validate_user_fields(body, errors):
         value = body['username']
         label = 'Email'
         if not isinstance(value, str):
-            raise Exception(f'El campo {label} debe ser de tipo string')
+            raise Exception(_(u'The field {label} must be of type string', label=label))
         # Si field.required entonces el valor no puede ser vacío o == ''
         if value == '' or value == None:
-            raise Exception(f'El campo {label} es requerido')
+            raise Exception(_(u'The field {label} is required', label=label))
         if not re.match(r"[^@]+@[^@]+\.[^@]+", value):
-            raise Exception(f'El campo {label} debe ser un email')
+            raise Exception(_(u'The field {label} must be a valid email', label=label))
     except Exception as e:
         errors['username'] = str(e)
 
     # validar si body['password'] es igual a body['confirmPassword']
     if body['password'] != body['confirmPassword']:
-        errors['confirmPassword'] = 'Las contraseñas no coinciden'
+        errors['confirmPassword'] = _('Passwords do not match')
     
     return errors
 
@@ -427,7 +428,7 @@ def accept_compromise(username):
     # Actualizar usuario en la base de datos
     mongodb.update_record('users', {'username': username}, user_update)
     # Retornar mensaje de éxito
-    return jsonify({'msg': 'Compromiso aceptado exitosamente'}), 200
+    return jsonify({'msg': _('Compromise accepted successfully')}), 200
 
 # Nuevo servicio para verificar si el usuario tiene un rol específico
 @cacheHandler.cache.cache()
@@ -435,7 +436,7 @@ def has_role(username, role):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     # Si el usuario tiene el rol, retornar True
     if role in user['roles']:
         return True
@@ -447,7 +448,7 @@ def has_right(username, right):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     # Si el usuario tiene el rol, retornar True
     if right in user['accessRights']:
         return True
@@ -458,7 +459,7 @@ def get_user_rights(username):
     user = mongodb.get_record('users', {'username': username}, fields={'accessRights': 1})
     # Si el usuario no existe, retornar error
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     # Retornar los roles del usuario
     return user['accessRights']
 
@@ -472,14 +473,14 @@ def generate_token(username, password, admin = False, expiration = 2):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     
     # Si la contraseña no coincide, retornar error
     if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
-        return jsonify({'msg': 'Contraseña incorrecta'}), 400
+        return jsonify({'msg': _('Incorrect password')}), 400
     # Si el usuario no ha aceptado el compromiso, retornar error
     if not user['compromise']:
-        return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
+        return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
     # Crear el token de acceso para el usuario con el username y sin expiración
     if not admin:
@@ -507,15 +508,15 @@ def generate_node_token(username, password):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     
     # Si la contraseña no coincide, retornar error
     if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
-        return jsonify({'msg': 'Contraseña incorrecta'}), 400
+        return jsonify({'msg': _('Incorrect password')}), 400
     
     # Si el usuario no ha aceptado el compromiso, retornar error
     if not user['compromise']:
-        return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
+        return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
     access_token = create_access_token(identity=username, expires_delta=False)
     # usamos Fernet para encriptar el token de acceso
@@ -535,15 +536,15 @@ def generate_viz_token(username, password):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     
     # Si la contraseña no coincide, retornar error
     if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
-        return jsonify({'msg': 'Contraseña incorrecta'}), 400
+        return jsonify({'msg': _('Incorrect password')}), 400
     
     # Si el usuario no ha aceptado el compromiso, retornar error
     if not user['compromise']:
-        return jsonify({'msg': 'Usuario no ha aceptado el compromiso'}), 400
+        return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
     access_token = create_access_token(identity=username, expires_delta=False)
     # usamos Fernet para encriptar el token de acceso
@@ -566,7 +567,7 @@ def get_requests(username):
 
         # Si el usuario no existe, retornar error
         if not user:
-            return {'msg': 'Usuario no existe'}
+            return {'msg': _('User not found')}, 404
         
         # Verificar que lastRequest sea una fecha y que sea de la semana actual
         if not 'lastRequest' in user:
@@ -604,9 +605,9 @@ def set_favorite(user, body):
         fav = mongodb.get_record(body['type'], {'_id': ObjectId(body['id'])}, fields={'_id': 1, 'status': 1})
 
         if not fav:
-            return {'msg': 'Favorito no existe'}, 404
+            return {'msg': _('Resource not found')}, 404
         elif fav['status'] != 'published' and body['type'] == 'resources':
-            return {'msg': 'Favorito no publicado'}, 400
+            return {'msg': _('Resource not published')}, 400
 
         resp = mongodb.update_record_operator('users', {'username': user}, update)
 
@@ -619,7 +620,7 @@ def set_favorite(user, body):
 
         get_user_favorites.invalidate(user)
 
-        return {'msg': 'Favorito agregado exitosamente'}, 200
+        return {'msg': _('Favorite added successfully')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -645,7 +646,7 @@ def delete_favorite(user, body):
 
         get_user_favorites.invalidate(user)
 
-        return {'msg': 'Favorito eliminado exitosamente'}, 200
+        return {'msg': _('Favorite deleted successfully')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 

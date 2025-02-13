@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-02-10 12:52-0500\n"
+"POT-Creation-Date: 2025-02-12 11:36-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -23,6 +23,56 @@ msgstr ""
 
 #: __init__.py:171
 msgid "API pública activa"
+msgstr ""
+
+#: api/snaps/services.py:36
+msgid "Record not found"
+msgstr ""
+
+#: api/snaps/services.py:59
+msgid "Snap created successfully"
+msgstr ""
+
+#: api/snaps/services.py:83
+msgid "Snap updated successfully"
+msgstr ""
+
+#: api/snaps/services.py:94 api/snaps/services.py:140
+msgid "Snap not found"
+msgstr ""
+
+#: api/snaps/services.py:96 api/snaps/services.py:142 api/system/routes.py:41
+#: api/system/routes.py:69 api/system/routes.py:131 api/system/routes.py:156
+#: api/system/routes.py:192 api/system/routes.py:219 api/system/routes.py:246
+#: api/system/routes.py:273 api/system/routes.py:299 api/system/routes.py:325
+#: api/system/routes.py:373 api/system/routes.py:401 api/tasks/routes.py:52
+#: api/tasks/routes.py:82 api/tasks/routes.py:108 api/tasks/routes.py:148
+#: api/tasks/services.py:207 api/types/routes.py:98 api/types/routes.py:157
+#: api/types/routes.py:167 api/types/routes.py:221 api/types/routes.py:260
+#: api/types/routes.py:294 api/users/routes.py:41 api/users/routes.py:85
+#: api/users/routes.py:189 api/users/routes.py:228 api/users/routes.py:432
+#: api/users/routes.py:476 api/users/routes.py:516 api/users/routes.py:559
+#: api/usertasks/routes.py:46 api/usertasks/routes.py:49
+#: api/usertasks/routes.py:85 api/usertasks/routes.py:107
+#: api/usertasks/routes.py:141 api/usertasks/routes.py:182
+#: api/usertasks/services.py:129 api/usertasks/services.py:133
+#: api/views/routes.py:33 api/views/routes.py:66 api/views/routes.py:97
+#: api/views/routes.py:142
+msgid "You don't have the required authorization"
+msgstr ""
+
+#: api/snaps/services.py:106
+msgid "Snap deleted successfully"
+msgstr ""
+
+#: api/snaps/services.py:160 api/snaps/services.py:188
+msgid "Error while getting the file: {error}"
+msgstr ""
+
+#: api/snaps/services.py:192 api/snaps/services.py:194
+#: api/snaps/services.py:196 api/snaps/services.py:198
+#: api/snaps/services.py:200 api/snaps/services.py:207
+msgid "File not found"
 msgstr ""
 
 #: api/system/services.py:57
@@ -75,13 +125,16 @@ msgstr ""
 
 #: api/system/services.py:227 api/system/services.py:243
 #: api/system/services.py:276 api/system/services.py:295
-#: api/system/services.py:320
+#: api/system/services.py:320 api/users/services.py:370
+#: api/users/services.py:381 api/users/services.py:392
 msgid "The field {label} must be of type string"
 msgstr ""
 
 #: api/system/services.py:230 api/system/services.py:246
 #: api/system/services.py:265 api/system/services.py:292
 #: api/system/services.py:323 api/system/services.py:351
+#: api/users/services.py:373 api/users/services.py:384
+#: api/users/services.py:395
 msgid "The field {label} is required"
 msgstr ""
 
@@ -149,5 +202,257 @@ msgstr ""
 
 #: api/system/services.py:689
 msgid "Cache cleaned successfully"
+msgstr ""
+
+#: api/tasks/services.py:166 api/users/services.py:43 api/users/services.py:63
+#: api/users/services.py:81 api/users/services.py:168 api/users/services.py:196
+#: api/users/services.py:570
+msgid "User not found"
+msgstr ""
+
+#: api/tasks/services.py:203 api/usertasks/services.py:118
+msgid "Task not found"
+msgstr ""
+
+#: api/tasks/services.py:225
+msgid "Task stopped successfully"
+msgstr ""
+
+#: api/tasks/services.py:227
+msgid "Task cannot be stopped"
+msgstr ""
+
+#: api/types/routes.py:128
+msgid "Slug already exists"
+msgstr ""
+
+#: api/types/routes.py:173
+msgid "Type not found"
+msgstr ""
+
+#: api/types/routes.py:291
+msgid "You must specify the slug and the type"
+msgstr ""
+
+#: api/types/services.py:59
+msgid "Name and slug are required"
+msgstr ""
+
+#: api/types/services.py:72
+msgid "Post type created successfully"
+msgstr ""
+
+#: api/types/services.py:86 api/types/services.py:122 api/types/services.py:153
+#: api/types/services.py:256 api/types/services.py:268
+#: api/types/services.py:282 api/types/services.py:296
+msgid "Post type not found"
+msgstr ""
+
+#: api/types/services.py:143
+msgid "Post type updated successfully"
+msgstr ""
+
+#: api/types/services.py:166
+msgid "Post type deleted successfully"
+msgstr ""
+
+#: api/types/services.py:314
+msgid "Form not found"
+msgstr ""
+
+#: api/users/routes.py:296 api/users/routes.py:326 api/users/routes.py:358
+#: api/users/services.py:283 api/users/services.py:306
+#: api/users/services.py:439 api/users/services.py:451
+#: api/users/services.py:462 api/users/services.py:476
+#: api/users/services.py:511 api/users/services.py:539
+msgid "User does not exist"
+msgstr ""
+
+#: api/users/routes.py:434
+msgid "You must specify the password of the user"
+msgstr ""
+
+#: api/users/routes.py:438
+msgid "Duration must be an integer or false"
+msgstr ""
+
+#: api/users/routes.py:745
+msgid "Missing type field in body"
+msgstr ""
+
+#: api/users/routes.py:747
+msgid "Missing page field in body"
+msgstr ""
+
+#: api/users/services.py:96
+msgid "You have reached the limit of requests for this week"
+msgstr ""
+
+#: api/users/services.py:171
+msgid "You cannot change the username"
+msgstr ""
+
+#: api/users/services.py:186 api/users/services.py:219
+msgid "User updated successfully"
+msgstr ""
+
+#: api/users/services.py:201 api/users/services.py:480
+#: api/users/services.py:515 api/users/services.py:543
+msgid "Incorrect password"
+msgstr ""
+
+#: api/users/services.py:212 api/users/services.py:403
+msgid "Passwords do not match"
+msgstr ""
+
+#: api/users/services.py:221
+msgid "No changes were made"
+msgstr ""
+
+#: api/users/services.py:233 api/users/services.py:325
+msgid "User already exists"
+msgstr ""
+
+#: api/users/services.py:242
+msgid "Role does not exist"
+msgstr ""
+
+#: api/users/services.py:246
+msgid "Access right does not exist"
+msgstr ""
+
+#: api/users/services.py:255 api/users/services.py:336
+msgid "Error validating fields"
+msgstr ""
+
+#: api/users/services.py:269
+msgid "User registered successfully"
+msgstr ""
+
+#: api/users/services.py:279
+msgid "Password recovery disabled"
+msgstr ""
+
+#: api/users/services.py:293
+msgid "Password recovery"
+msgstr ""
+
+#: api/users/services.py:295
+msgid "Password recovery email sent"
+msgstr ""
+
+#: api/users/services.py:302
+msgid "You cannot delete yourself"
+msgstr ""
+
+#: api/users/services.py:310
+msgid "User deleted successfully"
+msgstr ""
+
+#: api/users/services.py:319
+msgid "User registration disabled"
+msgstr ""
+
+#: api/users/services.py:355
+msgid "Account verification"
+msgstr ""
+
+#: api/users/services.py:359
+msgid ""
+"User registered successfully. Please verify your account by clicking the "
+"link sent to your email"
+msgstr ""
+
+#: api/users/services.py:397
+msgid "The field {label} must be a valid email"
+msgstr ""
+
+#: api/users/services.py:431
+msgid "Compromise accepted successfully"
+msgstr ""
+
+#: api/users/services.py:483 api/users/services.py:519
+#: api/users/services.py:547
+msgid "User has not accepted the compromise"
+msgstr ""
+
+#: api/users/services.py:608
+msgid "Resource not found"
+msgstr ""
+
+#: api/users/services.py:610
+msgid "Resource not published"
+msgstr ""
+
+#: api/users/services.py:623
+msgid "Favorite added successfully"
+msgstr ""
+
+#: api/users/services.py:649
+msgid "Favorite deleted successfully"
+msgstr ""
+
+#: api/usertasks/routes.py:52
+msgid "You must specify the status of the tasks"
+msgstr ""
+
+#: api/usertasks/services.py:32
+msgid "There are no tasks for this resource"
+msgstr ""
+
+#: api/usertasks/services.py:75
+msgid "resourceId is required"
+msgstr ""
+
+#: api/usertasks/services.py:77
+msgid "user is required"
+msgstr ""
+
+#: api/usertasks/services.py:79
+msgid "comment is required"
+msgstr ""
+
+#: api/usertasks/services.py:82
+msgid "user cannot be empty"
+msgstr ""
+
+#: api/usertasks/services.py:84
+msgid "comment cannot be empty"
+msgstr ""
+
+#: api/usertasks/services.py:86
+msgid "resourceId cannot be empty"
+msgstr ""
+
+#: api/usertasks/services.py:90
+msgid "There is already a task for this resource"
+msgstr ""
+
+#: api/usertasks/services.py:121
+msgid "Task already approved"
+msgstr ""
+
+#: api/usertasks/services.py:125
+msgid "You cannot review this task"
+msgstr ""
+
+#: api/usertasks/services.py:148
+msgid "No unfinished tasks"
+msgstr ""
+
+#: api/views/services.py:22 api/views/services.py:51
+msgid "View not found"
+msgstr ""
+
+#: api/views/services.py:114
+msgid "View updated successfully"
+msgstr ""
+
+#: api/views/services.py:139
+msgid "View created successfully"
+msgstr ""
+
+#: api/views/services.py:157
+msgid "View deleted successfully"
 msgstr ""
 

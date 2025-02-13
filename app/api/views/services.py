@@ -4,6 +4,7 @@ from app.api.views.models import View, ViewUpdate
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from bson.objectid import ObjectId
+from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -18,7 +19,7 @@ def get(id, user):
     view = mongodb.get_record('views', {'_id': ObjectId(id)})
 
     if not view:
-        return {'msg': 'Vista de consulta no encontrada'}, 404
+        return {'msg': _('View not found')}, 404
     
     view.pop('_id')
 
@@ -47,7 +48,7 @@ def get_view_info(view_slug):
     }
 
     if not view:
-        return {'msg': 'Vista de consulta no encontrada'}, 404
+        return {'msg': _('View not found')}, 404
     
 
     types = []
@@ -110,7 +111,7 @@ def update(id, body, user):
 
         register_log(user, log_actions['view_update'], log)
 
-        return {'msg': 'Vista de consulta actualizada exitosamente'}, 200
+        return {'msg': _('View updated successfully')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -135,7 +136,7 @@ def create(body, user):
 
         register_log(user, log_actions['view_create'], log)
 
-        return {'msg': 'Vista de consulta creada exitosamente'}, 201
+        return {'msg': _('View created successfully')}, 201
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -153,6 +154,6 @@ def delete(id, user):
         register_log(user, log_actions['view_delete'], log)
         get_all.invalidate_all()
 
-        return {'msg': 'Vista de consulta eliminada exitosamente'}, 200
+        return {'msg': _('View deleted successfully')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500

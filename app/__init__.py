@@ -249,7 +249,7 @@ app.celery_app = celery_app
 def get_locale():
     user_management = mongodb.get_record('system', {'name': 'user_management'})
     lenguaje = user_management['data'][2]['value']
-    return 'es_ES'
+    return lenguaje
     
 babel = Babel(app, locale_selector=get_locale)
 

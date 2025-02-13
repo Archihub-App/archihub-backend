@@ -11,6 +11,7 @@ from app.api.logs.services import register_log
 from app.api.system.services import get_access_rights_id
 from app.utils.functions import verify_role_exists
 from app.utils.functions import clear_cache
+from flask_babel import _
 
 cacheHandler = CacheHandler.CacheHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -55,7 +56,7 @@ def get_all():
 def create(body, user):
     try:
         if body['name'] == '' or body['slug'] == '':
-            return {'msg': 'El nombre y el slug no pueden estar vacíos'}, 400
+            return {'msg': _('Name and slug are required')}, 400
         # Crear instancia de PostType con el body del request
         post_type = PostType(**body)
         # Insertar el tipo de post en la base de datos
@@ -68,7 +69,7 @@ def create(body, user):
         # Limpiar la cache
         update_cache()
         # Retornar el resultado
-        return {'msg': 'Tipo de post creado exitosamente'}, 201
+        return {'msg': _('Post type created successfully')}, 201
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -82,7 +83,7 @@ def get_by_slug(slug):
         post_type = mongodb.get_record('post_types', {'slug': slug})
         # Si el tipo de post no existe, retornar error
         if not post_type:
-            return {'msg': 'Tipo de post no existe'}, 404
+            return {'msg': _('Post type not found')}, 404
         # quitamos el id del tipo de post
         post_type.pop('_id')
 
@@ -118,7 +119,7 @@ def update_by_slug(slug, body, user):
     post_type = mongodb.get_record('post_types', {'slug': slug})
     # Si el tipo de post no existe, retornar error
     if not post_type:
-        return {'msg': 'Tipo de post no existe'}, 404
+        return {'msg': _('Post type not found')}, 404
     
     try:
         if 'editRoles' in body:
@@ -139,7 +140,7 @@ def update_by_slug(slug, body, user):
         # Limpiar la cache
         update_cache()
         # Retornar el resultado
-        return {'msg': 'Tipo de post actualizado exitosamente.'}, 200
+        return {'msg': _('Post type updated successfully')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -149,7 +150,7 @@ def delete_by_slug(slug, user):
     post_type = mongodb.get_record('post_types', {'slug': slug})
     # Si el tipo de post no existe, retornar error
     if not post_type:
-        return {'msg': 'Tipo de post no existe'}, 404
+        return {'msg': _('Post type not found')}, 404
     # Eliminar el tipo de post
     mongodb.delete_record('post_types', {'slug': slug})
     # Eliminar todos los recursos del tipo de post
@@ -162,7 +163,7 @@ def delete_by_slug(slug, user):
     # Limpiar la cache
     update_cache()
     # Retornar el resultado
-    return {'msg': 'Tipo de post eliminado exitosamente'}, 204
+    return {'msg': _('Post type deleted successfully')}, 200
 
 # Funcion que devuelve recursivamente los padres de un tipo de post
 def get_parents(post_type, first=True, fields=['name', 'slug', 'icon'], post_types=[]):
@@ -252,7 +253,7 @@ def add_resource(post_type_slug, increment=1):
     post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
     # Si el tipo de post no existe, retornar error
     if not post_type:
-        return {'msg': 'Tipo de post no existe'}, 404
+        return {'msg': _('Post type not found')}, 404
     # Incrementar el contador de recursos del tipo de post
     mongodb.increment_record(
         'post_types', {'slug': post_type_slug}, 'resourcesCount', increment)
@@ -264,7 +265,7 @@ def is_hierarchical(post_type_slug):
     post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
     # Si el tipo de post no existe, retornar error
     if not post_type:
-        return {'msg': 'Tipo de post no existe'}, 404
+        return {'msg': _('Post type not found')}, 404
 
     # Retornar el resultado
     return (post_type['hierarchical'], len(post_type['parentType']) > 0)
@@ -278,7 +279,7 @@ def get_icon(post_type_slug):
     post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
     # Si el tipo de post no existe, retornar error
     if not post_type:
-        return {'msg': 'Tipo de post no existe'}, 404
+        return {'msg': _('Post type not found')}, 404
     # Retornar el resultado
     return post_type['icon']
 
@@ -292,7 +293,7 @@ def get_metadata(post_type_slug):
     post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
     # Si el tipo de post no existe, retornar error
     if not post_type:
-        return {'msg': 'Tipo de post no existe'}, 404
+        return {'msg': _('Post type not found')}, 404
     # Si el campo metadata es un string y es distinto a '', recuperar el formulario con ese slug
     if type(post_type['metadata']) == str and post_type['metadata'] != '':
         post_type['metadata'] = get_form_by_slug(post_type['metadata'])
@@ -310,7 +311,7 @@ def get_form_by_slug(slug):
         form = mongodb.get_record('forms', {'slug': slug})
         # Si el formulario no existe, retornar error
         if not form:
-            return {'msg': 'Formulario no existe'}
+            return {'msg': _('Form not found')}, 404
 
         # Agregamos un nuevo campo al inicio del arreglo de fields, que es el campo de accessRights
         form['fields'].insert(0, {

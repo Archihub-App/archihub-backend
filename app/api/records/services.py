@@ -18,6 +18,7 @@ import hashlib
 import magic
 import uuid
 from dotenv import load_dotenv
+from flask_babel import _
 load_dotenv()
 
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
@@ -56,7 +57,7 @@ def get_by_filters(body, current_user):
             'records', body['filters'], limit=20, skip=body['page'] * 20))
         # Si el recurso no existe, retornar error
         if not records:
-            return {'msg': 'Recurso no existe'}, 404
+            return {'msg': _('Record does not exist')}, 404
         
         total = get_total(json.dumps(body['filters']))
 
@@ -114,11 +115,11 @@ def delete_parent(resource_id, parent_id, current_user):
 
         # Si el record no existe, retornar error
         if not record:
-            return {'msg': 'Record no existe'}, 404
-
+            return {'msg': _('Record does not exist')}, 404
+        
         # Si el record no tiene el recurso como parent, retornar error
         if not any(x['id'] == resource_id for x in record['parent']):
-            return {'msg': 'Record no tiene el recurso como parent'}, 404
+            return {'msg': _('Record does not have the resource as parent')}, 404
 
         # Si el record tiene el recurso como parent, eliminarlo
         # el parent es de tipo dict y tiene los campos id y post_type
@@ -165,10 +166,9 @@ def delete_parent(resource_id, parent_id, current_user):
         
 
         # Retornar el resultado
-        return {'msg': 'Parent eliminado exitosamente'}, 200
+        return {'msg': _('Parent deleted')}, 200
 
     except Exception as e:
-        print(str(e))
         return {'msg': str(e)}, 500
 
 
@@ -197,7 +197,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
     resource = mongodb.get_record('resources', {'_id': ObjectId(resource_id)}, fields={'parents': 1, 'post_type': 1})
     # Si el recurso no existe, retornar error
     if not resource:
-        raise Exception('Recurso no existe')
+        raise Exception(_('Resource does not exist'))
     
     resp = []
     index = 0
@@ -374,7 +374,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                 
                 get_hash.invalidate_all()
         else:
-            raise Exception('Tipo de archivo no permitido')
+            raise Exception(_('File type not allowed'))
 
         index += 1
     # retornar el resultado
@@ -407,14 +407,14 @@ def get_by_id(id, current_user, fullFields = False):
             record = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'_id': 1})
 
             if not record:
-                return {'msg': 'Record no existe'}, 404
+                return {'msg': _('Record does not exist')}, 404
             else:
                 return parse_result(record), 200
         
         if 'accessRights' in record:
             if record['accessRights']:
                 if not has_right(current_user, record['accessRights']) and not has_right(current_user, 'admin'):
-                    return {'msg': 'No tiene permisos para acceder a este recurso'}, 401
+                    return {'msg': _('You do not have permission to view this record')}, 401
         
         # get keys from record['processing']
         keys = {}
@@ -458,9 +458,9 @@ def get_by_id(id, current_user, fullFields = False):
 def get_by_index_gallery(body, current_user):
     try:
         if 'id' not in body:
-            return {'msg': 'id no definido'}, 400
+            return {'msg': _('id is missing')}, 400
         if 'index' not in body:
-            return {'msg': 'index no definido'}, 400
+            return {'msg': _('index is missing')}, 400
         
         resource = mongodb.get_record('resources', {'_id': ObjectId(body['id'])}, fields={'filesObj': 1})
         ids = []
@@ -594,9 +594,9 @@ def postBlockDocument(current_user, obj):
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
 
             cache_get_block_by_page_id.invalidate_all()
-            return {'msg': 'Bloque actualizado'}, 201
+            return {'msg': _('Block updated')}, 200
         else:
-            return {'msg': 'Record no existe'}, 404
+            return {'msg': _('Record does not exist')}, 404
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -624,9 +624,9 @@ def updateBlockDocument(current_user, obj):
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
 
             cache_get_block_by_page_id.invalidate_all()
-            return {'msg': 'Bloque actualizado'}, 200
+            return {'msg': _('Block updated')}, 200
         else:
-            return {'msg': 'Record no existe'}, 404
+            return {'msg': _('Record does not exist')}, 404
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -650,9 +650,9 @@ def deleteBlockDocument(current_user, obj):
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
 
             cache_get_block_by_page_id.invalidate_all()
-            return {'msg': 'Bloque eliminado'}, 200
+            return {'msg': _('Block deleted')}, 200
         else:
-            return {'msg': 'Record no existe'}, 404
+            return {'msg': _('Record does not exist')}, 404
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -661,7 +661,7 @@ def get_favCount(id):
     try:
         record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'favCount': 1})
         if not record:
-            return {'msg': 'Record no existe'}, 404
+            return {'msg': _('Record does not exist')}, 404
         return record['favCount']
     except Exception as e:
         raise Exception(str(e))
@@ -702,13 +702,13 @@ def delete_transcription_segment(id, body, user):
 
     record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
     if not record:
-        return {'msg': 'Record no existe'}, 404
+        return {'msg': _('Record does not exist')}, 404
     if 'processing' not in record:
-        return {'msg': 'El record no tiene transcripción'}, 404
+        return {'msg': _('Record does not have transcription')}, 404
     if slug not in record['processing']:
-        return {'msg': 'El record no tiene transcripción'}, 404
+        return {'msg': _('Record does not have transcription')}, 404
     if record['processing'][slug]['type'] != 'av_transcribe':
-        return {'msg': 'Record no ha sido procesado con el slug ' + slug}, 404
+        return {'msg': _(u'Record has not been processed with {slug}', slug=slug)}, 404
     
     segments = record['processing'][slug]['result']['segments']
 
@@ -725,7 +725,7 @@ def delete_transcription_segment(id, body, user):
 
     cache_get_record_transcription.invalidate(id, slug)
 
-    return {'msg': 'Segmento eliminado'}, 200
+    return {'msg': _('Transcription segment deleted')}, 200
     
 def edit_transcription(id, body, user):
     resp_, status = get_by_id(id, user)
@@ -736,13 +736,13 @@ def edit_transcription(id, body, user):
 
     record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
     if not record:
-        return {'msg': 'Record no existe'}, 404
+        return {'msg': _('Record does not exist')}, 404
     if 'processing' not in record:
-        return {'msg': 'El record no tiene transcripción'}, 404
+        return {'msg': _('Record does not have transcription')}, 404
     if slug not in record['processing']:
-        return {'msg': 'El record no tiene transcripción'}, 404
+        return {'msg': _('Record does not have transcription')}, 404
     if record['processing'][slug]['type'] != 'av_transcribe':
-        return {'msg': 'Record no ha sido procesado con el slug ' + slug}, 404
+        return {'msg': _(u'Record has not been processed with {slug}', slug=slug)}, 404
     
     segments = record['processing'][slug]['result']['segments']
 
@@ -769,12 +769,12 @@ def edit_transcription(id, body, user):
 
     cache_get_record_transcription.invalidate(id, slug)
 
-    return {'msg': 'Transcripción editada'}, 200
+    return {'msg': _('Transcription segment edited')}, 200
 
 def download_records(body, user):
     try:
         if 'id' not in body:
-            return {'msg': 'id no definido'}, 400
+            return {'msg': _('id is missing')}, 400
         
         resp_, status = get_by_id(body['id'], user, True)
         if status != 200:

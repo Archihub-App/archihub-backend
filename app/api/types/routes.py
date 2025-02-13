@@ -8,6 +8,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.utils.functions import cache_type_roles
 from app.utils import DatabaseHandler
+from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -94,7 +95,7 @@ def create():
 
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para crear un tipo de contenido'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     
     # Si el slug no está definido, crearlo
     if not body['slug'] or body['slug'] == '':
@@ -124,7 +125,7 @@ def create():
         if not slug_exists:
             return services.create(body, current_user)
         else:
-            return {'msg': 'El slug ya existe'}, 400
+            return {'msg': _('Slug already exists')}, 400
 
 # Nuevo endpoint para obtener un tipo de contenido por su slug
 @bp.route('/<slug>', methods=['GET'])
@@ -153,7 +154,7 @@ def get_by_slug(slug):
     current_user = get_jwt_identity()
     # se verifica si el usuario tiene el rol de administrador o editor
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
-        return {'msg': 'No tiene permisos para obtener un tipo de contenido'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     
     roles = cache_type_roles(slug)
     if roles['viewRoles']:
@@ -163,13 +164,13 @@ def get_by_slug(slug):
                 canView = True
                 break
         if not canView:
-            return {'msg': 'No tiene permisos para obtener un tipo de contenido'}, 401
+            return {'msg': _('You don\'t have the required authorization')}, 401
             
     # Llamar al servicio para obtener un tipo de contenido por su slug
     slug_exists = services.get_by_slug(slug)
     # si el service.get_by_slug devuelve un error, entonces el tipo de contenido no existe
     if 'msg' in slug_exists:
-        if slug_exists['msg'] == 'Tipo de contenido no existe':
+        if slug_exists['msg'] == _('Type not found'):
             return slug_exists, 404
     else:
         return slug_exists
@@ -217,7 +218,7 @@ def update_by_slug(slug):
     current_user = get_jwt_identity()
     # se verifica si el usuario tiene el rol de administrador o editor
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
-        return {'msg': 'No tiene permisos para actualizar un tipo de contenido'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Obtener el body de la request
     body = request.json
     # Llamar al servicio para actualizar un tipo de contenido por su slug
@@ -256,7 +257,7 @@ def delete_by_slug(slug):
     current_user = get_jwt_identity()
     # se verifica si el usuario tiene el rol de administrador o editor
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
-        return {'msg': 'No tiene permisos para eliminar un tipo de contenido'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Llamar al servicio para eliminar un tipo de contenido por su slug
     resp = services.delete_by_slug(slug, current_user)
     if isinstance(resp, dict):
@@ -287,10 +288,10 @@ def get_type_viz():
     body = request.get_json()
 
     if 'slug' not in body or 'type' not in body:
-        return {'msg': 'Debe enviar el slug y el tipo de contenido'}, 400
+        return {'msg': _('You must specify the slug and the type')}, 400
     
     if not user_services.has_role(get_jwt_identity(), 'admin') and not user_services.has_role(get_jwt_identity(), 'editor'):
-        return {'msg': 'No tiene permisos para obtener la información de los tipos de contenido'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     
     resp = services.get_type_viz(body['slug'], body['type'])
 

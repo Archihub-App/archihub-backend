@@ -14,6 +14,7 @@ from io import BytesIO
 from PIL import Image
 import base64
 import os
+from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -32,7 +33,7 @@ def create(user, body):
     try:
         record = mongodb.get_record('records', {'_id': ObjectId(body['record_id'])}, {'name': 1})
         if record is None:
-            return {'msg': 'Archivo no encontrado'}, 404
+            return {'msg': _('Record not found')}, 404
         
         snap = {
             'user': user,
@@ -55,7 +56,7 @@ def create(user, body):
         # Limpiar la cache
         update_cache()
 
-        return {'msg': 'Recorte creado exitosamente'}, 201
+        return {'msg': _('Snap created successfully')}, 201
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -79,7 +80,7 @@ def update_by_id(id, body, user):
         }})
         # Limpiar la cache
         update_cache()
-        return {'msg': 'Snap actualizado exitosamente'}, 200
+        return {'msg': _('Snap updated successfully')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -90,9 +91,9 @@ def delete_by_id(id, user):
         snap = mongodb.get_record('snaps', {'_id': ObjectId(id)}, {'user': 1})
         # Si el snap no existe, retornar error
         if snap is None:
-            return {'msg': 'Snap no encontrado'}, 404
+            return {'msg': _('Snap not found')}, 404
         if snap['user'] != user:
-            return {'msg': 'No tienes permisos para eliminar este recorte'}, 401
+            return {'msg': _('You don\'t have the required authorization')}, 401
         
         # Eliminar el snap de la base de datos
         mongodb.delete_record('snaps', {'_id': ObjectId(id)})
@@ -102,7 +103,7 @@ def delete_by_id(id, user):
         }})
         # Limpiar la cache
         update_cache()
-        return {'msg': 'Recorte eliminado exitosamente'}, 204
+        return {'msg': _('Snap deleted successfully')}, 204
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -136,9 +137,9 @@ def get_by_id(id, user):
         snap = mongodb.get_record('snaps', {'_id': ObjectId(id)}, {'user': 1, 'record_id': 1, 'data': 1, 'type': 1})
         # Si el snap no existe, retornar error
         if snap is None:
-            return {'msg': 'Snap no encontrado'}, 404
+            return {'msg': _('Snap not found')}, 404
         if snap['user'] != user:
-            return {'msg': 'No tienes permisos para ver este recorte'}, 401
+            return {'msg': _('You don\'t have the required authorization')}, 401
         
         if snap['type'] == 'document':
             return get_document_snap(user, snap['record_id'], snap['data'])
@@ -156,7 +157,7 @@ def get_document_snap(user, record_id, data):
     from app.api.records.services import get_by_id
     record, status = get_by_id(record_id, user)
     if status != 200:
-        return {'msg': f'Error al obtener el archivo: {record["msg"]}'} , 500
+        return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
     
     pages = json.dumps([data['page'] - 1])
     from app.utils.functions import cache_get_pages_by_id
@@ -184,26 +185,26 @@ def get_image_snap(user, record_id, data):
     from app.api.records.services import get_by_id
     record, status = get_by_id(record_id, user)
     if status != 200:
-        return {'msg': f'Error al obtener el archivo: {record["msg"]}'} , 500
+        return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
 
     file = mongodb.get_record('records', {'_id': ObjectId(record_id)}, {'processing': 1})
     if file is None:
-        return {'msg': 'Archivo no encontrado'}, 404
+        return {'msg': _('File not found')}, 404
     if 'processing' not in file:
-        return {'msg': 'Archivo no encontrado'}, 404
+        return {'msg': _('File not found')}, 404
     if 'fileProcessing' not in file['processing']:
-        return {'msg': 'Archivo no encontrado'}, 404
+        return {'msg': _('File not found')}, 404
     if 'type' not in file['processing']['fileProcessing']:
-        return {'msg': 'Archivo no encontrado'}, 404
+        return {'msg': _('File not found')}, 404
     if file['processing']['fileProcessing']['type'] != 'image':
-        return {'msg': 'Archivo no encontrado'}, 404
+        return {'msg': _('File not found')}, 404
 
     path = file['processing']['fileProcessing']['path']
     path_img = os.path.join(WEB_FILES_PATH, path)
     path_img = path_img + '_large.jpg'
 
     if not os.path.exists(path_img):
-        return {'msg': 'Archivo no encontrado'}, 404
+        return {'msg': _('File not found')}, 404
 
     image = Image.open(path_img)
     width, height = image.size

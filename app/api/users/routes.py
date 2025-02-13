@@ -4,6 +4,7 @@ from flask import request
 from . import services
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import get_jwt_identity
+from flask_babel import _
 
 # En este archivo se registran las rutas de la API para los usuarios
 
@@ -37,7 +38,7 @@ def get_by_id(id):
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Llamar al servicio para obtener el usuario
     resp = services.get_by_id(id)
     if isinstance(resp, list):
@@ -81,7 +82,7 @@ def register():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     
     body = request.json
 
@@ -185,7 +186,7 @@ def update():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     
     body = request.json
 
@@ -224,7 +225,7 @@ def delete():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     
     body = request.json
 
@@ -292,7 +293,7 @@ def get_compromise():
     user = services.get_user(current_user)
 
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     return user, 200
 
 # Nuevo endpoint para aceptar el compromise de un usuario
@@ -322,7 +323,7 @@ def accept_compromise():
     user = services.get_user(current_user)
     
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     # Llamar al servicio para aceptar el compromise del usuario
     return services.accept_compromise(current_user)
 
@@ -354,7 +355,7 @@ def get_user():
     # quitar el campo password del usuario
     user.pop('password')
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     return user, 200
 
 # Nuevo endpoint POST con un username y password en el body para generar un token de acceso para un usuario
@@ -428,13 +429,13 @@ def generate_admin_token():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     if 'password' not in body:
-        return jsonify({'msg': 'Falta el campo password en el body'}), 400
+        return jsonify({'msg': _('You must specify the password of the user')}), 400
     if 'duration' not in request.json:
         body['duration'] = 2
     if not isinstance(body['duration'], int) and body['duration'] != False:
-        return jsonify({'msg': 'duration debe ser un entero o False'}), 400
+        return jsonify({'msg': _('Duration must be an integer or false')}), 400
     
     # Llamar al servicio para generar el token
     return services.generate_token(current_user, body['password'], True, body['duration'])
@@ -472,7 +473,7 @@ def generate_node_token():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
     # Obtener el username y password del body
@@ -512,7 +513,7 @@ def generate_viz_token():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'visualizer'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
     # Obtener el username y password del body
@@ -555,7 +556,7 @@ def get_all():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
     # Llamar al servicio para obtener los usuarios
@@ -741,9 +742,9 @@ def get_snaps():
     body = request.json
 
     if 'type' not in body:
-        return jsonify({'msg': 'Falta el campo type en el body'}), 400
+        return jsonify({'msg': _('Missing type field in body')}), 400
     if 'page' not in body:
-        return jsonify({'msg': 'Falta el campo page en el body'}), 400
+        return jsonify({'msg': _('Missing page field in body')}), 400
 
     # Llamar al servicio para obtener los snaps
     from app.api.snaps.services import get_by_user_id

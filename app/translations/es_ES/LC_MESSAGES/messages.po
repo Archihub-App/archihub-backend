@@ -1,7 +1,7 @@
-# English translations for PROJECT.
-# Copyright (C) 2025 ORGANIZATION
-# This file is distributed under the same license as the PROJECT project.
-# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+# Spanish translations for ArchiHUB.
+# Copyright (C) 2025 BITSOL
+# This file is distributed under the same license as the ArchiHUB project.
+# Néstor Peña, 2025.
 #
 msgid ""
 msgstr ""
@@ -21,134 +21,421 @@ msgstr ""
 
 #: __init__.py:165
 msgid "Administrators API is active"
-msgstr ""
+msgstr "API de administración activa"
 
 #: __init__.py:171
 msgid "API pública activa"
-msgstr ""
+msgstr "API pública activa"
+
+#: api/snaps/services.py:36
+msgid "Record not found"
+msgstr "Archivo no encontrado"
+
+#: api/snaps/services.py:59
+msgid "Snap created successfully"
+msgstr "Recorte creado con éxito"
+
+#: api/snaps/services.py:83
+msgid "Snap updated successfully"
+msgstr "Recorte actualizado con éxito"
+
+#: api/snaps/services.py:94 api/snaps/services.py:140
+msgid "Snap not found"
+msgstr "Recorte no encontrado"
+
+#: api/snaps/services.py:106
+msgid "Snap deleted successfully"
+msgstr "Recorte eliminado con éxito"
+
+#: api/snaps/services.py:160 api/snaps/services.py:188
+msgid "Error while getting the file: {error}"
+msgstr "Error al obtener el archivo: {error}"
+
+#: api/snaps/services.py:192 api/snaps/services.py:194
+#: api/snaps/services.py:196 api/snaps/services.py:198
+#: api/snaps/services.py:200 api/snaps/services.py:207
+msgid "File not found"
+msgstr "Archivo no encontrado"
+
+#: api/system/routes.py:41 api/system/routes.py:69 api/system/routes.py:131
+#: api/system/routes.py:156 api/system/routes.py:192 api/system/routes.py:219
+#: api/system/routes.py:246 api/system/routes.py:273 api/system/routes.py:299
+#: api/system/routes.py:325 api/system/routes.py:373 api/system/routes.py:401
+msgid "You don't have the required authorization"
+msgstr "No tienes la autorización requerida"
 
 #: api/system/services.py:57
 msgid "Error while changing the value of the field {key}"
-msgstr ""
+msgstr "Error al cambiar el valor del campo {key}"
 
 #: api/system/services.py:71
 msgid "Error while getting the resources: {e}"
-msgstr ""
+msgstr "Error al obtener los recursos: {e}"
 
 #: api/system/services.py:110
 msgid "System updates applied successfully"
-msgstr ""
+msgstr "Actualizaciones del sistema aplicadas con éxito"
 
 #: api/system/services.py:126
 msgid "There si no default cataloging type"
-msgstr ""
+msgstr "No hay un tipo de catalogación predeterminado"
 
 #: api/system/services.py:133
 msgid "Error while getting the default cataloging type"
-msgstr ""
+msgstr "Error al obtener el tipo de catalogación predeterminado"
 
 #: api/system/services.py:147
 msgid "The default type of the cataloging module does not exist"
-msgstr ""
+msgstr "El tipo predeterminado del módulo de catalogación no existe"
 
 #: api/system/services.py:154
 msgid "Error while getting the default type of the cataloging module"
-msgstr ""
+msgstr "Error al obtener el tipo predeterminado del módulo de catalogación"
 
 #: api/system/services.py:172
 msgid "Resources schema updated successfully"
-msgstr ""
+msgstr "Esquema de recursos actualizado con éxito"
 
 #: api/system/services.py:174
 msgid "Error while updating the resources schema"
-msgstr ""
+msgstr "Error al actualizar el esquema de recursos"
 
 #: api/system/services.py:187
 msgid "There is no resources schema uploaded"
-msgstr ""
+msgstr "No hay un esquema de recursos cargado"
 
 #: api/system/services.py:191
 msgid "Error while getting the resources schema"
-msgstr ""
+msgstr "Error al obtener el esquema de recursos"
 
 #: api/system/services.py:210
 msgid "Error while getting the value of the field {key}"
-msgstr ""
+msgstr "Error al obtener el valor del campo {key}"
 
 #: api/system/services.py:227 api/system/services.py:243
 #: api/system/services.py:276 api/system/services.py:295
 #: api/system/services.py:320
 msgid "The field {label} must be of type string"
-msgstr ""
+msgstr "El campo {label} debe ser de tipo cadena de texto"
 
 #: api/system/services.py:230 api/system/services.py:246
 #: api/system/services.py:265 api/system/services.py:292
 #: api/system/services.py:323 api/system/services.py:351
 msgid "The field {label} is required"
-msgstr ""
+msgstr "El campo {label} es requerido"
 
 #: api/system/services.py:233 api/system/services.py:252
 #: api/system/services.py:279 api/system/services.py:310
 #: api/system/services.py:338 api/system/services.py:354
 msgid "Error while validating the field {label}"
-msgstr ""
+msgstr "Error al validar el campo {label}"
 
 #: api/system/services.py:249
 msgid "The field {label} must be an email"
-msgstr ""
+msgstr "El campo {label} debe ser un correo electrónico"
 
 #: api/system/services.py:262 api/system/services.py:289
 msgid "The field {label} must be of type array"
-msgstr ""
+msgstr "El campo {label} debe ser de tipo arreglo"
 
 #: api/system/services.py:268
 msgid "The field {label} must have at least {min_items} items"
-msgstr ""
+msgstr "El campo {label} debe tener al menos {min_items} elementos"
 
 #: api/system/services.py:271
 msgid "The field {label} must have at most {max_items} items"
-msgstr ""
+msgstr "El campo {label} debe tener como máximo {max_items} elementos"
 
 #: api/system/services.py:334
 msgid "The field {label} must be a valid URL"
-msgstr ""
+msgstr "El campo {label} debe ser una URL válida"
 
 #: api/system/services.py:348
 msgid "The field {label} must be of type date"
-msgstr ""
+msgstr "El campo {label} debe ser de tipo fecha"
 
 #: api/system/services.py:387
 msgid "Error while getting the plugins: {e}"
-msgstr ""
+msgstr "Error al obtener los complementos: {e}"
 
 #: api/system/services.py:410
 msgid "Plugins successfully updated, please restart the system"
-msgstr ""
+msgstr "Complementos actualizados con éxito, por favor reinicie el sistema"
 
 #: api/system/services.py:412
 msgid "Error while activating the plugins: {e}"
-msgstr ""
+msgstr "Error al activar los complementos: {e}"
 
 #: api/system/services.py:441
 msgid "Plugin successfully updated, please restart the system"
-msgstr ""
+msgstr "Complemento actualizado con éxito, por favor reinicie el sistema"
 
 #: api/system/services.py:454
 msgid "The field for the index management doesn't exists in the system"
-msgstr ""
+msgstr "El campo para la gestión de índices no existe en el sistema"
 
 #: api/system/services.py:457
 msgid "Indexing is deactivated"
-msgstr ""
+msgstr "La indexación está desactivada"
 
 #: api/system/services.py:570
 msgid "The process has been added to the processing queue"
-msgstr ""
+msgstr "El proceso ha sido añadido a la cola de procesamiento"
 
 #: api/system/services.py:573
 msgid "Error: {e}"
-msgstr ""
+msgstr "Error: {e}"
 
 #: api/system/services.py:689
 msgid "Cache cleaned successfully"
 msgstr "Cache limpiada con éxito"
+
+#: api/tasks/services.py:203 api/usertasks/services.py:118
+msgid "Task not found"
+msgstr "Tarea no encontrada"
+
+#: api/tasks/services.py:225
+msgid "Task stopped successfully"
+msgstr "Tarea detenida con éxito"
+
+#: api/tasks/services.py:227
+msgid "Task cannot be stopped"
+msgstr "Tarea no puede ser detenida"
+
+#: api/types/routes.py:128
+msgid "Slug already exists"
+msgstr "Slug ya existe"
+
+#: api/types/routes.py:173
+msgid "Type not found"
+msgstr "Tipo de contenido no encontrado"
+
+#: api/types/routes.py:291
+msgid "You must specify the slug and the type"
+msgstr "Debes especificar el slug y el tipo"
+
+#: api/types/services.py:59
+msgid "Name and slug are required"
+msgstr "El nombre y el slug son requeridos"
+
+#: api/types/services.py:72
+msgid "Post type created successfully"
+msgstr "Tipo de contenido creado con éxito"
+
+#: api/types/services.py:86 api/types/services.py:122 api/types/services.py:153
+#: api/types/services.py:256 api/types/services.py:268
+#: api/types/services.py:282 api/types/services.py:296
+msgid "Post type not found"
+msgstr "Tipo de contenido no encontrado"
+
+#: api/types/services.py:143
+msgid "Post type updated successfully"
+msgstr "Tipo de contenido actualizado con éxito"
+
+#: api/types/services.py:166
+msgid "Post type deleted successfully"
+msgstr "Tipo de contenido eliminado con éxito"
+
+#: api/types/services.py:314
+msgid "Form not found"
+msgstr "Estándar de metadatos no encontrado"
+
+#: api/users/routes.py:296 api/users/routes.py:326 api/users/routes.py:358
+#: api/users/services.py:283 api/users/services.py:306
+#: api/users/services.py:439 api/users/services.py:451
+#: api/users/services.py:462 api/users/services.py:476
+#: api/users/services.py:511 api/users/services.py:539
+msgid "User does not exist"
+msgstr "Usuario no existe"
+
+#: api/users/routes.py:434
+msgid "You must specify the password of the user"
+msgstr "Debes especificar la contraseña del usuario"
+
+#: api/users/routes.py:438
+msgid "Duration must be an integer or false"
+msgstr "Duración debe ser un entero o falso"
+
+#: api/users/routes.py:745
+msgid "Missing type field in body"
+msgstr "Falta el campo tipo"
+
+#: api/users/routes.py:747
+msgid "Missing page field in body"
+msgstr "Falta el campo página"
+
+#: api/users/services.py:43 api/users/services.py:63 api/users/services.py:81
+#: api/users/services.py:168 api/users/services.py:196
+#: api/users/services.py:570
+msgid "User not found"
+msgstr "Usuario no encontrado"
+
+#: api/users/services.py:96
+msgid "You have reached the limit of requests for this week"
+msgstr "Alcanzaste el límite de solicitudes para esta semana"
+
+#: api/users/services.py:171
+msgid "You cannot change the username"
+msgstr "No puedes cambiar el nombre de usuario"
+
+#: api/users/services.py:186 api/users/services.py:219
+msgid "User updated successfully"
+msgstr "Usuario actualizado con éxito"
+
+#: api/users/services.py:201 api/users/services.py:480
+#: api/users/services.py:515 api/users/services.py:543
+msgid "Incorrect password"
+msgstr "Contraseña incorrecta"
+
+#: api/users/services.py:212 api/users/services.py:403
+msgid "Passwords do not match"
+msgstr "Contraseñas no coinciden"
+
+#: api/users/services.py:221
+msgid "No changes were made"
+msgstr "No hay cambios realizados"
+
+#: api/users/services.py:233 api/users/services.py:325
+msgid "User already exists"
+msgstr "Usuario ya existe"
+
+#: api/users/services.py:242
+msgid "Role does not exist"
+msgstr "Rol no existe"
+
+#: api/users/services.py:246
+msgid "Access right does not exist"
+msgstr "Nivel de acceso no existe"
+
+#: api/users/services.py:255 api/users/services.py:336
+msgid "Error validating fields"
+msgstr "Error validando campos"
+
+#: api/users/services.py:269
+msgid "User registered successfully"
+msgstr "Usuario registrado con éxito"
+
+#: api/users/services.py:279
+msgid "Password recovery disabled"
+msgstr "Recuperación de contraseña deshabilitada"
+
+#: api/users/services.py:293
+msgid "Password recovery"
+msgstr "Recuperación de contraseña"
+
+#: api/users/services.py:295
+msgid "Password recovery email sent"
+msgstr "Correo de recuperación de contraseña enviado"
+
+#: api/users/services.py:302
+msgid "You cannot delete yourself"
+msgstr "No puedes eliminarte a ti mismo"
+
+#: api/users/services.py:310
+msgid "User deleted successfully"
+msgstr "Usuario eliminado con éxito"
+
+#: api/users/services.py:319
+msgid "User registration disabled"
+msgstr "Registro de usuario deshabilitado"
+
+#: api/users/services.py:355
+msgid "Account verification"
+msgstr "Validación de cuenta"
+
+#: api/users/services.py:359
+msgid "User registered successfully. Please verify your account by clicking the link sent to your email"
+msgstr "Usuario registrado con éxito. Por favor verifica tu cuenta haciendo clic en el enlace enviado a tu correo electrónico"
+
+#: api/users/services.py:397
+msgid "The field {label} must be a valid email"
+msgstr "El campo {label} debe ser un correo electrónico válido"
+
+#: api/users/services.py:431
+msgid "Compromise accepted successfully"
+msgstr "El compromiso fue aceptado con éxito"
+
+#: api/users/services.py:483 api/users/services.py:519
+#: api/users/services.py:547
+msgid "User has not accepted the compromise"
+msgstr "El usuario no ha aceptado el compromiso"
+
+#: api/users/services.py:608
+msgid "Resource not found"
+msgstr "Recurso no encontrado"
+
+#: api/users/services.py:610
+msgid "Resource not published"
+msgstr "Recurso no publicado"
+
+#: api/users/services.py:623
+msgid "Favorite added successfully"
+msgstr "Favorito añadido con éxito"
+
+#: api/users/services.py:649
+msgid "Favorite deleted successfully"
+msgstr "Favorito eliminado con éxito"
+
+#: api/usertasks/routes.py:52
+msgid "You must specify the status of the tasks"
+msgstr "Debes especificar el estado de las tareas"
+
+#: api/usertasks/services.py:32
+msgid "There are no tasks for this resource"
+msgstr "No hay tareas para este recurso"
+
+#: api/usertasks/services.py:75
+msgid "resourceId is required"
+msgstr "resourceId es requerido"
+
+#: api/usertasks/services.py:77
+msgid "user is required"
+msgstr "usuario es requerido"
+
+#: api/usertasks/services.py:79
+msgid "comment is required"
+msgstr "comentario es requerido"
+
+#: api/usertasks/services.py:82
+msgid "user cannot be empty"
+msgstr "usuario no puede estar vacío"
+
+#: api/usertasks/services.py:84
+msgid "comment cannot be empty"
+msgstr "comentario no puede estar vacío"
+
+#: api/usertasks/services.py:86
+msgid "resourceId cannot be empty"
+msgstr "resourceId no puede estar vacío"
+
+#: api/usertasks/services.py:90
+msgid "There is already a task for this resource"
+msgstr "Ya hay una tarea para este recurso"
+
+#: api/usertasks/services.py:118
+msgid "Task not found"
+msgstr "Tarea no encontrada"
+
+#: api/usertasks/services.py:121
+msgid "Task already approved"
+msgstr "Tarea ya aprobada"
+
+#: api/usertasks/services.py:125
+msgid "You cannot review this task"
+msgstr "No puedes revisar esta tarea"
+
+#: api/views/services.py:22 api/views/services.py:51
+msgid "View not found"
+msgstr "Vista de consulta no encontrada"
+
+#: api/views/services.py:114
+msgid "View updated successfully"
+msgstr "Vista de consulta actualizada con éxito"
+
+#: api/views/services.py:139
+msgid "View created successfully"
+msgstr "Vista de consulta creada con éxito"
+
+#: api/views/services.py:157
+msgid "View deleted successfully"
+msgstr "Vista de consulta eliminada con éxito"

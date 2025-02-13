@@ -6,6 +6,7 @@ from app.api.users import services as user_services
 from flask import request, jsonify
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
+from flask_babel import _
 
 # from app.tasks.tasks import add
 from celery.result import AsyncResult
@@ -48,7 +49,7 @@ def get_tasks(user):
     body = request.json
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin') and (current_user != user and user == 'automatic'):
-        return {'msg': 'No tiene permisos para obtener las tasks'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
 
     return services.get_tasks(user, body)
 
@@ -78,7 +79,7 @@ def get_tasks_total(user):
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin') and (current_user != user and user == 'automatic'):
-        return {'msg': 'No tiene permisos para obtener las tasks'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
 
     resp = services.get_tasks_total(user)
 
@@ -104,7 +105,7 @@ def test_celery_result_all():
     current_user = get_jwt_identity()
     # # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para obtener las tasks'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Llamar al servicio para probar las tasks de celery
     i = app.celery_app.control.inspect()
 
@@ -144,6 +145,6 @@ def delete_task(user, taskId):
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para eliminar la task'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
 
     return services.stop_task(taskId, current_user)

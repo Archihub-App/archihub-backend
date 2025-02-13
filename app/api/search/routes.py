@@ -6,6 +6,7 @@ from flask import request, jsonify
 from app.api.users import services as user_services
 from app.api.resources.services import cache_type_roles
 import json
+from flask_babel import _
 
 # En este archivo se registran las rutas de la API para la búsqueda
 
