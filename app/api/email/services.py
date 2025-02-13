@@ -31,8 +31,6 @@ def send_email(to_email, subject, body):
         
         server.sendmail('ArchiHUB', to_email, msg.as_string())
         server.quit()
-
-        print("Email enviado exitosamente")
     except Exception as e:
         raise e
         

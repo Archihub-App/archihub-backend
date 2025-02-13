@@ -4,6 +4,7 @@ from flask import request
 from app.api.adminApi import services
 from app.utils.FernetAuth import fernetAuthenticate
 import json
+from flask_babel import _
 
 # Nuevo POST endpoint para crear nuevos recursos
 @bp.route('/create', methods=['POST'])
@@ -45,7 +46,7 @@ def new_resource(username, isAdmin):
             description: Error al crear el recurso
     """
     if not isAdmin:
-        return jsonify({'msg': 'No tiene permisos para crear un recurso'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.form.to_dict()
     files = request.files.getlist('files')
@@ -93,7 +94,7 @@ def update_resource(username, isAdmin):
             description: Error al actualizar el recurso
     """
     if not isAdmin:
-        return jsonify({'msg': 'No tiene permisos para crear un recurso'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.form.to_dict()
     files = request.files.getlist('files')
@@ -130,7 +131,7 @@ def get_resource_id(username, isAdmin):
             description: Error al obtener el id del recurso
     """
     if not isAdmin:
-        return jsonify({'msg': 'No tiene permisos para obtener el id del recurso'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
 
@@ -165,7 +166,7 @@ def get_opts_id(username, isAdmin):
             description: Error al obtener el id del recurso
     """
     if not isAdmin:
-        return jsonify({'msg': 'No tiene permisos para obtener el id del recurso'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
 
@@ -209,7 +210,7 @@ def create_type(username, isAdmin):
             description: Error al crear el tipo de contenido
     """
     if not isAdmin:
-        return jsonify({'msg': 'No tiene permisos para crear un tipo de contenido'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     # Obtener el body del request
     body = request.json
@@ -256,7 +257,7 @@ def update_type(username, isAdmin):
             description: Error al actualizar el tipo de contenido
     """
     if not isAdmin:
-        return jsonify({'msg': 'No tiene permisos para actualizar un tipo de contenido'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     # Obtener el body del request
     body = request.json
@@ -290,7 +291,7 @@ def get_type(username, isAdmin, slug):
             description: Error al obtener el tipo del recurso
     """
     if not isAdmin:
-        return jsonify({'msg': 'No tiene permisos para obtener el tipo del recurso'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     # Llamar al servicio para obtener el tipo del recurso
     return services.get_type(slug, username)

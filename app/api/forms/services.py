@@ -11,6 +11,7 @@ from app.api.system.services import update_resources_schema
 from app.api.system.services import get_access_rights_id
 from app.api.types.services import get_by_slug as get_type_by_slug
 from app.utils.functions import get_access_rights
+from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -84,7 +85,7 @@ def create(body, user):
         get_by_slug.invalidate_all()
         get_all.invalidate_all()
         # Retornar el resultado
-        return {'msg': 'Formulario creado exitosamente'}, 201
+        return {'msg': _('Form created successfully')}, 201
     except Exception as e:
             return {'msg': str(e)}, 500
 
@@ -96,7 +97,7 @@ def get_by_slug(slug):
         form = mongodb.get_record('forms', {'slug': slug})
         # Si el formulario no existe, retornar error
         if not form:
-            return {'msg': 'Formulario no existe'}
+            return {'msg': 'Formulario no existe'}, 404
         
         # Agregamos un nuevo campo al inicio del arreglo de fields, que es el campo de accessRights
         form['fields'].insert(0, {
@@ -127,7 +128,7 @@ def update_by_slug(slug, body, user):
         form = mongodb.get_record('forms', {'slug': slug})
         # Si el formulario no existe, retornar error
         if not form:
-            return {'msg': 'Formulario no existe'}, 404
+            return {'msg': _('Form not found')}, 404
         # Crear instancia de FormUpdate con el body del request
         form_update = FormUpdate(**body)
         # Actualizar el formulario en la base de datos
@@ -137,7 +138,7 @@ def update_by_slug(slug, body, user):
         # Limpiar la cache
         update_cache()
         # Retornar el resultado
-        return {'msg': 'Formulario actualizado exitosamente. Si se agregaron nuevos campos o se cambió el tipo de alguno de los campos existentes, es importante volver a generar el índice desde la opción en los ajustes del sistema.'}, 200
+        return {'msg': _('Form updated successfully. If new fields were added or the type of any existing fields was changed, it is important to regenerate the index from the option in the system settings')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -148,12 +149,12 @@ def delete_by_slug(slug, user):
         form = mongodb.get_record('forms', {'slug': slug})
         # Si el formulario no existe, retornar error
         if not form:
-            return {'msg': 'Formulario no existe'}, 404
+            return {'msg': _('Form not found')}, 404
         # verificar que no existan tipos de post que usen el formulario
         post_types = list(mongodb.get_all_records('post_types', {'metadata': slug}))
 
         if(len(post_types) > 0):
-            return {'msg': 'No se puede eliminar el formulario porque existen tipos de post que lo usan'}, 400
+            return {'msg': _('The form is being used by a post type')}, 400
         
         # Eliminar el formulario de la base de datos
         mongodb.delete_record('forms', {'slug': slug})
@@ -166,7 +167,7 @@ def delete_by_slug(slug, user):
         get_all.invalidate_all()
         get_by_slug.invalidate_all()
         # Retornar el resultado
-        return {'msg': 'Formulario eliminado exitosamente'}, 204
+        return {'msg': _('Form deleted successfully')}, 204
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -178,19 +179,19 @@ def validate_form(form):
     for field in form['fields']:
         if 'destiny' in field:
             if field['destiny'] == 'ident':
-                raise Exception("Error: el formulario no puede tener un campo con destino igual a ident")
+                raise Exception(_('Error: the field cannot have destiny equal to ident'))
             
             if not field['destiny'].startswith('metadata') and not field['type'] == 'separator' and not field['type'] == 'file':
-                raise Exception("Error: el formulario no puede tener un campo con destino que no inicie con metadata")
+                raise Exception(_('Error: the field destiny must start with metadata'))
             
             if field['destiny'] == 'metadata.firstLevel.title':
                 hasTitle = True
                 if field['type'] != 'text':
-                    raise Exception("Error: el campo con destino igual a metadata.firstLevel.title debe ser de tipo texto")
+                    raise Exception(_('Error: the field with destiny equal to metadata.firstLevel.title must be of type text'))
             
         if field['type'] == 'file':
             if not 'filetag' in field:
-                raise Exception("Error: el campo archivo debe tener una etiqueta")
+                raise Exception(_('Error: the field with type file must have the filetag attribute'))
             
         if 'setCondition' in field:
             if not field['setCondition']:
@@ -210,10 +211,10 @@ def validate_form(form):
                 options = [o['id'] for o in options['options']]
                 for f in field['accessRights']:
                     if f not in options:
-                        raise Exception("Error: el campo accessRights tiene un valor que no es válido")
+                        raise Exception(_('The value of the accessRights field is not valid'))
                     
     if not hasTitle:
-        raise Exception("Error: el formulario debe tener un campo con destino igual a metadata.firstLevel.title")
+        raise Exception(_('Error: the form must have a field with destiny equal to metadata.firstLevel.title'))
             
     
 # Funcion que itera entre todos los formularios y devuelve la estructura combinada de todos
@@ -244,7 +245,7 @@ def update_main_schema(new_form = None, updated_form = None):
                         if(resp[field['destiny']] != tipo):
                             if(tipo not in same_types and resp[field['destiny']] not in same_types):
                                 # si el tipo del campo no es igual al tipo del campo que ya existe en el diccionario, se lanza una excepcion
-                                raise Exception("Error: el campo " + field['destiny'] + " tiene dos tipos diferentes")
+                                raise Exception(_(u'Error: el campo {field} tiene dos tipos diferentes', field=field['destiny']))
                     else:
                         resp[field['destiny']] = tipo
 
@@ -256,7 +257,7 @@ def update_main_schema(new_form = None, updated_form = None):
                     if(field['destiny'] in resp):
                         if(resp[field['destiny']] != tipo):
                             if(tipo not in same_types and resp[field['destiny']] not in same_types):
-                                raise Exception("Error: el campo " + field['destiny'] + " tiene dos tipos diferentes")
+                                raise Exception(_(u'Error: el campo {field} tiene dos tipos diferentes', field=field['destiny']))
                     else:
                         resp[field['destiny']] = tipo
 
@@ -271,14 +272,14 @@ def update_main_schema(new_form = None, updated_form = None):
                             f['destiny'] = slugify(f['name'])
                             f['required'] = False
                             if f['destiny'] in seen:
-                                raise Exception("Error: el subcampo " + f['name'] + " en " + field['label'] + " ya existe en el formulario")
+                                raise Exception(_('Error: the destiny of the field {field} is repeated', field=f['name']))
                             seen.add(f['destiny'])
                             
                 if 'destiny' in field and tipo != 'separator' and tipo != 'file':
                     if(field['destiny'] in resp):
                         if(resp[field['destiny']] != tipo):
                             if(tipo not in same_types and resp[field['destiny']] not in same_types):
-                                raise Exception("Error: el campo " + field['destiny'] + " tiene dos tipos diferentes")
+                                raise Exception(_(u'The field {field} has two different types', field=field['destiny']))
                     else:
                         resp[field['destiny']] = tipo
 
@@ -316,9 +317,9 @@ def duplicate_by_slug(slug, user):
     try:
         form = mongodb.get_record('forms', {'slug': slug})
         if not form:
-            return {'msg': 'Formulario no existe'}, 404
+            return {'msg': _('Form not found')}, 404
         
-        form['name'] = form['name'] + ' (copia)'
+        form['name'] = form['name'] + _(' (copy)')
         form['slug'] = form['slug']
         form['fields'] = [field for field in form['fields']]
 

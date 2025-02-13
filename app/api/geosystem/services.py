@@ -5,6 +5,7 @@ from app.api.geosystem.models import PolygonUpdate
 import os
 import json
 from shapely.geometry import shape, mapping
+from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -67,7 +68,7 @@ def upload_shapes():
                         get_level.invalidate_all()
                         
 
-        return {'msg': 'Polígonos geográficos actualizados'}, 200
+        return {'msg': _('Shapes uploaded successfully')}, 200
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-02-12 11:36-0500\n"
+"POT-Creation-Date: 2025-02-13 18:49-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -25,22 +25,31 @@ msgstr ""
 msgid "API pública activa"
 msgstr ""
 
-#: api/snaps/services.py:36
-msgid "Record not found"
-msgstr ""
-
-#: api/snaps/services.py:59
-msgid "Snap created successfully"
-msgstr ""
-
-#: api/snaps/services.py:83
-msgid "Snap updated successfully"
-msgstr ""
-
-#: api/snaps/services.py:94 api/snaps/services.py:140
-msgid "Snap not found"
-msgstr ""
-
+#: api/adminApi/routes.py:49 api/adminApi/routes.py:97
+#: api/adminApi/routes.py:134 api/adminApi/routes.py:169
+#: api/adminApi/routes.py:213 api/adminApi/routes.py:260
+#: api/adminApi/routes.py:294 api/forms/routes.py:34 api/forms/routes.py:87
+#: api/forms/routes.py:187 api/forms/routes.py:222 api/forms/routes.py:257
+#: api/lists/routes.py:33 api/lists/routes.py:89 api/lists/routes.py:124
+#: api/lists/routes.py:185 api/lists/routes.py:226 api/logs/routes.py:48
+#: api/records/public_services.py:104 api/records/routes.py:52
+#: api/records/routes.py:285 api/records/routes.py:326
+#: api/records/routes.py:548 api/records/routes.py:594
+#: api/records/routes.py:634 api/resources/public_services.py:44
+#: api/resources/public_services.py:104 api/resources/public_services.py:110
+#: api/resources/public_services.py:129 api/resources/public_services.py:187
+#: api/resources/public_services.py:190 api/resources/public_services.py:302
+#: api/resources/public_services.py:401 api/resources/routes.py:109
+#: api/resources/routes.py:125 api/resources/routes.py:215
+#: api/resources/routes.py:230 api/resources/routes.py:269
+#: api/resources/routes.py:535 api/resources/services.py:75
+#: api/resources/services.py:154 api/resources/services.py:271
+#: api/resources/services.py:744 api/resources/services.py:756
+#: api/resources/services.py:816 api/resources/services.py:876
+#: api/resources/services.py:879 api/resources/services.py:1072
+#: api/resources/services.py:1123 api/resources/services.py:1196
+#: api/resources/services.py:1205 api/resources/services.py:1604
+#: api/search/public_services.py:30 api/search/services.py:35
 #: api/snaps/services.py:96 api/snaps/services.py:142 api/system/routes.py:41
 #: api/system/routes.py:69 api/system/routes.py:131 api/system/routes.py:156
 #: api/system/routes.py:192 api/system/routes.py:219 api/system/routes.py:246
@@ -59,6 +68,343 @@ msgstr ""
 #: api/views/routes.py:33 api/views/routes.py:66 api/views/routes.py:97
 #: api/views/routes.py:142
 msgid "You don't have the required authorization"
+msgstr ""
+
+#: api/adminApi/services.py:13
+msgid "Unable to get the default cataloging type"
+msgstr ""
+
+#: api/adminApi/services.py:41 api/users/services.py:608
+msgid "Resource not found"
+msgstr ""
+
+#: api/adminApi/services.py:49 api/lists/services.py:143
+msgid "Option not found"
+msgstr ""
+
+#: api/auth/services.py:89 api/tasks/services.py:166 api/users/services.py:43
+#: api/users/services.py:63 api/users/services.py:81 api/users/services.py:168
+#: api/users/services.py:196 api/users/services.py:570
+msgid "User not found"
+msgstr ""
+
+#: api/auth/services.py:91
+msgid "Invalid password"
+msgstr ""
+
+#: api/forms/services.py:88
+msgid "Form created successfully"
+msgstr ""
+
+#: api/forms/services.py:131 api/forms/services.py:152
+#: api/forms/services.py:320 api/types/services.py:314
+msgid "Form not found"
+msgstr ""
+
+#: api/forms/services.py:141
+msgid ""
+"Form updated successfully. If new fields were added or the type of any "
+"existing fields was changed, it is important to regenerate the index from"
+" the option in the system settings"
+msgstr ""
+
+#: api/forms/services.py:157
+msgid "The form is being used by a post type"
+msgstr ""
+
+#: api/forms/services.py:170
+msgid "Form deleted successfully"
+msgstr ""
+
+#: api/forms/services.py:182
+msgid "Error: the field cannot have destiny equal to ident"
+msgstr ""
+
+#: api/forms/services.py:185
+msgid "Error: the field destiny must start with metadata"
+msgstr ""
+
+#: api/forms/services.py:190
+msgid ""
+"Error: the field with destiny equal to metadata.firstLevel.title must be "
+"of type text"
+msgstr ""
+
+#: api/forms/services.py:194
+msgid "Error: the field with type file must have the filetag attribute"
+msgstr ""
+
+#: api/forms/services.py:214
+msgid "The value of the accessRights field is not valid"
+msgstr ""
+
+#: api/forms/services.py:217
+msgid ""
+"Error: the form must have a field with destiny equal to "
+"metadata.firstLevel.title"
+msgstr ""
+
+#: api/forms/services.py:248 api/forms/services.py:260
+msgid "Error: el campo {field} tiene dos tipos diferentes"
+msgstr ""
+
+#: api/forms/services.py:275
+msgid "Error: the destiny of the field {field} is repeated"
+msgstr ""
+
+#: api/forms/services.py:282
+msgid "The field {field} has two different types"
+msgstr ""
+
+#: api/forms/services.py:322
+msgid " (copy)"
+msgstr ""
+
+#: api/geosystem/services.py:71
+msgid "Shapes uploaded successfully"
+msgstr ""
+
+#: api/lists/services.py:64
+msgid "List created successfully"
+msgstr ""
+
+#: api/lists/services.py:79 api/lists/services.py:113 api/lists/services.py:162
+msgid "List not found"
+msgstr ""
+
+#: api/lists/services.py:154
+msgid "Error getting option"
+msgstr ""
+
+#: api/lists/services.py:203
+msgid "List updated successfully"
+msgstr ""
+
+#: api/lists/services.py:227
+msgid "List deleted successfully"
+msgstr ""
+
+#: api/logs/services.py:31
+msgid "Log created successfully"
+msgstr ""
+
+#: api/logs/services.py:41
+msgid "Logs not found"
+msgstr ""
+
+#: api/records/public_services.py:62 api/records/public_services.py:147
+msgid "id not defined"
+msgstr ""
+
+#: api/records/public_services.py:64
+msgid "index not defined"
+msgstr ""
+
+#: api/records/public_services.py:98 api/snaps/services.py:36
+msgid "Record not found"
+msgstr ""
+
+#: api/records/public_services.py:155 api/records/services.py:785
+msgid "Record does not have processing"
+msgstr ""
+
+#: api/records/public_services.py:158 api/records/services.py:788
+msgid "Record does not have fileProcessing"
+msgstr ""
+
+#: api/records/public_services.py:161 api/records/services.py:791
+msgid "Record does not have fileProcessing type"
+msgstr ""
+
+#: api/records/routes.py:495
+msgid "You must specify a page"
+msgstr ""
+
+#: api/records/routes.py:497
+msgid "You must specify a block"
+msgstr ""
+
+#: api/records/routes.py:499
+msgid "You must specify a slug"
+msgstr ""
+
+#: api/records/services.py:60 api/records/services.py:118
+#: api/records/services.py:410 api/records/services.py:599
+#: api/records/services.py:629 api/records/services.py:655
+#: api/records/services.py:664 api/records/services.py:705
+#: api/records/services.py:739
+msgid "Record does not exist"
+msgstr ""
+
+#: api/records/services.py:122
+msgid "Record does not have the resource as parent"
+msgstr ""
+
+#: api/records/services.py:169
+msgid "Parent deleted"
+msgstr ""
+
+#: api/records/services.py:200 api/resources/public_services.py:305
+#: api/resources/public_services.py:378 api/resources/public_services.py:405
+#: api/resources/services.py:771 api/resources/services.py:780
+#: api/resources/services.py:810 api/resources/services.py:1075
+#: api/resources/services.py:1126 api/resources/services.py:1234
+#: api/resources/services.py:1403 api/resources/services.py:1574
+msgid "Resource does not exist"
+msgstr ""
+
+#: api/records/services.py:377
+msgid "File type not allowed"
+msgstr ""
+
+#: api/records/services.py:417 api/records/services.py:796
+msgid "You do not have permission to view this record"
+msgstr ""
+
+#: api/records/services.py:461 api/records/services.py:777
+msgid "id is missing"
+msgstr ""
+
+#: api/records/services.py:463
+msgid "index is missing"
+msgstr ""
+
+#: api/records/services.py:597 api/records/services.py:627
+msgid "Block updated"
+msgstr ""
+
+#: api/records/services.py:653
+msgid "Block deleted"
+msgstr ""
+
+#: api/records/services.py:707 api/records/services.py:709
+#: api/records/services.py:741 api/records/services.py:743
+msgid "Record does not have transcription"
+msgstr ""
+
+#: api/records/services.py:711 api/records/services.py:745
+msgid "Record has not been processed with {slug}"
+msgstr ""
+
+#: api/records/services.py:728
+msgid "Transcription segment deleted"
+msgstr ""
+
+#: api/records/services.py:772
+msgid "Transcription segment edited"
+msgstr ""
+
+#: api/resources/public_services.py:387 api/resources/services.py:1243
+msgid "Resource does not have images"
+msgstr ""
+
+#: api/resources/services.py:148
+msgid "The metadata is required"
+msgstr ""
+
+#: api/resources/services.py:237
+msgid "Resource created successfully"
+msgstr ""
+
+#: api/resources/services.py:259 api/users/services.py:255
+#: api/users/services.py:336
+msgid "Error validating fields"
+msgstr ""
+
+#: api/resources/services.py:266
+msgid "Error validating files"
+msgstr ""
+
+#: api/resources/services.py:336
+msgid "Resource updated successfully"
+msgstr ""
+
+#: api/resources/services.py:428
+msgid "The resource cannot have itself as parent"
+msgstr ""
+
+#: api/resources/services.py:433
+msgid "The parent resource does not exist"
+msgstr ""
+
+#: api/resources/services.py:437
+msgid "The resource isn't hierarchical"
+msgstr ""
+
+#: api/resources/services.py:440
+msgid "The resource post type is not allowed to have a parent of this type"
+msgstr ""
+
+#: api/resources/services.py:455
+msgid "The post type must have a parent"
+msgstr ""
+
+#: api/resources/services.py:475 api/resources/services.py:497
+#: api/resources/services.py:514 api/resources/services.py:530
+#: api/resources/services.py:547 api/resources/services.py:564
+#: api/resources/services.py:580 api/resources/services.py:594
+#: api/resources/services.py:610 api/resources/services.py:629
+#: api/resources/services.py:636 api/resources/services.py:644
+#: api/resources/services.py:651 api/resources/services.py:694
+#: api/system/services.py:230 api/system/services.py:246
+#: api/system/services.py:265 api/system/services.py:292
+#: api/system/services.py:323 api/system/services.py:351
+#: api/users/services.py:373 api/users/services.py:384
+#: api/users/services.py:395
+msgid "The field {label} is required"
+msgstr ""
+
+#: api/resources/services.py:544 api/resources/services.py:642
+msgid "The field {label} must be a number"
+msgstr ""
+
+#: api/resources/services.py:561 api/resources/services.py:649
+msgid "The field {label} must be a boolean"
+msgstr ""
+
+#: api/resources/services.py:680 api/resources/services.py:684
+#: api/resources/services.py:686
+msgid "There is an error in {label}"
+msgstr ""
+
+#: api/resources/services.py:703 api/resources/services.py:713
+msgid "The resource must have valid access rights"
+msgstr ""
+
+#: api/resources/services.py:735
+msgid "The field {label} must have a maximum of {maxFiles} files"
+msgstr ""
+
+#: api/resources/services.py:851
+msgid "Asociated files"
+msgstr ""
+
+#: api/resources/services.py:1178
+msgid "Zip files deleted"
+msgstr ""
+
+#: api/resources/services.py:1225
+msgid "Resource deleted"
+msgstr ""
+
+#: api/resources/services.py:1355
+msgid "Post type does not exist"
+msgstr ""
+
+#: api/resources/services.py:1609
+msgid "Post type changed"
+msgstr ""
+
+#: api/snaps/services.py:59
+msgid "Snap created successfully"
+msgstr ""
+
+#: api/snaps/services.py:83
+msgid "Snap updated successfully"
+msgstr ""
+
+#: api/snaps/services.py:94 api/snaps/services.py:140
+msgid "Snap not found"
 msgstr ""
 
 #: api/snaps/services.py:106
@@ -130,14 +476,6 @@ msgstr ""
 msgid "The field {label} must be of type string"
 msgstr ""
 
-#: api/system/services.py:230 api/system/services.py:246
-#: api/system/services.py:265 api/system/services.py:292
-#: api/system/services.py:323 api/system/services.py:351
-#: api/users/services.py:373 api/users/services.py:384
-#: api/users/services.py:395
-msgid "The field {label} is required"
-msgstr ""
-
 #: api/system/services.py:233 api/system/services.py:252
 #: api/system/services.py:279 api/system/services.py:310
 #: api/system/services.py:338 api/system/services.py:354
@@ -204,12 +542,6 @@ msgstr ""
 msgid "Cache cleaned successfully"
 msgstr ""
 
-#: api/tasks/services.py:166 api/users/services.py:43 api/users/services.py:63
-#: api/users/services.py:81 api/users/services.py:168 api/users/services.py:196
-#: api/users/services.py:570
-msgid "User not found"
-msgstr ""
-
 #: api/tasks/services.py:203 api/usertasks/services.py:118
 msgid "Task not found"
 msgstr ""
@@ -254,10 +586,6 @@ msgstr ""
 
 #: api/types/services.py:166
 msgid "Post type deleted successfully"
-msgstr ""
-
-#: api/types/services.py:314
-msgid "Form not found"
 msgstr ""
 
 #: api/users/routes.py:296 api/users/routes.py:326 api/users/routes.py:358
@@ -321,10 +649,6 @@ msgstr ""
 msgid "Access right does not exist"
 msgstr ""
 
-#: api/users/services.py:255 api/users/services.py:336
-msgid "Error validating fields"
-msgstr ""
-
 #: api/users/services.py:269
 msgid "User registered successfully"
 msgstr ""
@@ -374,10 +698,6 @@ msgstr ""
 #: api/users/services.py:483 api/users/services.py:519
 #: api/users/services.py:547
 msgid "User has not accepted the compromise"
-msgstr ""
-
-#: api/users/services.py:608
-msgid "Resource not found"
 msgstr ""
 
 #: api/users/services.py:610

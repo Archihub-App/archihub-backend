@@ -6,6 +6,7 @@ from app.utils.LogActions import log_actions
 from flask import jsonify, request
 from app.api.users.services import get_user
 import bcrypt
+from flask_babel import _
 
 LDAP_HOST = os.environ.get('LDAP_HOST', False)
 LDAP_BASE_DN = os.environ.get('LDAP_BASE_DN', 'dc=example,dc=com')
@@ -85,9 +86,9 @@ def archihub_login(username, password):
     user = get_user(username)
     
     if not user:
-        return jsonify({'msg': 'Usuario inválido'}), 401
+        return jsonify({'msg': _('User not found')}), 404
     if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
-        return jsonify({'msg': 'Contraseña inválida'}), 401
+        return jsonify({'msg': _('Invalid password')}), 401
     
     access_token = create_access_token(identity=username, expires_delta=expires_delta)
     

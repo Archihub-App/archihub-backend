@@ -1,4 +1,5 @@
 from app.utils import DatabaseHandler
+from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -9,7 +10,7 @@ def autoComplete(body):
         from app.api.system.services import get_default_cataloging_type
         postType, status = get_default_cataloging_type()
         if status != 200:
-            return jsonify({'msg': 'Error al obtener el tipo de contenido por defecto'}), 500
+            return jsonify({'msg': _('Unable to get the default cataloging type')}), 500
         body['post_type'] = postType
     if 'status' not in body:
         body['status'] = 'published'
@@ -37,7 +38,7 @@ def get_id(body, user):
     resource = mongodb.get_record('resources', body, {'_id': 1, 'post_type': 1, 'metadata': 1, 'filesObj': 1, 'parent': 1, 'parents': 1})
 
     if resource is None:
-        return {'msg': 'No existe ese recurso'}, 400
+        return {'msg': _('Resource not found')}, 404
 
     return {'id': str(resource['_id']), 'post_type': resource['post_type'], 'metadata': resource['metadata'], 'filesObj': resource['filesObj'], 'parent': resource['parent'], 'parents': resource['parents']}, 200
 
@@ -45,7 +46,7 @@ def get_opts_id(body, user):
     options = mongodb.get_record('options', {'term': body['term']}, {'_id': 1})
 
     if options is None:
-        return {'msg': 'No existe esa opción'}, 400
+        return {'msg': _('Option not found')}, 404
     
 
     return {'id': str(options['_id'])}, 200
