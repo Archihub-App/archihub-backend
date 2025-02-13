@@ -6,6 +6,7 @@ import json
 from app.api.logs.models import Log
 from datetime import datetime
 from app.utils import LogActions
+from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -27,7 +28,7 @@ def register_log(username, action, metadata=None):
     # Insertar log en la base de datos
     mongodb.insert_record('logs', log)
     # Retornar mensaje de éxito
-    return jsonify({'msg': 'Log registrado exitosamente'}), 200
+    return jsonify({'msg': _('Log created successfully')}), 201
 
 # Nuevo servicio para obtener todos los logs de acuerdo a un filtro
 def filter(body):
@@ -37,7 +38,7 @@ def filter(body):
                                         ('date', -1)], skip=body['page'] * 20, fields={'_id': 0, 'metadata': 0})
         # Si no hay logs, retornar error
         if not logs:
-            return {'msg': 'No se encontraron logs'}, 400
+            return {'msg': _('Logs not found')}, 404
         # Obtener el total de logs
         total = get_total(json.dumps(body['filters']))
         # Parsear el resultado

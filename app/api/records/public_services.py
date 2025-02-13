@@ -18,6 +18,7 @@ import hashlib
 import magic
 import uuid
 from dotenv import load_dotenv
+from flask_babel import _
 load_dotenv()
 
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
@@ -58,9 +59,9 @@ def get_document_gallery(id, pages, size):
 def get_by_index_gallery(body):
     try:
         if 'id' not in body:
-            return {'msg': 'id no definido'}, 400
+            return {'msg': _('id not defined')}, 400
         if 'index' not in body:
-            return {'msg': 'index no definido'}, 400
+            return {'msg': _('index not defined')}, 400
         
         resource = mongodb.get_record('resources', {'_id': ObjectId(body['id'])}, fields={'filesObj': 1})
         ids = []
@@ -94,13 +95,13 @@ def get_by_id(id, fullFields = False):
             record = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'_id': 1})
 
             if not record:
-                return {'msg': 'Record no existe'}, 404
+                return {'msg': _('Record not found')}, 404
             else:
                 return parse_result(record), 200
         
         if 'accessRights' in record:
             if record['accessRights']:
-                return {'msg': 'No tiene permisos para acceder a este recurso'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
         
         # get keys from record['processing']
         keys = {}
@@ -143,7 +144,7 @@ def get_by_id(id, fullFields = False):
 def download_records(body):
     try:
         if 'id' not in body:
-            return {'msg': 'id no definido'}, 400
+            return {'msg': _('id not defined')}, 400
         
         resp_, status = get_by_id(body['id'], True)
         if status != 200:
@@ -151,13 +152,13 @@ def download_records(body):
         
         record = resp_
         if 'processing' not in record:
-            return {'msg': 'El record no tiene procesamiento'}, 404
+            return {'msg': _('Record does not have processing')}, 404
         
         if 'fileProcessing' not in record['processing']:
-            return {'msg': 'El record no tiene fileProcessing'}, 404
+            return {'msg': _('Record does not have fileProcessing')}, 404
         
         if 'type' not in record['processing']['fileProcessing']:
-            return {'msg': 'El record no tiene type en fileProcessing'}, 404
+            return {'msg': _('Record does not have fileProcessing type')}, 404
                 
         path = os.path.join(WEB_FILES_PATH, record['processing']['fileProcessing']['path'])
         

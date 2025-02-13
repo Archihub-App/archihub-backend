@@ -782,18 +782,18 @@ def download_records(body, user):
         
         record = resp_
         if 'processing' not in record:
-            return {'msg': 'El record no tiene procesamiento'}, 404
+            return {'msg': _('Record does not have processing')}, 404
         
         if 'fileProcessing' not in record['processing']:
-            return {'msg': 'El record no tiene fileProcessing'}, 404
+            return {'msg': _('Record does not have fileProcessing')}, 404
         
         if 'type' not in record['processing']['fileProcessing']:
-            return {'msg': 'El record no tiene type en fileProcessing'}, 404
+            return {'msg': _('Record does not have fileProcessing type')}, 404
         
         if 'accessRights' in record:
             if record['accessRights']:
                 if not has_right(user, record['accessRights']) and not has_role(user, 'admin'):
-                    return {'msg': 'No tiene permisos para acceder a este recurso'}, 401
+                    return {'msg': _('You do not have permission to view this record')}, 401
         
         path = os.path.join(WEB_FILES_PATH, record['processing']['fileProcessing']['path'])
         

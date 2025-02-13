@@ -11,6 +11,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from bson.objectid import ObjectId
 from app.utils.functions import get_roles, get_access_rights, get_roles_id, get_access_rights_id
+from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -60,7 +61,7 @@ def create(body, user):
         # Limpiar la cache
         update_cache()
         # Retornar el resultado
-        return {'msg': 'Listado creado exitosamente'}, 201
+        return {'msg': _('List created successfully')}, 201
     
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -75,7 +76,7 @@ def get_by_slug(slug):
         lista = { 'name': lista['name'], 'description': lista['description'], 'options': lista['options'] }
         # Si el listado no existe, retornar error
         if not lista:
-            return {'msg': 'Listado no existe'}
+            return {'msg': _('List not found')}, 404
         
         opts = []
 
@@ -109,7 +110,7 @@ def get_by_id(id):
         lista = { 'name': lista['name'], 'description': lista['description'], 'options': lista['options'] }
         # Si el listado no existe, retornar error
         if not lista:
-            return {'msg': 'Listado no existe'}
+            return {'msg': _('List not found')}, 404
         
         opts = []
 
@@ -139,7 +140,7 @@ def get_option_by_id(id):
         option = mongodb.get_record('options', {'_id': ObjectId(id)})
         # Si la opcion no existe, retornar error
         if not option:
-            return {'msg': 'Opcion no existe'}
+            return {'msg': _('Option not found')}, 404
         
         # Parsear el resultado
         option = {
@@ -150,7 +151,7 @@ def get_option_by_id(id):
         # Retornar el resultado
         return option
     except Exception as e:
-        raise Exception('Error al obtener la opcion')
+        raise Exception(_('Error getting option'))
 
 # Nuevo servicio para actualizar un listado
 def update_by_id(id, body, user):
@@ -158,7 +159,7 @@ def update_by_id(id, body, user):
     lista = mongodb.get_record('lists', {'_id': ObjectId(id)})
     # Si el listado no existe, retornar error
     if not lista:
-        return {'msg': 'Listado no existe'}, 404
+        return {'msg': _('List not found')}, 404
     # Crear instancia de ListUpdate con el body del request
     try:
         # Actualizar el listado en la base de datos
@@ -199,7 +200,7 @@ def update_by_id(id, body, user):
                 get_roles.invalidate_all()
                 
             # Retornar el resultado
-            return {'msg': 'Listado actualizado exitosamente'}, 200
+            return {'msg': _('List updated successfully')}, 200
     
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -223,7 +224,7 @@ def delete_by_id(id, user):
         get_by_id.invalidate_all()
         get_all.invalidate_all()
         # Retornar el resultado
-        return {'msg': 'Listado eliminado exitosamente'}, 200
+        return {'msg': _('List deleted successfully')}, 200
     
     except Exception as e:
         return {'msg': str(e)}, 500
