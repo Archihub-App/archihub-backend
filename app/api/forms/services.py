@@ -108,12 +108,14 @@ def get_by_slug(slug):
             'list': get_access_rights_id(),
             'type': 'select'
         })
+        
+        print(form)
         # quitamos el id del formulario
         form.pop('_id')
         # Parsear el resultado
         form = parse_result(form)
         # Retornar el resultado
-        return form
+        return form, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
