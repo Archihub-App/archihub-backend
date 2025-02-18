@@ -17,6 +17,7 @@ from app.api.users.services import has_role
 from bson.objectid import ObjectId
 from app.api.types.services import get_all as get_all_types
 import json
+from flask_babel import _
 
 load_dotenv()
 
@@ -179,7 +180,6 @@ class ExtendedPluginClass(PluginClass):
         
         types = current['types_activation']
         for t in types:
-            print("Registering fileProcessing hook for type: ", t['type'])
             hookHandler.register('resource_files_create', self.automatic, t, t['order'])
 
     def add_routes(self):
@@ -254,7 +254,7 @@ class ExtendedPluginClass(PluginClass):
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': 'No tiene permisos suficientes'}, 401
+                    return {'msg': _('You don\'t have the required authorization')}, 401
                 
                 types = get_all_types()
                 if isinstance(types, list):
@@ -305,7 +305,7 @@ class ExtendedPluginClass(PluginClass):
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': 'No tiene permisos suficientes'}, 401
+                    return {'msg': _('You don\'t have the required authorization')}, 401
                 
                 body = request.form.to_dict()
                 data = body['data']
@@ -318,7 +318,7 @@ class ExtendedPluginClass(PluginClass):
 
                 self.set_plugin_settings(data)
 
-                return {'msg': 'Configuración guardada'}, 200
+                return {'msg': _('Settings updated')}, 200
             
             except Exception as e:
                 return {'msg': str(e)}, 500

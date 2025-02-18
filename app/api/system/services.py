@@ -89,6 +89,7 @@ def clear_system_cache():
     get_access_rights_id.invalidate_all()
     get_resources_schema.invalidate_all()
     get_plugins.invalidate_all()
+    get_system_language.invalidate_all()
 
 # Funcion para actualizar los ajustes del sistema
 def update_settings(settings, current_user):
@@ -651,6 +652,12 @@ def set_system_setting():
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
+
+@cacheHandler.cache.cache()
+def get_system_language():
+    user_management = mongodb.get_record('system', {'name': 'user_management'})
+    lenguaje = user_management['data'][2]['value']
+    return {'language': lenguaje}, 200
 
 
 def clear_cache():
