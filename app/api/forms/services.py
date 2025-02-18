@@ -109,8 +109,6 @@ def get_by_slug(slug):
             'type': 'select'
         })
         
-        print(form)
-        # quitamos el id del formulario
         form.pop('_id')
         # Parsear el resultado
         form = parse_result(form)
