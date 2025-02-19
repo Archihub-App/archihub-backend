@@ -191,7 +191,6 @@ class ExtendedPluginClass(PluginClass):
 
             self.validate_fields(body, 'bulk')
             self.validate_roles(current_user, ['admin', 'processing'])
-
             task = self.bulk.delay(body, current_user)
             self.add_task_to_user(task.id, 'filesProcessing.create_webfile', current_user, 'msg')
             
@@ -242,7 +241,7 @@ class ExtendedPluginClass(PluginClass):
             if len(resources) < 100:
                 loop = False
 
-            instance.clear_cache()
+        instance.clear_cache()
         return 'Se procesaron ' + str(size) + ' archivos'
         
       

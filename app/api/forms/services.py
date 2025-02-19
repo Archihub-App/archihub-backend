@@ -53,20 +53,20 @@ def create(body, user):
             body['slug'] = body['slug'].replace('--', '-')
 
             # llamamos al servicio para verificar si el slug ya existe
-            slug_exists = get_by_slug(body['slug'])
+            slug_exists, status = get_by_slug(body['slug'])
             # Mientras el slug exista, agregar un número al final
             index = 1
-            while 'msg' not in slug_exists:
+            while status == 200:
                 body['slug'] = body['slug'] + '-' + str(index)
-                slug_exists = get_by_slug(body['slug'])
+                slug_exists, status = get_by_slug(body['slug'])
                 index += 1
                 
         else:
-            slug_exists = get_by_slug(body['slug'])
+            slug_exists, status = get_by_slug(body['slug'])
             index = 1
-            while 'msg' not in slug_exists:
+            while status == 200:
                 body['slug'] = body['slug'] + '-' + str(index)
-                slug_exists = get_by_slug(body['slug'])
+                slug_exists, status = get_by_slug(body['slug'])
                 index += 1
             
         validate_form(body)
