@@ -270,6 +270,10 @@ msgstr "Falta el campo página"
 msgid "User not found"
 msgstr "Usuario no encontrado"
 
+#: api/auth/services.py:91
+msgid "Invalid password"
+msgstr "Contraseña inválida"
+
 #: api/users/services.py:96
 msgid "You have reached the limit of requests for this week"
 msgstr "Alcanzaste el límite de solicitudes para esta semana"
