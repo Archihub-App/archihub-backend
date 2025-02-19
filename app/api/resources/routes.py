@@ -347,6 +347,8 @@ def get_tree():
 
                 return_slugs = []
                 
+                if not 'status' in body:
+                    body['status'] = 'published'
                 if body['status'] == 'draft':
                     if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'admin'):
                         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
