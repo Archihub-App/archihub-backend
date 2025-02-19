@@ -201,20 +201,11 @@ class ExtendedPluginClass(PluginClass):
             'post_type': body['post_type']
         }
         if isinstance(body['post_type'], list):
-            filters['post_type'] = {'$in': body['post_type']}
-        
+            filters['post_type'] = {'$in': body['post_type']}   
 
         if 'parent' in body:
             if body['parent'] and len(body['resources']) == 0:
-                pt = body['post_type']
-                isList = False
-                if (isinstance(pt, list) and len(pt) > 0) :
-                    isList = True
-                    
-                if not isList:
-                    filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
-                else:
-                    filters = {'$or': [{'parents.id': body['parent'], 'post_type': {'$in': body['post_type']}}, {'_id': ObjectId(body['parent'])}]}
+                filters = {'$or': [{'parents.id': body['parent'], 'post_type': filters['post_type']}, {'_id': ObjectId(body['parent'])}]}
                 
         
         if 'resources' in body:

@@ -304,7 +304,7 @@ def get_tree():
         current_user = get_jwt_identity()
         # Obtener el body del request
         body = request.json
-
+        
         if 'view' in body:
             if body['view'] == 'tree':
                 slugs = [item['slug'] for item in body['tree']]
@@ -346,6 +346,10 @@ def get_tree():
                     slugs = body['activeTypes']
 
                 return_slugs = []
+                
+                if body['status'] == 'draft':
+                    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'admin'):
+                        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
                 for s in slugs:
                     roles = cache_type_roles(s)
@@ -356,7 +360,7 @@ def get_tree():
                     else:
                         return_slugs.append(s)
                 
-                resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'] if 'postType' in body else None, int(body['page']) if 'page' in body else 0)
+                resp = services.get_tree(body['root'],'|'.join(return_slugs), current_user, body['postType'] if 'postType' in body else None, int(body['page']) if 'page' in body else 0, body['status'] if 'status' in body else 'published')
 
                 if isinstance(resp, list):
                     resp = tuple(resp)
