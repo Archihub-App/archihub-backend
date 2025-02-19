@@ -32,6 +32,7 @@ import os
 from datetime import datetime
 from dateutil import parser
 import numbers
+from flask_babel import _
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
@@ -71,7 +72,7 @@ def get_all(body, user):
                         canView = True
                         break
                 if not canView:
-                    return {'msg': 'No tiene permisos para obtener los recursos'}, 401
+                    return {'msg': _('You don\'t have the required authorization')}, 401
 
         filters = {}
         limit = 20
@@ -144,13 +145,13 @@ def create(body, user, files, updateCache = True):
 
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
-            return {'msg': 'El recurso debe tener metadata'}, 400
+            return {'msg': _('The metadata is required')}, 400
 
 
         status = body['status']
         if status == 'published':
             if not has_role(user, 'publisher') and not has_role(user, 'admin'):
-                return {'msg': 'No tiene permisos para publicar un recurso'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
             
         if not status:
             status = 'draft'
@@ -233,7 +234,7 @@ def create(body, user, files, updateCache = True):
             hookHandler.call('resource_files_create', body)
 
         # Retornar el resultado
-        resp = {'msg': 'Recurso creado exitosamente', 'id': str(new_resource.inserted_id), 'post_type': body['post_type']}
+        resp = {'msg': _('Resource created successfully'), 'id': str(new_resource.inserted_id), 'post_type': body['post_type']}
         return resp, 201
     except Exception as e:
         print(str(e))
@@ -255,19 +256,19 @@ def update_by_id(id, body, user, files, updateCache = True):
         
 
         if errors:
-            return {'msg': 'Error al validar los campos', 'errors': errors}, 400
+            return {'msg': _('Error validating fields'), 'errors': errors}, 400
         
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
 
         validate_files([*body['filesIds'], *resource['filesObj']], metadata, errors)
 
         if errors:
-            return {'msg': 'Error al validar los archivos', 'errors': errors}, 400
+            return {'msg': _('Error validating files'), 'errors': errors}, 400
 
         status = body['status']
         if status == 'published':
             if not has_role(user, 'publisher') and not has_role(user, 'admin'):
-                return {'msg': 'No tiene permisos para publicar un recurso'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
         if not status:
             status = 'draft'
 
@@ -332,7 +333,7 @@ def update_by_id(id, body, user, files, updateCache = True):
         if updateCache:
             update_cache()
         # Retornar el resultado
-        return {'msg': 'Recurso actualizado exitosamente'}, 200
+        return {'msg': _('Resource updated successfully')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
@@ -424,20 +425,19 @@ def validate_parent(body):
             # si el padre es el mismo que el hijo, retornar error
             if '_id' in body:
                 if parent['id'] == body['_id']:
-                    raise Exception('El recurso no puede ser su propio padre')
+                    raise Exception(_('The resource cannot have itself as parent'))
             
             if 'post_type' not in parent:
                 parent_temp = mongodb.get_record('resources', {'_id': ObjectId(parent['id'])}, fields={'post_type': 1})
                 if not parent_temp:
-                    raise Exception('El recurso padre no existe')
+                    raise Exception(_('The parent resource does not exist'))
                 parent['post_type'] = parent_temp['post_type']
             # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
             if parent['post_type'] == body['post_type'] and not hierarchical[0]:
-                raise Exception('El tipo de contenido no es jerarquico')
+                raise Exception(_('The resource isn\'t hierarchical'))
             # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
             elif not has_parent_postType(body['post_type'], parent['post_type']) and not hierarchical[0]:
-                raise Exception(
-                    'El recurso no tiene como padre al recurso padre')
+                raise Exception(_('The resource post type is not allowed to have a parent of this type'))
 
             body['parents'] = [parent, *get_parents(parent['id'])]
             body['parent'] = parent
@@ -452,7 +452,7 @@ def validate_parent(body):
                 body['parent'] = None
                 return body
             elif not hierarchical[0] and hierarchical[1]:
-                raise Exception('El tipo de contenido debe tener un padre')
+                raise Exception(_('The post type must have a parent'))
             elif not hierarchical[0] and not hierarchical[1]:
                 body['parents'] = []
                 body['parent'] = None
@@ -472,7 +472,7 @@ def validate_fields(body, metadata, errors):
                         value = get_value_by_path(body, field['destiny'])
                         if not value or value == '':
                             if field['required'] and body['status'] == 'published':
-                                errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                                errors[field['destiny']] = _(u'The field {label} is required', label=field['label'])
                             else:
                                 body = change_value(body, field['destiny'], 'Sin título')
                     if field['type'] == 'location':
@@ -494,7 +494,7 @@ def validate_fields(body, metadata, errors):
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
-                                   ] = f'El campo {field["label"]} es requerido'
+                                   ] = _(u'The field {label} is required', label=field['label'])
                             
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':
@@ -511,7 +511,7 @@ def validate_fields(body, metadata, errors):
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
-                                   ] = f'El campo {field["label"]} es requerido'
+                                   ] = _(u'The field {label} is required', label=field['label'])
                             
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':
@@ -527,7 +527,7 @@ def validate_fields(body, metadata, errors):
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published' and field['destiny'] != 'accessRights':
                             errors[field['destiny']
-                                   ] = f'El campo {field["label"]} es requerido'
+                                   ] = _(u'The field {label} is required', label=field['label'])
                         
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':
@@ -541,10 +541,10 @@ def validate_fields(body, metadata, errors):
                         if exists:
                             if not isinstance(get_value_by_path(body, field['destiny']), numbers.Number):
                                 errors[field['destiny']
-                                    ] = f'El campo {field["label"]} debe ser un número'
+                                    ] = _(u'The field {label} must be a number', label=field['label'])
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
-                                   ] = f'El campo {field["label"]} es requerido'
+                                   ] = _(u'The field {label} is required', label=field['label'])
                             
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':
@@ -558,10 +558,10 @@ def validate_fields(body, metadata, errors):
                         if exists:
                             if not isinstance(get_value_by_path(body, field['destiny']), bool):
                                 errors[field['destiny']
-                                    ] = f'El campo {field["label"]} debe ser un booleano'
+                                    ] = _(u'The field {label} must be a boolean', label=field['label'])
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
-                                   ] = f'El campo {field["label"]} es requerido'
+                                   ] = _(u'The field {label} is required', label=field['label'])
                             
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':
@@ -577,7 +577,7 @@ def validate_fields(body, metadata, errors):
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
-                                   ] = f'El campo {field["label"]} es requerido'
+                                   ] = _(u'The field {label} is required', label=field['label'])
                             
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':
@@ -591,7 +591,7 @@ def validate_fields(body, metadata, errors):
                                 body, field['destiny']), field)
                         elif field['required'] and body['status'] == 'published':
                             errors[field['destiny']
-                                   ] = f'El campo {field["label"]} es requerido'
+                                   ] = _(u'The field {label} is required', label=field['label'])
                     elif field['type'] == 'simple-date':
                         exists = get_value_by_path(body, field['destiny'])
                         hasCondition = int(field['conditionField']) if 'conditionField' in field else False
@@ -607,7 +607,7 @@ def validate_fields(body, metadata, errors):
                             validate_simple_date(value, field)
                             body = change_value(body, field['destiny'], value)
                         elif field['required'] and body['status'] == 'published':
-                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                            errors[field['destiny']] = _(u'The field {label} is required', label=field['label'])
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
@@ -626,29 +626,29 @@ def validate_fields(body, metadata, errors):
                                             subfield['label'] = subfield['name']
                                             validate_text(v[subfield['destiny']], subfield)
                                         elif subfield['required'] and body['status'] == 'published':
-                                            errors[subfield['destiny']] = f'El campo {subfield["name"]} es requerido'
+                                            errors[subfield['destiny']] = _(u'The field {label} is required', label=subfield['name'])
                                     elif subfield['type'] == 'text-area':
                                         exists = v[subfield['destiny']]
                                         if exists:
                                             subfield['label'] = subfield['name']
                                             validate_text(v[subfield['destiny']], subfield)
                                         elif subfield['required'] and body['status'] == 'published':
-                                            errors[subfield['destiny']] = f'El campo {subfield["name"]} es requerido'
+                                            errors[subfield['destiny']] = _(u'The field {label} is required', label=subfield['name'])
                                     elif subfield['type'] == 'number':
                                         exists = v[subfield['destiny']]
                                         if exists:
                                             v[subfield['destiny']] = float(v[subfield['destiny']])
                                             if not isinstance(v[subfield['destiny']], numbers.Number):
-                                                errors[subfield['destiny']] = f'El campo {subfield["name"]} debe ser un número'
+                                                errors[subfield['destiny']] = _(u'The field {label} must be a number', label=subfield['name'])
                                         elif subfield['required'] and body['status'] == 'published':
-                                            errors[subfield['destiny']] = f'El campo {subfield["name"]} es requerido'
+                                            errors[subfield['destiny']] = _(u'The field {label} is required', label=subfield['name'])
                                     elif subfield['type'] == 'checkbox':
                                         exists = v[subfield['destiny']]
                                         if exists:
                                             if not isinstance(v[subfield['destiny']], bool):
-                                                errors[subfield['destiny']] = f'El campo {subfield["name"]} debe ser un booleano'
+                                                errors[subfield['destiny']] = _(u'The field {label} must be a boolean', label=subfield['name'])
                                         elif subfield['required'] and body['status'] == 'published':
-                                            errors[subfield['destiny']] = f'El campo {subfield["name"]} es requerido'
+                                            errors[subfield['destiny']] = _(u'The field {label} is required', label=subfield['name'])
                                     elif subfield['type'] == 'simple-date':
                                         exists = v[subfield['destiny']]
                                         if exists:
@@ -677,13 +677,13 @@ def validate_fields(body, metadata, errors):
                             temp = []
                             for f in value:
                                 if 'id' not in f:
-                                    errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+                                    errors[field['destiny']] = _(u'There is an error in {label}', label=field['label'])
                                 else:
                                     resource = mongodb.get_record('resources', {'_id': ObjectId(f['id'])})
                                     if not resource:
-                                        errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+                                        errors[field['destiny']] = _(u'There is an error in {label}', label=field['label'])
                                     elif resource['post_type'] != field['relation_type']:
-                                        errors[field['destiny']] = f'Hay un error en el campo {field["label"]}'
+                                        errors[field['destiny']] = _(u'There is an error in {label}', label=field['label'])
                                     else:
                                         temp.append({
                                             'id': f['id'],
@@ -691,18 +691,16 @@ def validate_fields(body, metadata, errors):
                                         })
                             body = change_value(body, field['destiny'], temp)
                         elif field['required'] and body['status'] == 'published':
-                            errors[field['destiny']] = f'El campo {field["label"]} es requerido'
+                            errors[field['destiny']] = _(u'The field {label} is required', label=field['label'])
 
         except Exception as e:
-            print(str(e), field['destiny'])
             errors[field['destiny']] = str(e)
 
     if 'accessRights' not in body:
         body['accessRights'] = None
     else:
         if body['accessRights'] == '':
-            errors['accessRights'] = 'El recurso debe tener derechos de acceso'
-        
+            errors['accessRights'] = _('The resource must have valid access rights')
         elif body['accessRights'] == 'public':
             body['accessRights'] = None
         else:
@@ -712,7 +710,7 @@ def validate_fields(body, metadata, errors):
                 access_rights = [a['id'] for a in access_rights]
 
                 if body['accessRights'] not in access_rights and body['accessRights'] != None:
-                    errors['accessRights'] = 'El recurso debe tener derechos de acceso válidos'
+                    errors['accessRights'] = _('The resource must have valid access rights')
 
     return body
 
@@ -734,7 +732,7 @@ def validate_files(files, metadata, errors):
             if f['maxFiles'] != '' and f['maxFiles'] != 0:
                 if f['filetag'] in count_tags:
                     if f['maxFiles'] < count_tags[f['filetag']]:
-                        errors[f['filetag']] = f'El campo {f["label"]} no puede tener más de {f["maxFiles"]} archivos'
+                        errors[f['filetag']] = _(u'The field {label} must have a maximum of {maxFiles} files', label=f['label'], maxFiles=f['maxFiles'])
 
 # Nuevo servicio para obtener un recurso por su id
 def get_by_id(id, user):
@@ -743,7 +741,7 @@ def get_by_id(id, user):
         accessRights = get_accessRights(id)
         if accessRights:
             if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
-                return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
             
         post_type = get_resource_type(id)
         post_type_roles = cache_type_roles(post_type)
@@ -755,7 +753,7 @@ def get_by_id(id, user):
                     canView = True
                     break
             if not canView:
-                return {'msg': 'No tiene permisos para obtener un recurso'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
 
         resource = get_resource(id, user)
 
@@ -770,7 +768,7 @@ def get_by_id(id, user):
 def get_resource_type(id):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'post_type': 1})
     if not resource:
-        raise Exception('Recurso no existe')
+        raise Exception(_('Resource does not exist'))
     return resource['post_type']
 
 @cacheHandler.cache.cache(limit=5000)
@@ -779,7 +777,7 @@ def get_accessRights(id):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'accessRights': 1, 'parents': 1})
     # Si el recurso no existe, retornar error
     if not resource:
-        raise Exception('Recurso no existe')
+        raise Exception(_('Resource does not exist'))
     
     if 'accessRights' in resource:
         if resource['accessRights']:
@@ -809,13 +807,13 @@ def get_resource(id, user):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
     # Si el recurso no existe, retornar error
     if not resource:
-        raise Exception('Recurso no existe')
+        raise Exception(_('Resource does not exist'))
     
     status = resource['status']
     if status == 'draft':
         if not has_role(user, 'publisher') or not has_role(user, 'admin'):
             if resource['createdBy'] != user and not has_role(user, 'editor'):
-                raise Exception('No tiene permisos para ver este recurso')
+                raise Exception(_('You don\'t have the required authorization'))
         
     # Registrar el log
     resource['_id'] = str(resource['_id'])
@@ -850,7 +848,7 @@ def get_resource(id, user):
         if len(resource['filesObj']) > 0:
             resource['children'] = [{
                 'post_type': 'files',
-                'name': 'Archivos asociados',
+                'name': _('Asociated files'),
                 'icon': 'archivo',
                 'slug': 'files',
             }, *resource['children']]
@@ -875,10 +873,10 @@ def get_resource(id, user):
                         canView = False
             
             if not canView:
-                set_value_in_dict(resource, f['destiny'], 'No tiene permisos para ver este campo')
+                set_value_in_dict(resource, f['destiny'], _('You don\'t have the required authorization'))
                 temp.append({
                     'label': f['label'],
-                    'value': 'No tiene permisos para ver este campo',
+                    'value': _('You don\'t have the required authorization'),
                     'type': 'text'
                 })
                 continue
@@ -1071,10 +1069,10 @@ def get_resource_files(id, user, page, groupImages = False):
         accessRights = get_accessRights(id)
         if accessRights:
             if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
-                return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
         # Si el recurso no existe, retornar error
         if not resource:
-            return {'msg': 'Recurso no existe'}, 404
+            return {'msg': _('Resource does not exist')}, 404
 
         temp = []
         ids = []
@@ -1122,10 +1120,10 @@ def download_resource_files(body, user):
         accessRights = get_accessRights(body['id'])
         if accessRights:
             if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
-                return {'msg': 'No tiene permisos para acceder al recurso'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
         # Si el recurso no existe, retornar error
         if not resource:
-            return {'msg': 'Recurso no existe'}, 404
+            return {'msg': _('Resource does not exist')}, 404
 
         temp = []
         ids = []
@@ -1177,7 +1175,7 @@ def delete_zip_files():
         for f in os.listdir(zippath):
             os.remove(os.path.join(zippath, f))
             
-        return {'msg': 'Archivos eliminados'}, 200
+        return {'msg': _('Zip files deleted')}, 200
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
@@ -1195,7 +1193,7 @@ def delete_by_id(id, user):
                     canEdit = True
                     break
             if not canEdit:
-                return {'msg': 'No tiene permisos para eliminar un recurso'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
         
         if post_type_roles['viewRoles']:
             canView = False
@@ -1204,7 +1202,7 @@ def delete_by_id(id, user):
                     canView = True
                     break
             if not canView:
-                return {'msg': 'No tiene permisos para eliminar un recurso'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
 
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         
@@ -1224,7 +1222,7 @@ def delete_by_id(id, user):
         update_cache()
 
         # Retornar el resultado
-        return {'msg': 'Recurso eliminado exitosamente'}, 200
+        return {'msg': _('Resource deleted')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -1233,7 +1231,7 @@ def get_resource_images(id, user):
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
 
     if not resource:
-        return {'msg': 'Recurso no existe'}, 404
+        return {'msg': _('Resource does not exist')}, 404
 
     ids = []
     if 'filesObj' in resource:
@@ -1242,7 +1240,7 @@ def get_resource_images(id, user):
 
     img = mongodb.count('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'})
     if img == 0:
-        return {'msg': 'No hay imágenes asociadas al recurso'}, 404
+        return {'msg': _('Resource does not have images')}, 404
     
     resp = {
         'pages': img
@@ -1311,7 +1309,7 @@ def get_children_cache(root, available, post_type=None):
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
 @cacheHandler.cache.cache(limit=5000)
-def get_tree(root, available, user, post_type=None, page=None):
+def get_tree(root, available, user, post_type=None, page=None, status='published'):
     try:
         list_available = available.split('|')
 
@@ -1321,18 +1319,18 @@ def get_tree(root, available, user, post_type=None, page=None):
             if page is not None:
                 resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
-                             "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
+                             "$in": list_available}, 'parent': None, 'status': status}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
             else:
                 resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
-                             "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             "$in": list_available}, 'parent': None, 'status': status}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         else:
             if page is not None:
                 resources = list(mongodb.get_all_records('resources', {'post_type': {
-                             "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
+                             "$in": list_available}, 'parent.id': root, 'status': status}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
             else:
                 resources = list(mongodb.get_all_records('resources', {'post_type': {
-                             "$in": list_available}, 'parent.id': root, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             "$in": list_available}, 'parent.id': root, 'status': status}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
 
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
@@ -1354,7 +1352,7 @@ def has_parent_postType(post_type, compare):
         post_type = mongodb.get_record('post_types', {'slug': post_type})
         # Si el tipo de post no existe, retornar error
         if not post_type:
-            return {'msg': 'Tipo de post no existe'}, 404
+            return {'msg': _('Post type does not exist')}, 404
         # Si el tipo de post tiene padre, retornar True
         if len(post_type['parentType']) > 0:
             for p in post_type['parentType']:
@@ -1402,7 +1400,7 @@ def get_parent(id):
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         # Si el recurso no existe, retornar error
         if not resource:
-            return {'msg': 'Recurso no existe'}, 404
+            return {'msg': _('Resource does not exist')}, 404
         # Si el recurso no tiene padre, retornar una lista vacia
         if 'parent' not in resource:
             return None
@@ -1573,7 +1571,7 @@ def get_favCount(id):
     try:
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'favCount': 1})
         if not resource:
-            raise Exception('Recurso no existe')
+            raise Exception(_('Resource does not exist'))
         return {'favCount': resource['favCount']}, 200
     except Exception as e:
         raise Exception(str(e))
@@ -1603,12 +1601,12 @@ def change_post_type(body, user):
                     canEdit = True
                     break
             if not canEdit:
-                return {'msg': 'No tiene permisos para cambiar el tipo de post'}, 401
+                return {'msg': _('You don\'t have the required authorization')}, 401
 
         
 
         # Retornar el resultado
-        return {'msg': 'Tipo de post cambiado exitosamente'}, 200
+        return {'msg': _('Post type changed')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 

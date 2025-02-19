@@ -4,6 +4,7 @@ from app.utils import CacheHandler
 from app.api.usertasks.models import UserTask, UserTaskUpdate
 from datetime import datetime
 from bson.objectid import ObjectId
+from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -28,7 +29,7 @@ def get_resource_tasks(resourceId):
             
             return task, 200
         else:
-            return jsonify({'msg': 'No hay tareas pendientes para este recurso'}), 404
+            return jsonify({'msg': _('There are no tasks for this resource')}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
@@ -71,22 +72,22 @@ def get_editors():
 def create_task(body, user):
     try:
         if 'resourceId' not in body:
-            return jsonify({'error': 'resourceId es requerido'}), 400
+            return jsonify({'error': _('resourceId is required')}), 400
         if 'user' not in body:
-            return jsonify({'error': 'user es requerido'}), 400
+            return jsonify({'error': _('user is required')}), 400
         if 'comment' not in body:
-            return jsonify({'error': 'comment es requerido'}), 400
+            return jsonify({'error': _('comment is required')}), 400
         
         if body['user'] == '':
-            return jsonify({'error': 'user no puede ser vacío'}), 400
+            return jsonify({'error': _('user cannot be empty')}), 400
         if body['comment'] == '':
-            return jsonify({'error': 'comment no puede ser vacío'}), 400
+            return jsonify({'error': _('comment cannot be empty')}), 400
         if body['resourceId'] == '':
-            return jsonify({'error': 'resourceId no puede ser vacío'}), 400
+            return jsonify({'error': _('resourceId cannot be empty')}), 400
         
         task = mongodb.get_record('usertasks', {'resourceId': body['resourceId'], 'status': 'pending'})
         if task:
-            return jsonify({'error': 'Ya existe una tarea pendiente para este recurso'}), 400
+            return jsonify({'error': _('There is already a task for this resource')}), 400
         
         body['status'] = 'pending'
         body['createdAt'] = datetime.now()
@@ -114,22 +115,22 @@ def update_task(id, body, user, isTeamLead):
     try:
         task = mongodb.get_record('usertasks', {'_id': ObjectId(id)})
         if not task:
-            return jsonify({'error': 'No existe la tarea'}), 400
+            return jsonify({'error': _('Task not found')}), 404
         
         if task['status'] == 'approved':
-            return jsonify({'error': 'La tarea ya ha sido completada'}), 400
+            return jsonify({'error': _('Task already approved')}), 400
         
         if task['status'] == 'pending' and 'status' in body and body['status'] == 'review':
             if user != task['user']:
-                return jsonify({'error': 'No es el usuario asignado para la tarea'}), 400
+                return jsonify({'error': _('You cannot review this task')}), 401
             
         if task['status'] == 'review' and 'status' in body and body['status'] == 'rejected':
             if not isTeamLead:
-                return jsonify({'error': 'No tiene permisos suficientes'}), 401
+                return jsonify({'error': _('You don\'t have the required authorization')}), 401
             
         if task['status'] == 'review' and 'status' in body and body['status'] == 'approved':
             if not isTeamLead:
-                return jsonify({'error': 'No tiene permisos suficientes'}), 401
+                return jsonify({'error': _('You don\'t have the required authorization')}), 401
             
         body['comment'] = [{
             'user': user,
@@ -144,7 +145,7 @@ def update_task(id, body, user, isTeamLead):
         updated_task['comment'] = process_comments(updated_task['comment'])
         
         if body['status'] == 'approved':
-            return jsonify({'error': "No hay tareas sin completar"}), 400
+            return jsonify({'error': _('No unfinished tasks')}), 400
         else:
             return jsonify(updated_task), 200
     except Exception as e:

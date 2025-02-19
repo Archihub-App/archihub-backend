@@ -5,6 +5,7 @@ from app.api.system import services
 from app.api.users import services as user_services
 from flask import request
 from app.utils.FernetAuth import fernetAuthenticate, nodeFernetAuthenticate
+from flask_babel import _
 
 
 # from app.tasks.tasks import add
@@ -37,7 +38,7 @@ def get_all():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para obtener los ajustes del sistema'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Llamar al servicio para obtener todos los ajustes del sistema
     resp = services.get_all_settings()
     return resp
@@ -65,7 +66,7 @@ def update():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para actualizar los ajustes del sistema'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Obtener el body de la request
     body = request.get_json()
 
@@ -127,7 +128,7 @@ def get_plugins():
         return resp	
     
     else:
-        return {'msg': 'No tiene permisos para obtener el listado de plugins en la carpeta plugins'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
 
 # POST para instalar un plugin
 @bp.route('/plugins', methods=['POST'])
@@ -152,7 +153,7 @@ def activate_plugin():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para activar los plugins'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Obtener el body de la request
     body = request.get_json()
     # Llamar al servicio para instalar un plugin
@@ -188,7 +189,7 @@ def change_plugin_status(plugin_name):
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para activar/desactivar el plugin'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Llamar al servicio para activar/desactivar un plugin
     return services.change_plugin_status(plugin_name, current_user)
 
@@ -215,7 +216,7 @@ def get_access_rights():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
-        return {'msg': 'No tiene permisos para obtener el listado de access rights'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Llamar al servicio para obtener el listado de access rights
     return services.get_access_rights()
 
@@ -242,7 +243,7 @@ def get_roles():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para obtener el listado de roles'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Llamar al servicio para obtener el listado de roles
     return services.get_roles()
 
@@ -269,7 +270,7 @@ def regenerate_index():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de procesamiento o administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para iniciar la regeneración del index'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Llamar al servicio para iniciar la regeneración del index
     return services.regenerate_index(current_user)
 
@@ -295,7 +296,7 @@ def index_resources():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de procesamiento o administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para iniciar la indexación de recursos'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Llamar al servicio para iniciar la indexación de recursos
     return services.index_resources(current_user)
 
@@ -321,7 +322,7 @@ def clear_cache():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de procesamiento o administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para limpiar la cache'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     # Llamar al servicio para limpiar la cache
     return services.clear_cache()
 
@@ -369,7 +370,7 @@ def geo_load():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de procesamiento o administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para actualizar los poligonos'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     
     
     from app.api.geosystem.services import upload_shapes
@@ -397,7 +398,25 @@ def zip_files_delete():
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de procesamiento o administrador
     if not user_services.has_role(current_user, 'admin'):
-        return {'msg': 'No tiene permisos para eliminar los archivos'}, 401
+        return {'msg': _('You don\'t have the required authorization')}, 401
     
     from app.api.resources.services import delete_zip_files
     return delete_zip_files()
+
+@bp.route('/get-language', methods=['GET'])
+def get_system_language():
+    """
+    Obtener el idioma del sistema
+    ---
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Idioma del sistema
+        500:
+            description: Error al obtener el idioma del sistema
+    """
+    resp = services.get_system_language()
+    if isinstance(resp, list):
+        return tuple(resp)
+    return resp

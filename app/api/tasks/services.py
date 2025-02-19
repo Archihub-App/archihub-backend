@@ -8,6 +8,7 @@ from app.api.tasks.models import TaskUpdate
 from datetime import datetime
 from celery.result import AsyncResult
 import os
+from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -162,8 +163,8 @@ def add_task(taskId, taskName, username, resultType):
     # Verificar si el usuario existe
     user = mongodb.get_record('users', {'username': username})
     if not user and username != 'automatic' and username != 'system':
-        return {'msg': 'El usuario no existe'}, 404
-
+        return {'msg': _('User not found')}, 404
+    
     new_task = {
         "taskId": taskId,
         "user": user['username'] if user else 'automatic',
@@ -199,11 +200,11 @@ def stop_task(taskId, user):
         task = mongodb.get_record('tasks', {'taskId': taskId})
         # Verificar si la tarea existe
         if not task:
-            return {'msg': 'La tarea no existe'}, 404
+            return {'msg': _('Task not found')}, 404
 
         # verificar que el usuario sea el dueño de la tarea
         if task['user'] != user:
-            return {'msg': 'No tiene permisos para detener la tarea'}, 401
+            return {'msg': _('You don\'t have the required authorization')}, 401
 
         # Obtener el resultado de la tarea
         result = AsyncResult(taskId)
@@ -221,8 +222,8 @@ def stop_task(taskId, user):
 
             mongodb.update_record('tasks', {'taskId': taskId}, task)
 
-            return {'msg': 'La tarea se detuvo correctamente'}, 200
+            return {'msg': _('Task stopped successfully')}, 200
         else:
-            return {'msg': 'La tarea no se puede detener'}, 400
+            return {'msg': _('Task cannot be stopped')}, 400
     except Exception as e:
         return {'msg': str(e)}, 500

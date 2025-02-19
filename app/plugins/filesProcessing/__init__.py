@@ -17,6 +17,7 @@ from app.api.users.services import has_role
 from bson.objectid import ObjectId
 from app.api.types.services import get_all as get_all_types
 import json
+from flask_babel import _
 
 load_dotenv()
 
@@ -179,7 +180,6 @@ class ExtendedPluginClass(PluginClass):
         
         types = current['types_activation']
         for t in types:
-            print("Registering fileProcessing hook for type: ", t['type'])
             hookHandler.register('resource_files_create', self.automatic, t, t['order'])
 
     def add_routes(self):
@@ -188,10 +188,8 @@ class ExtendedPluginClass(PluginClass):
         def process_files():
             current_user = get_jwt_identity()
             body = request.get_json()
-
             self.validate_fields(body, 'bulk')
             self.validate_roles(current_user, ['admin', 'processing'])
-
             task = self.bulk.delay(body, current_user)
             self.add_task_to_user(task.id, 'filesProcessing.create_webfile', current_user, 'msg')
             
@@ -202,10 +200,13 @@ class ExtendedPluginClass(PluginClass):
         filters = {
             'post_type': body['post_type']
         }
+        if isinstance(body['post_type'], list):
+            filters['post_type'] = {'$in': body['post_type']}   
 
         if 'parent' in body:
             if body['parent'] and len(body['resources']) == 0:
-                filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}], **filters}
+                filters = {'$or': [{'parents.id': body['parent'], 'post_type': filters['post_type']}, {'_id': ObjectId(body['parent'])}]}
+                
         
         if 'resources' in body:
             if body['resources']:
@@ -242,7 +243,7 @@ class ExtendedPluginClass(PluginClass):
             if len(resources) < 100:
                 loop = False
 
-            instance.clear_cache()
+        instance.clear_cache()
         return 'Se procesaron ' + str(size) + ' archivos'
         
       
@@ -254,7 +255,7 @@ class ExtendedPluginClass(PluginClass):
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': 'No tiene permisos suficientes'}, 401
+                    return {'msg': _('You don\'t have the required authorization')}, 401
                 
                 types = get_all_types()
                 if isinstance(types, list):
@@ -305,7 +306,7 @@ class ExtendedPluginClass(PluginClass):
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': 'No tiene permisos suficientes'}, 401
+                    return {'msg': _('You don\'t have the required authorization')}, 401
                 
                 body = request.form.to_dict()
                 data = body['data']
@@ -318,7 +319,7 @@ class ExtendedPluginClass(PluginClass):
 
                 self.set_plugin_settings(data)
 
-                return {'msg': 'Configuración guardada'}, 200
+                return {'msg': _('Settings updated')}, 200
             
             except Exception as e:
                 return {'msg': str(e)}, 500

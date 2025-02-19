@@ -4,6 +4,7 @@ from flask_jwt_extended import jwt_required
 from app.api.forms import services
 from app.api.users import services as user_services
 from flask_jwt_extended import get_jwt_identity
+from flask_babel import _
 
 # En este archivo se registran las rutas de la API para los estándares de metadatos
 
@@ -30,7 +31,7 @@ def get_all():
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Llamar al servicio para obtener todos los estándares de metadatos
     resp = services.get_all()
     if isinstance(resp, list):
@@ -83,7 +84,7 @@ def create():
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     
     return services.create(body, current_user)
     
@@ -120,12 +121,11 @@ def get_by_slug(slug):
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
     # Llamar al servicio para obtener el estándar por su slug
-    resp = services.get_by_slug(slug)
+    resp, status = services.get_by_slug(slug)
 
     # Si el estándar no existe, retornar error
-    if 'msg' in resp:
-        if resp['msg'] == 'Formulario no existe':
-            return jsonify(resp), 404
+    if status == 404:
+        return jsonify(resp), 404
     # Retornar el estándar
     return jsonify(resp), 200
 
@@ -184,7 +184,7 @@ def update_by_slug(slug):
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Llamar al servicio para actualizar el estándar por su slug
     return services.update_by_slug(slug, body, current_user)
 
@@ -219,7 +219,7 @@ def delete_by_slug(slug):
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Llamar al servicio para eliminar el estándar por su slug
     return services.delete_by_slug(slug, current_user)
 
@@ -254,6 +254,6 @@ def duplicate_by_slug(slug):
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Llamar al servicio para duplicar el estándar por su slug
     return services.duplicate_by_slug(slug, current_user)

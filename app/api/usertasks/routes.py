@@ -5,6 +5,7 @@ from . import services
 from flask_jwt_extended import jwt_required
 from flask_jwt_extended import get_jwt_identity
 from app.api.users import services as user_services
+from flask_babel import _
 
 @bp.route('/tasks', methods=['POST'])
 @jwt_required()
@@ -42,13 +43,13 @@ def get_tasks():
     body = request.json
     
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not body['user']:
-        return jsonify({'msg': 'No tiene permisos suficientes'}), 401
+        return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
     
     if body['user'] != current_user and not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead'):
-        return jsonify({'msg': 'No tiene permisos suficientes'}), 401
+        return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
     
     if 'status' not in body:
-        return jsonify({'msg': 'Debe especificar el estado de las tareas'}), 400
+        return jsonify({'msg': _('You must specify the status of the tasks')}), 400
     
     params ={
         'status': body['status'],
@@ -81,7 +82,7 @@ def get_resource_tasks(resourceId):
     """
     current_user = get_jwt_identity()
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor'):
-        return jsonify({'msg': 'No tiene permisos suficientes'}), 401
+        return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
     
     return services.get_resource_tasks(resourceId)
 
@@ -103,7 +104,7 @@ def get_editors():
     """
     current_user = get_jwt_identity()
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor'):
-        return jsonify({'msg': 'No tiene permisos suficientes'}), 401
+        return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
     
     return services.get_editors()
 
@@ -137,7 +138,7 @@ def create_task():
     """
     current_user = get_jwt_identity()
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead'):
-        return jsonify({'msg': 'No tiene permisos suficientes'}), 401
+        return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
     
     return services.create_task(request.json, current_user)
 
@@ -178,6 +179,6 @@ def update_task(taskId):
     """
     current_user = get_jwt_identity()
     if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'team_lead'):
-        return jsonify({'msg': 'No tiene permisos suficientes'}), 401
+        return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
     
     return services.update_task(taskId, request.json, current_user, user_services.has_role(current_user, 'team_lead'))

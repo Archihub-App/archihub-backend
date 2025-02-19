@@ -8,6 +8,7 @@ from app.utils.functions import get_access_rights
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 import os
+from flask_babel import _
 
 index_handler = IndexHandler.IndexHandler()
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
@@ -31,7 +32,7 @@ def get_resources_by_filters(body, user):
                         canView = True
                         break
                 if not canView:
-                    return {'msg': 'No tiene permisos para obtener los recursos'}, 401
+                    return {'msg': _('You don\'t have the required authorization')}, 401
 
         query = {
             'track_total_hits': True,

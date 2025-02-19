@@ -5,6 +5,7 @@ from app.api.records import services
 from app.api.users import services as user_services
 from flask import request, jsonify
 import json
+from flask_babel import _
 
 # En este archivo se registran las rutas de la API para los records
 
@@ -48,7 +49,7 @@ def get_all():
     # si el usuario no es admin
     if not user_services.has_role(current_user, 'admin'):
         # retornar error
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
     # Llamar al servicio para obtener los records
@@ -281,7 +282,7 @@ def edit_document_transcription(id):
 
     if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
         # retornar error
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     body = request.json
     
@@ -322,7 +323,7 @@ def delete_document_transcription(id):
 
     if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
         # retornar error
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     body = request.json
     
@@ -491,11 +492,11 @@ def get_blocks_by_id(id):
 
     body = request.json
     if 'page' not in body:
-        return {'msg': 'Debe especificar una página'}, 500
+        return {'msg': _('You must specify a page')}, 500
     if 'block' not in body:
-        return {'msg': 'Debe especificar un bloque'}, 500
+        return {'msg': _('You must specify a block')}, 500
     if 'slug' not in body:
-        return {'msg': 'Debe especificar un slug'}, 500
+        return {'msg': _('You must specify a slug')}, 500
     
     # Llamar al servicio para obtener un record por su id
     resp = services.get_document_block_by_page(current_user, id, body['page'], body['slug'], body['block'])
@@ -544,7 +545,7 @@ def post_label():
     # si el usuario no es admin
     if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
         # retornar error
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
 
@@ -590,7 +591,7 @@ def set_label():
     # si el usuario no es admin
     if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
         # retornar error
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
 
@@ -630,7 +631,7 @@ def delete_label():
     # si el usuario no es admin
     if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'editor'):
         # retornar error
-        return jsonify({'msg': 'No tienes permisos para realizar esta acción'}), 401
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
 

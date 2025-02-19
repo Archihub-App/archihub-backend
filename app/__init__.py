@@ -1,7 +1,8 @@
 '''
 ARCHIHUB: A comprehensive tool for organizing and connecting information
-Versión 0.8.3
+Versión 0.8.4
 Author: BITSOL
+Website: https://bit-sol.xyz/
 Made with ❤️ in Colombia
 '''
 
@@ -13,6 +14,7 @@ from flask_cors import CORS
 from celery import Celery
 from celery import Task
 from flask import Flask
+from flask_babel import Babel, gettext as _
 
 import os
 from app.utils import DatabaseHandler
@@ -27,6 +29,9 @@ mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 
 def create_app(config_class=config[os.environ['FLASK_ENV']]):
+    from app.api.system.services import set_system_setting
+    set_system_setting()
+    
     app = Flask(__name__)
 
     app.config.from_mapping(
@@ -40,7 +45,15 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
         ),
     )
     app.config.from_object(config_class)
-
+    
+    
+    
+    
+    # Babel
+    app.config['BABEL_DEFAULT_LOCALE'] = 'en'
+    app.config['BABEL_SUPPORTED_LOCALES'] = ['es', 'en']
+    app.config['BABEL_TRANSLATION_DIRECTORIES'] = os.path.join(os.path.abspath(os.path.dirname(__file__)), "translations")
+    
     # agregar CORS
     CORS(app, resources={
         r"/adminApi/*": {"origins": "*"},
@@ -82,6 +95,8 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             'in': 'header'
         }
     }
+    
+    
 
     # registrar plugins activos en la base de datos
     plugins = mongodb.get_record('system', {'name': 'active_plugins'})
@@ -143,21 +158,18 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     # Registrar usertasks blueprint
     from app.api.usertasks import bp as usertasks_bp
     app.register_blueprint(usertasks_bp, url_prefix='/usertasks')
-    
-    from app.api.system.services import set_system_setting
-    set_system_setting()
 
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 
     if(admin_api['data'][0]['value']):
         print('-'*50)
-        print('👨‍💼 🔧 📡 Administrators API is active')
+        print('👨‍💼 🔧 📡 ' + _("Administrators API is active"))
         from app.api.adminApi import bp as adminApi_bp
         app.register_blueprint(adminApi_bp, url_prefix='/adminApi')
 
     if(admin_api['data'][1]['value']):
         print('-'*50)
-        print('🌐 🟢 🚀 Public API is active')
+        print('🌐 🟢 🚀 ' + _("API pública activa"))
         from app.api.publicApi import bp as publicApi_bp
         app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
     
@@ -235,6 +247,13 @@ app = create_app()
 celery_app = celery_init_app(app)
 app.celery_app = celery_app
 
+def get_locale():
+    user_management = mongodb.get_record('system', {'name': 'user_management'})
+    lenguaje = user_management['data'][2]['value']
+    return lenguaje
+    
+babel = Babel(app, locale_selector=get_locale)
+
 print('''
 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 :::'###::::'########:::'######::'##::::'##:'####:'##::::'##:'##::::'##:'########::
@@ -246,9 +265,10 @@ print('''
  ##:::: ##: ##:::. ##:. ######:: ##:::: ##:'####: ##:::: ##:. #######:: ########::
 ..:::::..::..:::::..:::......:::..:::::..::....::..:::::..:::.......:::........:::
 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-v0.8.3::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+v0.8.4::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 Author: BITSOL::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 Made with ❤️  in Colombia::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+Website: https://bit-sol.xyz/:::::::::::::::::::::::::::::::::::::::::::::::::::::
 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 ''')
 

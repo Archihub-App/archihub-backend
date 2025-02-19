@@ -42,6 +42,9 @@ class ExtendedPluginClass(PluginClass):
             overwrite = data['overwrite'] if 'overwrite' in data else False
 
             files = request.files.getlist('files')
+            
+            if len(files) == 0:
+                return {'msg': 'No se ha subido ningún archivo'}, 400
 
             self.validate_fields(data, 'lunch')
             
