@@ -114,11 +114,14 @@ def get_by_id(id):
         
         opts = []
 
-        records = mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(id) for id in lista['options']]}}, [('term', 1)])
+        records = list(mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(id) for id in lista['options']]}}))
         
         # opts es igual a un arreglo de diccionarios con los campos id y term
-        for record in records:
-            opts.append({'id': str(record['_id']), 'term': record['term']})
+        for opt_id in lista['options']:
+            for record in records:
+                if str(record['_id']) == opt_id:
+                    opts.append({'id': str(record['_id']), 'term': record['term']})
+                    break
 
         # agregamos los campos al listado
         lista['options'] = opts
