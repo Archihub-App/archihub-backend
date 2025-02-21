@@ -654,10 +654,13 @@ def set_system_setting():
         return {'msg': str(e)}, 500
 
 @cacheHandler.cache.cache()
-def get_system_language():
+def get_system_settings():
     user_management = mongodb.get_record('system', {'name': 'user_management'})
     lenguaje = user_management['data'][2]['value']
-    return {'language': lenguaje}, 200
+    
+    return {
+        'language': lenguaje
+    }, 200
 
 
 def clear_cache():

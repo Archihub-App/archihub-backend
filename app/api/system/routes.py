@@ -403,8 +403,8 @@ def zip_files_delete():
     from app.api.resources.services import delete_zip_files
     return delete_zip_files()
 
-@bp.route('/get-language', methods=['GET'])
-def get_system_language():
+@bp.route('/get-settings', methods=['GET'])
+def get_system_settings():
     """
     Obtener el idioma del sistema
     ---
@@ -416,7 +416,7 @@ def get_system_language():
         500:
             description: Error al obtener el idioma del sistema
     """
-    resp = services.get_system_language()
+    resp = services.get_system_settings()
     if isinstance(resp, list):
         return tuple(resp)
     return resp
