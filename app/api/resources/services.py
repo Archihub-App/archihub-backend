@@ -1338,6 +1338,8 @@ def get_tree(root, available, user, post_type=None, page=None, status='published
         for resource in resources:
             resource['children'] = get_children(resource['id'], available, False, post_type)
             resource['icon'] = get_icon(resource['post_type'])
+            from app.api.types.services import get_by_slug
+            resource['type'] = get_by_slug(resource['post_type']['name'])
 
         # Retornar los recursos y los padres
         return resources, 200
