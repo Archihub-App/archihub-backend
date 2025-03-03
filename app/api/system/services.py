@@ -89,7 +89,7 @@ def clear_system_cache():
     get_access_rights_id.invalidate_all()
     get_resources_schema.invalidate_all()
     get_plugins.invalidate_all()
-    get_system_language.invalidate_all()
+    get_system_settings.invalidate_all()
 
 # Funcion para actualizar los ajustes del sistema
 def update_settings(settings, current_user):
@@ -646,8 +646,6 @@ def set_system_setting():
                         setting_db['data'].append(d)
                 update = OptionUpdate(**{'data': setting_db['data']})
                 mongodb.update_record('system', {'name': setting['name']}, update)
-            
-            
 
     except Exception as e:
         print(str(e))
@@ -656,10 +654,23 @@ def set_system_setting():
 @cacheHandler.cache.cache()
 def get_system_settings():
     user_management = mongodb.get_record('system', {'name': 'user_management'})
-    lenguaje = user_management['data'][2]['value']
+    language = user_management['data'][2]['value']
+    
+    plugins = mongodb.get_record('system', {'name': 'active_plugins'})
+    capabilities = []
+    for p in plugins['data']:
+        plugin_module = __import__(f'app.plugins.{p}', fromlist=[
+                               'ExtendedPluginClass', 'plugin_info'])
+        plugin_bp = plugin_module.ExtendedPluginClass(
+            p, __name__, **plugin_module.plugin_info)
+        
+        c = plugin_bp.get_capabilities()
+        if c:
+            capabilities = [*capabilities, *c]
     
     return {
-        'language': lenguaje
+        'language': language,
+        'capabilities': capabilities
     }, 200
 
 

@@ -28,6 +28,7 @@ from app.api.records.services import create as create_record
 from app.api.system.services import get_access_rights
 from app.api.users.services import has_right, has_role
 from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
+from app.api.types.services import get_by_slug
 import os
 from datetime import datetime
 from dateutil import parser
@@ -1334,17 +1335,19 @@ def get_tree(root, available, user, post_type=None, page=None, status='published
 
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
+        
 
         for resource in resources:
             resource['children'] = get_children(resource['id'], available, False, post_type)
             resource['icon'] = get_icon(resource['post_type'])
-            from app.api.types.services import get_by_slug
             resource['type'] = get_by_slug(resource['post_type'])
-            print(resource['type'])
+            name = resource['type']['name']
+            resource['type'] = name
 
         # Retornar los recursos y los padres
         return resources, 200
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 # Funcion para validar que el tipo del padre sea uno admitido por el hijo
