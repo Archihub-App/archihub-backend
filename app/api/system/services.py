@@ -648,7 +648,6 @@ def set_system_setting():
                 mongodb.update_record('system', {'name': setting['name']}, update)
 
     except Exception as e:
-        print(str(e))
         return {'msg': str(e)}, 500
 
 @cacheHandler.cache.cache()
@@ -667,6 +666,16 @@ def get_system_settings():
         c = plugin_bp.get_capabilities()
         if c:
             capabilities = [*capabilities, *c]
+            
+    index_management = mongodb.get_record('system', {'name': 'index_management'})
+    indexing = index_management['data'][0]['value']
+    
+    if indexing:
+        capabilities.append('indexing')
+        
+    vector_db = index_management['data'][1]['value']
+    if vector_db:
+        capabilities.append('vector_db')
     
     return {
         'language': language,

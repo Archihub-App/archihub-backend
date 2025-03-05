@@ -331,7 +331,7 @@ def cache_get_record_stream(id):
     # obtener el path del archivo
     path = record['processing']['fileProcessing']['path']
     type = record['processing']['fileProcessing']['type']
-
+    
     return path, type
 
 
