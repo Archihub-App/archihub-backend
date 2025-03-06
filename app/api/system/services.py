@@ -681,6 +681,30 @@ def get_system_settings():
         'language': language,
         'capabilities': capabilities
     }, 200
+    
+@cacheHandler.cache.cache()
+def get_system_actions(body):
+    try:
+        placement = body['placement']
+        plugins = mongodb.get_record('system', {'name': 'active_plugins'})
+        actions = []
+        for p in plugins['data']:
+            plugin_module = __import__(f'app.plugins.{p}', fromlist=[
+                               'ExtendedPluginClass', 'plugin_info'])
+            plugin_bp = plugin_module.ExtendedPluginClass(
+                p, __name__, **plugin_module.plugin_info)
+            a = plugin_bp.get_actions(placement)
+            if a:
+                for _a in a:
+                    if _a['placement'] == placement:
+                        actions.append(_a)
+                
+        return {
+            'actions': actions
+        }, 200
+        
+    except Exception as e:
+        return {'msg': str(e)}, 500
 
 
 def clear_cache():

@@ -420,3 +420,25 @@ def get_system_settings():
     if isinstance(resp, list):
         return tuple(resp)
     return resp
+
+@bp.route('/get-actions', methods=['POST'])
+@jwt_required()
+def get_actions():
+    """
+    Obtener las acciones del sistema
+    ---
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Acciones del sistema
+        500:
+            description: Error al obtener las acciones del sistema
+    """
+    body = request.get_json()
+    current_user = get_jwt_identity()
+    
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'editor'):
+        return {'msg': _('You don\'t have the required authorization')}, 401
+    
+    return services.get_system_actions(body)
