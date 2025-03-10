@@ -90,6 +90,7 @@ def clear_system_cache():
     get_resources_schema.invalidate_all()
     get_plugins.invalidate_all()
     get_system_settings.invalidate_all()
+    get_system_actions.invalidate_all()
 
 # Funcion para actualizar los ajustes del sistema
 def update_settings(settings, current_user):
@@ -683,9 +684,8 @@ def get_system_settings():
     }, 200
     
 @cacheHandler.cache.cache()
-def get_system_actions(body):
+def get_system_actions(placement):
     try:
-        placement = body['placement']
         plugins = mongodb.get_record('system', {'name': 'active_plugins'})
         actions = []
         for p in plugins['data']:
@@ -693,10 +693,12 @@ def get_system_actions(body):
                                'ExtendedPluginClass', 'plugin_info'])
             plugin_bp = plugin_module.ExtendedPluginClass(
                 p, __name__, **plugin_module.plugin_info)
-            a = plugin_bp.get_actions(placement)
+            
+            a = plugin_bp.get_actions()
             if a:
                 for _a in a:
                     if _a['placement'] == placement:
+                        _a['plugin'] = p
                         actions.append(_a)
                 
         return {
