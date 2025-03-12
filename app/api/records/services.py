@@ -726,6 +726,47 @@ def delete_transcription_segment(id, body, user):
     cache_get_record_transcription.invalidate(id, slug)
 
     return {'msg': _('Transcription segment deleted')}, 200
+
+def edit_transcription_speaker(id, body, user):
+    resp_, status = get_by_id(id, user)
+    if status != 200:
+        return {'msg': resp_['msg']}, 500
+    
+    slug = body['slug']
+    
+    record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
+    if not record:
+        return {'msg': _('Record does not exist')}, 404
+    if 'processing' not in record:
+        return {'msg': _('Record does not have transcription')}, 404
+    if slug not in record['processing']:
+        return {'msg': _('Record does not have transcription')}, 404
+    if record['processing'][slug]['type'] != 'av_transcribe':
+        return {'msg': _(u'Record has not been processed with {slug}', slug=slug)}, 404
+    
+    segments = record['processing'][slug]['result']['segments']
+    updateSpeaker = False
+    
+    if 'speaker' in body and 'oldSpeaker' in body:
+        updateSpeaker = body['speaker']
+        oldSpeaker = body['oldSpeaker']
+        
+    if updateSpeaker:
+        for segment in segments:
+            if 'speaker' in segment:
+                if segment['speaker'] == oldSpeaker:
+                    segment['speaker'] = updateSpeaker
+                    
+    update = {
+        'processing': record['processing']
+    }
+
+    update['processing'][slug]['result']['segments'] = segments
+
+    update = FileRecordUpdate(**update)
+    mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+
+    cache_get_record_transcription.invalidate(id, slug)
     
 def edit_transcription(id, body, user):
     resp_, status = get_by_id(id, user)
@@ -746,17 +787,9 @@ def edit_transcription(id, body, user):
     
     segments = record['processing'][slug]['result']['segments']
 
-    updateSpeaker = False
     segments[body['index']]['text'] = body['text']
     if 'speaker' in body:
-        if body['speaker'] != segments[body['index']]['speaker']:
-            updateSpeaker = segments[body['index']]['speaker']
-            
-    if updateSpeaker:
-        for segment in segments:
-            if 'speaker' in segment:
-                if segment['speaker'] == updateSpeaker:
-                    segment['speaker'] = body['speaker']
+        segments[body['index']]['speaker'] = body['speaker']
 
     update = {
         'processing': record['processing']
