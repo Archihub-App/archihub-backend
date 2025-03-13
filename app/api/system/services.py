@@ -661,6 +661,11 @@ def get_system_settings():
     for p in plugins['data']:
         plugin_module = __import__(f'app.plugins.{p}', fromlist=[
                                'ExtendedPluginClass', 'plugin_info'])
+        
+        plugin_info = plugin_module.plugin_info.copy()
+        if 'slug' in plugin_info:
+            plugin_info.pop('slug')
+            
         plugin_bp = plugin_module.ExtendedPluginClass(
             p, __name__, **plugin_module.plugin_info)
         
