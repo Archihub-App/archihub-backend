@@ -19,6 +19,7 @@ import magic
 import uuid
 from dotenv import load_dotenv
 from flask_babel import _
+import re
 load_dotenv()
 
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
@@ -692,6 +693,23 @@ def remove_from_favCount(id):
     except Exception as e:
         raise Exception(str(e))
     
+def generate_text_transcription(segments):
+    pattern = r'\s*(transcribed by.*|subtitles by.*|by.*\.com|by.*\.org|http.*|.com*)$'
+    text = ''
+    current_speaker = ''
+    for segment in segments:
+        if re.search(pattern, segment['text']):
+            continue
+        if 'speaker' in segment:
+            if current_speaker != segment['speaker']:
+                current_speaker = segment['speaker']
+                text += '\n\n' + current_speaker + ': ' + segment['text'] + ' '
+            else:
+                text += segment['text'] + ' '
+        else:
+            text += segment['text'] + ' '
+    return text
+    
 def delete_transcription_segment(id, body, user):
     resp_, status = get_by_id(id, user)
     if status != 200:
@@ -762,11 +780,14 @@ def edit_transcription_speaker(id, body, user):
     }
 
     update['processing'][slug]['result']['segments'] = segments
+    update['processing'][slug]['result']['text'] = generate_text_transcription(segments)
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
 
     cache_get_record_transcription.invalidate(id, slug)
+    
+    return {'msg': _('Transcription speaker edited')}, 200
     
 def edit_transcription(id, body, user):
     resp_, status = get_by_id(id, user)
@@ -796,6 +817,7 @@ def edit_transcription(id, body, user):
     }
 
     update['processing'][slug]['result']['segments'] = segments
+    update['processing'][slug]['result']['text'] = generate_text_transcription(segments)
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)

@@ -35,11 +35,12 @@ def get_resource_tasks(resourceId):
     
 def get_all_tasks(filters):
     try:
+        print(filters)
         f = {
             'status': {'$in': filters['status']},
             'user': filters['user'] if filters['user'] else {'$exists': True}
         }
-        tasks = list(mongodb.get_all_records('usertasks', f, fields={'user': 1, 'status': 1 ,'createdAt': 1, 'resourceId': 1}))
+        tasks = list(mongodb.get_all_records('usertasks', f, fields={'user': 1, 'status': 1 ,'createdAt': 1, 'resourceId': 1}).sort('createdAt', -1).skip(filters['page'] * 10).limit(10))
         for task in tasks:
             task['_id'] = str(task['_id'])
             task['createdAt'] = task['createdAt'].strftime('%Y-%m-%d %H:%M:%S')

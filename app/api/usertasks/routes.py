@@ -53,7 +53,8 @@ def get_tasks():
     
     params ={
         'status': body['status'],
-        'user': body['user'] if 'user' in body else None
+        'user': body['user'] if 'user' in body else None,
+        'page': body['page'] if 'page' in body else 1,
     }
     
     return services.get_all_tasks(params)
