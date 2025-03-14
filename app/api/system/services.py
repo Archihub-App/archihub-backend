@@ -667,7 +667,7 @@ def get_system_settings():
             plugin_info.pop('slug')
             
         plugin_bp = plugin_module.ExtendedPluginClass(
-            p, __name__, **plugin_module.plugin_info)
+            p, __name__, **plugin_info)
         
         c = plugin_bp.get_capabilities()
         if c:
