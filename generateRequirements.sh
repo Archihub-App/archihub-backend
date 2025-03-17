@@ -25,11 +25,17 @@ fi
 # get the requirements file
 REQUIREMENTS_FILE="$ROOT_DIR/requirements.txt"
 
+# if the requirements file does not have an empty line at the end, add one
+sed -i -e '$a\' "$REQUIREMENTS_FILE"
+
 # make a copy of the requirements file
 cp "$REQUIREMENTS_FILE" "$REQUIREMENTS_FILE.bak"
 
 # iterate over all requirements.txt files in the plugins directory
 for file in $ROOT_DIR/app/plugins/*/requirements.txt; do
+    # if the file does not have an empty line at the end, add one
+    sed -i -e '$a\' "$file"
+
     # append the requirements to the requirements.txt file
     cat "$file" >> "$REQUIREMENTS_FILE"
 done

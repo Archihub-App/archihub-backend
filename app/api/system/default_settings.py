@@ -47,13 +47,15 @@ settings = [
                 'type': 'checkbox_single',
                 'label': 'Activar la API de administración',
                 'id': 'api_activation_admin',
-                'instructions': 'Activa la API para los endpoints de administración. La llave del administrador tiene una duración de no más de dos días y es importante desactivar la API una vez se hayan terminado de hacer los cambios.'
+                'instructions': 'Activa la API para los endpoints de administración. La llave del administrador tiene una duración de no más de dos días y es importante desactivar la API una vez se hayan terminado de hacer los cambios.',
+                'value': False
             },
             {
                 'type': 'checkbox_single',
                 'label': 'Activar la API pública',
                 'id': 'api_activation_public',
-                'instructions': 'Activa la API pública del aplicativo. Los endpoints públicos permiten consultar información y tienen un límite por semana por usuario.'
+                'instructions': 'Activa la API pública del aplicativo. Los endpoints públicos permiten consultar información y tienen un límite por semana por usuario.',
+                'value': False
             }
         ]
     },
@@ -65,13 +67,15 @@ settings = [
                 'type': 'checkbox_single',
                 'label': 'Activar el índice para las búsquedas',
                 'id': 'index_activation',
-                'instructions': 'Activa la gestión del índice. Solo activar esta opción si ya se tiene la instalación de elasticsearch configurada.'
+                'instructions': 'Activa la gestión del índice. Solo activar esta opción si ya se tiene la instalación de elasticsearch configurada.',
+                'value': False
             },
             {
                 'type': 'checkbox_single',
                 'label': 'Activar la búsqueda semántica',
                 'id': 'vector_activation',
-                'instructions': 'Activa la base de datos vectorial para realizar búsqueda semánticas de la información. Es necesario tener QDrant configurado.'
+                'instructions': 'Activa la base de datos vectorial para realizar búsqueda semánticas de la información. Es necesario tener QDrant configurado.',
+                'value': False
             },
             {
                 'type': 'button_single',

@@ -89,7 +89,8 @@ def clear_system_cache():
     get_access_rights_id.invalidate_all()
     get_resources_schema.invalidate_all()
     get_plugins.invalidate_all()
-    get_system_language.invalidate_all()
+    get_system_settings.invalidate_all()
+    get_system_actions.invalidate_all()
 
 # Funcion para actualizar los ajustes del sistema
 def update_settings(settings, current_user):
@@ -646,18 +647,71 @@ def set_system_setting():
                         setting_db['data'].append(d)
                 update = OptionUpdate(**{'data': setting_db['data']})
                 mongodb.update_record('system', {'name': setting['name']}, update)
-            
-            
 
     except Exception as e:
-        print(str(e))
         return {'msg': str(e)}, 500
 
 @cacheHandler.cache.cache()
-def get_system_language():
+def get_system_settings():
     user_management = mongodb.get_record('system', {'name': 'user_management'})
-    lenguaje = user_management['data'][2]['value']
-    return {'language': lenguaje}, 200
+    language = user_management['data'][2]['value']
+    
+    plugins = mongodb.get_record('system', {'name': 'active_plugins'})
+    capabilities = []
+    for p in plugins['data']:
+        plugin_module = __import__(f'app.plugins.{p}', fromlist=[
+                               'ExtendedPluginClass', 'plugin_info'])
+        
+        plugin_info = plugin_module.plugin_info.copy()
+        if 'slug' in plugin_info:
+            plugin_info.pop('slug')
+            
+        plugin_bp = plugin_module.ExtendedPluginClass(
+            p, __name__, **plugin_info)
+        
+        c = plugin_bp.get_capabilities()
+        if c:
+            capabilities = [*capabilities, *c]
+            
+    index_management = mongodb.get_record('system', {'name': 'index_management'})
+    indexing = index_management['data'][0]['value']
+    
+    if indexing:
+        capabilities.append('indexing')
+        
+    vector_db = index_management['data'][1]['value']
+    if vector_db:
+        capabilities.append('vector_db')
+    
+    return {
+        'language': language,
+        'capabilities': capabilities
+    }, 200
+    
+@cacheHandler.cache.cache()
+def get_system_actions(placement):
+    try:
+        plugins = mongodb.get_record('system', {'name': 'active_plugins'})
+        actions = []
+        for p in plugins['data']:
+            plugin_module = __import__(f'app.plugins.{p}', fromlist=[
+                               'ExtendedPluginClass', 'plugin_info'])
+            plugin_bp = plugin_module.ExtendedPluginClass(
+                p, __name__, **plugin_module.plugin_info)
+            
+            a = plugin_bp.get_actions()
+            if a:
+                for _a in a:
+                    if _a['placement'] == placement:
+                        _a['plugin'] = p
+                        actions.append(_a)
+                
+        return {
+            'actions': actions
+        }, 200
+        
+    except Exception as e:
+        return {'msg': str(e)}, 500
 
 
 def clear_cache():

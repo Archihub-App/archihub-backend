@@ -449,7 +449,7 @@ def get_count(type, filters = {}):
         raise Exception(str(e))
 
 @cacheHandler.cache.cache(limit=1000)
-def get_type_viz(slug, type):
+def get_type_viz(slug, type, filters=None):
     try:
         if type == 'timeCreated':
             data = list(mongodb.aggregate('resources', [

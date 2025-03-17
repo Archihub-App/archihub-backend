@@ -403,8 +403,8 @@ def zip_files_delete():
     from app.api.resources.services import delete_zip_files
     return delete_zip_files()
 
-@bp.route('/get-language', methods=['GET'])
-def get_system_language():
+@bp.route('/get-settings', methods=['GET'])
+def get_system_settings():
     """
     Obtener el idioma del sistema
     ---
@@ -416,7 +416,34 @@ def get_system_language():
         500:
             description: Error al obtener el idioma del sistema
     """
-    resp = services.get_system_language()
+    resp = services.get_system_settings()
+    if isinstance(resp, list):
+        return tuple(resp)
+    return resp
+
+@bp.route('/get-actions', methods=['POST'])
+@jwt_required()
+def get_actions():
+    """
+    Obtener las acciones del sistema
+    ---
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Acciones del sistema
+        500:
+            description: Error al obtener las acciones del sistema
+    """
+    body = request.get_json()
+    current_user = get_jwt_identity()
+    
+    print(body)
+    
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'editor'):
+        return {'msg': _('You don\'t have the required authorization')}, 401
+    
+    resp = services.get_system_actions(body['placement'])
     if isinstance(resp, list):
         return tuple(resp)
     return resp
