@@ -171,6 +171,9 @@ def update_user(body, current_user):
             return {'msg': _('You cannot change the username')}, 400
             
         body['roles'] = verify_role_exists(body['roles'])
+        if 'editor' not in body['roles'] and 'admin' not in body['roles'] and 'user' not in body['roles']:
+            return {'msg': _('You must have at least one system role')}, 400
+        
         body['accessRights'] = verify_accessright_exists(body['accessRights'])
 
         if 'lastRequest' in body:
