@@ -117,7 +117,7 @@ def test_celery_result_all():
 # delete_task
 @bp.route('/<taskId>', methods=['DELETE'])
 @jwt_required()
-def delete_task(user, taskId):
+def delete_task(taskId):
     """
     Elimina una task
     ---
