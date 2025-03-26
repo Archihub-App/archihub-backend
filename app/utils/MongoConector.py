@@ -18,9 +18,9 @@ class MongoConector:
         self.ip_server= os.environ.get(MONGO_IP_SERVER, 'localhost').split(',')
         self.admin = os.environ.get(MONGO_ADMIN, '7bOS9*NkX41M')
         self.user = os.environ.get(MONGO_USER, 'admin')
-        self.database = os.environ.get(MONGO_DATABASE, 'sim-backend-prod')
+        self.database = os.environ.get(MONGO_DATABASE, 'archihub-prod')
         self.port = os.environ.get(MONGO_PORT, '27017')
-        self.simpledatabase = os.environ.get(MONGO_DATABASE, 'sim-backend-prod')
+        self.simpledatabase = os.environ.get(MONGO_DATABASE, 'archihub-prod')
 
     def getMongoURI(self):
         mongourl = "mongodb://"

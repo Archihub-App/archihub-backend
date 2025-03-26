@@ -33,6 +33,20 @@ def get_resource_tasks(resourceId):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     
+def get_record_tasks(recordId):
+    try:
+        task = mongodb.get_record('usertasks', {'recordId': recordId, 'status': {'$in': ['pending', 'review', 'rejected']}}, fields={'user': 1, 'status': 1 ,'createdAt': 1, 'comment': 1})
+        
+        if task:
+            task['_id'] = str(task['_id'])
+            task['comment'] = process_comments(task['comment'])
+            
+            return task, 200
+        else:
+            return jsonify({'msg': _('There are no tasks for this record')}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    
 def get_all_tasks(filters):
     try:
         print(filters)
@@ -72,8 +86,8 @@ def get_editors():
     
 def create_task(body, user):
     try:
-        if 'resourceId' not in body:
-            return jsonify({'error': _('resourceId is required')}), 400
+        if 'resourceId' not in body and 'recordId' not in body:
+            return jsonify({'error': _('resourceId or recordId is required')}), 400
         if 'user' not in body:
             return jsonify({'error': _('user is required')}), 400
         if 'comment' not in body:
@@ -83,12 +97,21 @@ def create_task(body, user):
             return jsonify({'error': _('user cannot be empty')}), 400
         if body['comment'] == '':
             return jsonify({'error': _('comment cannot be empty')}), 400
-        if body['resourceId'] == '':
-            return jsonify({'error': _('resourceId cannot be empty')}), 400
         
-        task = mongodb.get_record('usertasks', {'resourceId': body['resourceId'], 'status': 'pending'})
-        if task:
-            return jsonify({'error': _('There is already a task for this resource')}), 400
+        if 'resourceId' in body:
+            if body['resourceId'] == '':
+                return jsonify({'error': _('resourceId cannot be empty')}), 400
+        
+            task = mongodb.get_record('usertasks', {'resourceId': body['resourceId'], 'status': 'pending'})
+            if task:
+                return jsonify({'error': _('There is already a task for this resource')}), 400
+        elif 'recordId' in body:
+            if body['recordId'] == '':
+                return jsonify({'error': _('recordId cannot be empty')}), 400
+            
+            task = mongodb.get_record('usertasks', {'recordId': body['recordId'], 'status': 'pending'})
+            if task:
+                return jsonify({'error': _('There is already a task for this record')}), 400
         
         body['status'] = 'pending'
         body['createdAt'] = datetime.now()
@@ -105,8 +128,6 @@ def create_task(body, user):
         inserted_task['_id'] = str(inserted_task['_id'])
         inserted_task['createdAt'] = inserted_task['createdAt'].strftime('%Y-%m-%d %H:%M:%S')
         inserted_task['comment'] = process_comments(inserted_task['comment'])
-        
-        print(inserted_task)
         
         return jsonify(inserted_task), 201
     except Exception as e:
