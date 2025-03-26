@@ -87,7 +87,7 @@ def get_resource_tasks(resourceId):
     
     return services.get_resource_tasks(resourceId)
 
-@bp.route('/<recordId>', methods=['GET'])
+@bp.route('/record/<recordId>', methods=['GET'])
 @jwt_required()
 def get_record_tasks(recordId):
     """
