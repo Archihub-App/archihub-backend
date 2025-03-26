@@ -42,19 +42,19 @@ class IndexHandler:
         self.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', index_name)
 
     def get_aliases(self):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'
+        url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'
         response = requests.get(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
     def get_alias_indexes(self, alias):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_alias/' + alias
+        url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_alias/' + alias
         response = requests.get(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
 
     def create_index(self, index, settings=None, mapping=None):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index
+        url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index
 
         json = {}
         if settings:
@@ -68,7 +68,7 @@ class IndexHandler:
         return response.json()
 
     def add_to_alias(self, alias, index):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'
+        url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'
         body = {
             'actions': [
                 {
@@ -84,7 +84,7 @@ class IndexHandler:
         return response.json()
 
     def remove_from_alias(self, alias, index):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'
+        url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'
         body = {
             'actions': [
                 {
@@ -100,13 +100,13 @@ class IndexHandler:
         return response.json()
     
     def delete_index(self, index):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index
+        url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index
         response = requests.delete(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
     def delete_all_documents(self, index):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index + '/_delete_by_query'
+        url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index + '/_delete_by_query'
         body = {
             'query': {
                 'match_all': {}
@@ -117,14 +117,14 @@ class IndexHandler:
         return response.json()
     
     def delete_document(self, index, id):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index + '/_doc/' + id
+        url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index + '/_doc/' + id
         response = requests.delete(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         
         return response.json()
     
     def reindex(self, source, dest):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_reindex'
+        url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_reindex'
         body = {
             'source': {
                 'index': source
@@ -138,14 +138,14 @@ class IndexHandler:
         return response.json()
 
     def set_mapping(self, index, mapping):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + \
+        url = ELASTIC_DOMAIN + ':' + \
             ELASTIC_PORT + '/' + index + '/_mapping'
         response = requests.put(url, json=mapping, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
     def index_document(self, index, id, document):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + \
+        url = ELASTIC_DOMAIN + ':' + \
             ELASTIC_PORT + '/' + index + '/_doc/' + id
         response = requests.put(url, json=document, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
@@ -153,7 +153,7 @@ class IndexHandler:
         return response
     
     def search(self, index, query):
-        url = 'http://' + ELASTIC_DOMAIN + ':' + \
+        url = ELASTIC_DOMAIN + ':' + \
             ELASTIC_PORT + '/' + index + '/_search'
         response = requests.post(url, json=query, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
