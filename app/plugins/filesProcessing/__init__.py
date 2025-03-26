@@ -149,8 +149,8 @@ def process_file(file):
             mongodb.update_record('records', {'_id': file['_id']}, update)
 
 class ExtendedPluginClass(PluginClass):
-    def __init__(self, path, import_name, name, description, version, author, type, settings):
-        super().__init__(path, __file__, import_name, name, description, version, author, type, settings)
+    def __init__(self, path, import_name, name, description, version, author, type, settings, actions, capabilities=None):
+        super().__init__(path, __file__, import_name, name, description, version, author, type, settings, actions = actions, capabilities=None)
         if not os.environ.get('CELERY_WORKER'):
             self.activate_settings()
 
@@ -331,6 +331,25 @@ plugin_info = {
     'version': '0.1',
     'author': 'Néstor Andrés Peña',
     'type': ['settings', 'bulk'],
+    'actions': [
+        {
+            'placement': 'detail_resource',
+            'label': 'Procesar archivos',
+            'roles': ['admin', 'processing', 'editor'],
+            'endpoint': 'bulk',
+            'icon': 'PrecisionManufacturing',
+            'extraOpts': [
+                {
+                    'type': 'checkbox',
+                    'label': 'Sobreescribir archivos existentes',
+                    'id': 'overwrite',
+                    'instructions': 'Sobreescribir archivos ya procesados. Si esta opción está desactivada, el plugin solo procesará los archivos que no tengan una versión procesada.',
+                    'default': False,
+                    'required': False,
+                }
+            ]
+        }
+    ],
     'settings': {
         'settings': [
             {

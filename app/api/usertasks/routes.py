@@ -87,6 +87,34 @@ def get_resource_tasks(resourceId):
     
     return services.get_resource_tasks(resourceId)
 
+@bp.route('/record/<recordId>', methods=['GET'])
+@jwt_required()
+def get_record_tasks(recordId):
+    """
+    Obtener las tareas de un record
+    ---
+    tags:
+        - Tareas
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+    responses:
+        200:
+            description: Tareas del record obtenidas exitosamente
+        401:
+            description: No tiene permisos suficientes
+        500:
+            description: Error al obtener las tareas del record
+    """
+    current_user = get_jwt_identity()
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor'):
+        return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
+    
+    return services.get_record_tasks(recordId)
+
 @bp.route('/editors', methods=['GET'])
 @jwt_required()
 def get_editors():

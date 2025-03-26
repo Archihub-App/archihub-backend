@@ -202,25 +202,17 @@ def stop_task(taskId, user):
         if not task:
             return {'msg': _('Task not found')}, 404
 
-        # verificar que el usuario sea el dueño de la tarea
-        if task['user'] != user:
-            return {'msg': _('You don\'t have the required authorization')}, 401
-
         # Obtener el resultado de la tarea
         result = AsyncResult(taskId)
         # Verificar si la tarea esta en estado pending
         if task['status'] == 'pending':
             # Detener la tarea
             result.revoke(terminate=True)
-            # Actualizar el estado de la tarea
-            update = {
-                'status': 'failed',
-                'result': '',
-            }
-
-            task = TaskUpdate(**update)
-
-            mongodb.update_record('tasks', {'taskId': taskId}, task)
+            
+            # eliminar la tarea de la base de datos
+            mongodb.delete_record('tasks', {'taskId': taskId})
+            # eliminar la tarea de la cache
+            get_tasks_total.invalidate_all()
 
             return {'msg': _('Task stopped successfully')}, 200
         else:

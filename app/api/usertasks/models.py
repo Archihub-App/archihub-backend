@@ -5,7 +5,8 @@ from datetime import datetime
 
 class UserTask(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
-    resourceId: str
+    resourceId: str = None
+    recordId: str = None
     user: str
     status: str = "pending"
     comment: list[dict]
