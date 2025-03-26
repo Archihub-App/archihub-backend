@@ -11,7 +11,7 @@ ELASTIC_PASSWORD = os.environ.get('ELASTIC_PASSWORD', '')
 ELASTIC_DOMAIN = os.environ.get('ELASTIC_DOMAIN', '')
 ELASTIC_PORT = os.environ.get('ELASTIC_PORT', '')
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
-
+ELASTIC_CERT = os.environ.get('ELASTIC_CERT', '')
 
 class IndexHandler:
     _instance = None
@@ -24,6 +24,10 @@ class IndexHandler:
             cls._instance.elastic_domain = ELASTIC_DOMAIN
             cls._instance.elastic_port = ELASTIC_PORT
             cls._instance.elastic_index_prefix = ELASTIC_INDEX_PREFIX
+            if ELASTIC_CERT != '':
+                cls._instance.ssl_context = ELASTIC_CERT
+            else:
+                cls._instance.ssl_context = None
         return cls._instance
 
     def start(self):
@@ -43,13 +47,21 @@ class IndexHandler:
 
     def get_aliases(self):
         url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'
-        response = requests.get(url, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.get(url, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.get(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
     def get_alias_indexes(self, alias):
         url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_alias/' + alias
-        response = requests.get(url, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.get(url, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.get(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
 
@@ -62,7 +74,11 @@ class IndexHandler:
         if mapping:
             json['mappings'] = mapping
 
-        response = requests.put(url, json=json, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.put(url, json=json, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.put(url, json=json, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         
         return response.json()
@@ -79,7 +95,11 @@ class IndexHandler:
                 }
             ]
         }
-        response = requests.post(url, json=body, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.post(url, json=body, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.post(url, json=body, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
 
@@ -95,13 +115,21 @@ class IndexHandler:
                 }
             ]
         }
-        response = requests.post(url, json=body, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.post(url, json=body, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.post(url, json=body, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
     def delete_index(self, index):
         url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index
-        response = requests.delete(url, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.delete(url, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.delete(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
@@ -112,13 +140,21 @@ class IndexHandler:
                 'match_all': {}
             }
         }
-        response = requests.post(url, json=body, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.post(url, json=body, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.post(url, json=body, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
     def delete_document(self, index, id):
         url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index + '/_doc/' + id
-        response = requests.delete(url, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.delete(url, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.delete(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         
         return response.json()
@@ -133,21 +169,33 @@ class IndexHandler:
                 'index': dest
             }
         }
-        response = requests.post(url, json=body, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.post(url, json=body, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.post(url, json=body, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
 
     def set_mapping(self, index, mapping):
         url = ELASTIC_DOMAIN + ':' + \
             ELASTIC_PORT + '/' + index + '/_mapping'
-        response = requests.put(url, json=mapping, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.put(url, json=mapping, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.put(url, json=mapping, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
     def index_document(self, index, id, document):
         url = ELASTIC_DOMAIN + ':' + \
             ELASTIC_PORT + '/' + index + '/_doc/' + id
-        response = requests.put(url, json=document, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.put(url, json=document, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.put(url, json=document, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         
         return response
@@ -155,6 +203,10 @@ class IndexHandler:
     def search(self, index, query):
         url = ELASTIC_DOMAIN + ':' + \
             ELASTIC_PORT + '/' + index + '/_search'
-        response = requests.post(url, json=query, auth=HTTPBasicAuth(
+        if self.ssl_context:
+            response = requests.post(url, json=query, auth=HTTPBasicAuth(
+                ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
+        else:
+            response = requests.post(url, json=query, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
