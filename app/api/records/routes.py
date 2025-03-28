@@ -280,7 +280,7 @@ def edit_document_transcription(id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
 
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'transcriber'):
         # retornar error
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
@@ -321,7 +321,7 @@ def edit_document_transcription_speaker(id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
 
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'transcriber'):
         # retornar error
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
@@ -362,7 +362,7 @@ def delete_document_transcription(id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
 
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'transcriber'):
         # retornar error
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
