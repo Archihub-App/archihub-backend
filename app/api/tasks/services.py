@@ -45,7 +45,31 @@ def get_tasks(user, body):
             if t['status'] == 'pending' or t['status'] == 'failed':
                 result = AsyncResult(t['taskId'])
 
-                if result.successful() and result.ready():
+                if result.state == 'PROGRESS':
+                    temp = {
+                        'status': result.info.get('status', 'En progreso'),
+                        'current': result.info.get('current', 0),
+                        'total': result.info.get('total', 1),
+                        'percent': int(result.info.get('current', 0) / result.info.get('total', 1) * 100) 
+                                if result.info.get('total', 1) > 0 else 0
+                    }
+                    
+                    for key, value in result.info.items():
+                        if key not in ['status', 'current', 'total']:
+                            temp[key] = value
+                            
+                    t['result'] = temp
+                    t['status'] = 'pending'
+                            
+                    update = {
+                        'status': 'pending',
+                        'result': temp,
+                    }
+                    task = TaskUpdate(**update)
+                    
+                    mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
+
+                elif result.successful() and result.ready():
                     if type(result.result) == str:
                         update = {
                             'status': 'completed',
