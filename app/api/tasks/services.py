@@ -46,17 +46,10 @@ def get_tasks(user, body):
                 result = AsyncResult(t['taskId'])
 
                 if result.state == 'PROGRESS':
-                    temp = {
-                        'status': result.info.get('status', 'En progreso'),
-                        'current': result.info.get('current', 0),
-                        'total': result.info.get('total', 1),
-                        'percent': int(result.info.get('current', 0) / result.info.get('total', 1) * 100) 
-                                if result.info.get('total', 1) > 0 else 0
-                    }
+                    temp = {}
                     
                     for key, value in result.info.items():
-                        if key not in ['status', 'current', 'total']:
-                            temp[key] = value
+                        temp[key] = value
                             
                     t['result'] = temp
                     t['status'] = 'pending'
@@ -157,9 +150,11 @@ def has_task(user, name):
                 
                 return False
             elif not result.successful() and result.ready():
+                error_info = str(result.result) if result.result else 'Unknown error'
+
                 update = {
                     'status': 'failed',
-                    'result': '',
+                    'result': error_info,
                 }
 
                 task = TaskUpdate(**update)
@@ -168,7 +163,7 @@ def has_task(user, name):
                     'tasks', {'taskId': task['taskId']}, task)
 
                 t['status'] = 'failed'
-                t['result'] = ''
+                t['result'] = error_info
                 return False
         # Verificar si la tarea existe
         if not task:
