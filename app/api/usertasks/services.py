@@ -79,7 +79,7 @@ def get_all_tasks(filters):
     
 def get_editors():
     try:
-        editors = list(mongodb.get_all_records('users', {'roles': 'editor'}, fields={'name': 1, 'username': 1}))
+        editors = list(mongodb.get_all_records('users', {'roles': {'$in': ['editor', 'transcriber']}}, fields={'name': 1, 'username': 1}))
         for editor in editors:
             editor['value'] = editor['username']
             editor['label'] = editor['name']
