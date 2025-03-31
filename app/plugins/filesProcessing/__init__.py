@@ -3,7 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.utils import DatabaseHandler
 from app.utils import HookHandler
 from flask import request
-from celery import shared_task
+from celery import shared_task, current_task
 from dotenv import load_dotenv
 import os
 from .utils import AudioProcessing
@@ -17,6 +17,8 @@ from app.api.users.services import has_role
 from bson.objectid import ObjectId
 from app.api.types.services import get_all as get_all_types
 import json
+from flask_babel import _
+import datetime
 from flask_babel import _
 
 load_dotenv()
@@ -197,6 +199,10 @@ class ExtendedPluginClass(PluginClass):
 
     @shared_task(ignore_result=False, name='filesProcessing.create_webfile')
     def bulk(body, user):
+        current_task.update_state(state='PROGRESS', meta={
+            'status': _('Starting process'),
+            'time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        })
         filters = {
             'post_type': body['post_type']
         }
@@ -213,12 +219,21 @@ class ExtendedPluginClass(PluginClass):
                 if len(body['resources']) > 0:
                     filters = {'_id': {'$in': [ObjectId(resource) for resource in body['resources']]}, **filters}
 
+        total = mongodb.count('resources', filters)
         step = 0
         size = 0
         loop = True
         instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
         # obtenemos los recursos
         while loop:
+            status_template = _(u'Processing files. Step {step} of {total}')
+            formatted_status = status_template.format(step=int(step + 1), total=int((total / 100) + 1))
+
+            current_task.update_state(state='PROGRESS', meta={
+                'status': formatted_status,
+                'progress': step / total * 100,
+                'time': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            })
             resources = list(mongodb.get_all_records('resources', filters, fields={'_id': 1}).limit(100).skip(step))
             resources = [str(resource['_id']) for resource in resources]
 
@@ -244,7 +259,9 @@ class ExtendedPluginClass(PluginClass):
                 loop = False
 
         instance.clear_cache()
-        return 'Se procesaron ' + str(size) + ' archivos'
+        resp_template = _(u'Processed {size} files of a total of {total} resources.')
+        formatted_resp = resp_template.format(size=int(size), total=int(total))
+        return formatted_resp
         
       
     def get_settings(self):
