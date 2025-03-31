@@ -45,7 +45,24 @@ def get_tasks(user, body):
             if t['status'] == 'pending' or t['status'] == 'failed':
                 result = AsyncResult(t['taskId'])
 
-                if result.successful() and result.ready():
+                if result.state == 'PROGRESS':
+                    temp = {}
+                    
+                    for key, value in result.info.items():
+                        temp[key] = value
+                            
+                    t['result'] = temp
+                    t['status'] = 'pending'
+                            
+                    update = {
+                        'status': 'pending',
+                        'result': temp,
+                    }
+                    task = TaskUpdate(**update)
+                    
+                    mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
+
+                elif result.successful() and result.ready():
                     if type(result.result) == str:
                         update = {
                             'status': 'completed',
@@ -133,9 +150,11 @@ def has_task(user, name):
                 
                 return False
             elif not result.successful() and result.ready():
+                error_info = str(result.result) if result.result else 'Unknown error'
+
                 update = {
                     'status': 'failed',
-                    'result': '',
+                    'result': error_info,
                 }
 
                 task = TaskUpdate(**update)
@@ -144,7 +163,7 @@ def has_task(user, name):
                     'tasks', {'taskId': task['taskId']}, task)
 
                 t['status'] = 'failed'
-                t['result'] = ''
+                t['result'] = error_info
                 return False
         # Verificar si la tarea existe
         if not task:
