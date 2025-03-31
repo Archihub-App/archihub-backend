@@ -1251,7 +1251,7 @@ def get_resource_images(id, user):
 
 # Funcion para obtener los hijos de un recurso
 @cacheHandler.cache.cache(limit=3000)
-def get_children(id, available, resp=False, post_type=None):
+def get_children(id, available, resp=False, post_type=None, status='published'):
     try:
         list_available = available.split('|')
         if post_type:
@@ -1260,10 +1260,10 @@ def get_children(id, available, resp=False, post_type=None):
         # Obtener los recursos del tipo de contenido
         if not resp:
             resources = mongodb.get_record('resources', {'post_type': {
-                                           '$in': list_available}, 'parents.post_type': {'$in': available.split('|')}, 'parents.id': id})
+                                           '$in': list_available}, 'parents.post_type': {'$in': available.split('|')}, 'parents.id': id, 'status': status})
         else:
             resources = mongodb.get_all_records('resources', {'post_type': {
-                                                '$in': list_available}, 'parents.post_type': {'$in': available.split('|')}, 'parents.id': id}, limit=10)
+                                                '$in': list_available}, 'parents.post_type': {'$in': available.split('|')}, 'parents.id': id, 'status': status}, limit=10)
 
         if (resources and not resp):
             return True
@@ -1338,7 +1338,7 @@ def get_tree(root, available, user, post_type=None, page=None, status='published
         
 
         for resource in resources:
-            resource['children'] = get_children(resource['id'], available, False, post_type)
+            resource['children'] = get_children(resource['id'], available, False, post_type, status=status)
             resource['icon'] = get_icon(resource['post_type'])
             resource['type'] = get_by_slug(resource['post_type'])
             name = resource['type']['name']
