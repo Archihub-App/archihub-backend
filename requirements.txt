@@ -9,8 +9,8 @@ flask
 flask_restful
 flask_cors
 pillow
-opencv-python
 numpy
+opencv-python
 ffmpeg-python
 bcrypt
 Werkzeug
