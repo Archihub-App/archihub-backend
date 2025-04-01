@@ -4,6 +4,7 @@ from requests.auth import HTTPBasicAuth
 from ssl import create_default_context
 from dotenv import load_dotenv
 load_dotenv()
+from app.utils.functions import get_access_rights
 
 
 ELASTIC_USER = os.environ.get('ELASTIC_USER', '')
@@ -210,3 +211,45 @@ class IndexHandler:
             response = requests.post(url, json=query, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
+    
+    def clean_elastic_search_response(self, response):
+        rights_system = get_access_rights()
+        rights_system = rights_system['options']
+
+        if 'hits' in response:
+            response = response['hits']
+
+            resources = []
+            for r in response['hits']:
+                index = True
+                new = {**r['_source'], 'id': r['_id']}
+                rights = new['accessRights']
+                if rights == 'public':
+                    del new['accessRights']
+                else:
+                    right = [r for r in rights_system if r['id'] == new['accessRights']]
+                    if len(right) > 0:
+                        new['accessRights'] = right[0]['term']
+                    else:
+                        index = False
+
+                if index:
+                    resources.append(new)
+
+            response = {
+                'total': response['total']['value'],
+                'resources': resources
+            }
+
+            return response
+        else:
+            return {
+                'total': 0,
+                'resources': []
+            }
+            
+    def clean_elastic_aggregation_response(self, response):
+        if 'aggregations' in response:
+            response = response['aggregations']
+            return response
+        return []
