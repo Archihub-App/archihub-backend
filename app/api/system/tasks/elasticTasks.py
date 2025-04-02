@@ -5,6 +5,7 @@ import os
 from bson.objectid import ObjectId
 from app.utils.index.spanish_settings import settings as spanish_settings
 from app.api.types.services import get_metadata
+from flask_babel import _
 
 index_handler = IndexHandler.IndexHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -59,14 +60,17 @@ def regenerate_index_task(mapping, user):
             ELASTIC_INDEX_PREFIX + '-resources', name)
         index_handler.delete_index(name)
 
-        return 'ok'
+        resp = _('Main index {index} updated', index=new_name)
+        return resp
     else:
         index_handler.start_new_index(mapping)
-        return 'ok'
+        resp = _('Main index {index} created', index=ELASTIC_INDEX_PREFIX + '-resources_1')
+        return resp
 
 @shared_task(ignore_result=False, name='system.index_resources')
 def index_resources_task(body={}):
     skip = 0
+    resouces_count = 0
     filters = {}
     loop = True
     if '_id' in body:
@@ -81,6 +85,7 @@ def index_resources_task(body={}):
     while len(resources) > 0 and loop:
         for resource in resources:
             document = {}
+            resouces_count += 1
             post_type = resource['post_type']
             fields = get_metadata(post_type)['fields']
             for f in fields:
@@ -91,14 +96,17 @@ def index_resources_task(body={}):
                         if value != None:
                             document = change_value(
                                 document, f['destiny'], value)
-                if f['type'] == 'simple-date':
+                elif f['type'] == 'simple-date':
                     destiny = f['destiny']
                     if destiny != '':
                         value = get_value_by_path(resource, destiny)
                         if value != None:
-                            value = value.strftime('%Y-%m-%d')
-                            change_value(document, f['destiny'], value)
-                if f['type'] == 'repeater':
+                            import datetime
+                            if isinstance(value, datetime.datetime):
+                                value = value.strftime('%Y-%m-%dT%H:%M:%S')
+                                print(value)
+                                change_value(document, f['destiny'], value)
+                elif f['type'] == 'repeater':
                     value = get_value_by_path(resource, f['destiny'])
                     if value:
                         for v in value:
@@ -106,15 +114,16 @@ def index_resources_task(body={}):
                                 if s['type'] == 'simple-date':
                                     date = get_value_by_path(v, s['destiny'])
                                     if date:
-                                        date = date.strftime('%Y-%m-%d')
+                                        date = date.strftime('%Y-%m-%dT%H:%M:%S')
                                         change_value(v, s['destiny'], date)
                                     
 
             document['post_type'] = post_type
             
-            created_at = resource['createdAt']
-            created_at = created_at.strftime('%Y-%m-%dT%H:%M:%S')
-            document['createdAt'] = created_at
+            if 'createdBy' in resource:
+                created_at = resource['createdAt']
+                created_at = created_at.strftime('%Y-%m-%dT%H:%M:%S')
+                document['createdAt'] = created_at
             
             if 'parents' in resource:
                 document['parents'] = resource['parents']
@@ -136,6 +145,7 @@ def index_resources_task(body={}):
             r = index_handler.index_document(
                 ELASTIC_INDEX_PREFIX + '-resources', str(resource['_id']), document)
             if r.status_code != 201 and r.status_code != 200:
+                print(r.text)
                 raise Exception(
                     'Error al indexar el recurso ' + str(resource['_id']))
 
@@ -146,7 +156,8 @@ def index_resources_task(body={}):
         resources = list(mongodb.get_all_records(
             'resources', {}, limit=1000, skip=skip))
 
-    return 'ok'
+    resp = _(u'Indexing finished for {resources_count} resources', resouces_count=resouces_count)
+    return resp
 
 @shared_task(ignore_result=False, name='system.index_resources_delete')
 def index_resources_delete_task(body={}):
@@ -155,4 +166,5 @@ def index_resources_delete_task(body={}):
     if r['result'] != 'deleted':
         raise Exception('Error al indexar el recurso ' + str(body['_id']))
 
-    return 'ok'
+    resp = _(u'Resource {resource_id} deleted from index', resource_id=body['_id'])
+    return resp
