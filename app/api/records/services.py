@@ -828,6 +828,13 @@ def edit_transcription(id, body, user):
 
 def download_records(body, user):
     try:
+        from app.api.system.services import get_system_settings
+        settings, status = get_system_settings()
+        capabilities = settings['capabilities']
+        
+        if 'files_download' not in capabilities:
+            return {'msg': _('Files download isn\'t active')}, 400
+        
         if 'id' not in body:
             return {'msg': _('id is missing')}, 400
         

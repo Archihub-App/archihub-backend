@@ -100,6 +100,7 @@ def update_settings(settings, current_user):
         update_option('api_activation', settings)
         update_option('index_management', settings)
         update_option('user_management', settings)
+        update_option('files_management', settings)
 
         # Registrar log
         register_log(current_user, log_actions['system_update'], {
@@ -676,13 +677,25 @@ def get_system_settings():
         if c:
             capabilities = [*capabilities, *c]
             
+    indexing = False
+    vector_db = False
     index_management = mongodb.get_record('system', {'name': 'index_management'})
-    indexing = index_management['data'][0]['value']
+    for d in index_management['data']:
+        if d['id'] == 'index_activation':
+            indexing = d['value'] if d['value'] else False
+        elif d['id'] == 'vector_activation':
+            vector_db = d['value'] if d['value'] else False
+            
+    files_download = False
+    files_management = mongodb.get_record('system', {'name': 'files_management'})
+    for d in files_management['data']:
+        if d['id'] == 'files_download':
+            files_download = d['value'] if d['value'] else False
     
     if indexing:
         capabilities.append('indexing')
-        
-    vector_db = index_management['data'][1]['value']
+    if files_download:
+        capabilities.append('files_download')
     if vector_db:
         capabilities.append('vector_db')
     

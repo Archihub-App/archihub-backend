@@ -163,6 +163,13 @@ settings = [
         'label': 'Ajustes de los archivos',
         'data': [
             {
+                'type': 'checkbox_single',
+                'label': 'Activar la descarga de archivos',
+                'id': 'files_download',
+                'instructions': 'Activa la descarga de archivos en la aplicación. Los usuarios pueden descargar los archivos de la aplicación.',
+                'value': False
+            },
+            {
                 'type': 'button_single',
                 'label': 'Borrar archivos zipeados',
                 'id': 'zip_files_delete',
