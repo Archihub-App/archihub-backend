@@ -712,8 +712,16 @@ def get_system_actions(placement):
         for p in plugins['data']:
             plugin_module = __import__(f'app.plugins.{p}', fromlist=[
                                'ExtendedPluginClass', 'plugin_info'])
+            
+            plugin_info = plugin_module.plugin_info.copy()
+            if 'slug' in plugin_info:
+                plugin_info.pop('slug')
+            
+            if 'active' in plugin_info:
+                plugin_info.pop('active')
+                
             plugin_bp = plugin_module.ExtendedPluginClass(
-                p, __name__, **plugin_module.plugin_info)
+                p, __name__, **plugin_info)
             
             a = plugin_bp.get_actions()
             if a:
