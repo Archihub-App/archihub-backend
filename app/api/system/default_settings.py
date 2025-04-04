@@ -6,12 +6,14 @@ settings = [
             {
                 'type': 'select',
                 'label': 'Tipo por defecto del módulo de catalogación',
-                'id': 'tipo_defecto'
+                'id': 'tipo_defecto',
+                'value': ''
             },
             {
                 'type': 'checkbox',
                 'label': 'Tipos a mostrar en la vista individual',
-                'id': 'tipos_vista_individual'
+                'id': 'tipos_vista_individual',
+                'value': []
             }
         ]
     },
