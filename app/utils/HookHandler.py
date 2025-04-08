@@ -26,6 +26,7 @@ class HookHandler:
     def call(self, hook_name, *additional_args, **additional_kwargs):
         if hook_name in self.hooks:
             task_signatures = []
+            task_data = []
             names = []
             task_ids = []
             for _, func, reg_args, reg_kwargs in sorted(self.hooks[hook_name], key=lambda x: x[0]):
@@ -44,6 +45,7 @@ class HookHandler:
 
                 names.append(funcname)
                 task_signatures.append(task_signature)
+                task_data.append((funcname, final_args, final_kwargs))
             
             if task_signatures:
                 result = chain(*task_signatures).apply_async()
@@ -52,7 +54,18 @@ class HookHandler:
                 for x, task_id in enumerate(task_ids):
                     if task_id not in temp:
                         temp.append(task_id)
-                        add_task(task_id, names[x], 'automatic', 'hook')
+                        funcname, final_args, final_kwargs = task_data[x]
+                        if len(final_args) > 0:
+                            final_args = [{
+                                'id': arg['_id'],
+                                'resource_title': arg['metadata']['firstLevel']['title'],
+                            } for arg in final_args]
+                        add_task(task_id, names[x], 'automatic', 'hook', params={
+                            'args': final_args,
+                            'kwargs': final_kwargs,
+                            'hook_name': hook_name,
+                            'task_id': task_id,
+                        })
 
     def get_task_ids(self, result):
         ids = []

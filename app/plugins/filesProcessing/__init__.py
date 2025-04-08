@@ -191,7 +191,9 @@ class ExtendedPluginClass(PluginClass):
             self.validate_fields(body, 'bulk')
             self.validate_roles(current_user, ['admin', 'processing'])
             task = self.bulk.delay(body, current_user)
-            self.add_task_to_user(task.id, 'filesProcessing.create_webfile', current_user, 'msg')
+            self.add_task_to_user(task.id, 'filesProcessing.create_webfile', current_user, 'msg', {
+                'args': body
+            })
             
             return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
 

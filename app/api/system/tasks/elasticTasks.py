@@ -104,7 +104,6 @@ def index_resources_task(body={}):
                             import datetime
                             if isinstance(value, datetime.datetime):
                                 value = value.strftime('%Y-%m-%dT%H:%M:%S')
-                                print(value)
                                 change_value(document, f['destiny'], value)
                 elif f['type'] == 'repeater':
                     value = get_value_by_path(resource, f['destiny'])
@@ -156,7 +155,7 @@ def index_resources_task(body={}):
         resources = list(mongodb.get_all_records(
             'resources', {}, limit=1000, skip=skip))
 
-    resp = _(u'Indexing finished for {resources_count} resources', resouces_count=resouces_count)
+    resp = _("Indexing finished for %(count)s resources", count=resouces_count)
     return resp
 
 @shared_task(ignore_result=False, name='system.index_resources_delete')

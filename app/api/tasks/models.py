@@ -14,6 +14,7 @@ class Task(BaseModel):
     resultType: str
     result: str = None
     date: datetime
+    params: Optional[Any] = None
 
     class Config:
         populate_by_name = True

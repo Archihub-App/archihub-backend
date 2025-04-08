@@ -42,6 +42,7 @@ def get_tasks(user, body):
         tasks = parse_result(tasks)
 
         for t in tasks:
+            t['user'] = t['user'] if t['user'] != 'automatic' else 'system'
             if t['status'] == 'pending' or t['status'] == 'failed':
                 result = AsyncResult(t['taskId'])
 
@@ -159,7 +160,7 @@ def has_task(user, name):
 # Nuevo servicio para agregar una tarea a la base de datos asignandola a un usuario
 
 
-def add_task(taskId, taskName, username, resultType):
+def add_task(taskId, taskName, username, resultType, params={}):
     # Verificar si el usuario existe
     user = mongodb.get_record('users', {'username': username})
     if not user and username != 'automatic' and username != 'system':
@@ -172,6 +173,7 @@ def add_task(taskId, taskName, username, resultType):
         "name": taskName,
         "resultType": resultType,
         "date": datetime.now(),
+        "params": params,
     }
 
     task = Task(**new_task)

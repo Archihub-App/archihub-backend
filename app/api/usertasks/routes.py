@@ -207,7 +207,7 @@ def update_task(taskId):
             description: Error al actualizar la tarea
     """
     current_user = get_jwt_identity()
-    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'team_lead'):
+    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'transcriber'):
         return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
     
     return services.update_task(taskId, request.json, current_user, user_services.has_role(current_user, 'team_lead'))
