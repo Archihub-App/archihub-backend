@@ -482,8 +482,8 @@ def generate_token(username, password, admin = False, expiration = 2):
     if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
         return jsonify({'msg': _('Incorrect password')}), 400
     # Si el usuario no ha aceptado el compromiso, retornar error
-    if not user['compromise']:
-        return jsonify({'msg': _('User has not accepted the compromise')}), 400
+    # if not user['compromise']:
+    #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
     # Crear el token de acceso para el usuario con el username y sin expiración
     if not admin:
@@ -518,8 +518,8 @@ def generate_node_token(username, password):
         return jsonify({'msg': _('Incorrect password')}), 400
     
     # Si el usuario no ha aceptado el compromiso, retornar error
-    if not user['compromise']:
-        return jsonify({'msg': _('User has not accepted the compromise')}), 400
+    # if not user['compromise']:
+    #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
     access_token = create_access_token(identity=username, expires_delta=False)
     # usamos Fernet para encriptar el token de acceso
@@ -546,8 +546,8 @@ def generate_viz_token(username, password):
         return jsonify({'msg': _('Incorrect password')}), 400
     
     # Si el usuario no ha aceptado el compromiso, retornar error
-    if not user['compromise']:
-        return jsonify({'msg': _('User has not accepted the compromise')}), 400
+    # if not user['compromise']:
+    #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
     access_token = create_access_token(identity=username, expires_delta=False)
     # usamos Fernet para encriptar el token de acceso

@@ -105,7 +105,7 @@ def index_resources_task(body={}):
                             if isinstance(value, datetime.datetime):
                                 value = value.strftime('%Y-%m-%dT%H:%M:%S')
                                 change_value(document, f['destiny'], value)
-                elif f['type'] == 'repeater':
+                if f['type'] == 'repeater':
                     value = get_value_by_path(resource, f['destiny'])
                     if value:
                         for v in value:

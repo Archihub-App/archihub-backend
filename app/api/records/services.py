@@ -795,6 +795,7 @@ def edit_transcription(id, body, user):
         return {'msg': resp_['msg']}, 500
     
     slug = body['slug']
+    print(body)
 
     record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
     if not record:
@@ -809,6 +810,8 @@ def edit_transcription(id, body, user):
     segments = record['processing'][slug]['result']['segments']
 
     segments[body['index']]['text'] = body['text']
+    segments[body['index']]['start'] = body['start']
+    segments[body['index']]['end'] = body['end']
     if 'speaker' in body:
         segments[body['index']]['speaker'] = body['speaker']
 

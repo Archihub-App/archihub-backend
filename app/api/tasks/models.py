@@ -12,7 +12,7 @@ class Task(BaseModel):
     user: str
     status: str
     resultType: str
-    result: str = None
+    result: Optional[Any] = None
     date: datetime
     params: Optional[Any] = None
 
@@ -22,7 +22,7 @@ class Task(BaseModel):
 # Modelo para la actualización de opciones del sistema
 class TaskUpdate(BaseModel):
     status: Optional[str] = None
-    result: Optional[str] = None
+    result: Optional[Any] = None
 
     class Config:
         populate_by_name = True

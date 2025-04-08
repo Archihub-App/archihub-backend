@@ -110,7 +110,7 @@ def get_record_tasks(recordId):
             description: Error al obtener las tareas del record
     """
     current_user = get_jwt_identity()
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'transcriber'):
         return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
     
     return services.get_record_tasks(recordId)
@@ -207,7 +207,7 @@ def update_task(taskId):
             description: Error al actualizar la tarea
     """
     current_user = get_jwt_identity()
-    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'transcriber'):
+    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'transcriber') and not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
     
     return services.update_task(taskId, request.json, current_user, user_services.has_role(current_user, 'team_lead'))

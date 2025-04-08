@@ -219,7 +219,7 @@ class ExtendedPluginClass(PluginClass):
                     'type': field['type'],
                     'destiny': field['destiny'],
                     'required': field['required'],
-                    'instructions': field['instructions'],
+                    'instructions': field['instructions'] if 'instructions' in field else '',
                 }
 
                 fields_df.append(obj)
