@@ -60,11 +60,11 @@ def regenerate_index_task(mapping, user):
             ELASTIC_INDEX_PREFIX + '-resources', name)
         index_handler.delete_index(name)
 
-        resp = _('Main index {index} updated', index=new_name)
+        resp = _('Main index %(index)s updated', index=new_name)
         return resp
     else:
         index_handler.start_new_index(mapping)
-        resp = _('Main index {index} created', index=ELASTIC_INDEX_PREFIX + '-resources_1')
+        resp = _('Main index %(index)s created', index=ELASTIC_INDEX_PREFIX + '-resources_1')
         return resp
 
 @shared_task(ignore_result=False, name='system.index_resources')
@@ -165,5 +165,5 @@ def index_resources_delete_task(body={}):
     if r['result'] != 'deleted':
         raise Exception('Error al indexar el recurso ' + str(body['_id']))
 
-    resp = _(u'Resource {resource_id} deleted from index', resource_id=body['_id'])
+    resp = _('Resource %(id)s deleted from index', id=body['_id'])
     return resp

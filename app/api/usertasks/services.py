@@ -173,7 +173,7 @@ def update_task(id, body, user, isTeamLead):
         updated_task['_id'] = str(updated_task['_id'])
         updated_task['comment'] = process_comments(updated_task['comment'])
         
-        if body['status'] == 'approved':
+        if task['status'] == 'approved':
             return jsonify({'error': _('No unfinished tasks')}), 400
         else:
             return jsonify(updated_task), 200
