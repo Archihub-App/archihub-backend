@@ -9,6 +9,22 @@ def get_llm_providers():
     return llm_providers
 
 class OpenAIProvider(BaseLLMProvider):
+    def getModels(self):
+        return [
+            {
+                "id": "gpt-3.5-turbo",
+                "name": "GPT-3.5 Turbo",
+                "description": "A variant of GPT-3.5 optimized for chat.",
+                "type": "chat"
+            },
+            {
+                "id": "gpt-4",
+                "name": "GPT-4",
+                "description": "The latest and most powerful model from OpenAI.",
+                "type": "chat"
+            }
+        ]
+        
     def call(self, prompt, **kwargs):
         url = 'https://api.openai.com/v1/chat/completions'
         headers = {"Authorization": f"Bearer {self.key}", 'Content-Type': 'application/json'}
