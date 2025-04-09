@@ -692,7 +692,12 @@ def get_system_settings():
     for d in files_management['data']:
         if d['id'] == 'files_download':
             files_download = d['value'] if d['value'] else False
+            
+    from app.api.llms.services import get_llm_models
+    llm_models, status = get_llm_models()
     
+    if len(llm_models) > 0:
+        capabilities.append('llm')
     if indexing:
         capabilities.append('indexing')
     if files_download:
@@ -752,7 +757,7 @@ def clear_cache():
     from app.api.snaps.services import update_cache as update_cache_snaps
     from app.api.views.services import update_cache as update_cache_views
     from app.api.geosystem.services import update_cache as update_cache_geosystem
-    
+    from app.api.llms.services import update_cache as update_cache_llms
     from app.api.resources.public_services import update_cache as update_cache_resources_public
     from app.api.records.public_services import update_cache as update_cache_records_public
 
@@ -770,6 +775,7 @@ def clear_cache():
         update_cache_geosystem()
         update_cache_resources_public()
         update_cache_records_public()
+        update_cache_llms()
 
         print('-'*50)
         return {'msg': gettext('Cache cleaned successfully')}, 200

@@ -158,6 +158,10 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     # Registrar usertasks blueprint
     from app.api.usertasks import bp as usertasks_bp
     app.register_blueprint(usertasks_bp, url_prefix='/usertasks')
+    
+    #Registrar llms blueprint
+    from app.api.llms import bp as llms_bp
+    app.register_blueprint(llms_bp, url_prefix='/llms')
 
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 
