@@ -729,6 +729,7 @@ def delete_transcription_segment(id, body, user):
         return {'msg': _(u'Record has not been processed with {slug}', slug=slug)}, 404
     
     segments = record['processing'][slug]['result']['segments']
+    
 
     segments.pop(index)
 
@@ -737,6 +738,7 @@ def delete_transcription_segment(id, body, user):
     }
 
     update['processing'][slug]['result']['segments'] = segments
+    update['processing'][slug]['result']['text'] = generate_text_transcription(segments)
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)

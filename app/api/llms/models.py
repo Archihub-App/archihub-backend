@@ -25,9 +25,12 @@ class Message(BaseModel):
 
 class Conversation(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
-    provider: str
     user: str
     messages: List[Message] = Field(default_factory=list)
+    type: str = Field(default="chat")
+    processing_slug: str = None
+    record_id: str = None
+    resource_id: str = None
     
     class Config:
         populate_by_name = True

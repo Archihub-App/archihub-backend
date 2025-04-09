@@ -69,13 +69,22 @@ def update_llm_model(model_id):
     llm_model = services.update_llm_model(model_id, data)
     return llm_model
 
-@bp.route('/<id>/models', methods=['GET'])
+@bp.route('/models/<id>', methods=['GET'])
 @jwt_required()
 def get_provider_models(id):
     current_user = get_jwt_identity()
-    
-    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'processing') or not user_services.has_role(current_user, 'editor') or not user_services.has_role(current_user, 'transcriber'):
-        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     models = services.get_provider_models(id)
     return models
+
+@bp.route('/conversation', methods=['POST'])
+@jwt_required()
+def new_conversation():
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'processing'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    data = request.get_json()
+    llm_model = services.new_conversation(data, current_user)
+    return llm_model

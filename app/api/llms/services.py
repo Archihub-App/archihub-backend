@@ -74,18 +74,38 @@ def delete_llm_model(model_id):
     except Exception as e:
         return {'msg': str(e)}, 500
     
+def get_provider_class(id):
+    llm_provider = mongodb.get_record("llm_models", filters={"_id": ObjectId(id)})
+    if not llm_provider:
+        raise Exception('Modelo no encontrado')
+    
+    llm_provider.pop('_id')
+    
+    provider_class = PROVIDER_CLASSES.get(llm_provider['provider'])
+    if not provider_class:
+        raise Exception('Proveedor no encontrado')
+    
+    llm_provider.pop('provider')
+    provider = provider_class(**llm_provider)
+    return provider
+    
 def get_provider_models(id):
     try:
-        llm_provider = mongodb.get_record("llm_models", filters={"_id": ObjectId(id)})
-        if not llm_provider:
-            return {'msg': 'Modelo no encontrado'}, 404
-        
-        provider_class = PROVIDER_CLASSES.get(llm_provider[0]['provider'])
-        if not provider_class:
-            return {'msg': 'Proveedor no encontrado'}, 404
-        
-        provider = provider_class(llm_provider[0])
-        response = provider.get_models()
+        provider = get_provider_class(id)
+        response = provider.getModels()
         return response, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def new_conversation(data, user):
+    try:
+        provider = get_provider_class(data['provider']['id'])
+        if data['type'] == 'transcription':
+            from .utils.TranscriptionProcessing import create_transcription_conversation
+            response = create_transcription_conversation(data, provider, user)
+            return {
+                'response': response,
+            }, 200
+        return 'ok', 200
     except Exception as e:
         return {'msg': str(e)}, 500

@@ -356,7 +356,7 @@ def cache_get_processing_metadata(id, slug):
     return record['processing'][slug]['result']['metadata']
 
 @cacheHandler.cache.cache(limit=1000)
-def cache_get_record_transcription(id, slug):
+def cache_get_record_transcription(id, slug, segments=True):
     # Buscar el record en la base de datos
     record = mongodb.get_record(
         'records', {'_id': ObjectId(id)}, fields={'processing': 1})
@@ -415,11 +415,15 @@ def cache_get_record_transcription(id, slug):
                 total += seg['end'] - seg['start']
             sp['total'] = total
                 
-
     transcription = {
-        'segments': temp,
-        'speakers': speakers
+        'text': record['processing'][slug]['result']['text'],
     }
+    
+    if segments:
+        transcription = {
+            'segments': temp,
+            'speakers': speakers
+        }
 
     return transcription
 
