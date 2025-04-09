@@ -59,5 +59,16 @@ class OpenAIProvider(BaseLLMProvider):
             "temperature": kwargs.get("temperature", 0.5),
         }
         
-        response = requests.post(url, headers=headers, json=data)
-        return response.json()
+        try:
+            response = requests.post(url, headers=headers, json=data)
+            
+            response_data = response.json()
+            if response.status_code != 200:
+                raise ValueError(f"OpenAI API returned an error: {response.status_code} - {response.text}")
+            
+            if response_data.get("error"):
+                raise ValueError(f"OpenAI API returned an error: {response_data['error']['message']}")
+            
+            return response_data
+        except requests.exceptions.RequestException as e:
+            raise ValueError(f"Request to OpenAI API failed: {e}")

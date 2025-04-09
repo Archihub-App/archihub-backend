@@ -97,15 +97,13 @@ def get_provider_models(id):
     except Exception as e:
         return {'msg': str(e)}, 500
     
-def new_conversation(data, user):
+def set_conversation(data, user):
     try:
         provider = get_provider_class(data['provider']['id'])
         if data['type'] == 'transcription':
             from .utils.TranscriptionProcessing import create_transcription_conversation
             response = create_transcription_conversation(data, provider, user)
-            return {
-                'response': response,
-            }, 200
+            return response, 200
         return 'ok', 200
     except Exception as e:
         return {'msg': str(e)}, 500

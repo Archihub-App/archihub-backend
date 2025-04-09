@@ -79,12 +79,12 @@ def get_provider_models(id):
 
 @bp.route('/conversation', methods=['POST'])
 @jwt_required()
-def new_conversation():
+def set_conversation():
     current_user = get_jwt_identity()
 
     if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'processing'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     data = request.get_json()
-    llm_model = services.new_conversation(data, current_user)
+    llm_model = services.set_conversation(data, current_user)
     return llm_model

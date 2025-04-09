@@ -21,7 +21,7 @@ class LlmProviderUpdate(BaseModel):
 
 class Message(BaseModel):
     role: str
-    text: str
+    content: str
 
 class Conversation(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")

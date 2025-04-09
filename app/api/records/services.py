@@ -744,6 +744,7 @@ def delete_transcription_segment(id, body, user):
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
 
     cache_get_record_transcription.invalidate(id, slug)
+    cache_get_record_transcription.invalidate(id, slug, False)
 
     return {'msg': _('Transcription segment deleted')}, 200
 
@@ -788,6 +789,7 @@ def edit_transcription_speaker(id, body, user):
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
 
     cache_get_record_transcription.invalidate(id, slug)
+    cache_get_record_transcription.invalidate(id, slug, False)
     
     return {'msg': _('Transcription speaker edited')}, 200
     
@@ -828,6 +830,7 @@ def edit_transcription(id, body, user):
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
 
     cache_get_record_transcription.invalidate(id, slug)
+    cache_get_record_transcription.invalidate(id, slug, False)
 
     return {'msg': _('Transcription segment edited')}, 200
 
