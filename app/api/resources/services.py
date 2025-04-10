@@ -1192,7 +1192,9 @@ def delete_zip_files():
 # Nuevo servicio para eliminar un recurso
 def delete_by_id(id, user):
     try:
+        print('1')
         post_type = get_resource_type(id)
+        print('2')
         post_type_roles = cache_type_roles(post_type)
 
         if post_type_roles['editRoles']:
@@ -1204,6 +1206,7 @@ def delete_by_id(id, user):
             if not canEdit:
                 return {'msg': _('You don\'t have the required authorization')}, 401
         
+        print('3')
         if post_type_roles['viewRoles']:
             canView = False
             for r in post_type_roles['viewRoles']:
@@ -1213,12 +1216,15 @@ def delete_by_id(id, user):
             if not canView:
                 return {'msg': _('You don\'t have the required authorization')}, 401
 
+        print('4')
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         
         if 'files' in resource:
             records_list = resource['files']
             delete_records(records_list, id, user)
 
+
+        print('5')
         delete_children(id)
         # Eliminar el recurso de la base de datos
         deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})

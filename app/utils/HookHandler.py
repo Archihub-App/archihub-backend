@@ -58,7 +58,6 @@ class HookHandler:
                         if len(final_args) > 0:
                             final_args = [{
                                 'id': arg['_id'],
-                                'resource_title': arg['metadata']['firstLevel']['title'],
                             } for arg in final_args]
                         add_task(task_id, names[x], 'automatic', 'hook', params={
                             'args': final_args,
