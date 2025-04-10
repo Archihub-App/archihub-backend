@@ -71,6 +71,7 @@ def get_roles():
         temp.append({'id': 'processing', 'term': 'processing'})
         temp.append({'id': 'team_lead', 'term': 'team_lead'})
         temp.append({'id': 'transcriber', 'term': 'transcriber'})
+        temp.append({'id': 'llm', 'term': 'llm'})
 
         return {
             'options': temp
