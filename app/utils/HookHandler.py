@@ -55,16 +55,7 @@ class HookHandler:
                     if task_id not in temp:
                         temp.append(task_id)
                         funcname, final_args, final_kwargs = task_data[x]
-                        if len(final_args) > 0:
-                            final_args = [{
-                                'id': arg['_id'],
-                            } for arg in final_args]
-                        add_task(task_id, names[x], 'automatic', 'hook', params={
-                            'args': final_args,
-                            'kwargs': final_kwargs,
-                            'hook_name': hook_name,
-                            'task_id': task_id,
-                        })
+                        add_task(task_id, names[x], 'automatic', 'hook')
 
     def get_task_ids(self, result):
         ids = []
