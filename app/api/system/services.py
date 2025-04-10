@@ -101,6 +101,7 @@ def update_settings(settings, current_user):
         update_option('api_activation', settings)
         update_option('index_management', settings)
         update_option('user_management', settings)
+        update_option('files_management', settings)
 
         # Registrar log
         register_log(current_user, log_actions['system_update'], {
@@ -677,13 +678,30 @@ def get_system_settings():
         if c:
             capabilities = [*capabilities, *c]
             
+    indexing = False
+    vector_db = False
     index_management = mongodb.get_record('system', {'name': 'index_management'})
-    indexing = index_management['data'][0]['value']
+    for d in index_management['data']:
+        if d['id'] == 'index_activation':
+            indexing = d['value'] if d['value'] else False
+        elif d['id'] == 'vector_activation':
+            vector_db = d['value'] if d['value'] else False
+            
+    files_download = False
+    files_management = mongodb.get_record('system', {'name': 'files_management'})
+    for d in files_management['data']:
+        if d['id'] == 'files_download':
+            files_download = d['value'] if d['value'] else False
+            
+    from app.api.llms.services import get_llm_models
+    llm_models, status = get_llm_models()
     
+    if len(llm_models) > 0:
+        capabilities.append('llm')
     if indexing:
         capabilities.append('indexing')
-        
-    vector_db = index_management['data'][1]['value']
+    if files_download:
+        capabilities.append('files_download')
     if vector_db:
         capabilities.append('vector_db')
     
@@ -700,8 +718,16 @@ def get_system_actions(placement):
         for p in plugins['data']:
             plugin_module = __import__(f'app.plugins.{p}', fromlist=[
                                'ExtendedPluginClass', 'plugin_info'])
+            
+            plugin_info = plugin_module.plugin_info.copy()
+            if 'slug' in plugin_info:
+                plugin_info.pop('slug')
+            
+            if 'active' in plugin_info:
+                plugin_info.pop('active')
+                
             plugin_bp = plugin_module.ExtendedPluginClass(
-                p, __name__, **plugin_module.plugin_info)
+                p, __name__, **plugin_info)
             
             a = plugin_bp.get_actions()
             if a:
@@ -731,7 +757,7 @@ def clear_cache():
     from app.api.snaps.services import update_cache as update_cache_snaps
     from app.api.views.services import update_cache as update_cache_views
     from app.api.geosystem.services import update_cache as update_cache_geosystem
-    
+    from app.api.llms.services import update_cache as update_cache_llms
     from app.api.resources.public_services import update_cache as update_cache_resources_public
     from app.api.records.public_services import update_cache as update_cache_records_public
 
@@ -749,6 +775,7 @@ def clear_cache():
         update_cache_geosystem()
         update_cache_resources_public()
         update_cache_records_public()
+        update_cache_llms()
 
         print('-'*50)
         return {'msg': gettext('Cache cleaned successfully')}, 200

@@ -53,8 +53,8 @@ class PluginClass(Blueprint):
     def has_role(self, role, user):
         return has_role(user, role)
     
-    def add_task_to_user(self, taskId, taskName, user, resultType):
-        add_task(taskId, taskName, user, resultType)
+    def add_task_to_user(self, taskId, taskName, user, resultType, params={}):
+        add_task(taskId, taskName, user, resultType, params=params)
 
     def has_task(self, taskName, user):
         return has_task(user, taskName)

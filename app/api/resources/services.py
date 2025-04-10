@@ -34,6 +34,7 @@ from datetime import datetime
 from dateutil import parser
 import numbers
 from flask_babel import _
+
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
@@ -1116,6 +1117,13 @@ def get_resource_files(id, user, page, groupImages = False):
     
 def download_resource_files(body, user):
     try:
+        from app.api.system.services import get_system_settings
+        settings, status = get_system_settings()
+        capabilities = settings['capabilities']
+        
+        if 'files_download' not in capabilities:
+            return {'msg': _('Files download isn\'t active')}, 400
+        
         resource = mongodb.get_record('resources', {'_id': ObjectId(body['id'])})
         # check if the user has access to the resource
         accessRights = get_accessRights(body['id'])
@@ -1143,24 +1151,24 @@ def download_resource_files(body, user):
             import zipfile
             zipf = zipfile.ZipFile(zippath, 'w', zipfile.ZIP_DEFLATED)
             
-            for _ in r_:
-                if _['filepath']:
+            for re in r_:
+                if re['filepath']:
                     if body['type'] == 'original':
-                        path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
-                        zipf.write(path, _['name'])
+                        path = os.path.join(ORIGINAL_FILES_PATH, re['filepath'])
+                        zipf.write(path, re['name'])
                         
                     elif body['type'] == 'small':
-                        path = os.path.join(WEB_FILES_PATH, _['processing']['fileProcessing']['path'])
+                        path = os.path.join(WEB_FILES_PATH, re['processing']['fileProcessing']['path'])
                         
-                        if _['processing']['fileProcessing']['type'] == 'image':
+                        if re['processing']['fileProcessing']['type'] == 'image':
                             path = path + '_large.jpg'
-                        elif _['processing']['fileProcessing']['type'] == 'audio':
+                        elif re['processing']['fileProcessing']['type'] == 'audio':
                             path = path + '.mp3'
-                        elif _['processing']['fileProcessing']['type'] == 'video':
+                        elif re['processing']['fileProcessing']['type'] == 'video':
                             path = path + '.mp4'
-                        elif _['processing']['fileProcessing']['type'] == 'document':
-                            path = os.path.join(ORIGINAL_FILES_PATH, _['filepath'])
-                        zipf.write(path, _['name'])
+                        elif re['processing']['fileProcessing']['type'] == 'document':
+                            path = os.path.join(ORIGINAL_FILES_PATH, re['filepath'])
+                        zipf.write(path, re['name'])
                     
             zipf.close()
         
@@ -1184,7 +1192,9 @@ def delete_zip_files():
 # Nuevo servicio para eliminar un recurso
 def delete_by_id(id, user):
     try:
+        print('1')
         post_type = get_resource_type(id)
+        print('2')
         post_type_roles = cache_type_roles(post_type)
 
         if post_type_roles['editRoles']:
@@ -1196,6 +1206,7 @@ def delete_by_id(id, user):
             if not canEdit:
                 return {'msg': _('You don\'t have the required authorization')}, 401
         
+        print('3')
         if post_type_roles['viewRoles']:
             canView = False
             for r in post_type_roles['viewRoles']:
@@ -1205,12 +1216,15 @@ def delete_by_id(id, user):
             if not canView:
                 return {'msg': _('You don\'t have the required authorization')}, 401
 
+        print('4')
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         
         if 'files' in resource:
             records_list = resource['files']
             delete_records(records_list, id, user)
 
+
+        print('5')
         delete_children(id)
         # Eliminar el recurso de la base de datos
         deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})

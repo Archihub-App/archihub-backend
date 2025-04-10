@@ -710,10 +710,23 @@ def generate_text_transcription(segments):
             text += segment['text'] + ' '
     return text
     
+def is_transcriber_can_edit(recordId, user):
+    if has_role(user, 'transcriber'):
+        task = mongodb.get_record('usertasks', {'recordId': recordId, 'user': user, 'status': {'$in': ['review', 'pending', 'rejected']}}, fields={'_id': 1})
+        if task:
+            return True
+        else:
+            return False
+    return None 
+    
 def delete_transcription_segment(id, body, user):
     resp_, status = get_by_id(id, user)
     if status != 200:
         return {'msg': resp_['msg']}, 500
+    
+    can_edit = is_transcriber_can_edit(id, user)
+    if can_edit is False:
+        return {'msg': _('You do not have permission to edit this transcription')}, 401
     
     slug = body['slug']
     index = body['index']
@@ -729,6 +742,7 @@ def delete_transcription_segment(id, body, user):
         return {'msg': _(u'Record has not been processed with {slug}', slug=slug)}, 404
     
     segments = record['processing'][slug]['result']['segments']
+    
 
     segments.pop(index)
 
@@ -737,11 +751,13 @@ def delete_transcription_segment(id, body, user):
     }
 
     update['processing'][slug]['result']['segments'] = segments
+    update['processing'][slug]['result']['text'] = generate_text_transcription(segments)
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
 
     cache_get_record_transcription.invalidate(id, slug)
+    cache_get_record_transcription.invalidate(id, slug, False)
 
     return {'msg': _('Transcription segment deleted')}, 200
 
@@ -749,6 +765,10 @@ def edit_transcription_speaker(id, body, user):
     resp_, status = get_by_id(id, user)
     if status != 200:
         return {'msg': resp_['msg']}, 500
+    
+    can_edit = is_transcriber_can_edit(id, user)
+    if can_edit is False:
+        return {'msg': _('You do not have permission to edit this transcription')}, 401
     
     slug = body['slug']
     
@@ -786,6 +806,7 @@ def edit_transcription_speaker(id, body, user):
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
 
     cache_get_record_transcription.invalidate(id, slug)
+    cache_get_record_transcription.invalidate(id, slug, False)
     
     return {'msg': _('Transcription speaker edited')}, 200
     
@@ -794,8 +815,11 @@ def edit_transcription(id, body, user):
     if status != 200:
         return {'msg': resp_['msg']}, 500
     
+    can_edit = is_transcriber_can_edit(id, user)
+    if can_edit is False:
+        return {'msg': _('You do not have permission to edit this transcription')}, 401
+    
     slug = body['slug']
-    print(body)
 
     record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
     if not record:
@@ -826,11 +850,19 @@ def edit_transcription(id, body, user):
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
 
     cache_get_record_transcription.invalidate(id, slug)
+    cache_get_record_transcription.invalidate(id, slug, False)
 
     return {'msg': _('Transcription segment edited')}, 200
 
 def download_records(body, user):
     try:
+        from app.api.system.services import get_system_settings
+        settings, status = get_system_settings()
+        capabilities = settings['capabilities']
+        
+        if 'files_download' not in capabilities:
+            return {'msg': _('Files download isn\'t active')}, 400
+        
         if 'id' not in body:
             return {'msg': _('id is missing')}, 400
         
