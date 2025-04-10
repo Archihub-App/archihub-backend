@@ -10,7 +10,7 @@ from flask_babel import _
 def get_llm_models():
     current_user = get_jwt_identity()
     
-    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'processing') or not user_services.has_role(current_user, 'llm'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     llm_models = services.get_llm_models()
@@ -25,7 +25,7 @@ def get_llm_models():
 def get_llm_providers():
     current_user = get_jwt_identity()
     
-    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'processing') or not user_services.has_role(current_user, 'llm'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     llm_providers = services.get_llm_providers()
@@ -39,7 +39,7 @@ def get_llm_providers():
 def create_llm_model():
     current_user = get_jwt_identity()
     
-    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'processing'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     data = request.get_json()
@@ -51,7 +51,7 @@ def create_llm_model():
 def delete_llm_model(model_id):
     current_user = get_jwt_identity()
     
-    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'processing'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     llm_model = services.delete_llm_model(model_id)
@@ -62,7 +62,7 @@ def delete_llm_model(model_id):
 def get_provider_models(id):
     current_user = get_jwt_identity()
     
-    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'processing') or not user_services.has_role(current_user, 'llm'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     models = services.get_provider_models(id)
@@ -73,9 +73,43 @@ def get_provider_models(id):
 def set_conversation():
     current_user = get_jwt_identity()
 
-    if not user_services.has_role(current_user, 'admin') or not user_services.has_role(current_user, 'processing') or not user_services.has_role(current_user, 'llm'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     data = request.get_json()
     llm_model = services.set_conversation(data, current_user)
     return llm_model
+
+@bp.route('/conversation/<id>', methods=['GET'])
+@jwt_required()
+def get_conversation(id):
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    conversation = services.get_conversation(id, current_user)
+    return conversation
+
+@bp.route('/conversation/<id>', methods=['DELETE'])
+@jwt_required()
+def delete_conversation(id):
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    conversation = services.delete_conversation(id)
+    return conversation
+
+@bp.route('/conversation/history', methods=['POST'])
+@jwt_required()
+def get_conversation_history():
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    data = request.get_json()
+    history = services.get_conversation_history(data, current_user)
+    return history

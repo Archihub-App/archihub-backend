@@ -104,6 +104,35 @@ def set_conversation(data, user):
             from .utils.TranscriptionProcessing import create_transcription_conversation
             response = create_transcription_conversation(data, provider, user)
             return response, 200
-        return 'ok', 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def get_conversation_history(data, user):
+    type = data['type']
+    id = data['id']
+    
+    try:
+        if type == 'record':
+            from app.api.records.services import get_by_id
+            resp_, status = get_by_id(id, user)
+            if status != 200:
+                raise Exception('Error al obtener el record')
+            
+            conversations = list(mongodb.get_all_records('conversations', {'record_id': id, 'user': user}, fields={'_id': 1, 'created_at': 1, 'messages': 1, 'updated_at': 1}, sort=[('updated_at', -1)]))
+            conversations = parse_result(conversations)
+            for c in conversations:
+                c['messages'] = [c['messages'][0]]
+            return conversations, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def get_conversation(id, user):
+    try:
+        conversations = mongodb.get_record('conversations', {'_id': ObjectId(id), 'user': user}, fields={'_id': 1, 'created_at': 1, 'messages': 1, 'updated_at': 1})
+        if not conversations:
+            return {'msg': 'Conversación no encontrada'}, 404
+        
+        conversations = parse_result(conversations)
+        return conversations, 200
     except Exception as e:
         return {'msg': str(e)}, 500

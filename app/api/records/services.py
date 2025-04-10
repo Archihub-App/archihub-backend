@@ -710,10 +710,23 @@ def generate_text_transcription(segments):
             text += segment['text'] + ' '
     return text
     
+def is_transcriber_can_edit(recordId, user):
+    if has_role(user, 'transcriber'):
+        task = mongodb.get_record('usertasks', {'recordId': recordId, 'user': user, 'status': {'$in': ['review', 'pending', 'rejected']}}, fields={'_id': 1})
+        if task:
+            return True
+        else:
+            return False
+    return None 
+    
 def delete_transcription_segment(id, body, user):
     resp_, status = get_by_id(id, user)
     if status != 200:
         return {'msg': resp_['msg']}, 500
+    
+    can_edit = is_transcriber_can_edit(id, user)
+    if can_edit is False:
+        return {'msg': _('You do not have permission to edit this transcription')}, 401
     
     slug = body['slug']
     index = body['index']
@@ -752,6 +765,10 @@ def edit_transcription_speaker(id, body, user):
     resp_, status = get_by_id(id, user)
     if status != 200:
         return {'msg': resp_['msg']}, 500
+    
+    can_edit = is_transcriber_can_edit(id, user)
+    if can_edit is False:
+        return {'msg': _('You do not have permission to edit this transcription')}, 401
     
     slug = body['slug']
     
@@ -798,8 +815,11 @@ def edit_transcription(id, body, user):
     if status != 200:
         return {'msg': resp_['msg']}, 500
     
+    can_edit = is_transcriber_can_edit(id, user)
+    if can_edit is False:
+        return {'msg': _('You do not have permission to edit this transcription')}, 401
+    
     slug = body['slug']
-    print(body)
 
     record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
     if not record:

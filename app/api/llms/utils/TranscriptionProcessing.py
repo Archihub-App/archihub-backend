@@ -1,6 +1,7 @@
 from app.utils import DatabaseHandler, CacheHandler
 from app.api.llms.models import Conversation, ConversationUpdate
 from bson.objectid import ObjectId
+import datetime
 mongodb = DatabaseHandler.DatabaseHandler()
 
 
@@ -36,8 +37,6 @@ def create_transcription_conversation(body, provider, user):
     if conversation_id:
         conversation = mongodb.get_record('conversations', {'_id': ObjectId(conversation_id)}, fields={'messages': 1})
         
-        print(conversation)
-        
         for msg in conversation['messages']:
             messages.append({
                 'role': msg['role'],
@@ -64,7 +63,8 @@ def create_transcription_conversation(body, provider, user):
         ]
         
         payload = ConversationUpdate(
-            messages=messages
+            messages=messages,
+            updated_at=datetime.datetime.now()
         )
         
         mongodb.update_record('conversations', {'_id': ObjectId(conversation_id)}, payload)
@@ -87,7 +87,9 @@ def create_transcription_conversation(body, provider, user):
             ],
             'type': 'transcription',
             'processing_slug': processing_slug,
-            'record_id': record_id
+            'record_id': record_id,
+            'created_at': datetime.datetime.now(),
+            'updated_at': datetime.datetime.now()
         }
         
         payload = Conversation(**payload)
