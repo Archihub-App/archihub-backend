@@ -1323,11 +1323,10 @@ def get_children_cache(root, available, post_type=None):
     
 
 # Funcion para obtener los hijos de un recurso en forma de arbol
-# @cacheHandler.cache.cache(limit=5000)
+@cacheHandler.cache.cache(limit=5000)
 def get_tree(root, available, user, post_type=None, page=None, status='published'):
     try:
         list_available = available.split('|')
-        print(list_available, status, root, page)
 
         fields = {'metadata.firstLevel.title': 1, 'post_type': 1, 'parent': 1}
         status_ = 'published'
