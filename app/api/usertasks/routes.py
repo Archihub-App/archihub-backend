@@ -132,7 +132,7 @@ def get_editors():
             description: Error al obtener los editores de tareas
     """
     current_user = get_jwt_identity()
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'transcriber'):
         return jsonify({'msg':  _('You don\'t have the required authorization')}), 401
     
     return services.get_editors()
