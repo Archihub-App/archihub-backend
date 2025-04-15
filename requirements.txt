@@ -27,3 +27,6 @@ shapely
 qdrant-client
 sentence-transformers
 flask-babel
+google
+google.genai
+openai

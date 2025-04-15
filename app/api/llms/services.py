@@ -6,10 +6,11 @@ import json
 from bson import json_util
 from bson.objectid import ObjectId
 from app.api.llms.models import LlmProvider, LlmProviderUpdate
-from app.api.llms.utils.LLMProviders import OpenAIProvider
+from app.api.llms.utils.LLMProviders import OpenAIProvider, GoogleProvider
 
 PROVIDER_CLASSES = {
     'OpenAI': OpenAIProvider,
+    'Google': GoogleProvider,
 }
 
 fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
