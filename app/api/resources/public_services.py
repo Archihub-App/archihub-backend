@@ -1,7 +1,6 @@
 from flask import jsonify, request, send_file
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
-from app.utils import HookHandler
 from bson import json_util
 import json
 from bson.objectid import ObjectId
@@ -19,7 +18,6 @@ from app.api.resources.services import get_total, get_accessRights, get_resource
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
-hookHandler = HookHandler.HookHandler()
 children_cache = {}
 
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')

@@ -5,6 +5,7 @@ from app.api.users.services import has_role
 from app.api.system.models import OptionUpdate
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import HookHandler
 import uuid
 import os.path
 import requests
@@ -12,6 +13,7 @@ import json
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+hookHandler = HookHandler.HookHandler()
 
 TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', '')
 CLEAR_CACHE_PATH = os.environ.get('MASTER_HOST', '') + '/system/node-clear-cache'
@@ -62,6 +64,17 @@ class PluginClass(Blueprint):
     def allowedFile(self, filename, allowed_extensions):
         return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in allowed_extensions
+           
+    def update_data(self, collection, query, update):
+        try:
+            mongodb.update_record(collection, query, update)
+            if collection == 'records':
+                hookHandler.call('update_record', update.dict())
+            elif collection == 'resources':
+                hookHandler.call('update_resource', update.dict())
+                
+        except Exception as e:
+            raise Exception(str(e))
     
     def save_temp_file(self, file, filename):
         filename_new = str(uuid.uuid4()) + '.' + \

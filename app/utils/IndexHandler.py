@@ -40,11 +40,11 @@ class IndexHandler:
         #     for k in self.get_aliases():
         #         print(k)
 
-    def start_new_index(self, mapping=None):
-        index_name = self.elastic_index_prefix + '-resources_1'
+    def start_new_index(self, mapping=None, slug='resources'):
+        index_name = self.elastic_index_prefix + '-' + slug + '_1'
         from .index.spanish_settings import settings
         self.create_index(index_name, settings=settings, mapping=mapping)
-        self.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', index_name)
+        self.add_to_alias(ELASTIC_INDEX_PREFIX + '-' + slug, index_name)
 
     def get_aliases(self):
         url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'
@@ -64,6 +64,8 @@ class IndexHandler:
         else:
             response = requests.get(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
+        
+        print(response.text, response.status_code)
         return response.json()
 
     def create_index(self, index, settings=None, mapping=None):
@@ -223,16 +225,20 @@ class IndexHandler:
             for r in response['hits']:
                 index = True
                 new = {**r['_source'], 'id': r['_id']}
-                rights = new['accessRights']
-                if rights == 'public':
-                    del new['accessRights']
-                else:
-                    right = [r for r in rights_system if r['id'] == new['accessRights']]
-                    if len(right) > 0:
-                        new['accessRights'] = right[0]['term']
+                
+                if 'accessRights' in new:
+                    rights = new['accessRights']
+                    if rights == 'public':
+                        del new['accessRights']
                     else:
-                        index = False
-
+                        right = [r for r in rights_system if r['id'] == new['accessRights']]
+                        if len(right) > 0:
+                            new['accessRights'] = right[0]['term']
+                        else:
+                            index = False
+                if 'highlight' in r and 'text' in r['highlight']:
+                    # Replace the original text with the highlighted version
+                    new['text'] = r['highlight']['text'][0]
                 if index:
                     resources.append(new)
 

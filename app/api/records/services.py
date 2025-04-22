@@ -2,6 +2,7 @@ import datetime
 from flask import jsonify, send_file, Response
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import HookHandler
 from bson import json_util
 import json
 from bson.objectid import ObjectId
@@ -35,6 +36,7 @@ ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'oga', 'ogg
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+hookHandler = HookHandler.HookHandler()
 
 def update_cache():
     get_total.invalidate_all()
@@ -108,6 +110,35 @@ def update_record(record, current_user):
     except Exception as e:
         raise Exception(str(e))
 
+
+def update_record_by_id(id, current_user, body):
+    try:
+        # Buscar el record en la base de datos
+        record = mongodb.get_record('records', {'_id': ObjectId(id)})
+
+        # Si el record no existe, retornar error
+        if not record:
+            raise Exception(_('Record does not exist'))
+
+        # Si el record existe, actualizarlo
+        update = FileRecordUpdate(**body)
+
+        mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+
+        # Registrar el log
+        register_log(current_user, log_actions['record_update'], {
+                     'record': id})
+        # Limpiar la cache
+        hookHandler.call('record_update', body)
+        get_by_id.invalidate(id, current_user)
+        get_by_id.invalidate(id, current_user, True)
+        
+        # Retornar el resultado
+        return {'msg': _('Record updated')}, 200
+
+    except Exception as e:
+        raise Exception(str(e))
+    
 # Nuevo servicio para borrar un parent de un record
 def delete_parent(resource_id, parent_id, current_user):
     try:
@@ -163,9 +194,7 @@ def delete_parent(resource_id, parent_id, current_user):
         # Registrar el log
         register_log(current_user, log_actions['record_update'], {
                      'record': parent_id})
-        # Limpiar la cache
         
-
         # Retornar el resultado
         return {'msg': _('Parent deleted')}, 200
 
@@ -293,6 +322,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                 # registrar el log
                 register_log(current_user, log_actions['record_update'], {
                                 'record': str(record['_id'])})
+                hookHandler.call('record_update_parent', update_dict)
                 # limpiar la cache
                 
             else:
@@ -371,6 +401,8 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                     'size': record.size,
                     'filepath': record.filepath
                 }})
+                
+                hookHandler.call('record_create', record.dict())
                 # limpiar la cache
                 
                 get_hash.invalidate_all()
@@ -444,6 +476,14 @@ def get_by_id(id, current_user, fullFields = False):
                     to_clean.append(p['id'])
 
             record['parent'] = [x for x in record['parent'] if x['id'] not in to_clean]
+            for p in record['parent']:
+                if 'id' in p:
+                    p['id'] = str(p['id'])
+                    from app.api.resources.services import get_accessRights
+                    p['accessRights'] = get_accessRights(p['id'])
+                    if p['accessRights'] != None:
+                        if not has_right(current_user, p['accessRights']['id']):
+                            return {'msg': _('You do not have permission to view this record')}, 401
 
 
         if 'parents' in record:
@@ -453,7 +493,6 @@ def get_by_id(id, current_user, fullFields = False):
         return parse_result(record), 200
 
     except Exception as e:
-        print(str(e))
         return {'msg': str(e)}, 500
     
 def get_by_index_gallery(body, current_user):
@@ -593,6 +632,8 @@ def postBlockDocument(current_user, obj):
 
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+            
+            hookHandler.call('record_update', update.dict())
 
             cache_get_block_by_page_id.invalidate_all()
             return {'msg': _('Block updated')}, 200
@@ -623,6 +664,8 @@ def updateBlockDocument(current_user, obj):
 
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+            
+            hookHandler.call('record_update', update.dict())
 
             cache_get_block_by_page_id.invalidate_all()
             return {'msg': _('Block updated')}, 200
@@ -649,6 +692,8 @@ def deleteBlockDocument(current_user, obj):
 
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+            
+            hookHandler.call('record_update', update.dict())
 
             cache_get_block_by_page_id.invalidate_all()
             return {'msg': _('Block deleted')}, 200
@@ -755,6 +800,8 @@ def delete_transcription_segment(id, body, user):
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+    
+    hookHandler.call('record_update', update.dict())
 
     cache_get_record_transcription.invalidate(id, slug)
     cache_get_record_transcription.invalidate(id, slug, False)
@@ -804,6 +851,8 @@ def edit_transcription_speaker(id, body, user):
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+    
+    hookHandler.call('record_update', update.dict())
 
     cache_get_record_transcription.invalidate(id, slug)
     cache_get_record_transcription.invalidate(id, slug, False)
@@ -848,6 +897,8 @@ def edit_transcription(id, body, user):
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+    
+    hookHandler.call('record_update', update.dict())
 
     cache_get_record_transcription.invalidate(id, slug)
     cache_get_record_transcription.invalidate(id, slug, False)
