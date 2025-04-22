@@ -71,7 +71,8 @@ class PluginClass(Blueprint):
                 from app.api.records.services import update_record_by_id
                 update_record_by_id(id, None, update)
             elif collection == 'resources':
-                from app.api.resources.services import update_by_id
+                from app.api.resources.services import update_by_id as update_resource_by_id
+                update_resource_by_id(id, update, None, [], True)
         except Exception as e:
             raise Exception(str(e))
     
