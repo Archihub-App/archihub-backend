@@ -67,12 +67,16 @@ class PluginClass(Blueprint):
            
     def update_data(self, collection, query, update):
         try:
-            mongodb.update_record(collection, query, update)
             if collection == 'records':
-                hookHandler.call('update_record', update.dict())
+                from app.api.records.models import RecordUpdate
+                update_record = RecordUpdate(**update)
+                mongodb.update_record('records', query, update_record)
+                hookHandler.call('update_record', update)
             elif collection == 'resources':
-                hookHandler.call('update_resource', update.dict())
-                
+                from app.api.resources.models import ResourceUpdate
+                update_resource = ResourceUpdate(**update)
+                mongodb.update_record('resources', query, update_resource)
+                hookHandler.call('update_resource', update)
         except Exception as e:
             raise Exception(str(e))
     
