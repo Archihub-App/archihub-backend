@@ -268,7 +268,7 @@ def update_by_id(id, body, user, files, updateCache = True):
             return {'msg': _('Error validating files'), 'errors': errors}, 400
 
         status = body['status']
-        if status == 'published':
+        if status == 'published' and user:
             if not has_role(user, 'publisher') and not has_role(user, 'admin'):
                 return {'msg': _('You don\'t have the required authorization')}, 401
         if not status:

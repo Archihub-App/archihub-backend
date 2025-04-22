@@ -12,8 +12,6 @@ from .utils import ImageProcessing
 from .utils import PDFprocessing
 from .utils import DocumentProcessing
 from .utils import DatabaseProcessing
-from app.api.records.models import RecordUpdate
-from app.api.users.services import has_role
 from bson.objectid import ObjectId
 from app.api.types.services import get_all as get_all_types
 import json
@@ -59,7 +57,7 @@ def process_file(file, instance=None):
                     }
                 }
             }
-            instance.update_data('records', {'_id': file['_id']}, update)
+            instance.update_data('records', file['id'], update)
 
     elif 'video' in file['mime']:
         result_audio, result_video = VideoProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
@@ -74,7 +72,7 @@ def process_file(file, instance=None):
                 }
             }
             
-            instance.update_data('records', {'_id': file['_id']}, update)
+            instance.update_data('records', file['id'], update)
     elif 'image' in file['mime']:
         result = ImageProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
         if result:
@@ -87,7 +85,7 @@ def process_file(file, instance=None):
                 }
             }
             
-            instance.update_data('records', {'_id': file['_id']}, update)
+            instance.update_data('records', file['id'], update)
     elif 'word' in file['mime'] or ('text' in file['mime'] and get_filename_extension(file['filepath']) != '.csv'):
         result = DocumentProcessing.main(path, os.path.join(ORIGINAL_FILES_PATH, path_dir, filename), os.path.join(WEB_FILES_PATH, path_dir, filename))
 
@@ -101,7 +99,7 @@ def process_file(file, instance=None):
                 }
             }
             
-            instance.update_data('records', {'_id': file['_id']}, update)
+            instance.update_data('records', file['id'], update)
     elif 'application/pdf' in file['mime']:
         result = PDFprocessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
         folder_path = os.path.join(path_dir, filename).split('.')[0]
@@ -116,7 +114,7 @@ def process_file(file, instance=None):
                 }
             }
             
-            instance.update_data('records', {'_id': file['_id']}, update)
+            instance.update_data('records', file['id'], update)
     
     elif 'text' in file['mime'] and get_filename_extension(file['filepath']) == '.csv':
         result = DatabaseProcessing.main_csv(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
@@ -131,7 +129,7 @@ def process_file(file, instance=None):
                 }
             }
             
-            instance.update_data('records', {'_id': file['_id']}, update)
+            instance.update_data('records', file['id'], update)
 
     elif 'sheet' in file['mime']:
         result = DatabaseProcessing.main_excel(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
@@ -146,7 +144,7 @@ def process_file(file, instance=None):
                 }
             }
             
-            instance.update_data('records', {'_id': file['_id']}, update)
+            instance.update_data('records', file['id'], update)
 
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type, settings, actions, capabilities=None):
@@ -270,9 +268,8 @@ class ExtendedPluginClass(PluginClass):
         def get_settings(type):
             try:
                 current_user = get_jwt_identity()
-
-                if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': _('You don\'t have the required authorization')}, 401
+                
+                self.validate_roles(current_user, ['admin', 'processing'])
                 
                 types = get_all_types()
                 if isinstance(types, list):
@@ -322,8 +319,7 @@ class ExtendedPluginClass(PluginClass):
             try:
                 current_user = get_jwt_identity()
 
-                if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': _('You don\'t have the required authorization')}, 401
+                self.validate_roles(current_user, ['admin', 'processing'])
                 
                 body = request.form.to_dict()
                 data = body['data']

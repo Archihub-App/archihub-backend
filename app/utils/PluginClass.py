@@ -65,18 +65,13 @@ class PluginClass(Blueprint):
         return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in allowed_extensions
            
-    def update_data(self, collection, query, update):
+    def update_data(self, collection, id, update):
         try:
             if collection == 'records':
-                from app.api.records.models import RecordUpdate
-                update_record = RecordUpdate(**update)
-                mongodb.update_record('records', query, update_record)
-                hookHandler.call('update_record', update)
+                from app.api.records.services import update_record_by_id
+                update_record_by_id(id, None, update)
             elif collection == 'resources':
-                from app.api.resources.models import ResourceUpdate
-                update_resource = ResourceUpdate(**update)
-                mongodb.update_record('resources', query, update_resource)
-                hookHandler.call('update_resource', update)
+                from app.api.resources.services import update_by_id
         except Exception as e:
             raise Exception(str(e))
     

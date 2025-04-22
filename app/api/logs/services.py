@@ -23,6 +23,7 @@ def get_current_date():
 def register_log(username, action, metadata=None):
     # Obtener la fecha actual
     date = get_current_date()
+    username = username if username else 'system'
     # Crear instancia de Log con el username, la acción y la fecha
     log = Log(username=username, action=action, date=date, metadata=metadata)
     # Insertar log en la base de datos

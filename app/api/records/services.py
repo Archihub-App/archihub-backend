@@ -93,7 +93,7 @@ def get_total(obj):
         raise Exception(str(e))
     
 # Nuevos servicio para actualizar los campos displayName y accessRights de un record
-def update_record(record, current_user):
+def update_record(record, user):
     try:
         update = {}
         if 'displayName' in record:
@@ -104,9 +104,7 @@ def update_record(record, current_user):
             else:
                 update['accessRights'] = None
 
-        update = FileRecordUpdate(**update)
-
-        mongodb.update_record('records', {'_id': ObjectId(record['id'])}, update)
+        update_record_by_id(record['id'], user, update)
     except Exception as e:
         raise Exception(str(e))
 
@@ -124,14 +122,14 @@ def update_record_by_id(id, current_user, body):
         update = FileRecordUpdate(**body)
 
         mongodb.update_record('records', {'_id': ObjectId(id)}, update)
-
-        # Registrar el log
+        
         register_log(current_user, log_actions['record_update'], {
-                     'record': id})
-        # Limpiar la cache
+                        'record': id})
+        get_by_id.invalidate_all()
+    
+        
         hookHandler.call('record_update', body)
-        get_by_id.invalidate(id, current_user)
-        get_by_id.invalidate(id, current_user, True)
+        
         
         # Retornar el resultado
         return {'msg': _('Record updated')}, 200
@@ -208,17 +206,11 @@ def update_parent(parent_id, current_user, parents):
     new_list = [next(item for item in parents if item['id'] == id)
                 for id in unique_array_parents]
 
-    update = FileRecordUpdate(**{
+    update = {
         'parents': new_list
-    })
+    }
 
-    mongodb.update_record('records', {'_id': ObjectId(parent_id)}, update)
-
-    # Registrar el log
-    register_log(current_user, log_actions['record_update'], {
-        'record': parent_id})
-    # Limpiar la cache
-    
+    update_record_by_id(parent_id, current_user, update)
 
 
 # Nuevo servicio para crear un record para un recurso
