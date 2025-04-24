@@ -603,7 +603,9 @@ def transform_dict_to_mapping(dict_input):
                         mapping[key]['type'] = 'date'
                     elif mapping[key]['type'] == 'select':
                         mapping[key]['type'] = 'keyword'
-                    elif mapping[key]['type'] in ['location', 'author']:
+                    elif mapping[key]['type'] == 'location':
+                        mapping[key]['type'] = 'geo_shape'
+                    elif mapping[key]['type'] in ['author']:
                         mapping.pop(key, None)
             else:
                 mapping[key] = dict_input[key]

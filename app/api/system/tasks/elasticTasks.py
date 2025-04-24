@@ -115,6 +115,38 @@ def index_resources_task(body={}):
                                     if date:
                                         date = date.strftime('%Y-%m-%dT%H:%M:%S')
                                         change_value(v, s['destiny'], date)
+                if f['type'] == 'location':
+                    value = get_value_by_path(document, f['destiny'])
+                    temp = []
+                    if value:
+                        for v in value:
+                            if 'coordinates' in v:
+                                coordinates = v['coordinates']
+                                if coordinates:
+                                    if len(coordinates) == 2:
+                                        newObj = {
+                                            'type': 'Point',
+                                            'coordinates': [coordinates[0], coordinates[1]]
+                                        }
+                                        temp.append(newObj)
+                                    else:
+                                        raise Exception(
+                                            'Error al indexar el recurso ' + str(resource['_id']))
+                            else:
+                                for i in range(2, -1, -1):
+                                    if v['level_' + str(i)]:
+                                        level = v['level_' + str(i)]['ident']
+                                        if level:
+                                            if i == 0:
+                                                parent = None
+                                            else:
+                                                parent = v['level_' + str(i - 1)]['ident']
+                                            from app.api.geosystem.services import get_shape_centroid
+                                            centroid = get_shape_centroid(level, parent, i)
+                                            if centroid:
+                                                temp = temp + centroid
+                        change_value(document, f['destiny'], temp)
+                                            
                                     
 
             document['post_type'] = post_type

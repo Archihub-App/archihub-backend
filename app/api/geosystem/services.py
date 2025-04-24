@@ -13,6 +13,7 @@ cacheHandler = CacheHandler.CacheHandler()
 def update_cache():
     get_level.invalidate_all()
     get_level_info.invalidate_all()
+    get_shape_centroid.invalidate_all()
 
 def upload_shapes():
     try:
@@ -89,7 +90,7 @@ def get_level(body):
             shape_ = shape(s['geometry'])
             s.pop('_id')
             s['centroid'] = mapping(shape_.centroid)
-            geo = shape_.simplify(.85, preserve_topology=True)
+            geo = shape_.simplify(1 if int(level) == 0 else 0, preserve_topology=True)
             s['geometry'] = mapping(geo)
 
         return shapes, 200
@@ -114,3 +115,33 @@ def get_level_info(body):
         return shape, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+@cacheHandler.cache.cache(limit=5000)
+def get_shape_centroid(ident, parent, level):
+    try:
+        filters = {
+            'properties.admin_level': level,
+            'properties.ident': ident
+        }
+        if parent:
+            filters['properties.parent'] = parent
+            
+        record = mongodb.get_record('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1})
+        shape_ = shape(record['geometry'])
+        
+        if record['geometry']['type'] == 'MultiPolygon':
+            centroids = []
+            for polygon_coords in record['geometry']['coordinates']:
+                polygon = {
+                    'type': 'Polygon',
+                    'coordinates': polygon_coords
+                }
+                poly_shape = shape(polygon)
+                centroids.append(mapping(poly_shape.centroid))
+            
+            return centroids
+        else:
+            centroid = shape_.centroid
+            return [mapping(centroid)]
+    except Exception as e:
+        raise Exception(f'Error al obtener el centroide de la forma {ident}')
