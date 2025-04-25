@@ -145,6 +145,8 @@ def index_resources_task(body={}):
                                             centroid = get_shape_centroid(level, parent, i)
                                             if centroid:
                                                 temp = temp + centroid
+                                                break
+                                              
                         change_value(document, f['destiny'], temp)
                                             
                                     

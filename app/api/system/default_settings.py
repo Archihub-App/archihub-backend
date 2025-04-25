@@ -94,6 +94,14 @@ settings = [
                 'instructions': 'Esta acción vuelve a indexar todos los recursos sobreescribiendo las versiones anteriores y creando las que no están.',
                 'btn_label': 'Volver a indexar',
                 'value': 'index-resources'
+            },
+            {
+                'type': 'button_single',
+                'label': 'Indexar polígonos geográficos',
+                'id': 'index_geometries',
+                'instructions': 'Esta acción vuelve a indexar todos los polígonos geográficos sobreescribiendo las versiones anteriores y creando las que no están.',
+                'btn_label': 'Volver a indexar polígonos',
+                'value': 'index-geometries'
             }
         ]
     },

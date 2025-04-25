@@ -90,7 +90,7 @@ def get_level(body):
             shape_ = shape(s['geometry'])
             s.pop('_id')
             s['centroid'] = mapping(shape_.centroid)
-            geo = shape_.simplify(1 if int(level) == 0 else 0, preserve_topology=True)
+            geo = shape_.simplify(1.5 if int(level) == 0 else 0, preserve_topology=True)
             s['geometry'] = mapping(geo)
 
         return shapes, 200
