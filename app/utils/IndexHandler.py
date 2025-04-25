@@ -5,6 +5,7 @@ from ssl import create_default_context
 from dotenv import load_dotenv
 load_dotenv()
 from app.utils.functions import get_access_rights
+from flask_babel import _
 
 
 ELASTIC_USER = os.environ.get('ELASTIC_USER', '')
@@ -213,6 +214,27 @@ class IndexHandler:
             response = requests.post(url, json=query, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
+    
+    def regenerate_index(self, index, mapping):
+        keys = self.get_alias_indexes(
+            ELASTIC_INDEX_PREFIX + '-' + index).keys()
+        if len(keys) == 1:
+            name = list(keys)[0]
+            number = name.split('_')[1]
+            number = int(number) + 1
+            new_name = ELASTIC_INDEX_PREFIX + '-' + index + '_' + str(number)
+            self.create_index(new_name, mapping=mapping)
+            self.add_to_alias(ELASTIC_INDEX_PREFIX + '-' + index, new_name)
+            self.reindex(name, new_name)
+            self.remove_from_alias(ELASTIC_INDEX_PREFIX + '-' + index, name)
+            self.delete_index(name)
+
+            resp = _('Main index %(index)s updated', index=new_name)
+            return resp
+        else:
+            self.start_new_index(mapping, slug=index)
+            resp = _('Main index %(index)s created', index=ELASTIC_INDEX_PREFIX + '-' + index + '_1')
+            return resp
     
     def clean_elastic_search_response(self, response):
         rights_system = get_access_rights()

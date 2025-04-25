@@ -44,28 +44,7 @@ def change_value(body, path, value):
 
 @shared_task(ignore_result=False, name='system.regenerate_index')
 def regenerate_index_task(mapping, user):
-    keys = index_handler.get_alias_indexes(
-        ELASTIC_INDEX_PREFIX + '-resources').keys()
-    if len(keys) == 1:
-        name = list(keys)[0]
-        number = name.split('_')[1]
-        number = int(number) + 1
-        new_name = ELASTIC_INDEX_PREFIX + '-resources_' + str(number)
-        index_handler.create_index(
-            new_name, settings=spanish_settings, mapping=mapping)
-        index_handler.add_to_alias(
-            ELASTIC_INDEX_PREFIX + '-resources', new_name)
-        index_handler.reindex(name, new_name)
-        index_handler.remove_from_alias(
-            ELASTIC_INDEX_PREFIX + '-resources', name)
-        index_handler.delete_index(name)
-
-        resp = _('Main index %(index)s updated', index=new_name)
-        return resp
-    else:
-        index_handler.start_new_index(mapping)
-        resp = _('Main index %(index)s created', index=ELASTIC_INDEX_PREFIX + '-resources_1')
-        return resp
+    return index_handler.regenerate_index(mapping, 'resources')
 
 @shared_task(ignore_result=False, name='system.index_resources')
 def index_resources_task(body={}):

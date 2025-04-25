@@ -1,5 +1,5 @@
 from app.utils import CacheHandler
-from app.utils import DatabaseHandler
+from app.utils import DatabaseHandler, IndexHandler
 from app.api.geosystem.models import Polygon
 from app.api.geosystem.models import PolygonUpdate
 import os
@@ -9,6 +9,8 @@ from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+index_handler = IndexHandler.IndexHandler()
+ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
 def update_cache():
     get_level.invalidate_all()
@@ -17,7 +19,6 @@ def update_cache():
 
 def upload_shapes():
     try:
-        print('Uploading shapes')
         path = 'app/utils/geo'
         path = os.path.abspath(path)
         admin_folders = os.listdir(path)
@@ -71,8 +72,15 @@ def upload_shapes():
 
         return {'msg': _('Shapes uploaded successfully')}, 200
     except Exception as e:
-        print(str(e))
         return {'msg': str(e)}, 500
+    
+def index_shapes():
+    mapping = {
+        
+    }
+    
+    index_handler.regenerate_index('shapes', mapping)
+    
 
 @cacheHandler.cache.cache(limit=5000)
 def get_level(body):
