@@ -205,4 +205,18 @@ settings = [
             }
         ]
     },
+    {
+        'name': 'system_restart',
+        'label': 'Reinicio del sistema',
+        'data': [
+            {
+                'type': 'button_single',
+                'label': 'Reiniciar el sistema',
+                'id': 'system_restart_button',
+                'instructions': 'Reinicia el sistema para aplicar cambios de configuración.',
+                'btn_label': 'Reiniciar backend',
+                'value': 'restart'
+            }
+        ]
+    },
 ]

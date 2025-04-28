@@ -22,6 +22,7 @@ from functools import reduce
 from app.utils import HookHandler
 from flask_babel import gettext
 from app.api.system.tasks.elasticTasks import index_resources_task, index_resources_delete_task, regenerate_index_task
+import threading, time
 
 hookHandler = HookHandler.HookHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -717,6 +718,14 @@ def set_system_setting():
 
     except Exception as e:
         return {'msg': str(e)}, 500
+
+def restart_system():
+    def shutdown():
+        time.sleep(1)
+        import signal
+        os.kill(1, signal.SIGTERM)  # Send SIGTERM to PID 7 (container's main process)
+    threading.Thread(target=shutdown).start()
+    return {'msg': gettext('System restarted successfully')}, 200    
 
 @cacheHandler.cache.cache()
 def get_system_settings():
