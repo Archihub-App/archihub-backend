@@ -6,6 +6,8 @@ import os
 import json
 from shapely.geometry import shape, mapping
 from flask_babel import _
+from celery import shared_task
+from bson.objectid import ObjectId
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -74,12 +76,82 @@ def upload_shapes():
     except Exception as e:
         return {'msg': str(e)}, 500
     
-def index_shapes():
+@shared_task(ignore_result=False, name='geosystem.regenerate_index_shapes')
+def regenerate_index_shapes():
     mapping = {
-        
+        'properties': {
+            'geometry': {
+                'type': 'geo_shape'
+            },
+            'properties': {
+                'type': 'object',
+                'properties': {
+                    'admin_level': {
+                        'type': 'integer'
+                    },
+                    'ident': {
+                        'type': 'keyword'
+                    },
+                    'name': {
+                        'type': 'text',
+                        'fields': {
+                            'keyword': {
+                                'type': 'keyword',
+                            }
+                        }
+                    },
+                    'parent_name': {
+                        'type': 'text',
+                        'fields': {
+                            'keyword': {
+                                'type': 'keyword',
+                            }
+                        }
+                    },
+                    'parent': {
+                        'type': 'keyword'
+                    }
+                }
+            }
+        }
     }
     
-    index_handler.regenerate_index('shapes', mapping)
+    return index_handler.regenerate_index('shapes', mapping)
+    
+@shared_task(ignore_result=False, name='geosystem.index_shapes')
+def index_shapes(body={}):
+    skip = 0
+    shapes_count = 0
+    filters = {}
+    loop = True
+
+    shapes = list(mongodb.get_all_records(
+        'shapes', filters, limit=100, skip=skip))
+
+    if body == {}:
+        index_handler.delete_all_documents('shapes')
+
+    while len(shapes) > 0 and loop:
+        for shape_ in shapes:
+            document = {}
+            shapes_count += 1
+            document['geometry'] = shape_['geometry']
+            document['properties'] = {}
+            document['properties']['admin_level'] = shape_['properties']['admin_level']
+            document['properties']['ident'] = shape_['properties']['ident']
+            document['properties']['name'] = shape_['properties']['name']
+            if 'parent' in shape_['properties']:
+                document['properties']['parent'] = shape_['properties']['parent']
+            if 'parent_name' in shape_['properties']:
+                document['properties']['parent_name'] = shape_['properties']['parent_name']
+            index_handler.index_document(ELASTIC_INDEX_PREFIX + '-shapes', str(shape_['_id']), document)
+
+        skip += 100
+        shapes = list(mongodb.get_all_records(
+            'shapes', filters, limit=100, skip=skip))
+
+    resp = _("Indexing finished for %(count)s resources", count=shapes_count)
+    return resp
     
 
 @cacheHandler.cache.cache(limit=5000)

@@ -65,8 +65,8 @@ class IndexHandler:
         else:
             response = requests.get(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
-        
-        print(response.text, response.status_code)
+
+
         return response.json()
 
     def create_index(self, index, settings=None, mapping=None):
@@ -85,6 +85,7 @@ class IndexHandler:
             response = requests.put(url, json=json, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         
+        print(response.json())
         return response.json()
 
     def add_to_alias(self, alias, index):
@@ -216,8 +217,17 @@ class IndexHandler:
         return response.json()
     
     def regenerate_index(self, index, mapping):
-        keys = self.get_alias_indexes(
-            ELASTIC_INDEX_PREFIX + '-' + index).keys()
+        alias_response = self.get_alias_indexes(
+            ELASTIC_INDEX_PREFIX + '-' + index)
+        
+        print(alias_response)
+        if isinstance(alias_response, dict) and 'error' in alias_response and alias_response.get('status') == 404:
+            print('Alias not found')
+            self.start_new_index(mapping, slug=index)
+            resp = _('Main index %(index)s created', index=ELASTIC_INDEX_PREFIX + '-' + index + '_1')
+            return resp
+        
+        keys = alias_response.keys()
         if len(keys) == 1:
             name = list(keys)[0]
             number = name.split('_')[1]

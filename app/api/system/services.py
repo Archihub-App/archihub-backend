@@ -20,7 +20,6 @@ from app.api.tasks.services import add_task
 from app.api.types.services import get_metadata
 from functools import reduce
 from app.utils import HookHandler
-from bson.objectid import ObjectId
 from flask_babel import gettext
 from app.api.system.tasks.elasticTasks import index_resources_task, index_resources_delete_task, regenerate_index_task
 
@@ -635,6 +634,19 @@ def index_resources(user):
 
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+
+def regenerate_index_geometries(user):
+    from app.api.geosystem.services import regenerate_index_shapes
+    task = regenerate_index_shapes.delay()
+    add_task(task.id, 'geosystem.regenerate_index_shapes', user, 'msg')
+    return {'msg': 'Regeneración de geometrías iniciada'}, 200
+
+def index_geometries(user):
+    from app.api.geosystem.services import index_shapes
+    task = index_shapes.delay()
+    add_task(task.id, 'geosystem.index_shapes', user, 'msg')
+    return {'msg': 'Indexación de geometrías iniciada'}, 200
     
     
 def set_system_setting():

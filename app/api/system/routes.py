@@ -300,6 +300,58 @@ def index_resources():
     # Llamar al servicio para iniciar la indexación de recursos
     return services.index_resources(current_user)
 
+@bp.route('/index-geometries', methods=['GET'])
+@jwt_required()
+def index_geometries():
+    """
+    Iniciar la indexación de geometrías
+    ---
+    security:
+        - JWT: []
+    tags:
+       - Ajustes del sistema
+    responses:
+        200:
+            description: Indexación de recursos iniciada exitosamente
+        401:
+            description: No tiene permisos para iniciar la indexación de recursos
+        500:
+            description: Error al iniciar la indexación de recursos
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de procesamiento o administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': _('You don\'t have the required authorization')}, 401
+    # Llamar al servicio para iniciar la indexación de geometrías
+    return services.index_geometries(current_user)
+
+@bp.route('/regenerate-index-geometries', methods=['GET'])
+@jwt_required()
+def regenerate_index_geometries():
+    """
+    Iniciar la regeneración del index de geometrías
+    ---
+    security:
+        - JWT: []
+    tags:
+       - Ajustes del sistema
+    responses:
+        200:
+            description: Indexación de recursos iniciada exitosamente
+        401:
+            description: No tiene permisos para iniciar la indexación de recursos
+        500:
+            description: Error al iniciar la indexación de recursos
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de procesamiento o administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': _('You don\'t have the required authorization')}, 401
+    # Llamar al servicio para iniciar la indexación de geometrías
+    return services.regenerate_index_geometries(current_user)
+
 @bp.route('/clear-cache', methods=['GET'])
 @jwt_required()
 def clear_cache():
