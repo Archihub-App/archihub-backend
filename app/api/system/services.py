@@ -565,7 +565,7 @@ def regenerate_index(user):
         mapping = {
             'properties': mapping
         }
-
+        
         task = regenerate_index_task.delay(mapping, user)
         add_task(task.id, 'system.regenerate_index', user, 'msg')
 
@@ -575,43 +575,94 @@ def regenerate_index(user):
     except Exception as e:
         return {'msg': gettext(u'Error: {e}', e=str(e))}, 500
 
+def transform_dict_to_mapping(input_dict):
+    def map_field(field_def):
+        if not isinstance(field_def, dict):
+            raise ValueError(gettext(u'Invalid field definition: {field_def}', field_def=field_def))
 
-def transform_dict_to_mapping(dict_input):
-    try:
-        mapping = {}
-        for key in dict_input:
-            if isinstance(dict_input[key], dict):
-                if 'type' not in dict_input[key]:
-                    mapping[key] = {
-                        'properties': transform_dict_to_mapping(dict_input[key])
+        if 'type' in field_def and isinstance(field_def['type'], str):
+            field_type = field_def['type']
+
+            if field_type == 'text':
+                return {
+                    'type': 'text',
+                    'analyzer': 'analyzer_spanish',
+                    'fields': {
+                        'keyword': {
+                            'type': 'keyword',
+                            'ignore_above': 256
+                        }
                     }
-                else:
-                    mapping[key] = dict_input[key]
-                    if mapping[key]['type'] == 'text':
-                        mapping[key]['fields'] = {
-                            'keyword': {
-                                'type': 'keyword',
-                                'ignore_above': 256
+                }
+            elif field_type == 'text-area':
+                return {
+                    'type': 'text',
+                    'analyzer': 'analyzer_spanish'
+                }
+            elif field_type == 'select':
+                return {
+                    'type': 'keyword'
+                }
+            elif field_type == 'simple-date':
+                return {
+                    'type': 'date'
+                }
+            elif field_type == 'location':
+                print('location')
+                return {
+                    'type': 'geo_shape'
+                }
+            elif field_type == 'relation':
+                return {
+                    'type': 'object',
+                    'properties': {
+                        'id': {
+                            'type': 'text',
+                            'fields': {
+                                'keyword': {
+                                    'type': 'keyword',
+                                    'ignore_above': 256
+                                }
+                            }
+                        },
+                        'post_type': {
+                            'type': 'text',
+                            'fields': {
+                                'keyword': {
+                                    'type': 'keyword',
+                                    'ignore_above': 256
+                                }
                             }
                         }
-                        mapping[key]['analyzer'] = 'analyzer_spanish'
-                    elif mapping[key]['type'] == 'text-area':
-                        mapping[key]['type'] = 'text'
-                        mapping[key]['analyzer'] = 'analyzer_spanish'
-                    elif mapping[key]['type'] == 'simple-date':
-                        mapping[key]['type'] = 'date'
-                    elif mapping[key]['type'] == 'select':
-                        mapping[key]['type'] = 'keyword'
-                    elif mapping[key]['type'] == 'location':
-                        mapping[key]['type'] = 'geo_shape'
-                    elif mapping[key]['type'] in ['author']:
-                        mapping.pop(key, None)
+                    }
+                }
+            elif field_type == 'repeater':
+                return {
+                    'type': 'object'
+                }
+            elif field_type == 'checkbox':
+                return {
+                    'type': 'boolean'
+                }
+            elif field_type == 'number':
+                return {
+                    'type': 'float'
+                }
             else:
-                mapping[key] = dict_input[key]
+                return {'type': field_type}
 
-        return mapping
-    except Exception as e:
-        raise Exception(str(e))
+        else:
+            return {
+                'type': 'object',
+                'properties': {k: map_field(v) for k, v in field_def.items()}
+            }
+
+    mapping = {}
+    for key, value in input_dict.items():
+        mapping[key] = map_field(value)
+
+    return mapping
+
 
 
 def index_resources(user):

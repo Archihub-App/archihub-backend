@@ -44,7 +44,7 @@ def change_value(body, path, value):
 
 @shared_task(ignore_result=False, name='system.regenerate_index')
 def regenerate_index_task(mapping, user):
-    return index_handler.regenerate_index(mapping, 'resources')
+    return index_handler.regenerate_index('resources', mapping)
 
 @shared_task(ignore_result=False, name='system.index_resources')
 def index_resources_task(body={}):
@@ -112,6 +112,7 @@ def index_resources_task(body={}):
                                         raise Exception(
                                             'Error al indexar el recurso ' + str(resource['_id']))
                             else:
+                                print(v)
                                 for i in range(2, -1, -1):
                                     if v['level_' + str(i)]:
                                         level = v['level_' + str(i)]['ident']
@@ -122,6 +123,7 @@ def index_resources_task(body={}):
                                                 parent = v['level_' + str(i - 1)]['ident']
                                             from app.api.geosystem.services import get_shape_centroid
                                             centroid = get_shape_centroid(level, parent, i)
+                                            print(centroid)
                                             if centroid:
                                                 temp = temp + centroid
                                                 break
@@ -154,6 +156,7 @@ def index_resources_task(body={}):
                 if resource['accessRights']:
                     document['accessRights'] = resource['accessRights']
 
+            print(document)
             r = index_handler.index_document(
                 ELASTIC_INDEX_PREFIX + '-resources', str(resource['_id']), document)
             if r.status_code != 201 and r.status_code != 200:

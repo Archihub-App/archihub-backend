@@ -19,7 +19,7 @@ def get_resources_by_filters(body, user):
         post_types = body['post_type']
         sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
         sortBy = body.get('sortBy', 'createdAt')
-
+        
         for p in post_types:
             post_type_roles = cache_type_roles(p)
             user_accessRights = get_user_rights(user)
@@ -108,6 +108,64 @@ def get_resources_by_filters(body, user):
                             }
                         }
                     })
+                    
+        if 'location_filters' in body:
+            if len(body['location_filters']) > 0:
+                for location_filter in body['location_filters']:
+                    location_field = location_filter['destiny']
+                    location_values = location_filter['value']
+                    
+                    for location_value in location_values:
+                        highest_level = None
+                        level_id = None
+                        parent_id = None
+                        
+                        for i in range(2, -1, -1):
+                            level_key = f'level_{i}'
+                            if level_key in location_value and location_value[level_key] is not None:
+                                highest_level = i
+                                level_id = location_value[level_key]['ident']
+                                if i > 0:
+                                    parent_key = f'level_{i-1}'
+                                    if parent_key in location_value and location_value[parent_key] is not None:
+                                        parent_id = location_value[parent_key]['ident']
+                                break
+                        
+                        if highest_level is not None and level_id is not None:
+                            shape_query = {
+                                "query": {
+                                    "bool": {
+                                        "must": [
+                                            {"term": {"properties.admin_level": highest_level}},
+                                            {"term": {"properties.ident": level_id}}
+                                        ]
+                                    }
+                                }
+                            }
+                            
+                            if parent_id is not None:
+                                shape_query["query"]["bool"]["must"].append(
+                                    {"term": {"properties.parent": parent_id}}
+                                )
+                            
+                            shape_result = index_handler.search(ELASTIC_INDEX_PREFIX + '-shapes', shape_query)
+                            
+                            if 'hits' in shape_result and 'hits' in shape_result['hits'] and len(shape_result['hits']['hits']) > 0:
+                                shape_id = shape_result['hits']['hits'][0]['_id']
+                                query['query']['bool']['filter'].append({
+                                    'geo_shape': {
+                                        location_field: {
+                                            'indexed_shape': {
+                                                'index': ELASTIC_INDEX_PREFIX + '-shapes',
+                                                'id': shape_id,
+                                                'path': 'geometry'
+                                            },
+                                            'relation': 'within'
+                                        }
+                                    }
+                                })
+                                
+                                print(f"Location filter applied: {location_field}")
 
         response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
         response = clean_elastic_response(response)

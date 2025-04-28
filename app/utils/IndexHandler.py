@@ -75,6 +75,9 @@ class IndexHandler:
         json = {}
         if settings:
             json['settings'] = settings
+        else:
+            from .index.spanish_settings import settings as _settings
+            json['settings'] = _settings
         if mapping:
             json['mappings'] = mapping
 
@@ -221,9 +224,13 @@ class IndexHandler:
             ELASTIC_INDEX_PREFIX + '-' + index)
         
         print(alias_response)
+        
         if isinstance(alias_response, dict) and 'error' in alias_response and alias_response.get('status') == 404:
             print('Alias not found')
+            self.delete_index(ELASTIC_INDEX_PREFIX + '-' + index)
+            self.delete_index(ELASTIC_INDEX_PREFIX + '-' + index + '_1')
             self.start_new_index(mapping, slug=index)
+            self.add_to_alias(ELASTIC_INDEX_PREFIX + '-' + index, ELASTIC_INDEX_PREFIX + '-' + index + '_1')
             resp = _('Main index %(index)s created', index=ELASTIC_INDEX_PREFIX + '-' + index + '_1')
             return resp
         
