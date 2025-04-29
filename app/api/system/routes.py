@@ -500,7 +500,7 @@ def get_actions():
         return tuple(resp)
     return resp
 
-@bp.route('/restart', methods=['POST'])
+@bp.route('/restart', methods=['GET'])
 @jwt_required()
 def restart():
     """
@@ -517,8 +517,10 @@ def restart():
 
     # Obtener el usuario actual
     current_user = get_jwt_identity()
+
     # Verificar si el usuario tiene el rol de administrador
     if not user_services.has_role(current_user, 'admin'):
         return {'msg': _('You don\'t have the required authorization')}, 401
+    
     # Llamar al servicio para reiniciar el sistema
     return services.restart_system()
