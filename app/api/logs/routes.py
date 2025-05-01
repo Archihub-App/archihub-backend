@@ -51,7 +51,7 @@ def filter():
     return services.filter(body)
 
 # Nuevo GET endpoint para obtener todos los logs de un recurso
-@bp.route('/resource/<resource_id>', methods=['GET'])
+@bp.route('/resource/<resource_id>', methods=['POST'])
 @jwt_required()
 def get_logs(resource_id):
     """
@@ -65,6 +65,13 @@ def get_logs(resource_id):
           required: true
           type: string
           description: ID del recurso
+        - in: body
+          name: body
+          schema:
+                type: object
+                properties:
+                    page:
+                        type: number
     responses:
         200:
             description: Logs obtenidos exitosamente
@@ -75,8 +82,13 @@ def get_logs(resource_id):
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
+
     # Si el usuario no es admin, retornar error
     if not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+    
+    # Obtener el body del request
+    body = request.json
+
     # Llamar al servicio para obtener los logs de un recurso
-    return services.get_logs(resource_id)
+    return services.get_logs(body, resource_id)

@@ -58,7 +58,6 @@ def compare_objects(old_obj, new_obj, path_prefix, date):
     
     # Obtener todas las claves de ambos objetos
     all_keys = set(list(old_obj.keys()) + list(new_obj.keys()))
-    print(all_keys)
     
     for key in all_keys:
         current_path = f"{path_prefix}.{key}" if path_prefix else key
@@ -110,8 +109,9 @@ def extract_changes(logs):
     
     # Comparar pares de logs consecutivos
     for i in range(len(logs) - 1):
-        current_log = logs[i]
-        next_log = logs[i + 1]
+        # Obtener los logs actuales y siguientes
+        current_log = logs[i + 1]
+        next_log = logs[i]
         
         # Obtener los objetos de los logs
         current_resource = current_log.get('metadata', {}).get('resource', {}).get('metadata', {})
@@ -138,13 +138,19 @@ def get_total(obj):
         raise Exception(str(e))
     
 # Funcion para cambios en los logs de un recurso
-def get_logs(resource_id):
+def get_logs(body, resource_id):
     try:
+        limit = 20
+        skip = 0
+
+        if 'page' in body:
+            skip = body['page'] * limit
         # Obtener todos los logs de la coleccion logs
         logs = mongodb.get_all_records('logs',
                                       {'metadata.resource._id': resource_id,
                                        'action': {'$in': ["RESOURCE_CREATE", "RESOURCE_UPDATE"]}},
                                       limit=20,
+                                      skip=skip,
                                       sort=[('date', -1)],
                                       fields={'_id': 0})
         
