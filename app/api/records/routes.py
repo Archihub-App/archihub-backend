@@ -300,14 +300,14 @@ def edit_document_transcription_speaker(id):
     security:
         - JWT: []
     tags:
-        - Records
+      - Records
     parameters:
-        - in: path
-            name: id
-            schema:
-                type: string
-                required: true
-                description: id del record a obtener
+      - in: path
+        name: id
+        schema:
+            type: string
+            required: true
+            description: id del record a obtener
     responses:
         200:
             description: Record
