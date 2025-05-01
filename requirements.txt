@@ -30,3 +30,5 @@ flask-babel
 google
 google.genai
 openai
+transformers
+tokenizers

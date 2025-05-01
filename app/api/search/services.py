@@ -160,7 +160,7 @@ def get_resources_by_filters(body, user):
                                                 'id': shape_id,
                                                 'path': 'geometry'
                                             },
-                                            'relation': 'within'
+                                            'relation': 'intersects'
                                         }
                                     }
                                 })
