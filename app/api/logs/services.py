@@ -122,7 +122,6 @@ def extract_changes(logs):
         detected_changes = compare_objects(current_resource, next_resource, "", date)
         changes.extend(detected_changes)
     
-    changes.reverse()  # Invertir el orden para que los cambios más recientes aparezcan primero
     return changes
     
 # Funcion para obtener el total de recursos
@@ -146,8 +145,9 @@ def get_logs(resource_id):
                                       {'metadata.resource._id': resource_id,
                                        'action': {'$in': ["RESOURCE_CREATE", "RESOURCE_UPDATE"]}},
                                       limit=20,
-                                      sort=[('date', 1)],
+                                      sort=[('date', -1)],
                                       fields={'_id': 0})
+        
         # Si no hay logs, retornar error
         if not logs:
             return {'msg': _('Logs not found')}, 404
