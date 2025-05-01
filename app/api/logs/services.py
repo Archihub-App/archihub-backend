@@ -62,7 +62,6 @@ def compare_objects(old_obj, new_obj, path_prefix, date):
     
     for key in all_keys:
         current_path = f"{path_prefix}.{key}" if path_prefix else key
-        print(current_path)
         
         # Key neuvo (solo está en el nuevo objeto)
         if key not in old_obj:
@@ -105,10 +104,8 @@ def compare_objects(old_obj, new_obj, path_prefix, date):
 
 def extract_changes(logs):
     changes = []
-    print(logs)
     # Revisar que haya al menos dos logs para comparar
     if len(logs) < 2:
-        print("No hay suficientes logs para comparar.")
         return changes
     
     # Comparar pares de logs consecutivos
@@ -125,6 +122,7 @@ def extract_changes(logs):
         detected_changes = compare_objects(current_resource, next_resource, "", date)
         changes.extend(detected_changes)
     
+    changes.reverse()  # Invertir el orden para que los cambios más recientes aparezcan primero
     return changes
     
 # Funcion para obtener el total de recursos
