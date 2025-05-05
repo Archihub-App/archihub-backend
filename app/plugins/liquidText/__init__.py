@@ -35,6 +35,9 @@ class ExtendedPluginClass(PluginClass):
             
             if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
+            
+            from app.utils.functions import cache_get_processing_result
+            cache_get_processing_result.invalidate_all()
 
             task = self.bulk.delay(body, current_user)
             self.add_task_to_user(task.id, 'liquidText.generateLiquidText', current_user, 'msg')
