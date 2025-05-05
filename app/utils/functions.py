@@ -336,6 +336,22 @@ def cache_get_record_stream(id):
     
     return path, type
 
+@cacheHandler.cache.cache(limit=1000)
+def cache_get_processing_result(id, slug):
+    # Buscar el record en la base de datos
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
+
+    # Si el record no existe, retornar error
+    if not record:
+        raise Exception('Record no existe')
+    # si el record no se ha procesado, retornar error
+    if 'processing' not in record:
+        raise Exception('Record no ha sido procesado')
+    if slug not in record['processing']:
+        raise Exception('Record no ha sido procesado con el slug ' + slug)
+
+    return record['processing'][slug]['result']
 
 @cacheHandler.cache.cache(limit=1000)
 def cache_get_processing_metadata(id, slug):

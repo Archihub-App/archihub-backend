@@ -490,8 +490,6 @@ def get_actions():
     body = request.get_json()
     current_user = get_jwt_identity()
     
-    print(body)
-    
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'editor'):
         return {'msg': _('You don\'t have the required authorization')}, 401
     
