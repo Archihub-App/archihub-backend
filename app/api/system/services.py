@@ -790,6 +790,7 @@ def get_system_actions(placement):
         plugins = mongodb.get_record('system', {'name': 'active_plugins'})
         actions = []
         for p in plugins['data']:
+            print(p)
             plugin_module = __import__(f'app.plugins.{p}', fromlist=[
                                'ExtendedPluginClass', 'plugin_info'])
             
@@ -808,6 +809,7 @@ def get_system_actions(placement):
                 for _a in a:
                     if _a['placement'] == placement:
                         _a['plugin'] = p
+                        print(_a)
                         actions.append(_a)
                 
         return {
