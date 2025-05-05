@@ -300,7 +300,7 @@ plugin_info = {
     'description': 'Generar texto líquido a partir de los archivos catalogados en el sistema',
     'version': '0.1',
     'author': '',
-    'type': ['bulk'],
+    'type': [],
     'settings': {
         'settings_bulk': []
     },
