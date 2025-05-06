@@ -20,9 +20,9 @@ from app.api.tasks.services import add_task
 from app.api.types.services import get_metadata
 from functools import reduce
 from app.utils import HookHandler
-from bson.objectid import ObjectId
 from flask_babel import gettext
 from app.api.system.tasks.elasticTasks import index_resources_task, index_resources_delete_task, regenerate_index_task
+import threading, time
 
 hookHandler = HookHandler.HookHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -566,7 +566,7 @@ def regenerate_index(user):
         mapping = {
             'properties': mapping
         }
-
+        
         task = regenerate_index_task.delay(mapping, user)
         add_task(task.id, 'system.regenerate_index', user, 'msg')
 
@@ -576,41 +576,94 @@ def regenerate_index(user):
     except Exception as e:
         return {'msg': gettext(u'Error: {e}', e=str(e))}, 500
 
+def transform_dict_to_mapping(input_dict):
+    def map_field(field_def):
+        if not isinstance(field_def, dict):
+            raise ValueError(gettext(u'Invalid field definition: {field_def}', field_def=field_def))
 
-def transform_dict_to_mapping(dict_input):
-    try:
-        mapping = {}
-        for key in dict_input:
-            if isinstance(dict_input[key], dict):
-                if 'type' not in dict_input[key]:
-                    mapping[key] = {
-                        'properties': transform_dict_to_mapping(dict_input[key])
+        if 'type' in field_def and isinstance(field_def['type'], str):
+            field_type = field_def['type']
+
+            if field_type == 'text':
+                return {
+                    'type': 'text',
+                    'analyzer': 'analyzer_spanish',
+                    'fields': {
+                        'keyword': {
+                            'type': 'keyword',
+                            'ignore_above': 256
+                        }
                     }
-                else:
-                    mapping[key] = dict_input[key]
-                    if mapping[key]['type'] == 'text':
-                        mapping[key]['fields'] = {
-                            'keyword': {
-                                'type': 'keyword',
-                                'ignore_above': 256
+                }
+            elif field_type == 'text-area':
+                return {
+                    'type': 'text',
+                    'analyzer': 'analyzer_spanish'
+                }
+            elif field_type == 'select':
+                return {
+                    'type': 'keyword'
+                }
+            elif field_type == 'simple-date':
+                return {
+                    'type': 'date'
+                }
+            elif field_type == 'location':
+                print('location')
+                return {
+                    'type': 'geo_shape'
+                }
+            elif field_type == 'relation':
+                return {
+                    'type': 'object',
+                    'properties': {
+                        'id': {
+                            'type': 'text',
+                            'fields': {
+                                'keyword': {
+                                    'type': 'keyword',
+                                    'ignore_above': 256
+                                }
+                            }
+                        },
+                        'post_type': {
+                            'type': 'text',
+                            'fields': {
+                                'keyword': {
+                                    'type': 'keyword',
+                                    'ignore_above': 256
+                                }
                             }
                         }
-                        mapping[key]['analyzer'] = 'analyzer_spanish'
-                    elif mapping[key]['type'] == 'text-area':
-                        mapping[key]['type'] = 'text'
-                        mapping[key]['analyzer'] = 'analyzer_spanish'
-                    elif mapping[key]['type'] == 'simple-date':
-                        mapping[key]['type'] = 'date'
-                    elif mapping[key]['type'] == 'select':
-                        mapping[key]['type'] = 'keyword'
-                    elif mapping[key]['type'] in ['location', 'author']:
-                        mapping.pop(key, None)
+                    }
+                }
+            elif field_type == 'repeater':
+                return {
+                    'type': 'object'
+                }
+            elif field_type == 'checkbox':
+                return {
+                    'type': 'boolean'
+                }
+            elif field_type == 'number':
+                return {
+                    'type': 'float'
+                }
             else:
-                mapping[key] = dict_input[key]
+                return {'type': field_type}
 
-        return mapping
-    except Exception as e:
-        raise Exception(str(e))
+        else:
+            return {
+                'type': 'object',
+                'properties': {k: map_field(v) for k, v in field_def.items()}
+            }
+
+    mapping = {}
+    for key, value in input_dict.items():
+        mapping[key] = map_field(value)
+
+    return mapping
+
 
 
 def index_resources(user):
@@ -634,6 +687,19 @@ def index_resources(user):
     except Exception as e:
         return {'msg': str(e)}, 500
     
+
+def regenerate_index_geometries(user):
+    from app.api.geosystem.services import regenerate_index_shapes
+    task = regenerate_index_shapes.delay()
+    add_task(task.id, 'geosystem.regenerate_index_shapes', user, 'msg')
+    return {'msg': 'Regeneración de geometrías iniciada'}, 200
+
+def index_geometries(user):
+    from app.api.geosystem.services import index_shapes
+    task = index_shapes.delay()
+    add_task(task.id, 'geosystem.index_shapes', user, 'msg')
+    return {'msg': 'Indexación de geometrías iniciada'}, 200
+    
     
 def set_system_setting():
     try:
@@ -652,6 +718,14 @@ def set_system_setting():
 
     except Exception as e:
         return {'msg': str(e)}, 500
+
+def restart_system():
+    def shutdown():
+        time.sleep(1)
+        import signal
+        os.kill(1, signal.SIGTERM)  # Send SIGTERM to PID 7 (container's main process)
+    threading.Thread(target=shutdown).start()
+    return {'msg': gettext('System restarted successfully')}, 200    
 
 @cacheHandler.cache.cache()
 def get_system_settings():
@@ -716,6 +790,7 @@ def get_system_actions(placement):
         plugins = mongodb.get_record('system', {'name': 'active_plugins'})
         actions = []
         for p in plugins['data']:
+            print(p)
             plugin_module = __import__(f'app.plugins.{p}', fromlist=[
                                'ExtendedPluginClass', 'plugin_info'])
             
@@ -734,6 +809,7 @@ def get_system_actions(placement):
                 for _a in a:
                     if _a['placement'] == placement:
                         _a['plugin'] = p
+                        print(_a)
                         actions.append(_a)
                 
         return {

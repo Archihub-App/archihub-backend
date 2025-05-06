@@ -2,6 +2,7 @@ import datetime
 from flask import jsonify, send_file, Response
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import HookHandler
 from bson import json_util
 import json
 from bson.objectid import ObjectId
@@ -10,7 +11,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.users.services import has_right
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata, has_role
+from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata, has_role, cache_get_processing_result
 from werkzeug.utils import secure_filename
 import os
 import shutil
@@ -35,6 +36,7 @@ ALLOWED_EXTENSIONS = set(['txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'oga', 'ogg
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+hookHandler = HookHandler.HookHandler()
 
 def update_cache():
     get_total.invalidate_all()
@@ -91,7 +93,7 @@ def get_total(obj):
         raise Exception(str(e))
     
 # Nuevos servicio para actualizar los campos displayName y accessRights de un record
-def update_record(record, current_user):
+def update_record(record, user):
     try:
         update = {}
         if 'displayName' in record:
@@ -102,12 +104,39 @@ def update_record(record, current_user):
             else:
                 update['accessRights'] = None
 
-        update = FileRecordUpdate(**update)
-
-        mongodb.update_record('records', {'_id': ObjectId(record['id'])}, update)
+        update_record_by_id(record['id'], user, update)
     except Exception as e:
         raise Exception(str(e))
 
+
+def update_record_by_id(id, current_user, body):
+    try:
+        # Buscar el record en la base de datos
+        record = mongodb.get_record('records', {'_id': ObjectId(id)})
+
+        # Si el record no existe, retornar error
+        if not record:
+            raise Exception(_('Record does not exist'))
+
+        # Si el record existe, actualizarlo
+        update = FileRecordUpdate(**body)
+
+        mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+        
+        register_log(current_user, log_actions['record_update'], {
+                        'record': id})
+        get_by_id.invalidate_all()
+    
+        
+        hookHandler.call('record_update', body)
+        
+        
+        # Retornar el resultado
+        return {'msg': _('Record updated')}, 200
+
+    except Exception as e:
+        raise Exception(str(e))
+    
 # Nuevo servicio para borrar un parent de un record
 def delete_parent(resource_id, parent_id, current_user):
     try:
@@ -163,9 +192,7 @@ def delete_parent(resource_id, parent_id, current_user):
         # Registrar el log
         register_log(current_user, log_actions['record_update'], {
                      'record': parent_id})
-        # Limpiar la cache
         
-
         # Retornar el resultado
         return {'msg': _('Parent deleted')}, 200
 
@@ -179,17 +206,11 @@ def update_parent(parent_id, current_user, parents):
     new_list = [next(item for item in parents if item['id'] == id)
                 for id in unique_array_parents]
 
-    update = FileRecordUpdate(**{
+    update = {
         'parents': new_list
-    })
+    }
 
-    mongodb.update_record('records', {'_id': ObjectId(parent_id)}, update)
-
-    # Registrar el log
-    register_log(current_user, log_actions['record_update'], {
-        'record': parent_id})
-    # Limpiar la cache
-    
+    update_record_by_id(parent_id, current_user, update)
 
 
 # Nuevo servicio para crear un record para un recurso
@@ -293,6 +314,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                 # registrar el log
                 register_log(current_user, log_actions['record_update'], {
                                 'record': str(record['_id'])})
+                hookHandler.call('record_update_parent', update_dict)
                 # limpiar la cache
                 
             else:
@@ -371,6 +393,8 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                     'size': record.size,
                     'filepath': record.filepath
                 }})
+                
+                hookHandler.call('record_create', record.dict())
                 # limpiar la cache
                 
                 get_hash.invalidate_all()
@@ -444,6 +468,14 @@ def get_by_id(id, current_user, fullFields = False):
                     to_clean.append(p['id'])
 
             record['parent'] = [x for x in record['parent'] if x['id'] not in to_clean]
+            for p in record['parent']:
+                if 'id' in p:
+                    p['id'] = str(p['id'])
+                    from app.api.resources.services import get_accessRights
+                    p['accessRights'] = get_accessRights(p['id'])
+                    if p['accessRights'] != None:
+                        if not has_right(current_user, p['accessRights']['id']):
+                            return {'msg': _('You do not have permission to view this record')}, 401
 
 
         if 'parents' in record:
@@ -453,7 +485,6 @@ def get_by_id(id, current_user, fullFields = False):
         return parse_result(record), 200
 
     except Exception as e:
-        print(str(e))
         return {'msg': str(e)}, 500
     
 def get_by_index_gallery(body, current_user):
@@ -505,6 +536,18 @@ def get_processing_metadata(id, slug, current_user):
             return {'msg': resp_['msg']}, 500
         
         resp = cache_get_processing_metadata(id, slug)
+
+        return resp, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def get_processing_result(id, slug, current_user):
+    try:
+        resp_, status = get_by_id(id, current_user)
+        if status != 200:
+            return {'msg': resp_['msg']}, 500
+        
+        resp = cache_get_processing_result(id, slug)
 
         return resp, 200
     except Exception as e:
@@ -593,6 +636,8 @@ def postBlockDocument(current_user, obj):
 
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+            
+            hookHandler.call('record_update', update.dict())
 
             cache_get_block_by_page_id.invalidate_all()
             return {'msg': _('Block updated')}, 200
@@ -623,6 +668,8 @@ def updateBlockDocument(current_user, obj):
 
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+            
+            hookHandler.call('record_update', update.dict())
 
             cache_get_block_by_page_id.invalidate_all()
             return {'msg': _('Block updated')}, 200
@@ -649,6 +696,8 @@ def deleteBlockDocument(current_user, obj):
 
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
+            
+            hookHandler.call('record_update', update.dict())
 
             cache_get_block_by_page_id.invalidate_all()
             return {'msg': _('Block deleted')}, 200
@@ -755,6 +804,8 @@ def delete_transcription_segment(id, body, user):
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+    
+    hookHandler.call('record_update', update.dict())
 
     cache_get_record_transcription.invalidate(id, slug)
     cache_get_record_transcription.invalidate(id, slug, False)
@@ -804,6 +855,8 @@ def edit_transcription_speaker(id, body, user):
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+    
+    hookHandler.call('record_update', update.dict())
 
     cache_get_record_transcription.invalidate(id, slug)
     cache_get_record_transcription.invalidate(id, slug, False)
@@ -848,6 +901,8 @@ def edit_transcription(id, body, user):
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
+    
+    hookHandler.call('record_update', update.dict())
 
     cache_get_record_transcription.invalidate(id, slug)
     cache_get_record_transcription.invalidate(id, slug, False)

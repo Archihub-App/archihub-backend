@@ -8,6 +8,7 @@ import os
 from dotenv import load_dotenv
 from PIL import Image
 from flask import Response, jsonify
+import datetime
 import base64
 load_dotenv()
 
@@ -32,6 +33,7 @@ def clear_cache():
     cache_get_imgs_gallery_by_id.invalidate_all()
     cache_type_roles.invalidate_all()
     cache_get_processing_metadata.invalidate_all()
+    cache_get_processing_result.invalidate_all()
     has_right.invalidate_all()
     has_role.invalidate_all()
 
@@ -336,6 +338,32 @@ def cache_get_record_stream(id):
     
     return path, type
 
+@cacheHandler.cache.cache(limit=1000)
+def cache_get_processing_result(id, slug):
+    # Buscar el record en la base de datos
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
+
+    # Si el record no existe, retornar error
+    if not record:
+        raise Exception('Record no existe')
+    # si el record no se ha procesado, retornar error
+    if 'processing' not in record:
+        raise Exception('Record no ha sido procesado')
+    if slug not in record['processing']:
+        raise Exception('Record no ha sido procesado con el slug ' + slug)
+
+    result = record['processing'][slug]['result']
+    # iterate each key in result and if the value is a datetime, convert it to string
+    for key in result:
+        if isinstance(result[key], datetime.datetime):
+            result[key] = result[key].strftime('%Y-%m-%d %H:%M:%S')
+        elif isinstance(result[key], list):
+            for i in range(len(result[key])):
+                if isinstance(result[key][i], datetime.datetime):
+                    result[key][i] = result[key][i].strftime('%Y-%m-%d %H:%M:%S')
+
+    return result
 
 @cacheHandler.cache.cache(limit=1000)
 def cache_get_processing_metadata(id, slug):

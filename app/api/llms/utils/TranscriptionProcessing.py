@@ -23,6 +23,10 @@ def create_transcription_conversation(body, provider, user):
     except Exception as e:
         raise Exception('Error al obtener el procesamiento del record')
     
+    transcription_text = str(processing['text'])
+    tokens = provider.calculate_tokens(transcription_text)
+    print(f"Tokens: {tokens}")
+    
     messages = [
         {
             'role': 'system',

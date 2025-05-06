@@ -94,6 +94,22 @@ settings = [
                 'instructions': 'Esta acción vuelve a indexar todos los recursos sobreescribiendo las versiones anteriores y creando las que no están.',
                 'btn_label': 'Volver a indexar',
                 'value': 'index-resources'
+            },
+            {
+                'type': 'button_single',
+                'label': 'Regenerar índice de polígonos geográficos',
+                'id': 'regenerate_index_geometries',
+                'instructions': 'Esta acción vuelve a indexar todos los polígonos geográficos sobreescribiendo las versiones anteriores y creando las que no están.',
+                'btn_label': 'Regenerar índice de polígonos geográficos',
+                'value': 'regenerate-index-geometries'
+            },
+            {
+                'type': 'button_single',
+                'label': 'Indexar polígonos geográficos',
+                'id': 'index_geometries',
+                'instructions': 'Esta acción vuelve a indexar todos los polígonos geográficos sobreescribiendo las versiones anteriores y creando las que no están.',
+                'btn_label': 'Volver a indexar polígonos',
+                'value': 'index-geometries'
             }
         ]
     },
@@ -186,6 +202,20 @@ settings = [
                 'instructions': 'Borrar los inventarios públicos que se han generado en la aplicación.',
                 'btn_label': 'Borrar archivos',
                 'value': 'inventory_files_delete'
+            }
+        ]
+    },
+    {
+        'name': 'system_restart',
+        'label': 'Reinicio del sistema',
+        'data': [
+            {
+                'type': 'button_single',
+                'label': 'Reiniciar el sistema',
+                'id': 'system_restart_button',
+                'instructions': 'Reinicia el sistema para aplicar cambios de configuración.',
+                'btn_label': 'Reiniciar backend',
+                'value': 'restart'
             }
         ]
     },

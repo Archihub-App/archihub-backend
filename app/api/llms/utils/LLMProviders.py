@@ -15,7 +15,8 @@ class GoogleProvider(BaseLLMProvider):
             {
                 "id": "gemini-2.0-flash",
                 "name": "Gemini 2.0 Flash",
-                "type": "chat"
+                "type": "chat",
+                "max_tokens": 2048,
             },
             {
                 "id": "gemini-2.0-flash-lite",
@@ -87,31 +88,32 @@ class OpenAIProvider(BaseLLMProvider):
             {
                 "id": "gpt-3.5-turbo",
                 "name": "GPT-3.5 Turbo",
-                "type": "chat"
-            },
-            {
-                "id": "gpt-3.5-turbo-16k",
-                "name": "GPT-3.5 Turbo 16k",
+                "type": "chat",
+                "max_tokens": 16384,
             },
             {
                 "id": "gpt-4",
                 "name": "GPT-4",
-                "type": "chat"
+                "type": "chat",
+                "max_tokens": 32768,
             },
             {
                 "id": "gpt-4-turbo",
                 "name": "GPT-4 Turbo",
-                "type": "chat"
+                "type": "chat",
+                "max_tokens": 100000,
             },
             {
                 "id": "gpt-4o",
                 "name": "GPT-4o",
-                "type": "chat"
+                "type": "chat",
+                "max_tokens": 100000,
             },
             {
                 "id": "gpt-4o-mini",
                 "name": "GPT-4o Mini",
-                "type": "chat"
+                "type": "chat",
+                "max_tokens": 100000,
             }
         ]
         

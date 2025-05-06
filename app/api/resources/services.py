@@ -268,7 +268,7 @@ def update_by_id(id, body, user, files, updateCache = True):
             return {'msg': _('Error validating files'), 'errors': errors}, 400
 
         status = body['status']
-        if status == 'published':
+        if status == 'published' and user:
             if not has_role(user, 'publisher') and not has_role(user, 'admin'):
                 return {'msg': _('You don\'t have the required authorization')}, 401
         if not status:
@@ -481,6 +481,17 @@ def validate_fields(body, metadata, errors):
                         exists = get_value_by_path(body, field['destiny'])
                         hasCondition = int(field['conditionField']) if 'conditionField' in field else False
                         conditionField = metadata['fields'][hasCondition] if hasCondition else False
+                        
+                        if exists:
+                            if not isinstance(get_value_by_path(body, field['destiny']), list):
+                                errors[field['destiny']
+                                    ] = _(u'The field {label} must be a list', label=field['label'])
+                            else:
+                                for l in get_value_by_path(body, field['destiny']):
+                                    if not isinstance(l, dict):
+                                        errors[field['destiny']
+                                            ] = _(u'The field {label} must be a list of dicts', label=field['label'])
+                                    
                         
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':
@@ -979,34 +990,10 @@ def get_resource(id, user):
                     })
             elif f['type'] == 'location':
                 value = get_value_by_path(resource, f['destiny'])
-                
                 if value:
-                    resp = ''
-                    from app.api.geosystem.services import get_level_info
-                    if 'level_0' in value:
-                        resp += get_level_info({
-                            'level': 0,
-                            'ident': value['level_0']
-                        })[0]['properties']['name']
-                    if 'level_1' in value:
-                        level = get_level_info({
-                            'level': 1,
-                            'ident': value['level_1'],
-                            'parent': value['level_0']
-                        })
-                        if level[1] != 500:
-                            resp += ', ' + level[0]['properties']['name']
-                    if 'level_2' in value and level[1] != 500:
-                        level = get_level_info({
-                            'level': 2,
-                            'ident': value['level_2'],
-                            'parent': value['level_1']
-                        })
-                        if level[1] != 500:
-                            resp += ', ' + level[0]['properties']['name']
                     temp.append({
                         'label': f['label'],
-                        'value': resp,
+                        'value': value,
                         'type': 'location'
                     })
             elif f['type'] == 'repeater':

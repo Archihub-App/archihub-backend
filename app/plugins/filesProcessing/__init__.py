@@ -12,14 +12,11 @@ from .utils import ImageProcessing
 from .utils import PDFprocessing
 from .utils import DocumentProcessing
 from .utils import DatabaseProcessing
-from app.api.records.models import RecordUpdate
-from app.api.users.services import has_role
 from bson.objectid import ObjectId
 from app.api.types.services import get_all as get_all_types
 import json
 from flask_babel import _
 import datetime
-from flask_babel import _
 
 load_dotenv()
 
@@ -39,7 +36,7 @@ def get_filename_extension(filename):
     ext = ext.lower()
     return ext
 
-def process_file(file):
+def process_file(file, instance=None):
     path = os.path.join(ORIGINAL_FILES_PATH, file['filepath'])
     # quitar el nombre del archivo de la ruta
     path_dir = os.path.dirname(file['filepath'])
@@ -60,8 +57,7 @@ def process_file(file):
                     }
                 }
             }
-            update = RecordUpdate(**update)
-            mongodb.update_record('records', {'_id': file['_id']}, update)
+            instance.update_data('records', str(file['_id']), update)
 
     elif 'video' in file['mime']:
         result_audio, result_video = VideoProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
@@ -75,8 +71,8 @@ def process_file(file):
                     }
                 }
             }
-            update = RecordUpdate(**update)
-            mongodb.update_record('records', {'_id': file['_id']}, update)
+            
+            instance.update_data('records', str(file['_id']), update)
     elif 'image' in file['mime']:
         result = ImageProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
         if result:
@@ -88,8 +84,8 @@ def process_file(file):
                     }
                 }
             }
-            update = RecordUpdate(**update)
-            mongodb.update_record('records', {'_id': file['_id']}, update)
+            
+            instance.update_data('records', str(file['_id']), update)
     elif 'word' in file['mime'] or ('text' in file['mime'] and get_filename_extension(file['filepath']) != '.csv'):
         result = DocumentProcessing.main(path, os.path.join(ORIGINAL_FILES_PATH, path_dir, filename), os.path.join(WEB_FILES_PATH, path_dir, filename))
 
@@ -102,8 +98,8 @@ def process_file(file):
                     }
                 }
             }
-            update = RecordUpdate(**update)
-            mongodb.update_record('records', {'_id': file['_id']}, update)
+            
+            instance.update_data('records', str(file['_id']), update)
     elif 'application/pdf' in file['mime']:
         result = PDFprocessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
         folder_path = os.path.join(path_dir, filename).split('.')[0]
@@ -117,8 +113,8 @@ def process_file(file):
                     }
                 }
             }
-            update = RecordUpdate(**update)
-            mongodb.update_record('records', {'_id': file['_id']}, update)
+            
+            instance.update_data('records', str(file['_id']), update)
     
     elif 'text' in file['mime'] and get_filename_extension(file['filepath']) == '.csv':
         result = DatabaseProcessing.main_csv(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
@@ -132,8 +128,8 @@ def process_file(file):
                     }
                 }
             }
-            update = RecordUpdate(**update)
-            mongodb.update_record('records', {'_id': file['_id']}, update)
+            
+            instance.update_data('records', str(file['_id']), update)
 
     elif 'sheet' in file['mime']:
         result = DatabaseProcessing.main_excel(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
@@ -147,8 +143,8 @@ def process_file(file):
                     }
                 }
             }
-            update = RecordUpdate(**update)
-            mongodb.update_record('records', {'_id': file['_id']}, update)
+            
+            instance.update_data('records', str(file['_id']), update)
 
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type, settings, actions, capabilities=None):
@@ -158,6 +154,7 @@ class ExtendedPluginClass(PluginClass):
 
     @shared_task(ignore_result=False, name='filesProcessingCreate.auto')
     def automatic(type, body):
+        instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
         if body['post_type'] != type['type']:
             return 'ok'
         
@@ -169,9 +166,8 @@ class ExtendedPluginClass(PluginClass):
         records = list(mongodb.get_all_records('records', records_filters, fields={'_id': 1, 'mime': 1, 'filepath': 1}))
         size = len(records)
         for file in records:
-            process_file(file)
+            process_file(file, instance)
 
-        instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
         instance.clear_cache()
         return 'Se procesaron ' + str(size) + ' archivos'
 
@@ -252,7 +248,7 @@ class ExtendedPluginClass(PluginClass):
             size += len(records)
             for file in records:
                 try:
-                    process_file(file)
+                    process_file(file, instance)
                 except Exception as e:
                     print(str(e))
 
@@ -272,9 +268,8 @@ class ExtendedPluginClass(PluginClass):
         def get_settings(type):
             try:
                 current_user = get_jwt_identity()
-
-                if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': _('You don\'t have the required authorization')}, 401
+                
+                self.validate_roles(current_user, ['admin', 'processing'])
                 
                 types = get_all_types()
                 if isinstance(types, list):
@@ -324,8 +319,7 @@ class ExtendedPluginClass(PluginClass):
             try:
                 current_user = get_jwt_identity()
 
-                if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': _('You don\'t have the required authorization')}, 401
+                self.validate_roles(current_user, ['admin', 'processing'])
                 
                 body = request.form.to_dict()
                 data = body['data']

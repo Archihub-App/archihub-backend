@@ -1,22 +1,26 @@
 from app.utils import CacheHandler
-from app.utils import DatabaseHandler
+from app.utils import DatabaseHandler, IndexHandler
 from app.api.geosystem.models import Polygon
 from app.api.geosystem.models import PolygonUpdate
 import os
 import json
 from shapely.geometry import shape, mapping
 from flask_babel import _
+from celery import shared_task
+from bson.objectid import ObjectId
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+index_handler = IndexHandler.IndexHandler()
+ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
 def update_cache():
     get_level.invalidate_all()
     get_level_info.invalidate_all()
+    get_shape_centroid.invalidate_all()
 
 def upload_shapes():
     try:
-        print('Uploading shapes')
         path = 'app/utils/geo'
         path = os.path.abspath(path)
         admin_folders = os.listdir(path)
@@ -70,8 +74,85 @@ def upload_shapes():
 
         return {'msg': _('Shapes uploaded successfully')}, 200
     except Exception as e:
-        print(str(e))
         return {'msg': str(e)}, 500
+    
+@shared_task(ignore_result=False, name='geosystem.regenerate_index_shapes')
+def regenerate_index_shapes():
+    mapping = {
+        'properties': {
+            'geometry': {
+                'type': 'geo_shape'
+            },
+            'properties': {
+                'type': 'object',
+                'properties': {
+                    'admin_level': {
+                        'type': 'integer'
+                    },
+                    'ident': {
+                        'type': 'keyword'
+                    },
+                    'name': {
+                        'type': 'text',
+                        'fields': {
+                            'keyword': {
+                                'type': 'keyword',
+                            }
+                        }
+                    },
+                    'parent_name': {
+                        'type': 'text',
+                        'fields': {
+                            'keyword': {
+                                'type': 'keyword',
+                            }
+                        }
+                    },
+                    'parent': {
+                        'type': 'keyword'
+                    }
+                }
+            }
+        }
+    }
+    
+    return index_handler.regenerate_index('shapes', mapping)
+    
+@shared_task(ignore_result=False, name='geosystem.index_shapes')
+def index_shapes(body={}):
+    skip = 0
+    shapes_count = 0
+    filters = {}
+    loop = True
+
+    shapes = list(mongodb.get_all_records(
+        'shapes', filters, limit=100, skip=skip))
+
+    if body == {}:
+        index_handler.delete_all_documents('shapes')
+
+    while len(shapes) > 0 and loop:
+        for shape_ in shapes:
+            document = {}
+            shapes_count += 1
+            document['geometry'] = shape_['geometry']
+            document['properties'] = {}
+            document['properties']['admin_level'] = shape_['properties']['admin_level']
+            document['properties']['ident'] = shape_['properties']['ident']
+            document['properties']['name'] = shape_['properties']['name']
+            if 'parent' in shape_['properties']:
+                document['properties']['parent'] = shape_['properties']['parent']
+            if 'parent_name' in shape_['properties']:
+                document['properties']['parent_name'] = shape_['properties']['parent_name']
+            index_handler.index_document(ELASTIC_INDEX_PREFIX + '-shapes', str(shape_['_id']), document)
+
+        skip += 100
+        shapes = list(mongodb.get_all_records(
+            'shapes', filters, limit=100, skip=skip))
+
+    resp = _("Indexing finished for %(count)s resources", count=shapes_count)
+    return resp
+    
 
 @cacheHandler.cache.cache(limit=5000)
 def get_level(body):
@@ -89,7 +170,7 @@ def get_level(body):
             shape_ = shape(s['geometry'])
             s.pop('_id')
             s['centroid'] = mapping(shape_.centroid)
-            geo = shape_.simplify(.85, preserve_topology=True)
+            geo = shape_.simplify(1.5 if int(level) == 0 else 0, preserve_topology=True)
             s['geometry'] = mapping(geo)
 
         return shapes, 200
@@ -114,3 +195,33 @@ def get_level_info(body):
         return shape, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+@cacheHandler.cache.cache(limit=5000)
+def get_shape_centroid(ident, parent, level):
+    try:
+        filters = {
+            'properties.admin_level': level,
+            'properties.ident': ident
+        }
+        if parent:
+            filters['properties.parent'] = parent
+            
+        record = mongodb.get_record('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1})
+        shape_ = shape(record['geometry'])
+        
+        if record['geometry']['type'] == 'MultiPolygon':
+            centroids = []
+            for polygon_coords in record['geometry']['coordinates']:
+                polygon = {
+                    'type': 'Polygon',
+                    'coordinates': polygon_coords
+                }
+                poly_shape = shape(polygon)
+                centroids.append(mapping(poly_shape.centroid))
+            
+            return centroids
+        else:
+            centroid = shape_.centroid
+            return [mapping(centroid)]
+    except Exception as e:
+        raise Exception(f'Error al obtener el centroide de la forma {ident}')

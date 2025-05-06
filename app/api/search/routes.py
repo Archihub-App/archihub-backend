@@ -47,6 +47,7 @@ def get_all():
     current_user = get_jwt_identity()
     # Obtener el body del request
     body = request.json
+    
     # Llamar al servicio para obtener los resources
     return services.get_resources_by_filters(body, current_user)
 

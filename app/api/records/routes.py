@@ -300,14 +300,14 @@ def edit_document_transcription_speaker(id):
     security:
         - JWT: []
     tags:
-        - Records
+      - Records
     parameters:
-        - in: path
-            name: id
-            schema:
-                type: string
-                required: true
-                description: id del record a obtener
+      - in: path
+        name: id
+        schema:
+            type: string
+            required: true
+            description: id del record a obtener
     responses:
         200:
             description: Record
@@ -410,11 +410,54 @@ def get_metadata_by_id(id):
     
     return resp
 
+@bp.route('/<id>/result', methods=['POST'])
+@jwt_required()
+def get_result_by_id(id):
+    """
+    Obtener el resultado de un processing record por su id y slug
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+            name: id
+            schema:
+                type: string
+                required: true
+                description: id del record a obtener
+        - in: query
+            name: slug
+            schema:
+                type: string
+                required: true
+                description: slug del processing a obtener
+    responses:
+        200:
+            description: Record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+            """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    body = request.json
+    
+    # Llamar al servicio para obtener un record por su id
+    resp = services.get_processing_result(id, body['slug'], current_user)
+    
+    return resp
+
 @bp.route('/<id>/document', methods=['GET'])
 @jwt_required()
 def get_document_by_id(id):
     """
-    Obtener el documento de un record por su id
+    Obtener el resultado de un processing record por su id y slug
     ---
     security:
         - JWT: []

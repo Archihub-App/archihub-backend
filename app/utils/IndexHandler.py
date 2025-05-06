@@ -5,6 +5,7 @@ from ssl import create_default_context
 from dotenv import load_dotenv
 load_dotenv()
 from app.utils.functions import get_access_rights
+from flask_babel import _
 
 
 ELASTIC_USER = os.environ.get('ELASTIC_USER', '')
@@ -40,11 +41,11 @@ class IndexHandler:
         #     for k in self.get_aliases():
         #         print(k)
 
-    def start_new_index(self, mapping=None):
-        index_name = self.elastic_index_prefix + '-resources_1'
+    def start_new_index(self, mapping=None, slug='resources'):
+        index_name = self.elastic_index_prefix + '-' + slug + '_1'
         from .index.spanish_settings import settings
         self.create_index(index_name, settings=settings, mapping=mapping)
-        self.add_to_alias(ELASTIC_INDEX_PREFIX + '-resources', index_name)
+        self.add_to_alias(ELASTIC_INDEX_PREFIX + '-' + slug, index_name)
 
     def get_aliases(self):
         url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/_aliases'
@@ -64,6 +65,8 @@ class IndexHandler:
         else:
             response = requests.get(url, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
+
+
         return response.json()
 
     def create_index(self, index, settings=None, mapping=None):
@@ -72,6 +75,9 @@ class IndexHandler:
         json = {}
         if settings:
             json['settings'] = settings
+        else:
+            from .index.spanish_settings import settings as _settings
+            json['settings'] = _settings
         if mapping:
             json['mappings'] = mapping
 
@@ -82,6 +88,7 @@ class IndexHandler:
             response = requests.put(url, json=json, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         
+        print(response.json())
         return response.json()
 
     def add_to_alias(self, alias, index):
@@ -212,6 +219,40 @@ class IndexHandler:
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
+    def regenerate_index(self, index, mapping):
+        alias_response = self.get_alias_indexes(
+            ELASTIC_INDEX_PREFIX + '-' + index)
+        
+        print(alias_response)
+        
+        if isinstance(alias_response, dict) and 'error' in alias_response and alias_response.get('status') == 404:
+            print('Alias not found')
+            self.delete_index(ELASTIC_INDEX_PREFIX + '-' + index)
+            self.delete_index(ELASTIC_INDEX_PREFIX + '-' + index + '_1')
+            self.start_new_index(mapping, slug=index)
+            self.add_to_alias(ELASTIC_INDEX_PREFIX + '-' + index, ELASTIC_INDEX_PREFIX + '-' + index + '_1')
+            resp = _('Main index %(index)s created', index=ELASTIC_INDEX_PREFIX + '-' + index + '_1')
+            return resp
+        
+        keys = alias_response.keys()
+        if len(keys) == 1:
+            name = list(keys)[0]
+            number = name.split('_')[1]
+            number = int(number) + 1
+            new_name = ELASTIC_INDEX_PREFIX + '-' + index + '_' + str(number)
+            self.create_index(new_name, mapping=mapping)
+            self.add_to_alias(ELASTIC_INDEX_PREFIX + '-' + index, new_name)
+            self.reindex(name, new_name)
+            self.remove_from_alias(ELASTIC_INDEX_PREFIX + '-' + index, name)
+            self.delete_index(name)
+
+            resp = _('Main index %(index)s updated', index=new_name)
+            return resp
+        else:
+            self.start_new_index(mapping, slug=index)
+            resp = _('Main index %(index)s created', index=ELASTIC_INDEX_PREFIX + '-' + index + '_1')
+            return resp
+    
     def clean_elastic_search_response(self, response):
         rights_system = get_access_rights()
         rights_system = rights_system['options']
@@ -223,16 +264,20 @@ class IndexHandler:
             for r in response['hits']:
                 index = True
                 new = {**r['_source'], 'id': r['_id']}
-                rights = new['accessRights']
-                if rights == 'public':
-                    del new['accessRights']
-                else:
-                    right = [r for r in rights_system if r['id'] == new['accessRights']]
-                    if len(right) > 0:
-                        new['accessRights'] = right[0]['term']
+                
+                if 'accessRights' in new:
+                    rights = new['accessRights']
+                    if rights == 'public':
+                        del new['accessRights']
                     else:
-                        index = False
-
+                        right = [r for r in rights_system if r['id'] == new['accessRights']]
+                        if len(right) > 0:
+                            new['accessRights'] = right[0]['term']
+                        else:
+                            index = False
+                if 'highlight' in r and 'text' in r['highlight']:
+                    # Replace the original text with the highlighted version
+                    new['text'] = r['highlight']['text'][0]
                 if index:
                     resources.append(new)
 
