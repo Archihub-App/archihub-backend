@@ -108,7 +108,14 @@ class ExtendedPluginClass(PluginClass):
             return {'msg': resp}, 201
         
     def save(self, body, user):
-        instance = ExtendedPluginClass('liquidText', '', **plugin_info)
+        plugin_info_temp = {**plugin_info}
+        if 'slug' in plugin_info:
+            plugin_info.pop('slug')
+        
+        if 'active' in plugin_info:
+            plugin_info.pop('active')
+            
+        instance = ExtendedPluginClass('liquidText', '', **plugin_info_temp)
         
         record = mongodb.get_record('records', {'_id': ObjectId(body['id'])}, fields={'_id': 1, 'processing': 1, 'name': 1})
         if not record:
