@@ -32,4 +32,4 @@ google.genai
 openai
 transformers
 tokenizers
-BeautifulSoup
+BeautifulSoup4
