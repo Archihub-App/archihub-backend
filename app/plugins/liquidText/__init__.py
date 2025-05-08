@@ -23,8 +23,8 @@ ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
 TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', '')
 
 class ExtendedPluginClass(PluginClass):
-    def __init__(self, path, import_name, name, description, version, author, type, settings, actions, capabilities=None):
-        super().__init__(path, __file__, import_name, name, description, version, author, type, settings, actions = actions, capabilities=None)
+    def __init__(self, path, import_name, name, description, version, author, type, settings, actions, capabilities=None, **kwargs):
+        super().__init__(path, __file__, import_name, name, description, version, author, type, settings, actions=actions, capabilities=capabilities)
 
     def add_routes(self):
         @self.route('/bulk', methods=['POST'])
@@ -109,11 +109,6 @@ class ExtendedPluginClass(PluginClass):
         
     def save(self, body, user):
         plugin_info_temp = {**plugin_info}
-        if 'slug' in plugin_info:
-            plugin_info.pop('slug')
-        
-        if 'active' in plugin_info:
-            plugin_info.pop('active')
             
         instance = ExtendedPluginClass('liquidText', '', **plugin_info_temp)
         

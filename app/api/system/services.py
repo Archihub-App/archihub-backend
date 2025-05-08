@@ -723,7 +723,7 @@ def restart_system():
     def shutdown():
         time.sleep(1)
         import signal
-        os.kill(1, signal.SIGTERM)  # Send SIGTERM to PID 7 (container's main process)
+        os.kill(1, signal.SIGTERM)
     threading.Thread(target=shutdown).start()
     return {'msg': gettext('System restarted successfully')}, 200    
 
@@ -739,11 +739,6 @@ def get_system_settings():
                                'ExtendedPluginClass', 'plugin_info'])
         
         plugin_info = plugin_module.plugin_info.copy()
-        if 'slug' in plugin_info:
-            plugin_info.pop('slug')
-        
-        if 'active' in plugin_info:
-            plugin_info.pop('active')
             
         plugin_bp = plugin_module.ExtendedPluginClass(
             p, __name__, **plugin_info)
@@ -795,11 +790,6 @@ def get_system_actions(placement):
                                'ExtendedPluginClass', 'plugin_info'])
             
             plugin_info = plugin_module.plugin_info.copy()
-            if 'slug' in plugin_info:
-                plugin_info.pop('slug')
-            
-            if 'active' in plugin_info:
-                plugin_info.pop('active')
                 
             plugin_bp = plugin_module.ExtendedPluginClass(
                 p, __name__, **plugin_info)
