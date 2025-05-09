@@ -83,7 +83,7 @@ class ExtendedPluginClass(PluginClass):
             current_user = get_jwt_identity()
             body = request.get_json()
             
-            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
+            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user) and not self.has_role('editor', current_user) and not self.has_role('transcriber', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
 
             task = self.download.delay(body, current_user)
