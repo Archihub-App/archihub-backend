@@ -100,7 +100,7 @@ class ExtendedPluginClass(PluginClass):
             if 'id' not in body:
                 return {'msg': 'No se ha enviado el id del recurso'}, 400
             
-            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
+            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user) and not self.has_role('editor', current_user) and not self.has_role('transcriber', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
 
             resp = self.save(body, current_user)
