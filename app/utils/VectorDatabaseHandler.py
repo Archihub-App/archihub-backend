@@ -18,9 +18,8 @@ class VectorDatabaseHandler:
             cls._instance = super().__new__(cls)
             cls._instance.vector_host = VECTOR_HOST
             cls._instance.vector_port = VECTOR_PORT
-            if os.environ.get('CELERY_WORKER'):
-                from sentence_transformers import SentenceTransformer, util
-                cls._instance.embedding_model = SentenceTransformer("jinaai/jina-embeddings-v2-base-es", trust_remote_code=True)
+            from sentence_transformers import SentenceTransformer, util
+            cls._instance.embedding_model = SentenceTransformer("jinaai/jina-embeddings-v2-base-es", trust_remote_code=True)
             cls._instance.qdrant = QdrantClient(host=cls._instance.vector_host, port=cls._instance.vector_port)
             
             if not cls._instance.qdrant.collection_exists(METADATA_RESOURCES):

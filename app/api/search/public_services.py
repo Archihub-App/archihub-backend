@@ -1,13 +1,6 @@
 from flask import jsonify, request
 from app.utils import IndexHandler
-from app.api.users.services import has_right, has_role, get_user_rights
-from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
-from app.api.resources.services import get_accessRights, get_resource_type, get_children
-from app.api.types.services import get_icon
-from app.utils.functions import get_access_rights
-from app.utils.LogActions import log_actions
-from app.api.logs.services import register_log
-from app.api.search.services import clean_elastic_response
+from app.utils.functions import cache_type_roles
 import os
 from flask_babel import _
 
@@ -105,7 +98,7 @@ def get_resources_by_filters(body):
                     })
 
         response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
-        response = clean_elastic_response(response)
+        response = index_handler.clean_elastic_response(response)
 
         # register_log(user, log_actions['search'], {'filters': body})
 
