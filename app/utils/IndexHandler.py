@@ -30,16 +30,13 @@ class IndexHandler:
                 cls._instance.ssl_context = ELASTIC_CERT
             else:
                 cls._instance.ssl_context = None
+            cls._instance.start()
         return cls._instance
 
     def start(self):
-        # get all the keys in the dictionary
         keys = self.get_aliases().keys()
         if len(keys) == 0:
             self.start_new_index()
-        # else:
-        #     for k in self.get_aliases():
-        #         print(k)
 
     def start_new_index(self, mapping=None, slug='resources'):
         index_name = self.elastic_index_prefix + '-' + slug + '_1'
