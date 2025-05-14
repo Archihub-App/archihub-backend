@@ -160,8 +160,6 @@ def get_resources_by_filters(body, user):
                             })
 
     response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
-    if response['status'] != 200:
-        raise Exception(_('Error while searching resources'))
     
     response = index_handler.clean_elastic_search_response(response)
 

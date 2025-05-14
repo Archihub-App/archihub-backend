@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 # Modelo para el registro de un recurso
 class Record(BaseModel):
-    id: str = Field(default_factory=uuid.uuid4, alias="_id")
+    id: str =  Field(default_factory=lambda: str(uuid.uuid4()), alias="_id")
     mime: Optional[str] = None
     metadata: dict = None
     parents: list[dict] = None

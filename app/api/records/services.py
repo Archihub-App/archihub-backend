@@ -231,6 +231,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
             filename = f['filename']
         
         if allowedFile(filename):
+            print(f)
             if upload:
                 # generar un nombre unico para el archivo
                 filename_new = str(uuid.uuid4()) + '.' + \

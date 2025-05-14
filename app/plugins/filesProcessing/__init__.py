@@ -179,6 +179,7 @@ class ExtendedPluginClass(PluginClass):
         types = current['types_activation']
         for t in types:
             hookHandler.register('resource_files_create', self.automatic, t, t['order'])
+            hookHandler.register('resource_update', self.automatic, t, t['order'])
 
     def add_routes(self):
         @self.route('/bulk', methods=['POST'])
