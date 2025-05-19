@@ -159,7 +159,7 @@ def get_level(body):
     try:
         level = body['level']
         threshold = float(body.get('area_threshold', 0))
-        threshold = 3.0 if int(level) == 0 else threshold
+        threshold = 4.0 if int(level) == 0 else threshold
         filters = {
             'properties.admin_level': int(level)
         }

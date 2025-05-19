@@ -731,6 +731,8 @@ def restart_system():
 def get_system_settings():
     user_management = mongodb.get_record('system', {'name': 'user_management'})
     language = user_management['data'][2]['value']
+    from app.version import __version__
+    version = __version__
     
     plugins = mongodb.get_record('system', {'name': 'active_plugins'})
     capabilities = []
@@ -776,7 +778,8 @@ def get_system_settings():
     
     return {
         'language': language,
-        'capabilities': capabilities
+        'capabilities': capabilities,
+        'version': version,
     }, 200
     
 @cacheHandler.cache.cache()
@@ -786,8 +789,7 @@ def get_system_actions(placement):
         actions = []
         for p in plugins['data']:
             print(p)
-            plugin_module = __import__(f'app.plugins.{p}', fromlist=[
-                               'ExtendedPluginClass', 'plugin_info'])
+            plugin_module = __import__(f'app.plugins.{p}', fromlist=['ExtendedPluginClass', 'plugin_info'])
             
             plugin_info = plugin_module.plugin_info.copy()
                 

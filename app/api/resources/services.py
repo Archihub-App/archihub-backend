@@ -144,7 +144,7 @@ def create(body, user, files, updateCache = True):
     try:
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
-
+        
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': _('The metadata is required')}, 400
@@ -162,6 +162,8 @@ def create(body, user, files, updateCache = True):
             
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
+        
+        print("metadata", metadata)
 
         errors = {}
         # Validar los campos de la metadata
@@ -181,6 +183,8 @@ def create(body, user, files, updateCache = True):
         array_files = False
         temp_files = []
         temp_files_obj = body['filesIds']
+        
+        print("temp_files_obj", temp_files_obj)
 
         if 'files' in body:
             if len(body['files']) > 0:

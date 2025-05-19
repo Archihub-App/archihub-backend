@@ -1,6 +1,6 @@
+from app.version import __version__
 '''
 ARCHIHUB: A comprehensive tool for organizing and connecting information
-Versión 0.9.3
 Author: BITSOL
 Website: https://bit-sol.xyz/
 Made with ❤️ in Colombia
@@ -70,7 +70,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
         'uiversion': 3,
         'info': {
             'title': 'ARCHIHUB: A comprehensive tool for organizing and connecting information',
-            'version': '0.9.3',
+            'version': __version__,
             'description': 'This is the API documentation for [ArchiHub](https://www.instagram.com/archihub_app/). Additional information and general project documentation can be found [here](https://archihub-app.github.io/archihub.github.io/es/archihub/).<br /><br />Made with ❤️ in Colombia<br />',
             'termsOfService': 'https://archihub-app.github.io/archihub.github.io/es/conducta/',
             'contact': {
@@ -262,7 +262,7 @@ def get_locale():
     
 babel = Babel(app, locale_selector=get_locale)
 
-print('''
+print(f'''
 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 :::'###::::'########:::'######::'##::::'##:'####:'##::::'##:'##::::'##:'########::
 ::'## ##::: ##.... ##:'##... ##: ##:::: ##:. ##:: ##:::: ##: ##:::: ##: ##.... ##:
@@ -273,7 +273,7 @@ print('''
  ##:::: ##: ##:::. ##:. ######:: ##:::: ##:'####: ##:::: ##:. #######:: ########::
 ..:::::..::..:::::..:::......:::..:::::..::....::..:::::..:::.......:::........:::
 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-v0.9.3::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+v{__version__}::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 Author: BITSOL::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 Made with ❤️  in Colombia::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 Website: https://bit-sol.xyz/:::::::::::::::::::::::::::::::::::::::::::::::::::::
