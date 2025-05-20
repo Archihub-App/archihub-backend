@@ -23,8 +23,8 @@ USER_FILES_PATH = os.environ.get('USER_FILES_PATH', '')
 TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', '')
 
 class ExtendedPluginClass(PluginClass):
-    def __init__(self, path, import_name, name, description, version, author, type, settings):
-        super().__init__(path, __file__, import_name, name, description, version, author, type, settings)
+    def __init__(self, path, import_name, name, description, version, author, type, settings, actions=None, capabilities=None, **kwargs):
+        super().__init__(path, __file__, import_name, name, description, version, author, type, settings, actions=None, capabilities=None, **kwargs)
 
     def add_routes(self):
         @self.route('/lunch', methods=['POST'])
