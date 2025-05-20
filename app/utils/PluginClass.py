@@ -20,7 +20,7 @@ CLEAR_CACHE_PATH = os.environ.get('MASTER_HOST', '') + '/system/node-clear-cache
 NODE_TOKEN = os.environ.get('NODE_TOKEN', '')
 
 class PluginClass(Blueprint):
-    def __init__(self, path, filePath, import_name, name, description, version, author, type, settings=None, capabilities=None, actions=None):
+    def __init__(self, path, filePath, import_name, name, description, version, author, type, settings=None, capabilities=None, actions=None, **kwargs):
         super().__init__(path, import_name)
         self.name = name
         self.description = description

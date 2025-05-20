@@ -15,7 +15,9 @@ class Resource(BaseModel):
     status: str = 'created'
     accessRights: Optional[str] = None
     createdBy: str = None
+    updatedBy: str = None
     createdAt: datetime
+    updatedAt: datetime
     favCount: int = 0
 
     class Config:
@@ -45,6 +47,8 @@ class ResourceUpdate(BaseModel):
     status: Optional[str] = None
     accessRights: Optional[str] = None
     favCount: Optional[int] = None
+    updatedBy: str
+    updatedAt: datetime
 
     class Config:
         populate_by_name = True

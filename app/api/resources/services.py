@@ -184,8 +184,6 @@ def create(body, user, files, updateCache = True):
         temp_files = []
         temp_files_obj = body['filesIds']
         
-        print("temp_files_obj", temp_files_obj)
-
         if 'files' in body:
             if len(body['files']) > 0:
                 if 'filename' in body['files'][0]:
@@ -196,6 +194,8 @@ def create(body, user, files, updateCache = True):
         del body['filesIds']
         body['filesObj'] = []
         body['createdAt'] = datetime.now()
+        body['updatedAt'] = datetime.now()
+        body['updatedBy'] = user
         
         # Crear instancia de Resource con el body del request
         resource = Resource(**body)
@@ -287,6 +287,8 @@ def update_by_id(id, body, user, files, updateCache = True):
 
         body['filesObj'] = temp
         del body['filesIds']
+        body['updatedAt'] = datetime.now()
+        body['updatedBy'] = user
 
         # Crear instancia de ResourceUpdate con el body del request
         try:
