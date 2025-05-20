@@ -316,7 +316,9 @@ def update_by_id(id, body, user, files, updateCache = True):
         body['filesObj'] = [f for f in body['filesObj'] if f['id'] not in body['deletedFiles']]
 
         update = {
-            'filesObj': [*body['filesObj'], *records]
+            'filesObj': [*body['filesObj'], *records],
+            'updatedAt': datetime.now(),
+            'updatedBy': user
         }
 
         seen = set()
@@ -328,7 +330,10 @@ def update_by_id(id, body, user, files, updateCache = True):
                 new_list.append(d)
         update['filesObj'] = new_list
 
-        update_ = ResourceUpdate(**update)
+        try:
+            update_ = ResourceUpdate(**update)
+        except Exception as e:
+            print("Validation error details:", e.errors() if hasattr(e, 'errors') else str(e))
 
         mongodb.update_record(
             'resources', {'_id': ObjectId(body['_id'])}, update_)

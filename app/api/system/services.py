@@ -95,7 +95,6 @@ def clear_system_cache():
 # Funcion para actualizar los ajustes del sistema
 def update_settings(settings, current_user):
     try:
-        print(settings)
         update_option('post_types_settings', settings)
         update_option('access_rights', settings)
         update_option('api_activation', settings)
@@ -609,7 +608,6 @@ def transform_dict_to_mapping(input_dict):
                     'type': 'date'
                 }
             elif field_type == 'location':
-                print('location')
                 return {
                     'type': 'geo_shape'
                 }
@@ -788,7 +786,6 @@ def get_system_actions(placement):
         plugins = mongodb.get_record('system', {'name': 'active_plugins'})
         actions = []
         for p in plugins['data']:
-            print(p)
             plugin_module = __import__(f'app.plugins.{p}', fromlist=['ExtendedPluginClass', 'plugin_info'])
             
             plugin_info = plugin_module.plugin_info.copy()
@@ -801,7 +798,6 @@ def get_system_actions(placement):
                 for _a in a:
                     if _a['placement'] == placement:
                         _a['plugin'] = p
-                        print(_a)
                         actions.append(_a)
                 
         return {

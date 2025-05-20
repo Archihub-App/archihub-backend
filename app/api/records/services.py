@@ -119,7 +119,7 @@ def update_record_by_id(id, current_user, body):
             raise Exception(_('Record does not exist'))
 
         body['updatedBy'] = current_user
-        body['updatedAt'] = datetime.now()
+        body['updatedAt'] = datetime.datetime.now()
         # Si el record existe, actualizarlo
         update = FileRecordUpdate(**body)
 
@@ -310,7 +310,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                         update_dict['status'] = 'uploaded'
 
                 update_dict['updatedBy'] = current_user
-                update_dict['updatedAt'] = datetime.now()
+                update_dict['updatedAt'] = datetime.datetime.now()
                 # actualizar el record
                 update = FileRecordUpdate(**update_dict)
                 mongodb.update_record(
@@ -345,7 +345,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                         'parents': resource['parents'],
                         'status': 'uploaded',
                         'updatedBy': current_user,
-                        'updatedAt': datetime.now(),
+                        'updatedAt': datetime.datetime.now(),
                     })
                     # insertar el record en la base de datos
                     new_record = mongodb.insert_record('records', record)
@@ -371,7 +371,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                         'parents': resource['parents'],
                         'status': 'uploaded',
                         'updatedBy': current_user,
-                        'updatedAt': datetime.now(),
+                        'updatedAt': datetime.datetime.now(),
                     })
                     # verificar que no exista un record con el mismo hash
                     record_exists = get_hash(f['hash'])
