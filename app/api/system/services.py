@@ -735,7 +735,6 @@ def get_system_settings():
     plugins = mongodb.get_record('system', {'name': 'active_plugins'})
     capabilities = []
     for p in plugins['data']:
-        print(p)
         plugin_module = __import__(f'app.plugins.{p}', fromlist=[
                                'ExtendedPluginClass', 'plugin_info'])
         
