@@ -13,6 +13,10 @@ def get_resources_by_filters(body, user):
     post_types = body['post_type']
     sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
     sortBy = body.get('sortBy', 'createdAt')
+    activeColumns = body.get('activeColumns', [])
+    activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
+    
+    print('activeColumns', activeColumns)
     
     for p in post_types:
         post_type_roles = cache_type_roles(p)
@@ -61,7 +65,7 @@ def get_resources_by_filters(body, user):
         },
         'size': 20,
         'from': body['page'] * 20 if 'page' in body else 0,
-        '_source': ['post_type', 'metadata.firstLevel.title', 'accessRights', '_id', 'ident', 'files', 'createdAt']
+        '_source': ['post_type', 'accessRights', '_id', 'ident', 'files', 'createdAt'] + activeColumns,
     }
 
     if 'keyword' in body:

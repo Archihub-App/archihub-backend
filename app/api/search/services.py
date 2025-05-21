@@ -11,8 +11,6 @@ def get_resources_by_filters(body, user):
         searchSource = body.get('searchSource', 'index')
         response = None
         
-        print(f"Capabilities: {capabilities}, Search Type: {searchSource}")
-        
         if 'indexing' in capabilities and searchSource == 'index':
             from .utils import elasticUtils
             response = elasticUtils.get_resources_by_filters(body, user)

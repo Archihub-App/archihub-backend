@@ -779,6 +779,7 @@ def get_by_id(id, user):
             if not canView:
                 return {'msg': _('You don\'t have the required authorization')}, 401
 
+        print("get_by_id")
         resource = get_resource(id, user)
 
         register_log(user, log_actions['resource_open'], {'resource': id})
@@ -828,7 +829,7 @@ def get_accessRights(id):
 @cacheHandler.cache.cache(limit=5000)
 def get_resource(id, user):
     # Buscar el recurso en la base de datos
-    resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0})
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception(_('Resource does not exist'))
