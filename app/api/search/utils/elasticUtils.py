@@ -16,8 +16,6 @@ def get_resources_by_filters(body, user):
     activeColumns = body.get('activeColumns', [])
     activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
     
-    print('activeColumns', activeColumns)
-    
     for p in post_types:
         post_type_roles = cache_type_roles(p)
         user_accessRights = get_user_rights(user)

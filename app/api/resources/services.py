@@ -108,12 +108,35 @@ def get_all(body, user):
         # Obtener todos los recursos dado un tipo de contenido
         sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
         sortBy = body.get('sortBy', 'createdAt')
+        activeColumns = body.get('activeColumns', [])
+        activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
+        
+        fields = {'accessRights': 1, 'filesObj': 1, 'ident': 1, 'post_type': 1, 'createdAt': 1}
+        if activeColumns:
+            for col in activeColumns:
+                fields[col] = 1
+                filters[col] = {'$exists': True}
         
         resources = list(mongodb.get_all_records(
-            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1, 'post_type': 1, 'createdAt': 1}, sort=[(sortBy, sort_direction)]))
+            'resources', filters, limit=limit, skip=skip, fields=fields, sort=[(sortBy, sort_direction)]))
         # Obtener el total de recursos dado un tipo de contenido
         total = get_total(json.dumps(filters))
-        # Para cada recurso, obtener el formulario asociado y quitar los campos _id
+        
+        def convert_date_field(resource: dict, field_path: str):
+            keys = field_path.split('.')
+            current = resource
+            for k in keys[:-1]:
+                if isinstance(current, dict) and k in current:
+                    current = current[k]
+                else:
+                    return
+            last_key = keys[-1]
+            if isinstance(current, dict) and last_key in current:
+                value = current[last_key]
+                if isinstance(value, datetime):
+                    current[last_key] = value.isoformat() 
+                    
+        
         for resource in resources:
             resource['id'] = str(resource['_id'])
             resource.pop('_id')
@@ -126,9 +149,10 @@ def get_all(body, user):
                 resource['accessRights'] = resource['accessRights']['term']
             else:
                 resource['accessRights'] = None
-                
-            if 'createdAt' in resource:
-                resource['createdAt'] = resource['createdAt'].isoformat()
+            
+            for key in fields:
+                convert_date_field(resource, key)
+        
 
         response = {
             'total': total,
