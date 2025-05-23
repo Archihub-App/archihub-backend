@@ -314,7 +314,7 @@ def update_by_id(id, body, user, files, updateCache = True):
         body['filesObj'] = temp
         del body['filesIds']
         body['updatedAt'] = datetime.now()
-        body['updatedBy'] = user
+        body['updatedBy'] = user if user else 'system'
 
         # Crear instancia de ResourceUpdate con el body del request
         try:
@@ -344,7 +344,7 @@ def update_by_id(id, body, user, files, updateCache = True):
         update = {
             'filesObj': [*body['filesObj'], *records],
             'updatedAt': datetime.now(),
-            'updatedBy': user
+            'updatedBy': user if user else 'system'
         }
 
         seen = set()

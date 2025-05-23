@@ -118,7 +118,7 @@ def update_record_by_id(id, current_user, body):
         if not record:
             raise Exception(_('Record does not exist'))
 
-        body['updatedBy'] = current_user
+        body['updatedBy'] = current_user if current_user else 'system'
         body['updatedAt'] = datetime.datetime.now()
         # Si el record existe, actualizarlo
         update = FileRecordUpdate(**body)
