@@ -65,6 +65,22 @@ def get_resources_by_filters(body, user):
         'from': body['page'] * 20 if 'page' in body else 0,
         '_source': ['post_type', 'accessRights', '_id', 'ident', 'files', 'createdAt'] + activeColumns,
     }
+    
+    if sortBy.lower() != 'relevance':
+        if sortBy == 'metadata.firstLevel.title':
+            sortBy = 'metadata.firstLevel.title.keyword'
+
+        query['sort'] = [
+            { sortBy: { "order": "asc" if sort_direction == 1 else "desc" } }
+        ]
+    
+    if activeColumns:
+        for field in activeColumns:
+            query['query']['bool']['filter'].append({
+                'exists': {
+                    'field': field
+                }
+            })
 
     if 'keyword' in body:
         if len(body['keyword']) < 1:
