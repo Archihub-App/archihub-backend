@@ -115,7 +115,7 @@ def get_all(body, user):
         if activeColumns:
             for col in activeColumns:
                 fields[col] = 1
-                filters[col] = {'$exists': True}
+                filters[col] = {'$exists': True, '$ne': None}
         
         resources = list(mongodb.get_all_records(
             'resources', filters, limit=limit, skip=skip, fields=fields, sort=[(sortBy, sort_direction)]))
