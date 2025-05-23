@@ -418,7 +418,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
 def get_hash(hash):
     try:
         # Buscar el recurso en la base de datos
-        record = mongodb.get_record('records', {'hash': hash})
+        record = mongodb.get_record('records', {'hash': hash}, fields={'updatedBy': 0, 'updatedAt': 0})
         # Si el recurso no existe, retornar error
         if not record:
             return None
