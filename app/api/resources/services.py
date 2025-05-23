@@ -249,7 +249,9 @@ def create(body, user, files, updateCache = True):
                 return {'msg': str(e)}, 500
 
             update = {
-                'filesObj': records
+                'filesObj': records,
+                'updatedAt': datetime.now(),
+                'updatedBy': user
             }
 
             update_ = ResourceUpdate(**update)
