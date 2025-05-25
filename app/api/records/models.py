@@ -1,10 +1,11 @@
 import uuid
 from typing import Optional
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 # Modelo para el registro de un recurso
 class Record(BaseModel):
-    id: str = Field(default_factory=uuid.uuid4, alias="_id")
+    id: str =  Field(default_factory=lambda: str(uuid.uuid4()), alias="_id")
     mime: Optional[str] = None
     metadata: dict = None
     parents: list[dict] = None
@@ -18,6 +19,8 @@ class Record(BaseModel):
     displayName: str = None
     accessRights: str = None
     favCount: int = 0
+    updatedAt: datetime
+    updatedBy: str
 
     class Config:
         populate_by_name = True
@@ -47,6 +50,8 @@ class RecordUpdate(BaseModel):
     displayName: Optional[str] = None
     accessRights: Optional[str] = None
     favCount: Optional[int] = None
+    updatedBy: str
+    updatedAt: datetime
 
     class Config:
         populate_by_name = True

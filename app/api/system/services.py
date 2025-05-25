@@ -95,7 +95,6 @@ def clear_system_cache():
 # Funcion para actualizar los ajustes del sistema
 def update_settings(settings, current_user):
     try:
-        print(settings)
         update_option('post_types_settings', settings)
         update_option('access_rights', settings)
         update_option('api_activation', settings)
@@ -609,7 +608,6 @@ def transform_dict_to_mapping(input_dict):
                     'type': 'date'
                 }
             elif field_type == 'location':
-                print('location')
                 return {
                     'type': 'geo_shape'
                 }
@@ -723,7 +721,7 @@ def restart_system():
     def shutdown():
         time.sleep(1)
         import signal
-        os.kill(1, signal.SIGTERM)  # Send SIGTERM to PID 7 (container's main process)
+        os.kill(1, signal.SIGTERM)
     threading.Thread(target=shutdown).start()
     return {'msg': gettext('System restarted successfully')}, 200    
 
@@ -731,6 +729,8 @@ def restart_system():
 def get_system_settings():
     user_management = mongodb.get_record('system', {'name': 'user_management'})
     language = user_management['data'][2]['value']
+    from app.version import __version__
+    version = __version__
     
     plugins = mongodb.get_record('system', {'name': 'active_plugins'})
     capabilities = []
@@ -739,11 +739,6 @@ def get_system_settings():
                                'ExtendedPluginClass', 'plugin_info'])
         
         plugin_info = plugin_module.plugin_info.copy()
-        if 'slug' in plugin_info:
-            plugin_info.pop('slug')
-        
-        if 'active' in plugin_info:
-            plugin_info.pop('active')
             
         plugin_bp = plugin_module.ExtendedPluginClass(
             p, __name__, **plugin_info)
@@ -781,7 +776,8 @@ def get_system_settings():
     
     return {
         'language': language,
-        'capabilities': capabilities
+        'capabilities': capabilities,
+        'version': version,
     }, 200
     
 @cacheHandler.cache.cache()
@@ -790,16 +786,9 @@ def get_system_actions(placement):
         plugins = mongodb.get_record('system', {'name': 'active_plugins'})
         actions = []
         for p in plugins['data']:
-            print(p)
-            plugin_module = __import__(f'app.plugins.{p}', fromlist=[
-                               'ExtendedPluginClass', 'plugin_info'])
+            plugin_module = __import__(f'app.plugins.{p}', fromlist=['ExtendedPluginClass', 'plugin_info'])
             
             plugin_info = plugin_module.plugin_info.copy()
-            if 'slug' in plugin_info:
-                plugin_info.pop('slug')
-            
-            if 'active' in plugin_info:
-                plugin_info.pop('active')
                 
             plugin_bp = plugin_module.ExtendedPluginClass(
                 p, __name__, **plugin_info)
@@ -809,7 +798,6 @@ def get_system_actions(placement):
                 for _a in a:
                     if _a['placement'] == placement:
                         _a['plugin'] = p
-                        print(_a)
                         actions.append(_a)
                 
         return {

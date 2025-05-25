@@ -147,8 +147,8 @@ def process_file(file, instance=None):
             instance.update_data('records', str(file['_id']), update)
 
 class ExtendedPluginClass(PluginClass):
-    def __init__(self, path, import_name, name, description, version, author, type, settings, actions, capabilities=None):
-        super().__init__(path, __file__, import_name, name, description, version, author, type, settings, actions = actions, capabilities=None)
+    def __init__(self, path, import_name, name, description, version, author, type, settings, actions, capabilities=None, **kwargs):
+        super().__init__(path, __file__, import_name, name, description, version, author, type, settings, actions=actions, capabilities=capabilities, **kwargs)
         if not os.environ.get('CELERY_WORKER'):
             self.activate_settings()
 
@@ -179,6 +179,7 @@ class ExtendedPluginClass(PluginClass):
         types = current['types_activation']
         for t in types:
             hookHandler.register('resource_files_create', self.automatic, t, t['order'])
+            hookHandler.register('resource_update', self.automatic, t, t['order'])
 
     def add_routes(self):
         @self.route('/bulk', methods=['POST'])

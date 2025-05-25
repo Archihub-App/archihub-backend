@@ -108,12 +108,35 @@ def get_all(body, user):
         # Obtener todos los recursos dado un tipo de contenido
         sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
         sortBy = body.get('sortBy', 'createdAt')
+        activeColumns = body.get('activeColumns', [])
+        activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
+        
+        fields = {'accessRights': 1, 'filesObj': 1, 'ident': 1, 'post_type': 1, 'createdAt': 1}
+        if activeColumns:
+            for col in activeColumns:
+                fields[col] = 1
+                filters[col] = {'$exists': True, '$ne': None}
         
         resources = list(mongodb.get_all_records(
-            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1, 'post_type': 1, 'createdAt': 1}, sort=[(sortBy, sort_direction)]))
+            'resources', filters, limit=limit, skip=skip, fields=fields, sort=[(sortBy, sort_direction)]))
         # Obtener el total de recursos dado un tipo de contenido
         total = get_total(json.dumps(filters))
-        # Para cada recurso, obtener el formulario asociado y quitar los campos _id
+        
+        def convert_date_field(resource: dict, field_path: str):
+            keys = field_path.split('.')
+            current = resource
+            for k in keys[:-1]:
+                if isinstance(current, dict) and k in current:
+                    current = current[k]
+                else:
+                    return
+            last_key = keys[-1]
+            if isinstance(current, dict) and last_key in current:
+                value = current[last_key]
+                if isinstance(value, datetime):
+                    current[last_key] = value.isoformat() 
+                    
+        
         for resource in resources:
             resource['id'] = str(resource['_id'])
             resource.pop('_id')
@@ -126,9 +149,10 @@ def get_all(body, user):
                 resource['accessRights'] = resource['accessRights']['term']
             else:
                 resource['accessRights'] = None
-                
-            if 'createdAt' in resource:
-                resource['createdAt'] = resource['createdAt'].isoformat()
+            
+            for key in fields:
+                convert_date_field(resource, key)
+        
 
         response = {
             'total': total,
@@ -144,7 +168,7 @@ def create(body, user, files, updateCache = True):
     try:
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
-
+        
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': _('The metadata is required')}, 400
@@ -162,6 +186,8 @@ def create(body, user, files, updateCache = True):
             
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
+        
+        print("metadata", metadata)
 
         errors = {}
         # Validar los campos de la metadata
@@ -181,7 +207,7 @@ def create(body, user, files, updateCache = True):
         array_files = False
         temp_files = []
         temp_files_obj = body['filesIds']
-
+        
         if 'files' in body:
             if len(body['files']) > 0:
                 if 'filename' in body['files'][0]:
@@ -192,6 +218,8 @@ def create(body, user, files, updateCache = True):
         del body['filesIds']
         body['filesObj'] = []
         body['createdAt'] = datetime.now()
+        body['updatedAt'] = datetime.now()
+        body['updatedBy'] = user
         
         # Crear instancia de Resource con el body del request
         resource = Resource(**body)
@@ -221,7 +249,9 @@ def create(body, user, files, updateCache = True):
                 return {'msg': str(e)}, 500
 
             update = {
-                'filesObj': records
+                'filesObj': records,
+                'updatedAt': datetime.now(),
+                'updatedBy': user
             }
 
             update_ = ResourceUpdate(**update)
@@ -283,6 +313,8 @@ def update_by_id(id, body, user, files, updateCache = True):
 
         body['filesObj'] = temp
         del body['filesIds']
+        body['updatedAt'] = datetime.now()
+        body['updatedBy'] = user if user else 'system'
 
         # Crear instancia de ResourceUpdate con el body del request
         try:
@@ -310,7 +342,9 @@ def update_by_id(id, body, user, files, updateCache = True):
         body['filesObj'] = [f for f in body['filesObj'] if f['id'] not in body['deletedFiles']]
 
         update = {
-            'filesObj': [*body['filesObj'], *records]
+            'filesObj': [*body['filesObj'], *records],
+            'updatedAt': datetime.now(),
+            'updatedBy': user if user else 'system'
         }
 
         seen = set()
@@ -322,7 +356,10 @@ def update_by_id(id, body, user, files, updateCache = True):
                 new_list.append(d)
         update['filesObj'] = new_list
 
-        update_ = ResourceUpdate(**update)
+        try:
+            update_ = ResourceUpdate(**update)
+        except Exception as e:
+            print("Validation error details:", e.errors() if hasattr(e, 'errors') else str(e))
 
         mongodb.update_record(
             'resources', {'_id': ObjectId(body['_id'])}, update_)
@@ -768,6 +805,7 @@ def get_by_id(id, user):
             if not canView:
                 return {'msg': _('You don\'t have the required authorization')}, 401
 
+        print("get_by_id")
         resource = get_resource(id, user)
 
         register_log(user, log_actions['resource_open'], {'resource': id})
@@ -817,7 +855,7 @@ def get_accessRights(id):
 @cacheHandler.cache.cache(limit=5000)
 def get_resource(id, user):
     # Buscar el recurso en la base de datos
-    resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0})
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception(_('Resource does not exist'))

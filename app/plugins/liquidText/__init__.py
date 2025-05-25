@@ -23,8 +23,8 @@ ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
 TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', '')
 
 class ExtendedPluginClass(PluginClass):
-    def __init__(self, path, import_name, name, description, version, author, type, settings, actions, capabilities=None):
-        super().__init__(path, __file__, import_name, name, description, version, author, type, settings, actions = actions, capabilities=None)
+    def __init__(self, path, import_name, name, description, version, author, type, settings, actions, capabilities=None, **kwargs):
+        super().__init__(path, __file__, import_name, name, description, version, author, type, settings, actions=actions, capabilities=capabilities, **kwargs)
 
     def add_routes(self):
         @self.route('/bulk', methods=['POST'])
@@ -83,7 +83,7 @@ class ExtendedPluginClass(PluginClass):
             current_user = get_jwt_identity()
             body = request.get_json()
             
-            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user):
+            if not self.has_role('admin', current_user) and not self.has_role('processing', current_user) and not self.has_role('editor', current_user) and not self.has_role('transcriber', current_user):
                 return {'msg': 'No tiene permisos suficientes'}, 401
 
             task = self.download.delay(body, current_user)
@@ -109,11 +109,6 @@ class ExtendedPluginClass(PluginClass):
         
     def save(self, body, user):
         plugin_info_temp = {**plugin_info}
-        if 'slug' in plugin_info:
-            plugin_info.pop('slug')
-        
-        if 'active' in plugin_info:
-            plugin_info.pop('active')
             
         instance = ExtendedPluginClass('liquidText', '', **plugin_info_temp)
         

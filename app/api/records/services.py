@@ -118,6 +118,8 @@ def update_record_by_id(id, current_user, body):
         if not record:
             raise Exception(_('Record does not exist'))
 
+        body['updatedBy'] = current_user if current_user else 'system'
+        body['updatedAt'] = datetime.datetime.now()
         # Si el record existe, actualizarlo
         update = FileRecordUpdate(**body)
 
@@ -231,6 +233,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
             filename = f['filename']
         
         if allowedFile(filename):
+            print(f)
             if upload:
                 # generar un nombre unico para el archivo
                 filename_new = str(uuid.uuid4()) + '.' + \
@@ -306,6 +309,8 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                     else:
                         update_dict['status'] = 'uploaded'
 
+                update_dict['updatedBy'] = current_user
+                update_dict['updatedAt'] = datetime.datetime.now()
                 # actualizar el record
                 update = FileRecordUpdate(**update_dict)
                 mongodb.update_record(
@@ -338,7 +343,9 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                             'post_type': resource['post_type']
                         }],
                         'parents': resource['parents'],
-                        'status': 'uploaded'
+                        'status': 'uploaded',
+                        'updatedBy': current_user,
+                        'updatedAt': datetime.datetime.now(),
                     })
                     # insertar el record en la base de datos
                     new_record = mongodb.insert_record('records', record)
@@ -362,7 +369,9 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                             'post_type': resource['post_type']
                         }],
                         'parents': resource['parents'],
-                        'status': 'uploaded'
+                        'status': 'uploaded',
+                        'updatedBy': current_user,
+                        'updatedAt': datetime.datetime.now(),
                     })
                     # verificar que no exista un record con el mismo hash
                     record_exists = get_hash(f['hash'])
@@ -409,7 +418,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
 def get_hash(hash):
     try:
         # Buscar el recurso en la base de datos
-        record = mongodb.get_record('records', {'hash': hash})
+        record = mongodb.get_record('records', {'hash': hash}, fields={'updatedBy': 0, 'updatedAt': 0})
         # Si el recurso no existe, retornar error
         if not record:
             return None

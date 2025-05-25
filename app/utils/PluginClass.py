@@ -10,7 +10,7 @@ import uuid
 import os.path
 import requests
 import json
-
+import datetime
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
@@ -20,7 +20,7 @@ CLEAR_CACHE_PATH = os.environ.get('MASTER_HOST', '') + '/system/node-clear-cache
 NODE_TOKEN = os.environ.get('NODE_TOKEN', '')
 
 class PluginClass(Blueprint):
-    def __init__(self, path, filePath, import_name, name, description, version, author, type, settings=None, capabilities=None, actions=None):
+    def __init__(self, path, filePath, import_name, name, description, version, author, type, settings=None, capabilities=None, actions=None, **kwargs):
         super().__init__(path, import_name)
         self.name = name
         self.description = description
@@ -65,22 +65,21 @@ class PluginClass(Blueprint):
         return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in allowed_extensions
            
-    def update_data(self, collection, id, update):
+    def update_data(self, collection, id, update, files = []):
         try:
             if collection == 'records':
                 from app.api.records.services import update_record_by_id
                 update_record_by_id(id, None, update)
             elif collection == 'resources':
                 from app.api.resources.services import update_by_id as update_resource_by_id
-                update_resource_by_id(id, update, None, [], True)
+                update_resource_by_id(id, update, None, files, True)
                 
             self.clear_cache()
         except Exception as e:
             raise Exception(str(e))
     
     def save_temp_file(self, file, filename):
-        filename_new = str(uuid.uuid4()) + '.' + \
-                    filename.rsplit('.', 1)[1].lower()
+        filename_new = str(uuid.uuid4()) + '.' + filename.rsplit('.', 1)[1].lower()
         
         path = os.path.join(TEMPORAL_FILES_PATH)
         if not os.path.exists(path):

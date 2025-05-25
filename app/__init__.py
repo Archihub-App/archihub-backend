@@ -1,6 +1,6 @@
+from app.version import __version__
 '''
 ARCHIHUB: A comprehensive tool for organizing and connecting information
-Versión 0.9.2
 Author: BITSOL
 Website: https://bit-sol.xyz/
 Made with ❤️ in Colombia
@@ -70,7 +70,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
         'uiversion': 3,
         'info': {
             'title': 'ARCHIHUB: A comprehensive tool for organizing and connecting information',
-            'version': '0.9.2',
+            'version': __version__,
             'description': 'This is the API documentation for [ArchiHub](https://www.instagram.com/archihub_app/). Additional information and general project documentation can be found [here](https://archihub-app.github.io/archihub.github.io/es/archihub/).<br /><br />Made with ❤️ in Colombia<br />',
             'termsOfService': 'https://archihub-app.github.io/archihub.github.io/es/conducta/',
             'contact': {
@@ -178,6 +178,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
         app.register_blueprint(publicApi_bp, url_prefix='/publicApi')
     
     index_management = mongodb.get_record('system', {'name': 'index_management'})
+    search_loaded = False
 
     if index_management['data'][0]['value']:
         print('-'*50)
@@ -187,7 +188,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             index_handler = IndexHandler.IndexHandler()
             from app.api.search import bp as search_bp
             app.register_blueprint(search_bp, url_prefix='/search')
-            index_handler.start()
+            search_loaded = True
             from app.api.system.services import hookHandlerIndex
             hookHandlerIndex()
         except Exception as e:
@@ -201,6 +202,9 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
         try:
             from app.utils import VectorDatabaseHandler
             vector_handler = VectorDatabaseHandler.VectorDatabaseHandler()
+            if not search_loaded:
+                from app.api.search import bp as search_bp
+                app.register_blueprint(search_bp, url_prefix='/search')
             print('-'*50)
             print('🧬 📐 📈 Vector indexing is active')
         except Exception as e:
@@ -258,7 +262,7 @@ def get_locale():
     
 babel = Babel(app, locale_selector=get_locale)
 
-print('''
+print(f'''
 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 :::'###::::'########:::'######::'##::::'##:'####:'##::::'##:'##::::'##:'########::
 ::'## ##::: ##.... ##:'##... ##: ##:::: ##:. ##:: ##:::: ##: ##:::: ##: ##.... ##:
@@ -269,7 +273,7 @@ print('''
  ##:::: ##: ##:::. ##:. ######:: ##:::: ##:'####: ##:::: ##:. #######:: ########::
 ..:::::..::..:::::..:::......:::..:::::..::....::..:::::..:::.......:::........:::
 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-v0.9.2::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+v{__version__}::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 Author: BITSOL::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 Made with ❤️  in Colombia::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 Website: https://bit-sol.xyz/:::::::::::::::::::::::::::::::::::::::::::::::::::::

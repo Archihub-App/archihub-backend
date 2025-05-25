@@ -4,7 +4,7 @@ from app.api.geosystem.models import Polygon
 from app.api.geosystem.models import PolygonUpdate
 import os
 import json
-from shapely.geometry import shape, mapping
+from shapely.geometry import shape, mapping, MultiPolygon
 from flask_babel import _
 from celery import shared_task
 from bson.objectid import ObjectId
@@ -158,6 +158,8 @@ def index_shapes(body={}):
 def get_level(body):
     try:
         level = body['level']
+        threshold = float(body.get('area_threshold', 0))
+        threshold = 4.0 if int(level) == 0 else threshold
         filters = {
             'properties.admin_level': int(level)
         }
@@ -166,13 +168,29 @@ def get_level(body):
             
         shapes = list(mongodb.get_all_records('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1}, sort=[('properties.name', 1)]))
 
+        filtered_shapes = []
         for s in shapes:
-            shape_ = shape(s['geometry'])
+            geom = shape(s['geometry'])
+            
+            if geom.geom_type == 'Polygon':
+                if geom.area < threshold:
+                    continue
+                valid_geom = geom
+            elif geom.geom_type == 'MultiPolygon':
+                valid_polygons = [poly for poly in geom.geoms if poly.area >= threshold]
+                if not valid_polygons:
+                    continue
+                valid_geom = valid_polygons[0] if len(valid_polygons) == 1 else MultiPolygon(valid_polygons)
+            else:
+                continue
+            
             s.pop('_id')
-            s['centroid'] = mapping(shape_.centroid)
-            geo = shape_.simplify(1.5 if int(level) == 0 else 0, preserve_topology=True)
+            s['centroid'] = mapping(valid_geom.centroid)
+            geo = valid_geom.simplify(1 if int(level) == 0 else 0, preserve_topology=True)
             s['geometry'] = mapping(geo)
-
+            filtered_shapes.append(s)
+        
+        shapes = filtered_shapes
         return shapes, 200
     except Exception as e:
         return {'msg': str(e)}, 500
