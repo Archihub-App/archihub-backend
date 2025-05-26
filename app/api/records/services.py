@@ -186,7 +186,9 @@ def delete_parent(resource_id, parent_id, current_user):
         update = FileRecordUpdate(**{
             'parent': array_parent,
             'parents': array_parents,
-            'status': status
+            'status': status,
+            'updatedBy': current_user if current_user else 'system',
+            'updatedAt': datetime.datetime.now()
         })
 
         mongodb.update_record('records', {'_id': ObjectId(parent_id)}, update)
@@ -309,7 +311,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                     else:
                         update_dict['status'] = 'uploaded'
 
-                update_dict['updatedBy'] = current_user
+                update_dict['updatedBy'] = current_user if current_user else 'system'
                 update_dict['updatedAt'] = datetime.datetime.now()
                 # actualizar el record
                 update = FileRecordUpdate(**update_dict)
@@ -640,7 +642,9 @@ def postBlockDocument(current_user, obj):
                 })
             
             update = {
-                'processing': processing
+                'processing': processing,
+                'updatedBy': current_user if current_user else 'system',
+                'updatedAt': datetime.datetime.now()
             }
 
             update = FileRecordUpdate(**update)
@@ -672,7 +676,9 @@ def updateBlockDocument(current_user, obj):
                 processing[obj['slug']]['result'][obj['page'] - 1]['blocks'][obj['index']]['bbox'] = obj['bbox']
             
             update = {
-                'processing': processing
+                'processing': processing,
+                'updatedBy': current_user if current_user else 'system',
+                'updatedAt': datetime.datetime.now()
             }
 
             update = FileRecordUpdate(**update)
@@ -700,7 +706,9 @@ def deleteBlockDocument(current_user, obj):
                 processing[obj['slug']]['result'][obj['page'] - 1]['blocks'].pop(obj['index'])
             
             update = {
-                'processing': processing
+                'processing': processing,
+                'updatedBy': current_user if current_user else 'system',
+                'updatedAt': datetime.datetime.now()
             }
 
             update = FileRecordUpdate(**update)
@@ -730,7 +738,9 @@ def add_to_favCount(id):
         update = {
             '$inc': {
                 'favCount': 1
-            }
+            },
+            'updatedBy': 'system',
+            'updatedAt': datetime.datetime.now()
         }
         update_ = FileRecordUpdate(**update)
         mongodb.update_record('records', {'_id': ObjectId(id)}, update_)
@@ -743,7 +753,9 @@ def remove_from_favCount(id):
         update = {
             '$inc': {
                 'favCount': -1
-            }
+            },
+            'updatedBy': 'system',
+            'updatedAt': datetime.datetime.now()
         }
         update_ = FileRecordUpdate(**update)
         mongodb.update_record('records', {'_id': ObjectId(id)}, update_)
@@ -805,7 +817,9 @@ def delete_transcription_segment(id, body, user):
     segments.pop(index)
 
     update = {
-        'processing': record['processing']
+        'processing': record['processing'],
+        'updatedBy': user if user else 'system',
+        'updatedAt': datetime.datetime.now()
     }
 
     update['processing'][slug]['result']['segments'] = segments
@@ -856,7 +870,9 @@ def edit_transcription_speaker(id, body, user):
                     segment['speaker'] = updateSpeaker
                     
     update = {
-        'processing': record['processing']
+        'processing': record['processing'],
+        'updatedBy': user if user else 'system',
+        'updatedAt': datetime.datetime.now()
     }
 
     update['processing'][slug]['result']['segments'] = segments
@@ -902,7 +918,9 @@ def edit_transcription(id, body, user):
         segments[body['index']]['speaker'] = body['speaker']
 
     update = {
-        'processing': record['processing']
+        'processing': record['processing'],
+        'updatedBy': user if user else 'system',
+        'updatedAt': datetime.datetime.now()
     }
 
     update['processing'][slug]['result']['segments'] = segments
