@@ -15,6 +15,18 @@ def get_resources_by_filters(body, user):
     sortBy = body.get('sortBy', 'createdAt')
     activeColumns = body.get('activeColumns', [])
     activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
+    metadata_fields = []
+    for post_type in post_types:
+        from app.api.resources.services import get_metadata
+        metadata = get_metadata(post_type)
+        if metadata and 'fields' in metadata:
+            for field in metadata['fields']:
+                if field['destiny'] in activeColumns and field['destiny'] not in [m_field['destiny'] for m_field in metadata_fields]:
+                    metadata_fields.append({
+                        'destiny': field['destiny'],
+                        'type': field['type'],
+                    })
+    
     
     for p in post_types:
         post_type_roles = cache_type_roles(p)
@@ -67,20 +79,27 @@ def get_resources_by_filters(body, user):
     }
     
     if sortBy.lower() != 'relevance':
-        if sortBy == 'metadata.firstLevel.title':
-            sortBy = 'metadata.firstLevel.title.keyword'
+        if sortBy in [field['destiny'] for field in metadata_fields]:
+            metadata_field = next((f for f in metadata_fields if f['destiny'] == sortBy), None)
+            if metadata_field:
+                if metadata_field['type'] == 'text':
+                    sortBy = sortBy + '.keyword'
 
-        query['sort'] = [
-            { sortBy: { "order": "asc" if sort_direction == 1 else "desc" } }
-        ]
+            query['sort'] = [
+                { sortBy: { "order": "asc" if sort_direction == 1 else "desc" } }
+            ]
     
     if activeColumns:
         for field in activeColumns:
-            query['query']['bool']['filter'].append({
-                'exists': {
-                    'field': field
-                }
-            })
+            if field in [m_field['destiny'] for m_field in metadata_fields]:
+                metadata_field = next((f for f in metadata_fields if f['destiny'] == field), None)
+                if metadata_field:
+                    if metadata_field['type'] != 'text':
+                        query['query']['bool']['filter'].append({
+                            'exists': {
+                                'field': field
+                            }
+                        })
 
     if 'keyword' in body:
         if len(body['keyword']) < 1:

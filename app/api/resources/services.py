@@ -63,6 +63,7 @@ def parse_result(result):
 def get_all(body, user):
     try:
         body = json.loads(body)
+        activeColumns = body.get('activeColumns', [])
         post_types = body['post_type']
         body.pop('post_type')
         for p in post_types:
@@ -80,6 +81,17 @@ def get_all(body, user):
         limit = 20
         skip = 0
         filters['post_type'] = {"$in": post_types}
+        metadata_fields = []
+        for post_type in post_types:
+            from app.api.types.services import get_metadata
+            metadata = get_metadata(post_type)
+            if metadata and 'fields' in metadata:
+                for field in metadata['fields']:
+                    if field['destiny'] not in [m_field['destiny'] for m_field in metadata_fields] and field['destiny'] in activeColumns:
+                        metadata_fields.append({
+                            'destiny': field['destiny'],
+                            'type': field['type'],
+                        })
 
         if 'parents' in body:
             if body['parents']:
@@ -108,14 +120,15 @@ def get_all(body, user):
         # Obtener todos los recursos dado un tipo de contenido
         sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
         sortBy = body.get('sortBy', 'createdAt')
-        activeColumns = body.get('activeColumns', [])
         activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
         
         fields = {'accessRights': 1, 'filesObj': 1, 'ident': 1, 'post_type': 1, 'createdAt': 1}
         if activeColumns:
             for col in activeColumns:
                 fields[col] = 1
-                filters[col] = {'$exists': True, '$ne': None}
+                metadata_field = next((f for f in metadata_fields if f['destiny'] == col), None)
+                if metadata_field and metadata_field['type'] != 'text':
+                    filters[col] = {'$exists': True, '$ne': None}
         
         resources = list(mongodb.get_all_records(
             'resources', filters, limit=limit, skip=skip, fields=fields, sort=[(sortBy, sort_direction)]))
