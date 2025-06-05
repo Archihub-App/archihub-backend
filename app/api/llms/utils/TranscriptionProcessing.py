@@ -34,7 +34,7 @@ def create_transcription_conversation(body, provider, user):
         },
         {
             'role': 'user',
-            'content': "Transcipción:\n\n" + processing['text']
+            'content': "Transcription:\n\n" + processing['text']
         }
     ]
     
