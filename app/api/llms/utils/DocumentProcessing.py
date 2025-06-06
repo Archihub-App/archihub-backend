@@ -148,14 +148,6 @@ def create_document_conversation(body, provider, user):
         {
             'role': 'system',
             'content': prompts.document_basic_asist_system_prompt
-        },
-        {
-            'role': 'user',
-            'content': "Document content:\n\n" + clean_text
-        },
-        {
-            'role': 'user',
-            'content': "Please analyze the document and answer the following question:\n\n" + message
         }
     ]
     
@@ -168,16 +160,25 @@ def create_document_conversation(body, provider, user):
                 'content': msg['content']
             })
             
-    messages.append({
-        'role': 'user',
-        'content': message
-    })
+    messages.append(
+        {
+            'role': 'user',
+            'content': "Document content:\n\n" + clean_text
+        },
+        {
+            'role': 'user',
+            'content': message
+        }
+    )
     
     resp = provider.call(messages, model=model)
     
     if conversation_id:
         messages = conversation['messages'] + [
             {
+                'role': 'user',
+                'content': "Document content:\n\n" + clean_text
+            },{
                 'role': 'user',
                 'content': message
             },
@@ -201,6 +202,10 @@ def create_document_conversation(body, provider, user):
         payload = {
             'user': user,
             'messages': [
+                {
+                    'role': 'user',
+                    'content': "Document content:\n\n" + clean_text
+                },
                 {
                     'role': 'user',
                     'content': message
