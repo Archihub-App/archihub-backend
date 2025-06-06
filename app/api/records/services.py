@@ -129,10 +129,10 @@ def update_record_by_id(id, current_user, body):
                         'record': id})
         get_by_id.invalidate_all()
     
-        
-        hookHandler.call('record_update', body)
-        
-        
+        payload = body
+        payload['_id'] = id
+        hookHandler.call('record_update', payload)
+
         # Retornar el resultado
         return {'msg': _('Record updated')}, 200
 
@@ -321,7 +321,11 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                 # registrar el log
                 register_log(current_user, log_actions['record_update'], {
                                 'record': str(record['_id'])})
-                hookHandler.call('record_update_parent', update_dict)
+                
+                print('record_update_parent', update_dict)
+                payload = update_dict
+                payload['_id'] = str(record['_id'])
+                hookHandler.call('record_update_parent', payload)
                 # limpiar la cache
                 
             else:
@@ -404,8 +408,10 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                     'size': record.size,
                     'filepath': record.filepath
                 }})
-                
-                hookHandler.call('record_create', record.dict())
+
+                payload = record.dict()
+                payload['_id'] = str(new_record.inserted_id)
+                hookHandler.call('record_create', payload)
                 # limpiar la cache
                 
                 get_hash.invalidate_all()
@@ -650,7 +656,9 @@ def postBlockDocument(current_user, obj):
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
             
-            hookHandler.call('record_update', update.dict())
+            payload = update.dict()
+            payload['_id'] = obj['id_doc']
+            hookHandler.call('record_update', payload)
 
             cache_get_block_by_page_id.invalidate_all()
             return {'msg': _('Block updated')}, 200
@@ -684,7 +692,9 @@ def updateBlockDocument(current_user, obj):
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
             
-            hookHandler.call('record_update', update.dict())
+            payload = update.dict()
+            payload['_id'] = obj['id_doc']
+            hookHandler.call('record_update', payload)
 
             cache_get_block_by_page_id.invalidate_all()
             return {'msg': _('Block updated')}, 200
@@ -714,7 +724,9 @@ def deleteBlockDocument(current_user, obj):
             update = FileRecordUpdate(**update)
             mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
             
-            hookHandler.call('record_update', update.dict())
+            payload = update.dict()
+            payload['_id'] = obj['id_doc']
+            hookHandler.call('record_update', payload)
 
             cache_get_block_by_page_id.invalidate_all()
             return {'msg': _('Block deleted')}, 200
@@ -828,7 +840,9 @@ def delete_transcription_segment(id, body, user):
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
     
-    hookHandler.call('record_update', update.dict())
+    payload = update.dict()
+    payload['_id'] = id
+    hookHandler.call('record_update', payload)
 
     cache_get_record_transcription.invalidate(id, slug)
     cache_get_record_transcription.invalidate(id, slug, False)
@@ -881,7 +895,9 @@ def edit_transcription_speaker(id, body, user):
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
     
-    hookHandler.call('record_update', update.dict())
+    payload = update.dict()
+    payload['_id'] = id
+    hookHandler.call('record_update', payload)
 
     cache_get_record_transcription.invalidate(id, slug)
     cache_get_record_transcription.invalidate(id, slug, False)
@@ -929,7 +945,9 @@ def edit_transcription(id, body, user):
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
     
-    hookHandler.call('record_update', update.dict())
+    payload = update.dict()
+    payload['_id'] = id
+    hookHandler.call('record_update', payload)
 
     cache_get_record_transcription.invalidate(id, slug)
     cache_get_record_transcription.invalidate(id, slug, False)
