@@ -164,7 +164,10 @@ def create_document_conversation(body, provider, user):
         {
             'role': 'user',
             'content': "Document content:\n\n" + clean_text
-        },
+        }
+    )
+    
+    messages.append(
         {
             'role': 'user',
             'content': message
