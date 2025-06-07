@@ -105,6 +105,10 @@ def set_conversation(data, user):
             from .utils.TranscriptionProcessing import create_transcription_conversation
             response = create_transcription_conversation(data, provider, user)
             return response, 200
+        elif data['type'] == 'document':
+            from .utils.DocumentProcessing import create_document_conversation
+            response = create_document_conversation(data, provider, user)
+            return response, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
