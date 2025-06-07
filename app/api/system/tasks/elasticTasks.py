@@ -112,21 +112,21 @@ def index_resources_task(body={}):
                                         raise Exception(
                                             'Error al indexar el recurso ' + str(resource['_id']))
                             else:
-                                print(v)
-                                for i in range(2, -1, -1):
-                                    if v['level_' + str(i)]:
-                                        level = v['level_' + str(i)]['ident']
-                                        if level:
-                                            if i == 0:
-                                                parent = None
-                                            else:
-                                                parent = v['level_' + str(i - 1)]['ident']
-                                            from app.api.geosystem.services import get_shape_centroid
-                                            centroid = get_shape_centroid(level, parent, i)
-                                            print(centroid)
-                                            if centroid:
-                                                temp = temp + centroid
-                                                break
+                                if isinstance(v, dict):
+                                    for i in range(2, -1, -1):
+                                        if v['level_' + str(i)]:
+                                            level = v['level_' + str(i)]['ident']
+                                            if level:
+                                                if i == 0:
+                                                    parent = None
+                                                else:
+                                                    parent = v['level_' + str(i - 1)]['ident']
+                                                from app.api.geosystem.services import get_shape_centroid
+                                                centroid = get_shape_centroid(level, parent, i)
+                                                print(centroid)
+                                                if centroid:
+                                                    temp = temp + centroid
+                                                    break
                                               
                         change_value(document, f['destiny'], temp)
                                             
