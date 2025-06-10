@@ -647,6 +647,25 @@ def validate_fields(body, metadata, errors):
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
                                     body = change_value(body, field['destiny'], [])
+                    elif field['type'] == 'userslist':
+                        exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
+                        if exists:
+                            for user in exists:
+                                if not isinstance(user, dict) or 'id' not in user:
+                                    errors[field['destiny']] = _(u'The field {label} must be a list of users', label=field['label'])
+                                else:
+                                    user_record = mongodb.get_record('users', {'_id': ObjectId(user['id'])})
+                                    if not user_record:
+                                        errors[field['destiny']] = _(u'The field {label} must be a list of users', label=field['label'])
+                        elif field['required'] and body['status'] == 'published':
+                            errors[field['destiny']] = _(u'The field {label} is required', label=field['label'])
+                        if hasCondition:
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], [])
                     elif field['type'] == 'author':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
@@ -726,13 +745,11 @@ def validate_fields(body, metadata, errors):
                                             subfield['label'] = subfield['name']
                                             validate_simple_date(value, subfield)
                                             v[subfield['destiny']] = value
-                        
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
                                     body = change_value(body, field['destiny'], [])
-                                
                     elif field['type'] == 'relation':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:

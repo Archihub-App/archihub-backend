@@ -108,7 +108,7 @@ def get_all(body, current_user):
         page = body['page'] if 'page' in body else 0
         filters = body['filters'] if 'filters' in body else {}
         users = list(mongodb.get_all_records(
-            'users', filters, limit=20, skip=page * 20, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0, 'nodeToken': 0, 'vizToken': 0, 'requests': 0, 'lastRequest': 0}, sort=[('name', 1)]))
+            'users', filters, limit=20, skip=page * 20, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0, 'nodeToken': 0, 'vizToken': 0, 'requests': 0, 'lastRequest': 0, 'favorites': 0}, sort=[('name', 1)]))
         
         total = get_total(json.dumps(filters))
 
