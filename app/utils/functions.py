@@ -71,9 +71,9 @@ def get_roles():
         temp.append({'id': 'publisher', 'term': 'publisher'})
         temp.append({'id': 'visualizer', 'term': 'visualizer'})
         temp.append({'id': 'processing', 'term': 'processing'})
-        temp.append({'id': 'team_lead', 'term': 'team_lead'})
-        temp.append({'id': 'transcriber', 'term': 'transcriber'})
-        temp.append({'id': 'llm', 'term': 'llm'})
+        temp.append({'id': 'team_lead', 'term': 'team_lead'}) # rol que se usa para asignar tareas a un equipo
+        temp.append({'id': 'transcriber', 'term': 'transcriber'}) # rol que se usa para permitir a un usuario transcribir audios y videos
+        temp.append({'id': 'llm', 'term': 'llm'}) # rol que se usa para permitir a un usuario usar LLMs
 
         return {
             'options': temp

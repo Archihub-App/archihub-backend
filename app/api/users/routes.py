@@ -555,10 +555,12 @@ def get_all():
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
-    if not services.has_role(current_user, 'admin'):
+    if not services.has_role(current_user, 'admin') and not services.has_role(current_user, 'editor'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
     body = request.json
+    
+    print(body)
     # Llamar al servicio para obtener los usuarios
     return services.get_all(body, current_user)
 
