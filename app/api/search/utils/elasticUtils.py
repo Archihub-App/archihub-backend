@@ -27,19 +27,24 @@ def get_resources_by_filters(body, user):
                         'type': field['type'],
                     })
     
+    if user is None:
+        user_accessRights = ['public']
+    else:
+        user_accessRights = get_user_rights(user)
+        user_accessRights = user_accessRights + ['public']
     
     for p in post_types:
         post_type_roles = cache_type_roles(p)
-        user_accessRights = get_user_rights(user)
-        user_accessRights = user_accessRights + ['public']
-
         if post_type_roles['viewRoles']:
-            canView = False
-            for r in post_type_roles['viewRoles']:
-                if has_role(user, r) or has_role(user, 'admin'):
-                    canView = True
-                    break
-            if not canView:
+            if user is not None:
+                canView = False
+                for r in post_type_roles['viewRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canView = True
+                        break
+                if not canView:
+                    raise Exception(_('You don\'t have the required authorization'))
+            else:
                 raise Exception(_('You don\'t have the required authorization'))
 
     query = {
