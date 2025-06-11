@@ -35,6 +35,7 @@ def get_all(body):
     try:
         body = json.loads(body)
         post_types = body['post_type']
+        activeColumns = body.get('activeColumns', [])
 
         for p in post_types:
             post_type_roles = cache_type_roles(p)
@@ -45,7 +46,17 @@ def get_all(body):
         limit = 20
         skip = 0
         filters['post_type'] = {"$in": post_types}
-
+        metadata_fields = []
+        for post_type in post_types:
+            from app.api.types.services import get_metadata
+            metadata = get_metadata(post_type)
+            if metadata and 'fields' in metadata:
+                for field in metadata['fields']:
+                    if field['destiny'] not in [m_field['destiny'] for m_field in metadata_fields] and field['destiny'] in activeColumns:
+                        metadata_fields.append({
+                            'destiny': field['destiny'],
+                            'type': field['type'],
+                        })
         if 'parents' in body:
             if body['parents']:
                 filters['parents.id'] = body['parents']['id']
@@ -61,14 +72,34 @@ def get_all(body):
         
         sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
         sortBy = body.get('sortBy', 'createdAt')
+        activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
         
         # Obtener todos los recursos dado un tipo de contenido
+        fields = {'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1, 'createdAt': 1}
+        if activeColumns:
+            for col in activeColumns:
+                fields[col] = 1
+                metadata_field = next((f for f in metadata_fields if f['destiny'] == col), None)
+                if metadata_field and metadata_field['type'] != 'text':
+                    filters[col] = {'$exists': True, '$ne': None}
         resources = list(mongodb.get_all_records(
-            'resources', filters, limit=limit, skip=skip, fields={'metadata.firstLevel.title': 1, 'accessRights': 1, 'filesObj': 1, 'ident': 1, 'createdAt': 1}, sort=[(sortBy, sort_direction)]))
+            'resources', filters, limit=limit, skip=skip, fields=fields, sort=[(sortBy, sort_direction)]))
         
         # Obtener el total de recursos dado un tipo de contenido
         total = get_total(json.dumps(filters))
-        # Para cada recurso, obtener el formulario asociado y quitar los campos _id
+        def convert_date_field(resource: dict, field_path: str):
+            keys = field_path.split('.')
+            current = resource
+            for k in keys[:-1]:
+                if isinstance(current, dict) and k in current:
+                    current = current[k]
+                else:
+                    return
+            last_key = keys[-1]
+            if isinstance(current, dict) and last_key in current:
+                value = current[last_key]
+                if isinstance(value, datetime):
+                    current[last_key] = value.isoformat() 
         for resource in resources:
             resource['id'] = str(resource['_id'])
             resource.pop('_id')
@@ -82,8 +113,8 @@ def get_all(body):
             else:
                 resource['accessRights'] = None
                 
-            if 'createdAt' in resource:
-                resource['createdAt'] = resource['createdAt'].isoformat()
+            for key in fields:
+                convert_date_field(resource, key)
 
         response = {
             'total': total,
