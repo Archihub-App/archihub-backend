@@ -205,6 +205,6 @@ def get_resources_by_filters(body, user):
     
     response = index_handler.clean_elastic_search_response(response)
 
-    register_log(user, log_actions['search'], {'filters': body})
+    register_log(user if user is not None else 'public', log_actions['search'], {'filters': body})
     
     return response
