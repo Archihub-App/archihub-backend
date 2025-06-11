@@ -148,7 +148,7 @@ def get_by_id(id):
 @cacheHandler.cache.cache(limit=5000)
 def get_resource(id):
     # Buscar el recurso en la base de datos
-    resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0})
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception('Recurso no existe')
