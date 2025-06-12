@@ -54,6 +54,7 @@ class ExtendedPluginClass(PluginClass):
             
             # Buscar la tarea en la base de datos
             task = mongodb.get_record('tasks', {'taskId': taskId})
+            
             # Si la tarea no existe, retornar error
             if not task:
                 return {'msg': 'Tarea no existe'}, 404

@@ -1,5 +1,4 @@
 from flask import jsonify, request
-from app.utils.functions import get_access_rights
 from app.api.system.services import get_system_settings
 from flask_babel import _
 

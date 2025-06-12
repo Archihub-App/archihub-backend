@@ -835,7 +835,6 @@ def get_by_id(id, user):
             if not canView:
                 return {'msg': _('You don\'t have the required authorization')}, 401
 
-        print("get_by_id")
         resource = get_resource(id, user)
 
         register_log(user, log_actions['resource_open'], {'resource': id})
