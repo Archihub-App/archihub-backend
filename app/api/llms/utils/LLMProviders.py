@@ -17,21 +17,25 @@ class GoogleProvider(BaseLLMProvider):
                 "name": "Gemini 2.0 Flash",
                 "type": "chat",
                 "max_tokens": 2048,
+                "supports_vision": True,
             },
             {
                 "id": "gemini-2.0-flash-lite",
                 "name": "Gemini 2.0 Flash Lite",
-                "type": "chat"
+                "type": "chat",
+                "supports_vision": True,
             },
             {
                 "id": "gemini-2.0-flash-thinking-exp-01-21",
                 "name": "Gemini 2.0 Flash Thinking Exp 01-21",
-                "type": "chat"
+                "type": "chat",
+                "supports_vision": True,
             },
             {
                 "id": "gemini-2.5-pro-preview-03-25",
                 "name": "Gemini 2.5 Pro Preview 03-25",
-                "type": "chat"
+                "type": "chat",
+                "supports_vision": True,
             }
         ]
         
@@ -86,6 +90,27 @@ class OpenAIProvider(BaseLLMProvider):
     def getModels(self):
         return [
             {
+                "id": "gpt-4.1-nano",
+                "name": "GPT-4.1 Nano",
+                "type": "chat",
+                "max_tokens": 16384,
+                "supports_vision": True,
+            },
+            {
+                "id": "gpt-4.1-mini",
+                "name": "GPT-4.1 Mini",
+                "type": "chat",
+                "max_tokens": 16384,
+                "supports_vision": True,
+            },
+            {
+                "id": "gpt-4.1",
+                "name": "GPT-4.1",
+                "type": "chat",
+                "max_tokens": 16384,
+                "supports_vision": True,
+            },
+            {
                 "id": "gpt-3.5-turbo",
                 "name": "GPT-3.5 Turbo",
                 "type": "chat",
@@ -96,24 +121,42 @@ class OpenAIProvider(BaseLLMProvider):
                 "name": "GPT-4",
                 "type": "chat",
                 "max_tokens": 32768,
+                "supports_vision": True,
             },
             {
                 "id": "gpt-4-turbo",
                 "name": "GPT-4 Turbo",
                 "type": "chat",
                 "max_tokens": 100000,
+                "supports_vision": True,
             },
             {
                 "id": "gpt-4o",
                 "name": "GPT-4o",
                 "type": "chat",
                 "max_tokens": 100000,
+                "supports_vision": True,
             },
             {
                 "id": "gpt-4o-mini",
                 "name": "GPT-4o Mini",
                 "type": "chat",
                 "max_tokens": 100000,
+                "supports_vision": True,
+            },
+            {
+                "id": "o1",
+                "name": "o1",
+                "type": "chat",
+                "max_tokens": 100000,
+                "supports_vision": True,
+            },
+            {
+                "id": "o4-mini",
+                "name": "o4 Mini",
+                "type": "chat",
+                "max_tokens": 100000,
+                "supports_vision": True,
             }
         ]
         
