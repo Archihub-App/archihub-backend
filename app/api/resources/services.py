@@ -1244,6 +1244,19 @@ def delete_zip_files():
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
+    
+def delete_inventory_files():
+    try:
+        inventories = os.path.join(WEB_FILES_PATH, 'inventoryMaker')
+        if not os.path.exists(inventories):
+            os.makedirs(inventories, exist_ok=True)
+        for f in os.listdir(inventories):
+            os.remove(os.path.join(inventories, f))
+            
+        return {'msg': _('Inventory files deleted')}, 200
+    except Exception as e:
+        print(str(e))
+        return {'msg': str(e)}, 500
 
 # Nuevo servicio para eliminar un recurso
 def delete_by_id(id, user):

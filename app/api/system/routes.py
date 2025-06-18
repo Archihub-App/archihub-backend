@@ -455,6 +455,33 @@ def zip_files_delete():
     from app.api.resources.services import delete_zip_files
     return delete_zip_files()
 
+@bp.route('/inventory_files_delete', methods=['GET'])
+@jwt_required()
+def inventory_files_delete():
+    """
+    Eliminar archivos excel de inventario
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Archivos eliminados exitosamente
+        401:
+            description: No tiene permisos para eliminar los archivos
+        500:
+            description: Error al eliminar los archivos
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Verificar si el usuario tiene el rol de procesamiento o administrador
+    if not user_services.has_role(current_user, 'admin'):
+        return {'msg': _('You don\'t have the required authorization')}, 401
+    
+    from app.api.resources.services import delete_inventory_files
+    return delete_inventory_files()
+
 @bp.route('/get-settings', methods=['GET'])
 def get_system_settings():
     """

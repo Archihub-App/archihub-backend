@@ -16,6 +16,7 @@ load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
 USER_FILES_PATH = os.environ.get('USER_FILES_PATH', '')
+WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type, settings, actions=None, capabilities=None, **kwargs):
@@ -59,11 +60,12 @@ class ExtendedPluginClass(PluginClass):
                         filters['parent'] = view['parent']
                         
                 from .services import generateResourceInventory
-                path = USER_FILES_PATH
+                path = os.path.join(WEB_FILES_PATH, 'inventoryMaker')
                 filename = 'public_'+body['view']+'-'.join(body['post_type'])
                 file = generateResourceInventory(filters, None, path, filename)
                 return send_file(file, as_attachment=True)
             except Exception as e:
+                print(str(e))
                 return {'msg': str(e)}, 500
         
         @self.route('/bulk', methods=['POST'])
