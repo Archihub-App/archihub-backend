@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 class Option(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
     name: str
-    data: Dict[str, Any]
+    data: Any = None
     label: str = None
     plugins_settings: dict = None
 
@@ -24,7 +24,7 @@ class Option(BaseModel):
 
 # Modelo para la actualización de opciones del sistema
 class OptionUpdate(BaseModel):
-    data: Optional[Dict[str, Any]] = None
+    data: Optional[Any] = None
     plugins_settings: Optional[Dict[str, Any]] = None
 
     class Config:
