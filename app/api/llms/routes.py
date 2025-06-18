@@ -14,7 +14,6 @@ def get_llm_models():
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     llm_models = services.get_llm_models()
-    print(llm_models)
     if isinstance(llm_models, list):
         return tuple(llm_models)
     else:

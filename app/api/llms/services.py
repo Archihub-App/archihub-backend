@@ -100,6 +100,7 @@ def get_provider_models(id):
     
 def set_conversation(data, user):
     try:
+        print("Setting conversation with data:", data)
         provider = get_provider_class(data['provider']['id'])
         if data['type'] == 'transcription':
             from .utils.TranscriptionProcessing import create_transcription_conversation
@@ -109,6 +110,10 @@ def set_conversation(data, user):
             from .utils.DocumentProcessing import create_document_conversation
             response = create_document_conversation(data, provider, user)
             return response, 200
+        elif data['type'] == 'image_gallery':
+            from .utils.ImageProcessing import create_image_gallery_conversation
+            response = create_image_gallery_conversation(data, provider, user)
+            return {'msg': 'El tipo de conversación "image_gallery" no está implementado'}, 400
     except Exception as e:
         return {'msg': str(e)}, 500
 
