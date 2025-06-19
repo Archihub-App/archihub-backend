@@ -113,8 +113,9 @@ def set_conversation(data, user):
         elif data['type'] == 'image_gallery':
             from .utils.ImageProcessing import create_image_gallery_conversation
             response = create_image_gallery_conversation(data, provider, user)
-            return {'msg': 'El tipo de conversación "image_gallery" no está implementado'}, 400
+            return response, 200
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 def get_conversation_history(data, user):
@@ -133,6 +134,14 @@ def get_conversation_history(data, user):
             for c in conversations:
                 c['messages'] = [c['messages'][0]]
             return conversations, 200
+        elif type == 'image_gallery':
+            conversations = list(mongodb.get_all_records('conversations', {'resource_id': id, 'user': user}, fields={'_id': 1, 'created_at': 1, 'messages': 1, 'updated_at': 1}, sort=[('updated_at', -1)]))
+            conversations = parse_result(conversations)
+            for c in conversations:
+                c['messages'] = [process_img_message_content(c['messages'][0])]
+                
+            print("Conversations:", conversations)
+            return conversations, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -146,3 +155,24 @@ def get_conversation(id, user):
         return conversations, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+def process_img_message_content(message):
+    import base64
+    if 'content' in message and isinstance(message['content'], list):
+        for content_item in message['content']:
+            if content_item.get('type') == 'image_path' and 'path' in content_item:
+                small_path = content_item['path'].replace('_large.jpg', '_small.jpg')
+                
+                try:
+                    with open(small_path, 'rb') as image_file:
+                        image_data = image_file.read()
+                        base64_string = base64.b64encode(image_data).decode('utf-8')
+                        content_item['path'] = f"data:image/jpeg;base64,{base64_string}"
+                except FileNotFoundError:
+                    print(f"Image file not found: {small_path}")
+                    pass
+                except Exception as e:
+                    print(f"Error processing image {small_path}: {str(e)}")
+                    pass
+    
+    return message

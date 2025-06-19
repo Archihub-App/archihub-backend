@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, List
+from typing import Optional, List, Union, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -22,7 +22,7 @@ class LlmProviderUpdate(BaseModel):
 
 class Message(BaseModel):
     role: str
-    content: str
+    content: Union[str, List[Any]]
 
 class Conversation(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
