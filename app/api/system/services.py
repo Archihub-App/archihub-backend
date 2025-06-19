@@ -174,6 +174,7 @@ def update_resources_schema(schema):
         # Retornar el resultado
         return {'msg': gettext(u'Resources schema updated successfully')}, 200
     except Exception as e:
+        print(str(e))
         raise Exception(gettext(u'Error while updating the resources schema'))
 
 # Funcio para obtener el schema de los recursos

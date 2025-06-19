@@ -647,6 +647,25 @@ def validate_fields(body, metadata, errors):
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
                                     body = change_value(body, field['destiny'], [])
+                    elif field['type'] == 'userslist':
+                        exists = get_value_by_path(body, field['destiny'])
+                        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
+                        conditionField = metadata['fields'][hasCondition] if hasCondition else False
+                        if exists:
+                            for user in exists:
+                                if not isinstance(user, dict) or 'id' not in user:
+                                    errors[field['destiny']] = _(u'The field {label} must be a list of users', label=field['label'])
+                                else:
+                                    user_record = mongodb.get_record('users', {'_id': ObjectId(user['id'])})
+                                    if not user_record:
+                                        errors[field['destiny']] = _(u'The field {label} must be a list of users', label=field['label'])
+                        elif field['required'] and body['status'] == 'published':
+                            errors[field['destiny']] = _(u'The field {label} is required', label=field['label'])
+                        if hasCondition:
+                            if conditionField['type'] == 'checkbox':
+                                conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
+                                if not conditionFieldVal:
+                                    body = change_value(body, field['destiny'], [])
                     elif field['type'] == 'author':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
@@ -726,13 +745,11 @@ def validate_fields(body, metadata, errors):
                                             subfield['label'] = subfield['name']
                                             validate_simple_date(value, subfield)
                                             v[subfield['destiny']] = value
-                        
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':
                                 conditionFieldVal = get_value_by_path(body, conditionField['destiny'])
                                 if not conditionFieldVal:
                                     body = change_value(body, field['destiny'], [])
-                                
                     elif field['type'] == 'relation':
                         exists = get_value_by_path(body, field['destiny'])
                         if exists:
@@ -1218,6 +1235,8 @@ def download_resource_files(body, user):
 def delete_zip_files():
     try:
         zippath = os.path.join(WEB_FILES_PATH, 'zipfiles')
+        if not os.path.exists(zippath):
+            os.makedirs(zippath, exist_ok=True)
         for f in os.listdir(zippath):
             os.remove(os.path.join(zippath, f))
             
@@ -1225,13 +1244,24 @@ def delete_zip_files():
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
+    
+def delete_inventory_files():
+    try:
+        inventories = os.path.join(WEB_FILES_PATH, 'inventoryMaker')
+        if not os.path.exists(inventories):
+            os.makedirs(inventories, exist_ok=True)
+        for f in os.listdir(inventories):
+            os.remove(os.path.join(inventories, f))
+            
+        return {'msg': _('Inventory files deleted')}, 200
+    except Exception as e:
+        print(str(e))
+        return {'msg': str(e)}, 500
 
 # Nuevo servicio para eliminar un recurso
 def delete_by_id(id, user):
     try:
-        print('1')
         post_type = get_resource_type(id)
-        print('2')
         post_type_roles = cache_type_roles(post_type)
 
         if post_type_roles['editRoles']:
@@ -1243,7 +1273,6 @@ def delete_by_id(id, user):
             if not canEdit:
                 return {'msg': _('You don\'t have the required authorization')}, 401
         
-        print('3')
         if post_type_roles['viewRoles']:
             canView = False
             for r in post_type_roles['viewRoles']:
@@ -1253,7 +1282,6 @@ def delete_by_id(id, user):
             if not canView:
                 return {'msg': _('You don\'t have the required authorization')}, 401
 
-        print('4')
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
         
         if 'files' in resource:
@@ -1261,7 +1289,6 @@ def delete_by_id(id, user):
             delete_records(records_list, id, user)
 
 
-        print('5')
         delete_children(id)
         # Eliminar el recurso de la base de datos
         deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})

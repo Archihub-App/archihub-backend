@@ -82,8 +82,8 @@ def create(body, user):
             'slug': form.slug,
         }})
         # Limpiar la cache
-        get_by_slug.invalidate_all()
-        get_all.invalidate_all()
+        from app.api.system.services import clear_cache
+        clear_cache()
         # Retornar el resultado
         return {'msg': _('Form created successfully')}, 201
     except Exception as e:
@@ -136,7 +136,8 @@ def update_by_slug(slug, body, user):
         # Registrar el log
         register_log(user, log_actions['form_update'], {'form': body})
         # Limpiar la cache
-        update_cache()
+        from app.api.system.services import clear_cache
+        clear_cache()
         # Retornar el resultado
         return {'msg': _('Form updated successfully. If new fields were added or the type of any existing fields was changed, it is important to regenerate the index from the option in the system settings')}, 200
     except Exception as e:
@@ -164,8 +165,8 @@ def delete_by_slug(slug, user):
             'slug': form['slug']
         }})
         # Limpiar la cache
-        get_all.invalidate_all()
-        get_by_slug.invalidate_all()
+        from app.api.system.services import clear_cache
+        clear_cache()
         # Retornar el resultado
         return {'msg': _('Form deleted successfully')}, 204
     except Exception as e:
@@ -177,6 +178,10 @@ def validate_form(form):
     hasTitle = False
 
     for field in form['fields']:
+        if 'label' not in field:
+            raise Exception(_('Error: the field must have a label'))
+        if field['label'] == '':
+            raise Exception(_('Error: the field label cannot be empty'))
         if 'destiny' in field:
             if field['destiny'] == 'ident':
                 raise Exception(_('Error: the field cannot have destiny equal to ident'))
@@ -192,6 +197,24 @@ def validate_form(form):
         if field['type'] == 'file':
             if not 'filetag' in field:
                 raise Exception(_('Error: the field with type file must have the filetag attribute'))
+            
+        if field['type'] == 'repeater':
+            if 'subfields' not in field:
+                raise Exception(_('Error: the field with type repeater must have the subfields attribute'))
+            if not isinstance(field['subfields'], list):
+                raise Exception(_('Error: the subfields attribute must be a list'))
+            if len(field['subfields']) == 0:
+                raise Exception(_('Error: the subfields attribute cannot be empty'))
+            # Validar los subcampos del repeater
+            for subfield in field['subfields']:
+                if 'destiny' not in subfield:
+                    raise Exception(_('Error: the subfield must have a destiny'))
+                if 'name' not in subfield:
+                    raise Exception(_('Error: the subfield must have a name'))
+                if 'type' not in subfield:
+                    raise Exception(_('Error: the subfield must have a type'))
+                if 'label' not in subfield:
+                    raise Exception(_('Error: the subfield must have a label'))
             
         if 'setCondition' in field:
             if not field['setCondition']:
