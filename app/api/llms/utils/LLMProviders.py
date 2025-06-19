@@ -1,5 +1,7 @@
 import requests
 from .BaseLLMProvider import BaseLLMProvider
+import mimetypes
+import base64
 
 llm_providers = [
     "OpenAI",
@@ -52,14 +54,23 @@ class GoogleProvider(BaseLLMProvider):
         if kwargs.get("model") not in model_ids:
             raise ValueError(f"Model {kwargs.get('model')} is not supported. Supported models are: {model_ids}")
         
-        contents =[
-            types.Content(
-                role=msg['role'] if msg['role'] in ['user', 'assistant'] else 'user',
-                parts=[
-                    types.Part.from_text(text=msg['content'])
-                ]
-            ) for msg in messages
-        ]
+        contents = []
+        for msg in messages:
+            role = msg['role'] if msg['role'] in ['user', 'assistant'] else 'user'
+            parts = []
+            
+            if isinstance(msg['content'], str):
+                parts.append(types.Part.from_text(text=msg['content']))
+            elif isinstance(msg['content'], list):
+                for content_item in msg['content']:
+                    if content_item['type'] == 'text':
+                        parts.append(types.Part.from_text(text=content_item['text']))
+                    elif content_item['type'] == 'image_path':
+                        image_part = self.process_image(content_item['image_path'])
+                        if image_part:
+                            parts.append(image_part)
+            
+            contents.append(types.Content(role=role, parts=parts))
         
         generate_content_config = types.GenerateContentConfig(
             temperature=kwargs.get("temperature", 0.5),
@@ -85,6 +96,21 @@ class GoogleProvider(BaseLLMProvider):
                 }
             ],
         }
+        
+    def process_image(self, image_path):
+        from google.genai import types
+        
+        mime_type, _ = mimetypes.guess_type(image_path)
+        if not mime_type or not mime_type.startswith('image/'):
+            mime_type = 'image/jpeg'
+        
+        with open(image_path, 'rb') as f:
+            image_bytes = f.read()
+            
+        return types.Part.from_bytes(
+            data=image_bytes,
+            mime_type=mime_type
+        )
 
 class OpenAIProvider(BaseLLMProvider):
     def getModels(self):
@@ -170,9 +196,42 @@ class OpenAIProvider(BaseLLMProvider):
         if kwargs.get("model") not in model_ids:
             raise ValueError(f"Model {kwargs.get('model')} is not supported. Supported models are: {model_ids}")
         
+        processed_messages = []
+        
+        for msg in messages:
+            if isinstance(msg['content'], str):
+                # Simple text message
+                processed_messages.append(msg)
+            elif isinstance(msg['content'], list):
+                # Mixed content (text + images)
+                content_parts = []
+                for content_item in msg['content']:
+                    if content_item['type'] == 'text':
+                        content_parts.append({
+                            "type": "text",
+                            "text": content_item['text']
+                        })
+                    elif content_item['type'] == 'image_path':
+                        # Convert local image to base64 for OpenAI
+                        image_path = content_item['path']
+                        base64_image = self.process_image(image_path)
+                        content_parts.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": base64_image
+                            }
+                        })
+                
+                processed_messages.append({
+                    "role": msg['role'],
+                    "content": content_parts
+                })
+            else:
+                processed_messages.append(msg)
+        
         data = {
             "model": kwargs.get("model", "gpt-3.5-turbo"),
-            "messages": messages,
+            "messages": processed_messages,
             "max_tokens": kwargs.get("max_tokens", 2048),
             "temperature": kwargs.get("temperature", 0.5),
         }
@@ -190,3 +249,13 @@ class OpenAIProvider(BaseLLMProvider):
             return response_data
         except requests.exceptions.RequestException as e:
             raise ValueError(f"Request to OpenAI API failed: {e}")
+        
+    def process_image(self, image_path):
+        with open(image_path, "rb") as image_file:
+            base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+            
+        mime_type, _ = mimetypes.guess_type(image_path)
+        if not mime_type or not mime_type.startswith('image/'):
+            mime_type = 'image/jpeg'
+            
+        return f"data:{mime_type};base64,{base64_image}"
