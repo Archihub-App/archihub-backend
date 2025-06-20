@@ -139,19 +139,46 @@ def get_conversation_history(data, user):
             conversations = parse_result(conversations)
             for c in conversations:
                 c['messages'] = [process_img_message_content(c['messages'][0])]
-                
-            print("Conversations:", conversations)
             return conversations, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
 def get_conversation(id, user):
     try:
-        conversations = mongodb.get_record('conversations', {'_id': ObjectId(id), 'user': user}, fields={'_id': 1, 'created_at': 1, 'messages': 1, 'updated_at': 1})
+        conversations = mongodb.get_record('conversations', {'_id': ObjectId(id), 'user': user}, fields={'_id': 1, 'created_at': 1, 'messages': 1, 'updated_at': 1, 'resource_id': 1, 'page': 1})
         if not conversations:
             return {'msg': 'Conversación no encontrada'}, 404
         
         conversations = parse_result(conversations)
+        
+        # Track the last image that was included
+        last_included_image_path = None
+        
+        for i in range(len(conversations['messages'])):
+            message = conversations['messages'][i]
+            
+            if message['role'] == 'user' and isinstance(message.get('content'), list):
+                # Check if this message contains an image
+                has_image = False
+                current_image_path = None
+                
+                for content_item in message['content']:
+                    if content_item.get('type') == 'image_path':
+                        has_image = True
+                        current_image_path = content_item.get('path')
+                        break
+                
+                # If this message has an image and it's the same as the last one, remove it
+                if has_image and current_image_path == last_included_image_path:
+                    # Remove the image from this message, keep only text content
+                    message['content'] = [item for item in message['content'] if item.get('type') != 'image_path']
+                elif has_image:
+                    # This is a new image, update the last included image path
+                    last_included_image_path = current_image_path
+            
+            # Process the message (convert image paths to base64)
+            conversations['messages'][i] = process_img_message_content(message)
+        
         return conversations, 200
     except Exception as e:
         return {'msg': str(e)}, 500

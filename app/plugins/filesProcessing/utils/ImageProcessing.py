@@ -25,7 +25,7 @@ def main(filepath, output):
             print("Tiene canal alpha")
             copy = copy.convert("RGB")
         copy.thumbnail((72,72))
-        copy.save(output + '_small.jpg', 'JPEG', optimize=True, quality=5)
+        copy.save(output + '_small.jpg', 'JPEG', optimize=True, quality=70)
 
         return True
     except Exception as e:
