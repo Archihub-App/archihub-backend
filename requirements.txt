@@ -33,3 +33,5 @@ openai
 transformers
 tokenizers
 BeautifulSoup4
+azure-ai-projects
+azure-identity
