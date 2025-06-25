@@ -8,7 +8,8 @@ class LlmProvider(BaseModel):
     name: str
     provider: str
     key: str
-    endpoint: str
+    endpoint: Optional[str] = None
+    endpointCognitive: Optional[str] = None
     
     class Config:
         populate_by_name = True
@@ -17,6 +18,7 @@ class LlmProviderUpdate(BaseModel):
     name: Optional[str] = None
     key: Optional[str] = None
     endpoint: Optional[str] = None
+    endpointCognitive: Optional[str] = None
     
     class Config:
         populate_by_name = True

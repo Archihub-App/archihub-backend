@@ -6,11 +6,12 @@ import json
 from bson import json_util
 from bson.objectid import ObjectId
 from app.api.llms.models import LlmProvider, LlmProviderUpdate
-from app.api.llms.utils.LLMProviders import OpenAIProvider, GoogleProvider
+from app.api.llms.utils.LLMProviders import OpenAIProvider, GoogleProvider, AzureProvider
 
 PROVIDER_CLASSES = {
     'OpenAI': OpenAIProvider,
     'Google': GoogleProvider,
+    'Azure': AzureProvider
 }
 
 fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
@@ -57,9 +58,26 @@ def create_llm_model(model):
     except Exception as e:
         return {'msg': str(e)}, 500
     
+def get_llm_model(model_id):
+    try:
+        llm_model = mongodb.get_record("llm_models", filters={"_id": ObjectId(model_id)}, fields={"key": 0})
+        if not llm_model:
+            return {'msg': 'Modelo no encontrado'}, 404
+        llm_model = parse_result(llm_model)
+        return llm_model, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
 def update_llm_model(model_id, model):
     try:
-        model['key'] = fernet.encrypt(model['key'].encode()).decode()
+        provider = model.get('provider')
+        if provider != 'Azure':
+            endpoint = model.get('endpoint')
+            endpointCognitive = model.get('endpointCognitive')
+            if endpoint or endpointCognitive:
+                model.pop('endpoint', None)
+                model.pop('endpointCognitive', None)
+                
         model = LlmProviderUpdate(**model)
         mongodb.update_record("llm_models", {"_id": ObjectId(model_id)}, model)
         update_cache()
@@ -76,7 +94,7 @@ def delete_llm_model(model_id):
         return {'msg': str(e)}, 500
     
 def get_provider_class(id):
-    llm_provider = mongodb.get_record("llm_models", filters={"_id": ObjectId(id)})
+    llm_provider = mongodb.get_record("llm_models", filters={"_id": ObjectId(id)}, fields={"endpoint": 0})
     if not llm_provider:
         raise Exception('Modelo no encontrado')
     

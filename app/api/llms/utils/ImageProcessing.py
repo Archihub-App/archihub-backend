@@ -2,7 +2,10 @@ from app.utils import DatabaseHandler, CacheHandler
 from app.api.llms.models import Conversation, ConversationUpdate
 from bson.objectid import ObjectId
 import datetime
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
 mongodb = DatabaseHandler.DatabaseHandler()
 
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')

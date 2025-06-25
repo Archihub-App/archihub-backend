@@ -45,6 +45,18 @@ def create_llm_model():
     llm_model = services.create_llm_model(data)
     return llm_model
 
+@bp.route('/<model_id>', methods=['PUT'])
+@jwt_required()
+def update_llm_model(model_id):
+    current_user = get_jwt_identity()
+    
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    data = request.get_json()
+    llm_model = services.update_llm_model(model_id, data)
+    return llm_model
+
 @bp.route('/<model_id>', methods=['DELETE'])
 @jwt_required()
 def delete_llm_model(model_id):
@@ -55,6 +67,17 @@ def delete_llm_model(model_id):
 
     llm_model = services.delete_llm_model(model_id)
     return llm_model
+
+@bp.route('/model/<id>', methods=['GET'])
+@jwt_required()
+def get_llm_model(id):
+    current_user = get_jwt_identity()
+    
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    model = services.get_llm_model(id)
+    return model
 
 @bp.route('/models/<id>', methods=['GET'])
 @jwt_required()

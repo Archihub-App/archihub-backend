@@ -5,7 +5,8 @@ import base64
 
 llm_providers = [
     "OpenAI",
-    "Google"
+    "Google",
+    "Azure",
 ]
 
 def get_llm_providers():
