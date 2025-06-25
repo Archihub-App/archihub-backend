@@ -131,7 +131,14 @@ class AzureProvider(BaseLLMProvider):
         }
         
         try:
-            response = requests.post(self.endpoint, headers=headers, json=data)
+            # find the model in the list of models
+            model_info = next((m for m in self.getModels() if m['id'] == model), None)
+            url = self.endpoint if not model_info.get("cognitive_services") else self.endpointCognitive
+            
+            if not url:
+                raise ValueError("Endpoint URL is not set for Azure provider.")
+            
+            response = requests.post(url, headers=headers, json=data)
             response_data = response.json()
             
             if response.status_code != 200:

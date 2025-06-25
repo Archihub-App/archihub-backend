@@ -94,7 +94,7 @@ def delete_llm_model(model_id):
         return {'msg': str(e)}, 500
     
 def get_provider_class(id):
-    llm_provider = mongodb.get_record("llm_models", filters={"_id": ObjectId(id)}, fields={"endpoint": 0})
+    llm_provider = mongodb.get_record("llm_models", filters={"_id": ObjectId(id)})
     if not llm_provider:
         raise Exception('Modelo no encontrado')
     

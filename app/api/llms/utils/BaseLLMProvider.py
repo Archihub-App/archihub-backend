@@ -8,10 +8,12 @@ fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
 fernet = Fernet(fernet_key)
 
 class BaseLLMProvider:
-    def __init__(self, name, key):
+    def __init__(self, name, key, **kwargs):
         self.name = name
         self.key = fernet.decrypt(key.encode()).decode()
-
+        self.endpoint = kwargs.get('endpoint', None)
+        self.endpointCognitive = kwargs.get('endpointCognitive', None)
+        
     def call(self, prompt, **kwargs):
         raise NotImplementedError(_("This method should be overridden by subclasses."))
     
