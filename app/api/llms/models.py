@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional, List
+from typing import Optional, List, Union, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -8,6 +8,8 @@ class LlmProvider(BaseModel):
     name: str
     provider: str
     key: str
+    endpoint: Optional[str] = None
+    endpointCognitive: Optional[str] = None
     
     class Config:
         populate_by_name = True
@@ -15,6 +17,8 @@ class LlmProvider(BaseModel):
 class LlmProviderUpdate(BaseModel):
     name: Optional[str] = None
     key: Optional[str] = None
+    endpoint: Optional[str] = None
+    endpointCognitive: Optional[str] = None
     
     class Config:
         populate_by_name = True
@@ -22,7 +26,7 @@ class LlmProviderUpdate(BaseModel):
 
 class Message(BaseModel):
     role: str
-    content: str
+    content: Union[str, List[Any]]
 
 class Conversation(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
