@@ -392,7 +392,6 @@ def update_by_id(id, body, user, files, updateCache = True):
 
 # Funcion para actualizar los recursos relacionados si el post_type es igual al del padre
 def update_relations_children(body, metadata, new = False):
-    print("update_relations_children")
     for f in metadata:
         if f['type'] == 'relation':
             if f['relation_type'] == body['post_type'] and get_value_by_path(body, f['destiny']):

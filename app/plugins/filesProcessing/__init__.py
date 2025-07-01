@@ -149,14 +149,14 @@ def process_file(file, instance=None):
 class ExtendedPluginClass(PluginClass):
     def __init__(self, path, import_name, name, description, version, author, type, settings, actions, capabilities=None, **kwargs):
         super().__init__(path, __file__, import_name, name, description, version, author, type, settings, actions=actions, capabilities=capabilities, **kwargs)
-        if not os.environ.get('CELERY_WORKER'):
+        if not os.environ.get('CELERY_WORKER') and not kwargs.get('isTask', False):
             self.activate_settings()
 
     @shared_task(ignore_result=False, name='filesProcessingCreate.auto')
     def automatic(type, body):
-        instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
+        instance = ExtendedPluginClass('filesProcessing','', **plugin_info, isTask=True)
         if body['post_type'] != type['type']:
-            return 'ok'
+            return None
         
         records_filters = {
             'parent.id': {'$in': [str(body['_id'])]},
@@ -222,7 +222,7 @@ class ExtendedPluginClass(PluginClass):
         step = 0
         size = 0
         loop = True
-        instance = ExtendedPluginClass('filesProcessing','', **plugin_info)
+        instance = ExtendedPluginClass('filesProcessing','', isTask=True, **plugin_info)
         # obtenemos los recursos
         while loop:
             status_template = _(u'Processing files. Step {step} of {total}')

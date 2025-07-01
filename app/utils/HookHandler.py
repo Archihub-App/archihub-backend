@@ -19,6 +19,10 @@ class HookHandler:
         try:
             if hook_name not in self.hooks:
                 self.hooks[hook_name] = []
+            
+            if any(f == func for _, f, _, _ in self.hooks[hook_name]):
+                return    
+            
             self.hooks[hook_name].append((queue, func, args if args is not None else [], kwargs if kwargs is not None else {}))
         except Exception as e:
             print(str(e))

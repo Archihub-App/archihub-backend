@@ -11,6 +11,7 @@ import os.path
 import requests
 import json
 import datetime
+from bson.objectid import ObjectId
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
@@ -65,16 +66,34 @@ class PluginClass(Blueprint):
         return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in allowed_extensions
            
-    def update_data(self, collection, id, update, files = []):
+    def update_data(self, collection, id, update):
         try:
             if collection == 'records':
                 from app.api.records.services import update_record_by_id
-                update_record_by_id(id, None, update)
+                resp = update_record_by_id(id, None, update)
             elif collection == 'resources':
-                from app.api.resources.services import update_by_id as update_resource_by_id
-                update_resource_by_id(id, update, None, files, True)
+                from app.api.resources.models import ResourceUpdate
+                from app.api.resources.services import get_metadata, validate_fields, update_relations_children
+                metadata = get_metadata(update['post_type'])
+                
+                errors = {}
+                
+                body = validate_fields(update, metadata, errors)
+                
+                body['updatedAt'] = datetime.datetime.now()
+                body['updatedBy'] = 'system'
+                
+                update_relations_children(update, metadata['fields'])
+                
+                if errors:
+                    return errors, 400
+                
+                update = ResourceUpdate(**body)
+                
+                resp = mongodb.update_record(collection, {'_id': ObjectId(id)}, update)
                 
             self.clear_cache()
+            return resp
         except Exception as e:
             raise Exception(str(e))
     

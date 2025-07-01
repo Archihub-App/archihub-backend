@@ -8,6 +8,8 @@ from shapely.geometry import shape, mapping, MultiPolygon
 from flask_babel import _
 from celery import shared_task
 from bson.objectid import ObjectId
+from shapely.validation import make_valid
+from shapely.ops import orient
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -157,7 +159,8 @@ def index_shapes(body={}):
 @cacheHandler.cache.cache(limit=5000)
 def get_level(body):
     try:
-        level = body['level']
+        level = body.get('level', 0)
+        bounds = body.get('bounds', None)
         threshold = float(body.get('area_threshold', 0))
         threshold = 4.0 if int(level) == 0 else threshold
         filters = {
@@ -166,8 +169,40 @@ def get_level(body):
         if 'parent' in body:
             filters['properties.parent'] = body['parent']
             
-        shapes = list(mongodb.get_all_records('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1}, sort=[('properties.name', 1)]))
-
+        if 'bounds' in body and bounds:
+            bounds_width = abs(bounds['maxLng'] - bounds['minLng'])
+            bounds_height = abs(bounds['maxLat'] - bounds['minLat'])
+            bounds_area = bounds_width * bounds_height
+            
+            if bounds_area < 400 and bounds_area > 40:  # Adjust threshold as needed
+                filters['properties.admin_level'] = {'$gte': int(level)}
+                filters['properties.admin_level'] = {'$lt': int(level) + 2}
+                threshold = 0.1
+            elif bounds_area < 40:
+                filters['properties.admin_level'] = 2
+                threshold = 0.01
+                
+            filters['geometry'] = {
+                '$geoIntersects': {
+                    '$geometry': {
+                        'type': 'Polygon',
+                        'coordinates': [[
+                            [bounds['minLng'], bounds['minLat']],
+                            [bounds['maxLng'], bounds['minLat']],
+                            [bounds['maxLng'], bounds['maxLat']],
+                            [bounds['minLng'], bounds['maxLat']],
+                            [bounds['minLng'], bounds['minLat']]
+                        ]],
+                        'crs': {
+                            'type': "name",
+                            'properties': { 'name': "EPSG:4326" }
+                        }
+                    }
+                }
+            }
+            
+        shapes = list(mongodb.get_all_records('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1}, sort=[('properties.admin_level', 1), ('properties.name', 1)]))
+        
         filtered_shapes = []
         for s in shapes:
             geom = shape(s['geometry'])
@@ -186,7 +221,10 @@ def get_level(body):
             
             s.pop('_id')
             s['centroid'] = mapping(valid_geom.centroid)
-            geo = valid_geom.simplify(1 if int(level) == 0 else 0, preserve_topology=True)
+            if not bounds:
+                geo = valid_geom.simplify(1 if int(level) == 0 else 0, preserve_topology=True)
+            else:
+                geo = valid_geom.simplify(0, preserve_topology=True)
             s['geometry'] = mapping(geo)
             filtered_shapes.append(s)
         
