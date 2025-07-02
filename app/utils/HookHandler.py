@@ -33,6 +33,9 @@ class HookHandler:
             task_data = []
             names = []
             task_ids = []
+            
+            sync_return_value = additional_args[0] if additional_args else None
+            
             for _, func, reg_args, reg_kwargs in sorted(self.hooks[hook_name], key=lambda x: x[0]):
                 if not isinstance(reg_args, list):
                     reg_args = [reg_args] if reg_args is not None else []
@@ -44,12 +47,17 @@ class HookHandler:
                 final_args = list(reg_args) + list(additional_args)
                 final_kwargs = {**reg_kwargs, **additional_kwargs}
 
-                task_signature = func.si(*final_args, **final_kwargs)
-                funcname = func.name
+                if hasattr(func, 'si'):  # It's a Celery task
+                    final_args = list(reg_args) + list(additional_args)
+                    task_signature = func.si(*final_args, **final_kwargs)
+                    funcname = func.name
 
-                names.append(funcname)
-                task_signatures.append(task_signature)
-                task_data.append((funcname, final_args, final_kwargs))
+                    names.append(funcname)
+                    task_signatures.append(task_signature)
+                    task_data.append((funcname, final_args, final_kwargs))
+                else:  # It's a regular synchronous function
+                    final_args = list(reg_args) + [sync_return_value]
+                    sync_return_value = func(*final_args, **final_kwargs)
             
             if task_signatures:
                 result = chain(*task_signatures).apply_async()
@@ -60,6 +68,8 @@ class HookHandler:
                         temp.append(task_id)
                         funcname, final_args, final_kwargs = task_data[x]
                         add_task(task_id, names[x], 'automatic', 'hook')
+            
+            return sync_return_value
 
     def get_task_ids(self, result):
         ids = []

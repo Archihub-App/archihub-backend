@@ -211,7 +211,7 @@ def create(body, user, files, updateCache = True):
         if 'ident' not in body:
             body['ident'] = 'ident'
         
-        hookHandler.call('resource_ident_create', body)
+        body = hookHandler.call('resource_ident_create', body)
 
         if errors:
             print(errors)
@@ -291,6 +291,8 @@ def update_by_id(id, body, user, files, updateCache = True):
         has_new_parent = has_changed_parent(id, body)
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
+        
+        body = hookHandler.call('resource_ident_create', body)
 
         errors = {}
 
