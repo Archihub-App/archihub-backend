@@ -200,10 +200,11 @@ def create(body, user, files, updateCache = True):
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
         
-        print("metadata", metadata)
+
 
         errors = {}
         # Validar los campos de la metadata
+        body = hookHandler.call('resource_pre_create', body)
         body = validate_fields(body, metadata, errors)
 
         update_relations_children(body, metadata['fields'], True)
@@ -211,8 +212,6 @@ def create(body, user, files, updateCache = True):
         if 'ident' not in body:
             body['ident'] = 'ident'
         
-        body = hookHandler.call('resource_ident_create', body)
-
         if errors:
             print(errors)
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
@@ -291,8 +290,8 @@ def update_by_id(id, body, user, files, updateCache = True):
         has_new_parent = has_changed_parent(id, body)
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
+        body = hookHandler.call('resource_pre_update', body)
         
-        body = hookHandler.call('resource_ident_create', body)
 
         errors = {}
 

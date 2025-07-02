@@ -40,6 +40,7 @@ class Resource(BaseModel):
 # Modelo para la actualización de un recurso
 class ResourceUpdate(BaseModel):
     post_type: Optional[str] = None
+    ident: Optional[str] = None
     metadata: Optional[dict] = None
     filesObj: Optional[list[dict]] = None
     parents: Optional[list[dict]] = None
