@@ -200,10 +200,11 @@ def create(body, user, files, updateCache = True):
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
         
-        print("metadata", metadata)
+
 
         errors = {}
         # Validar los campos de la metadata
+        body = hookHandler.call('resource_pre_create', body)
         body = validate_fields(body, metadata, errors)
 
         update_relations_children(body, metadata['fields'], True)
@@ -211,8 +212,6 @@ def create(body, user, files, updateCache = True):
         if 'ident' not in body:
             body['ident'] = 'ident'
         
-        hookHandler.call('resource_ident_create', body)
-
         if errors:
             print(errors)
             return {'msg': 'Error al validar los campos', 'errors': errors}, 400
@@ -291,7 +290,8 @@ def update_by_id(id, body, user, files, updateCache = True):
         has_new_parent = has_changed_parent(id, body)
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
-
+        body = hookHandler.call('resource_pre_update', body)
+        
         errors = {}
 
         # Validar los campos de la metadata
@@ -299,7 +299,6 @@ def update_by_id(id, body, user, files, updateCache = True):
 
         update_relations_children(body, metadata['fields'])
         
-
         if errors:
             return {'msg': _('Error validating fields'), 'errors': errors}, 400
         
@@ -346,7 +345,6 @@ def update_by_id(id, body, user, files, updateCache = True):
         try:
             records = create_record(id, user, files, filesTags = temp_files_obj)
         except Exception as e:
-            print(str(e))
             return {'msg': str(e)}, 500
 
         delete_records(body['deletedFiles'], id, user)
@@ -359,6 +357,7 @@ def update_by_id(id, body, user, files, updateCache = True):
             'updatedAt': datetime.now(),
             'updatedBy': user if user else 'system'
         }
+        
 
         seen = set()
         new_list = []
@@ -392,7 +391,6 @@ def update_by_id(id, body, user, files, updateCache = True):
 
 # Funcion para actualizar los recursos relacionados si el post_type es igual al del padre
 def update_relations_children(body, metadata, new = False):
-    print("update_relations_children")
     for f in metadata:
         if f['type'] == 'relation':
             if f['relation_type'] == body['post_type'] and get_value_by_path(body, f['destiny']):
@@ -1566,20 +1564,22 @@ def update_parents(id, post_type):
 def update_records_parents(id, user):
     try:
         # Hijos directos del recurso
-        children = mongodb.get_record('resources', {'_id': ObjectId(id)})
-        children = children['files']
+        children = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+        if not children or 'filesObj' not in children:
+            return
+        children = children['filesObj']
         # Si el recurso tiene hijos directos, actualizar el parent de cada hijo
         if children:
             for child in children:
                 record = mongodb.get_record(
-                    'records', {'_id': ObjectId(child)})
+                    'records', {'_id': ObjectId(child['id'])})
                 parents = record['parent']
                 temp = []
 
                 for p in parents:
                     temp = [*temp, *get_parents(p['id'])]
 
-                update_parent(child, user, temp)
+                update_parent(child['id'], user, temp)
 
     except Exception as e:
         raise Exception(str(e))

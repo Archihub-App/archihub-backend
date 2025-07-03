@@ -438,6 +438,7 @@ def accept_compromise(username):
 @cacheHandler.cache.cache()
 def has_role(username, role):
     user = mongodb.get_record('users', {'username': username})
+    
     # Si el usuario no existe, retornar error
     if not user:
         return jsonify({'msg': _('User does not exist')}), 400
