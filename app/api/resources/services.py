@@ -204,7 +204,9 @@ def create(body, user, files, updateCache = True):
 
         errors = {}
         # Validar los campos de la metadata
-        body = hookHandler.call('resource_pre_create', body)
+        body_tmp = hookHandler.call('resource_pre_create', body)
+        if body_tmp:
+            body = body_tmp
         body = validate_fields(body, metadata, errors)
 
         update_relations_children(body, metadata['fields'], True)
