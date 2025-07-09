@@ -778,10 +778,11 @@ def generate_text_transcription(segments):
     pattern = r'\s*(transcribed by.*|subtitles by.*|by.*\.com|by.*\.org|http.*|.com*)$'
     text = ''
     current_speaker = ''
+    
     for segment in segments:
         if re.search(pattern, segment['text']):
             continue
-        if 'speaker' in segment:
+        if 'speaker' in segment and segment['speaker']:
             if current_speaker != segment['speaker']:
                 current_speaker = segment['speaker']
                 text += '\n\n' + current_speaker + ': ' + segment['text'] + ' '
