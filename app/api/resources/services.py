@@ -200,8 +200,6 @@ def create(body, user, files, updateCache = True):
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
         
-
-
         errors = {}
         # Validar los campos de la metadata
         body_tmp = hookHandler.call('resource_pre_create', body)
@@ -292,7 +290,9 @@ def update_by_id(id, body, user, files, updateCache = True):
         has_new_parent = has_changed_parent(id, body)
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
-        body = hookHandler.call('resource_pre_update', body)
+        body_tmp = hookHandler.call('resource_pre_update', body)
+        if body_tmp:
+            body = body_tmp
         
         errors = {}
 
