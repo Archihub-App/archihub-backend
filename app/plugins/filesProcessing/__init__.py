@@ -156,7 +156,7 @@ class ExtendedPluginClass(PluginClass):
     def automatic(type, body):
         instance = ExtendedPluginClass('filesProcessing','', **plugin_info, isTask=True)
         if body['post_type'] != type['type']:
-            return None
+            return "ok"
         
         records_filters = {
             'parent.id': {'$in': [str(body['_id'])]},
