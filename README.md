@@ -21,3 +21,7 @@ En cuanto al uso del aplicativo, te recomendamos revisar las [guías en video](h
 Como se mencionó anteriormente, como usuario puedes desarrollar una interfaz completamente personalizada. Para facilitar esta tarea, hemos puesto a disposición de los usuarios de la herramienta la documentación de la Api de ArchiHUB. Para acceder a ella, el aplicativo se debe [haber iniciado](https://archihub-app.github.io/archihub.github.io/es/install_local/#arrancar-el-aplicativo).
 
 Con el aplicativo andando, debes acceder al endpoint de Swagger en la URL [http://localhost:{FLASK_RUN_PORT}/apidocs/](http://localhost:11000/apidocs/), donde *FLASK_RUN_PORT* es el número de puerto configurado en las varibles de entorno y que por defecto es 11000.
+
+## Citación
+
+Peña, N. (2023-2025). ArchiHUB: Digital public infrastructure for community archives (Version X.X.X) [Computer software]. https://github.com/Archihub-App 
