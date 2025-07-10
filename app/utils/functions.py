@@ -655,8 +655,7 @@ def cache_get_pages_by_id(id, pages, size):
         path_files = os.path.join(WEB_FILES_PATH, path, 'web/' + size + '/')
         path = os.path.join(WEB_FILES_PATH, path)
 
-
-        files = os.listdir(path_files)
+        files = sorted(os.listdir(path_files))
 
         response = []
         for x in pages:
