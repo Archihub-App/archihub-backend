@@ -74,7 +74,7 @@ def process_file(file, instance=None):
             
             instance.update_data('records', str(file['_id']), update)
     elif 'image' in file['mime']:
-        result = ImageProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+        result, metadata = ImageProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
         if result:
             update = {
                 'processing': {
@@ -84,6 +84,8 @@ def process_file(file, instance=None):
                     }
                 }
             }
+            if metadata:
+                update['processing']['fileProcessing']['metadata'] = metadata
             
             instance.update_data('records', str(file['_id']), update)
     elif 'word' in file['mime'] or ('text' in file['mime'] and get_filename_extension(file['filepath']) != '.csv'):
