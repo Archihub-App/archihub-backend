@@ -31,3 +31,4 @@ COPY . .
 RUN sed -i 's/\r$//' start.sh
 
 RUN chmod +x /app/start.sh
+RUN chmod +x /app/start_celery.sh
