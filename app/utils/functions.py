@@ -539,9 +539,9 @@ def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
         path = record['processing']['fileProcessing']['path']
         path_files = os.path.join(WEB_FILES_PATH, path, 'web/big/')
         path = os.path.join(WEB_FILES_PATH, path)
-        
-        files = os.listdir(path_files)
-        
+
+        files = sorted(os.listdir(path_files))
+
         if page > len(files):
             raise Exception('Record no tiene tantas páginas')
         
