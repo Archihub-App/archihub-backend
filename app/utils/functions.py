@@ -747,3 +747,9 @@ def has_role(username, role):
         return True
     # Si el usuario no tiene el rol, retornar False
     return False
+
+def find_by_id(data_array, id_value):
+    for item in data_array:
+        if item.get('id') == id_value:
+            return item
+    return None
