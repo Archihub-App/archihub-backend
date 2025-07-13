@@ -477,7 +477,7 @@ def cache_get_record_document_detail(id):
         path = record['processing']['fileProcessing']['path']
         path_small = os.path.join(WEB_FILES_PATH, path, 'web/small/')
 
-        files = os.listdir(path_small)
+        files = sorted(os.listdir(path_small))
         if len(files) == 0:
             raise Exception('Record no tiene archivos')
         
