@@ -477,7 +477,7 @@ def cache_get_record_document_detail(id):
         path = record['processing']['fileProcessing']['path']
         path_small = os.path.join(WEB_FILES_PATH, path, 'web/small/')
 
-        files = os.listdir(path_small)
+        files = sorted(os.listdir(path_small))
         if len(files) == 0:
             raise Exception('Record no tiene archivos')
         
@@ -539,9 +539,9 @@ def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
         path = record['processing']['fileProcessing']['path']
         path_files = os.path.join(WEB_FILES_PATH, path, 'web/big/')
         path = os.path.join(WEB_FILES_PATH, path)
-        
-        files = os.listdir(path_files)
-        
+
+        files = sorted(os.listdir(path_files))
+
         if page > len(files):
             raise Exception('Record no tiene tantas páginas')
         
@@ -747,3 +747,9 @@ def has_role(username, role):
         return True
     # Si el usuario no tiene el rol, retornar False
     return False
+
+def find_by_id(data_array, id_value):
+    for item in data_array:
+        if item.get('id') == id_value:
+            return item
+    return None

@@ -163,15 +163,20 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.llms import bp as llms_bp
     app.register_blueprint(llms_bp, url_prefix='/llms')
 
+    # Helper function to find a record by ID
+    from app.utils.functions import find_by_id
+
     admin_api = mongodb.get_record('system', {'name': 'api_activation'})
 
-    if(admin_api['data'][0]['value']):
+    api_activation_admin = find_by_id(admin_api['data'], 'api_activation_admin')
+    if api_activation_admin and api_activation_admin['value']:
         print('-'*50)
         print('👨‍💼 🔧 📡 ' + _("Administrators API is active"))
         from app.api.adminApi import bp as adminApi_bp
         app.register_blueprint(adminApi_bp, url_prefix='/adminApi')
 
-    if(admin_api['data'][1]['value']):
+    api_activation_public = find_by_id(admin_api['data'], 'api_activation_public')
+    if( api_activation_public and api_activation_public['value']):
         print('-'*50)
         print('🌐 🟢 🚀 ' + _("API pública activa"))
         from app.api.publicApi import bp as publicApi_bp
@@ -180,7 +185,8 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     index_management = mongodb.get_record('system', {'name': 'index_management'})
     search_loaded = False
 
-    if index_management['data'][0]['value']:
+    index_activation = find_by_id(index_management['data'], 'index_activation')
+    if index_activation and index_activation['value']:
         print('-'*50)
         print('🗂️  ⚙️  📊 Indexing is active')
         try:
@@ -195,10 +201,11 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             print('-'*50)
             print(str(e))
             print('No se pudo iniciar el indexador de documentos')
-            index_management['data'][0]['value'] = False
+            index_activation['value'] = False
             update_option('index_management', {'index_activation': False})
             
-    if index_management['data'][1]['value']:
+    vector_activation = find_by_id(index_management['data'], 'vector_activation')
+    if vector_activation and vector_activation['value']:
         try:
             from app.utils import VectorDatabaseHandler
             vector_handler = VectorDatabaseHandler.VectorDatabaseHandler()
@@ -211,7 +218,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             print('-'*50)
             print('No se pudo iniciar el indexador de vectores')
             print(str(e))
-            index_management['data'][1]['value'] = False
+            vector_activation['value'] = False
             update_option('index_management', {'vector_activation': False})
 
     if os.environ.get('FLASK_ENV') == 'DEV':
