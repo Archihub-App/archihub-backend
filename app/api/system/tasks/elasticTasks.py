@@ -123,7 +123,6 @@ def index_resources_task(body={}):
                                                     parent = v['level_' + str(i - 1)]['ident']
                                                 from app.api.geosystem.services import get_shape_centroid
                                                 centroid = get_shape_centroid(level, parent, i)
-                                                print(centroid)
                                                 if centroid:
                                                     temp = temp + centroid
                                                     break
@@ -151,6 +150,22 @@ def index_resources_task(body={}):
             document['accessRights'] = 'public'
             document['files'] = len(
                 resource['filesObj']) if 'filesObj' in resource else 0
+            
+            records_ids = []
+            if 'filesObj' in resource:
+                records_ids = [r['id'] for r in resource['filesObj']]
+            document['records'] = []
+            records_ids = [ObjectId(r) for r in records_ids]
+            if records_ids:
+                records_list = list(mongodb.get_all_records(
+                    'records', {'_id': {'$in': records_ids}}, {'_id': 1, 'processing.fileProcessing.type': 1}))
+                records_map = {record['_id']: record for record in records_list}
+                records = [records_map[id] for id in records_ids if id in records_map]
+            else:
+                records = []
+                
+            records = [{'id': str(record['_id']), 'type': record['processing']['fileProcessing']['type']} for record in records if 'processing' in record and 'fileProcessing' in record['processing']]
+            document['records'] = records
 
             if 'accessRights' in resource:
                 if resource['accessRights']:

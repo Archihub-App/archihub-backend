@@ -28,8 +28,8 @@ def main(filepath, output):
         if copy.mode in ("RGBA", "P"):
             print("Tiene canal alpha")
             copy = copy.convert("RGB")
-        copy.thumbnail((72,72))
-        copy.save(output + '_small.jpg', 'JPEG', optimize=True, quality=60)
+        copy.thumbnail((110,110))
+        copy.save(output + '_small.jpg', 'JPEG', optimize=True, quality=80)
 
         return True, metadata_list[0] if metadata_list else None
     except Exception as e:
