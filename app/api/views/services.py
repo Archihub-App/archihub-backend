@@ -52,15 +52,18 @@ def get_view_info(view_slug):
     
 
     types = []
-    filters = {}
-    if view['parent'] != '':
-        filters = {'parents.id': view['parent']}
+    tree_types = []
 
     for v in view['visible']:
-        from app.api.types.services import get_count
         from app.api.types.services import get_by_slug
+        from app.api.types.services import get_parents
         pt = get_by_slug(v)
-        count = get_count(v, filters)
+        pt_parents = get_parents(pt)
+        if pt_parents:
+            for p in pt_parents:
+                if p['slug'] not in [t['slug'] for t in tree_types]:
+                    tree_types.append(p)
+                    
         types.append({
             'slug': v,
             'description': pt['description'],
@@ -71,6 +74,7 @@ def get_view_info(view_slug):
     view.pop('_id')
     view.pop('visible')
     view['types'] = types
+    view['tree_types'] = tree_types
     from app.api.types.services import get_icon
     view['icon'] = get_icon(view['root'])
 

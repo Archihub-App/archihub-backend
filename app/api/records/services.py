@@ -46,11 +46,58 @@ def update_cache():
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
+def extract_important_exif(metadata):
+    if not metadata:
+        return {}
 
+    data = metadata
+    keys_of_interest = {
+        # 'File:FileName',
+        # 'File:FileSize',
+        'EXIF:Make',
+        'EXIF:Model',
+        'EXIF:LensModel',
+        'EXIF:FocalLength',
+        'EXIF:ApertureValue',
+        'EXIF:FNumber',
+        'EXIF:ExposureTime',
+        'EXIF:ISO',
+        # 'EXIF:DateTimeOriginal',
+        # 'EXIF:CreateDate',
+        # 'EXIF:ModifyDate',
+        'EXIF:ImageWidth',
+        'EXIF:ImageHeight',
+        'Composite:Megapixels',
+        # 'Composite:FOV',
+        # 'Composite:ShutterSpeed',
+        # 'XMP:Software',
+        # 'XMP:Firmware',
+        # 'XMP:ApproximateFocusDistance',
+        # 'XMP:WhiteBalance',
+        # 'XMP:Exposure2012',
+        # 'XMP:Contrast2012',
+        # 'XMP:Highlights2012',
+        # 'XMP:Shadows2012',
+        # 'XMP:Vibrance',
+        # 'XMP:Saturation',
+    }
+
+    cleaned = {k: data[k] for k in keys_of_interest if k in data}
+    return cleaned
 
 def allowedFile(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def set_record_metadata(record, metadata):
+    if 'metadata' not in record:
+        record['metadata'] = {}
+    
+    for key, value in metadata.items():
+        record['metadata'][key] = value
+    
+    return record
 
 
 def get_by_filters(body, current_user):
@@ -466,6 +513,8 @@ def get_by_id(id, current_user, fullFields = False):
             for key in record['processing']:
                 keys[key] = {}
                 keys[key]['type'] = record['processing'][key]['type']
+                if 'metadata' in record['processing'][key]:
+                    keys[key]['metadata'] = extract_important_exif(record['processing'][key]['metadata'])
 
             record['processing'] = keys
         

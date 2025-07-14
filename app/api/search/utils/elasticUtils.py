@@ -5,11 +5,14 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from flask_babel import _
 import os
+import base64
 
 index_handler = IndexHandler.IndexHandler()
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
+WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 def get_resources_by_filters(body, user):
+    print(body)
     post_types = body['post_type']
     sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
     sortBy = body.get('sortBy', 'createdAt')
@@ -105,6 +108,16 @@ def get_resources_by_filters(body, user):
                                 'field': field
                             }
                         })
+                        
+    if 'viewType' in body and body['viewType'] == 'gallery':
+        query['_source'] += ['records']
+        query['size'] = 10
+        query['from'] = body['page'] * 10 if 'page' in body else 0
+        query['query']['bool']['filter'].append({
+            'term': {
+                'records.type.keyword': 'image'
+            }
+        })
 
     if 'keyword' in body:
         if len(body['keyword']) < 1:
@@ -204,6 +217,27 @@ def get_resources_by_filters(body, user):
     response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
     
     response = index_handler.clean_elastic_search_response(response)
+    
+    if 'viewType' in body and body['viewType'] == 'gallery':
+        for resource in response['resources']:
+            if 'records' in resource:
+                records = resource.get('records', [])
+                images = [r for r in records if r['type'] == 'image']
+                resource['files'] = len(images)
+                resource['records'] = images[:3]
+                from app.api.records.services import get_by_id
+                for record in resource['records']:
+                    r, status = get_by_id(record['id'], user, True)
+                    if status == 200:
+                        path = r.get('processing', {}).get('fileProcessing', {}).get('path')
+                        path = path + '_small.jpg'
+                        if path:
+                            file_path = os.path.join(WEB_FILES_PATH, path)
+                            if file_path and os.path.exists(file_path):
+                                with open(file_path, 'rb') as f:
+                                    record['file'] = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
+            else:
+                resource['records'] = []
 
     register_log(user if user is not None else 'public', log_actions['search'], {'filters': body})
     

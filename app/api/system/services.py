@@ -648,8 +648,20 @@ def transform_dict_to_mapping(input_dict):
                 return {
                     'type': 'float'
                 }
-            else:
-                return {'type': field_type}
+            elif field_type == 'userslist':
+                return {
+                    'type': 'keyword',
+                }
+            elif field_type == 'select-multiple2':
+                return {
+                    'type': 'keyword',
+                    'ignore_above': 256
+                }
+            elif field_type == 'author':
+                return {
+                    'type': 'keyword',
+                    'ignore_above': 256
+                }
 
         else:
             return {
