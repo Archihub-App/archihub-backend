@@ -13,7 +13,7 @@ LDAP_BASE_DN = os.environ.get('LDAP_BASE_DN', 'dc=example,dc=com')
 LDAP_USER_DN = os.environ.get('LDAP_USER_DN', 'ou=users')
 LDAP_GROUP_DN = os.environ.get('LDAP_GROUP_DN', 'ou=groups')
 LDAP_TLS_CACERTFILE = os.environ.get('LDAP_TLS_CACERTFILE', None)
-LDAP_TLS_REQUIRE_CERT = os.environ.get('LDAP_TLS_REQUIRE_CERT', None)
+LDAP_TLS_REQUIRE_CERT = os.environ.get('LDAP_TLS_REQUIRE_CERT', 'demand')
 
 def ldap_login(username, password):
     try:
