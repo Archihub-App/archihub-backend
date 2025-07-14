@@ -19,14 +19,12 @@ def main(filepath, output):
 
         copy = im.copy()
         if copy.mode in ("RGBA", "P"):
-            print("Tiene canal alpha")
             copy = copy.convert("RGB")
         copy.thumbnail((1100,1100))
         copy.save(output + '_medium.jpg', 'JPEG', optimize=True, quality=80)
 
         copy = im.copy()
         if copy.mode in ("RGBA", "P"):
-            print("Tiene canal alpha")
             copy = copy.convert("RGB")
         copy.thumbnail((110,110))
         copy.save(output + '_small.jpg', 'JPEG', optimize=True, quality=80)

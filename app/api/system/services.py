@@ -657,8 +657,11 @@ def transform_dict_to_mapping(input_dict):
                     'type': 'keyword',
                     'ignore_above': 256
                 }
-            else:
-                return {'type': field_type}
+            elif field_type == 'author':
+                return {
+                    'type': 'keyword',
+                    'ignore_above': 256
+                }
 
         else:
             return {
