@@ -307,6 +307,54 @@ def get_resource(id):
                         'value': temp_,
                         'type': 'relation'
                     })
+            elif f['type'] == 'location':
+                value = get_value_by_path(resource, f['destiny'])
+                if value:
+                    temp.append({
+                        'label': f['label'],
+                        'value': value,
+                        'type': 'location'
+                    })
+            elif f['type'] == 'repeater':
+                value = get_value_by_path(resource, f['destiny'])
+                if value:
+                    temp_ = []
+                    for v in value:
+                        temp__ = []
+                        for s in f['subfields']:
+                            if s['type'] == 'text' or s['type'] == 'text-area':
+                                temp__.append({
+                                    'label': s['name'],
+                                    'value': v[s['destiny']],
+                                    'type': s['type']
+                                })
+                            elif s['type'] == 'number':
+                                temp__.append({
+                                    'label': s['name'],
+                                    'value': v[s['destiny']],
+                                    'type': s['type']
+                                })
+                            elif s['type'] == 'checkbox':
+                                temp__.append({
+                                    'label': s['name'],
+                                    'value': v[s['destiny']],
+                                    'type': s['type']
+                                })
+                            elif s['type'] == 'simple-date':
+                                if isinstance(v[s['destiny']], datetime):
+                                    v[s['destiny']] = v[s['destiny']].strftime('%Y-%m-%d')
+                                temp__.append({
+                                    'label': s['name'],
+                                    'value': v[s['destiny']],
+                                    'type': s['type']
+                                })
+                        temp_.append(temp__)
+
+                    temp.append({
+                        'label': f['label'],
+                        'value': temp_,
+                        'type': 'repeater'
+                    })
             
 
     resource['fields'] = temp
