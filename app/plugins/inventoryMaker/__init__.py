@@ -89,7 +89,7 @@ class ExtendedPluginClass(PluginClass):
                 
             if 'parent' in body:
                 if body['parent']:
-                    accessRights = get_accessRights(body['parent'])
+                    accessRights = get_accessRights(body['parent']['id'])
                     if accessRights:
                         if not self.has_right(current_user, accessRights['id']) and not self.has_role(current_user, 'admin'):
                             return {'msg': 'No tiene permisos para acceder al recurso'}, 401
@@ -361,7 +361,7 @@ class ExtendedPluginClass(PluginClass):
 
         if 'parent' in body:
             if body['parent']:
-                filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
+                filters = {'$or': [{'parents.id': body['parent']['id'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent']['id'])}]}
 
                 if 'status' not in body:
                     for o in filters['$or']:
@@ -385,7 +385,7 @@ class ExtendedPluginClass(PluginClass):
                 filters['createdBy'] = user
         elif body['status'] == 'published':
             filters['status'] = 'published'
- 
+            
         # buscamos los recursos con los filtros especificados
         resources = list(mongodb.get_all_records('resources', filters))
 
