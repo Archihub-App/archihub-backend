@@ -224,7 +224,6 @@ class ExtendedPluginClass(PluginClass):
                     
                     def get_resource_parent(parent):
                         from app.api.resources.services import get_by_id
-                        from app.api.users.services import has_right, has_role
                         
                         resource = mongodb.get_record('resources', {'$or': [{'_id': ObjectId(parent)}, {'metadata.firstLevel.title': parent}]}, fields={'_id': 1})
                         
