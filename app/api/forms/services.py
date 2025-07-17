@@ -213,8 +213,6 @@ def validate_form(form):
                     raise Exception(_('Error: the subfield must have a name'))
                 if 'type' not in subfield:
                     raise Exception(_('Error: the subfield must have a type'))
-                if 'label' not in subfield:
-                    raise Exception(_('Error: the subfield must have a label'))
             
         if 'setCondition' in field:
             if not field['setCondition']:
