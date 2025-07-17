@@ -419,7 +419,14 @@ class ExtendedPluginClass(PluginClass):
                 if f['type'] == 'text' or f['type'] == 'text-area':
                     obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
                 elif f['type'] == 'select':
-                    obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
+                    obj[f['label'] + '_id'] = clean_string(get_value_by_path(r, f['destiny']))
+                    option = mongodb.get_record('options', {'_id': ObjectId(obj[f['label'] + '_id'])})
+                    if option:
+                        obj[f['label']] = option['term']
+                elif f['type'] == 'select-multiple2':
+                    obj[f['label'] + '_ids'] = ', '.join([str(o) for o in get_value_by_path(r, f['destiny'])]) if get_value_by_path(r, f['destiny']) else ''
+                    options = mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(o) for o in get_value_by_path(r, f['destiny'])]}})
+                    obj[f['label']] = ', '.join([o['term'] for o in options]) if options else ''
                 elif f['type'] == 'simple-date':
                     date = get_value_by_path(r, f['destiny'])
                     if date:
