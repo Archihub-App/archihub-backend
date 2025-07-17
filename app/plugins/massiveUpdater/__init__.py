@@ -194,16 +194,27 @@ class ExtendedPluginClass(PluginClass):
                             
                             resp = []
                             for v in value:
+                                isFound = False
                                 if bool(re.fullmatch(r'[0-9a-fA-F]{24}', v)):
                                     for option in options:
                                         if option['id'] == v:
+                                            isFound = True
                                             resp.append(option['id'])
                                             break
                                 else:
                                     for option in options:
                                         if option['term'] == v:
+                                            isFound = True
                                             resp.append(option['id'])
                                             break
+                                if not isFound:
+                                    error = {
+                                        'index': index,
+                                        'id': row['id'],
+                                        'error': f'Opción {v} no encontrada en la lista {field["list"]}'
+                                    }
+                                    errores.append(error)
+                                    continue
                             
                             if field['type'] == 'select':
                                 set_value_in_dict(update, field['destiny'], resp[0])
