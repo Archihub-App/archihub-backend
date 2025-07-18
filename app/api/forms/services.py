@@ -16,6 +16,7 @@ from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+hookHandler = HookHandler.HookHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
@@ -37,11 +38,15 @@ def get_all_fields_types():
                 'label': _('Text'),
             },
             {
+                'id': 'text-area',
+                'label': _('Text area'),
+            },
+            {
                 'id': 'number',
                 'label': _('Number'),
             },
             {
-                'id': 'date',
+                'id': 'simple-date',
                 'label': _('Date'),
             },
             {
@@ -64,7 +69,26 @@ def get_all_fields_types():
                 'id': 'repeater',
                 'label': _('Repeater'),
             },
+            {
+                'id': 'separator',
+                'label': _('Separator'),
+            },
+            {
+                'id': 'author',
+                'label': _('Author'),
+            },
+            {
+                'id': 'location',
+                'label': _('Location'),
+            },
+            {
+                'id': 'userslit',
+                'label': _('User list'),
+            }
         ]
+        fields_tmp = hookHandler.run_hook('get_fields_types', fields=fields)
+        if fields_tmp:
+            fields = fields_tmp
         # Retornar los tipos de campos
         return fields, 200
     except Exception as e:
@@ -278,6 +302,8 @@ def validate_form(form):
                 for f in field['accessRights']:
                     if f not in options:
                         raise Exception(_('The value of the accessRights field is not valid'))
+                    
+        hookHandler.call('validate_form_field', field)
                     
     if not hasTitle:
         raise Exception(_('Error: the form must have a field with destiny equal to metadata.firstLevel.title'))
