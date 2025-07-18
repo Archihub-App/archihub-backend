@@ -1,6 +1,7 @@
 from flask import jsonify, request
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import HookHandler
 from bson import json_util
 import json
 from app.api.forms.models import Form
@@ -24,6 +25,50 @@ def update_cache():
     get_all.invalidate_all()
     get_by_slug.invalidate_all()
     get_type_by_slug.invalidate_all()
+    get_all_fields_types.invalidate_all()
+    
+    
+@cacheHandler.cache.cache()
+def get_all_fields_types():
+    try:
+        fields = [
+            {
+                'id': 'text',
+                'label': _('Text'),
+            },
+            {
+                'id': 'number',
+                'label': _('Number'),
+            },
+            {
+                'id': 'date',
+                'label': _('Date'),
+            },
+            {
+                'id': 'select',
+                'label': _('Select'),
+            },
+            {
+                'id': 'select-multiple2',
+                'label': _('Select multiple'),
+            },
+            {
+                'id': 'checkbox',
+                'label': _('Checkbox'),
+            },
+            {
+                'id': 'file',
+                'label': _('File'),
+            },
+            {
+                'id': 'repeater',
+                'label': _('Repeater'),
+            },
+        ]
+        # Retornar los tipos de campos
+        return fields, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
 
 # Nuevo servicio para obtener todos los estándares de metadatos
 @cacheHandler.cache.cache()
