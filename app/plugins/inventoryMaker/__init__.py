@@ -89,7 +89,7 @@ class ExtendedPluginClass(PluginClass):
                 
             if 'parent' in body:
                 if body['parent']:
-                    accessRights = get_accessRights(body['parent'])
+                    accessRights = get_accessRights(body['parent']['id'])
                     if accessRights:
                         if not self.has_right(current_user, accessRights['id']) and not self.has_role(current_user, 'admin'):
                             return {'msg': 'No tiene permisos para acceder al recurso'}, 401
@@ -361,7 +361,7 @@ class ExtendedPluginClass(PluginClass):
 
         if 'parent' in body:
             if body['parent']:
-                filters = {'$or': [{'parents.id': body['parent'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent'])}]}
+                filters = {'$or': [{'parents.id': body['parent']['id'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent']['id'])}]}
 
                 if 'status' not in body:
                     for o in filters['$or']:
@@ -385,7 +385,7 @@ class ExtendedPluginClass(PluginClass):
                 filters['createdBy'] = user
         elif body['status'] == 'published':
             filters['status'] = 'published'
- 
+            
         # buscamos los recursos con los filtros especificados
         resources = list(mongodb.get_all_records('resources', filters))
 
@@ -419,7 +419,14 @@ class ExtendedPluginClass(PluginClass):
                 if f['type'] == 'text' or f['type'] == 'text-area':
                     obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
                 elif f['type'] == 'select':
-                    obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
+                    obj[f['label'] + '_id'] = clean_string(get_value_by_path(r, f['destiny']))
+                    option = mongodb.get_record('options', {'_id': ObjectId(obj[f['label'] + '_id'])})
+                    if option:
+                        obj[f['label']] = option['term']
+                elif f['type'] == 'select-multiple2':
+                    obj[f['label'] + '_ids'] = ', '.join([str(o) for o in get_value_by_path(r, f['destiny'])]) if get_value_by_path(r, f['destiny']) else ''
+                    options = mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(o) for o in get_value_by_path(r, f['destiny'])]}})
+                    obj[f['label']] = ', '.join([o['term'] for o in options]) if options else ''
                 elif f['type'] == 'simple-date':
                     date = get_value_by_path(r, f['destiny'])
                     if date:

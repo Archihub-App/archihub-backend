@@ -12,11 +12,11 @@ ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 def get_resources_by_filters(body, user):
-    print(body)
     post_types = body['post_type']
     sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
     sortBy = body.get('sortBy', 'createdAt')
     activeColumns = body.get('activeColumns', [])
+    size = body.get('size', 20)
     activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
     metadata_fields = []
     for post_type in post_types:
@@ -81,8 +81,8 @@ def get_resources_by_filters(body, user):
                 ]
             }
         },
-        'size': 20,
-        'from': body['page'] * 20 if 'page' in body else 0,
+        'size': size,
+        'from': body['page'] * size if 'page' in body else 0,
         '_source': ['post_type', 'accessRights', '_id', 'ident', 'files', 'createdAt'] + activeColumns,
     }
     

@@ -16,6 +16,8 @@ from bson.objectid import ObjectId
 from app.api.system.services import set_value_in_dict, validate_text, validate_simple_date
 from app.api.resources.models import ResourceUpdate
 from dateutil import parser
+from flask_babel import _
+
 load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -192,16 +194,27 @@ class ExtendedPluginClass(PluginClass):
                             
                             resp = []
                             for v in value:
+                                isFound = False
                                 if bool(re.fullmatch(r'[0-9a-fA-F]{24}', v)):
                                     for option in options:
                                         if option['id'] == v:
+                                            isFound = True
                                             resp.append(option['id'])
                                             break
                                 else:
                                     for option in options:
                                         if option['term'] == v:
+                                            isFound = True
                                             resp.append(option['id'])
                                             break
+                                if not isFound:
+                                    error = {
+                                        'index': index,
+                                        'id': row['id'],
+                                        'error': f'Opción {v} no encontrada en la lista {field["list"]}'
+                                    }
+                                    errores.append(error)
+                                    continue
                             
                             if field['type'] == 'select':
                                 set_value_in_dict(update, field['destiny'], resp[0])
@@ -217,6 +230,41 @@ class ExtendedPluginClass(PluginClass):
                         errores.append(error)
                         continue
 
+                # si en la columna parent hay un valor, lo agregamos al update
+                if 'parent' in row and not pd.isna(row['parent']):
+                    
+                    def get_resource_parent(parent):
+                        from app.api.resources.services import get_by_id
+                        
+                        resource = mongodb.get_record('resources', {'$or': [{'_id': ObjectId(parent)}, {'metadata.firstLevel.title': parent}]}, fields={'_id': 1})
+                        
+                        if resource is None:
+                            return None
+                        
+                        resource, status = get_by_id(str(resource['_id']), user)
+                        
+                        if status != 200:
+                            return None
+                        
+                        return {
+                            'id': str(resource['_id']),
+                            'post_type': resource['post_type'],
+                        }
+                    
+                    parent = get_value_by_path(row['parent'])
+                    if parent:
+                        parent = get_resource_parent(parent)
+                        if parent:
+                            update['parent'] = parent
+                            update['parents'] = [parent]
+                        else:
+                            error = {
+                                'index': index,
+                                'id': row['id'],
+                                'error': 'Parent no encontrado'
+                            }
+                            errores.append(error)
+                            continue
                 
                 if doUpdate:
                     # actualizamos el recurso
