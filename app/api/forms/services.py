@@ -86,7 +86,7 @@ def get_all_fields_types():
                 'label': _('User list'),
             }
         ]
-        fields_tmp = hookHandler.run_hook('get_fields_types', fields=fields)
+        fields_tmp = hookHandler.run_hook('get_fields_types', fields)
         if fields_tmp:
             fields = fields_tmp
         # Retornar los tipos de campos
