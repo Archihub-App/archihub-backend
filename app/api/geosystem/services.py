@@ -37,7 +37,23 @@ def upload_shapes():
                     data = json.load(json_file)
                     features = data['features']
 
+                    features = data['features']
+
                     mongodb.delete_records('shapes', {'properties.admin_level': level})
+                    
+                    parent_shapes = {}
+                    if level > 0:
+                        parent_records = list(mongodb.get_all_records('shapes',
+                                                {'properties.admin_level': level - 1},
+                                                fields={'_id': 1, 'geometry': 1, 'properties.ident': 1, 'properties.name': 1}
+                                            ))
+                        for parent in parent_records:
+                            parent_shapes[parent['properties']['ident']] = {
+                                'geometry': shape(parent['geometry']),
+                                'ident': parent['properties']['ident'],
+                                'name': parent['properties']['name']
+                            }
+                    
                     for feature in features:
                         feature['properties']['admin_level'] = level
 
@@ -49,25 +65,25 @@ def upload_shapes():
                         feature['properties']['name'] = feature['properties']['name'].capitalize()
 
                         if level > 0:
-                            shape_intersect = list(mongodb.get_all_records('shapes',
-                                                                      {'properties.admin_level': level - 1, 'geometry': {'$geoIntersects': {'$geometry': feature['geometry']}}},
-                                                                        fields={'_id': 1, 'geometry': 1, 'properties.ident': 1, 'properties.name': 1}
-                                                                      ))
-
-                            for s in shape_intersect:
-                                candidate = shape(s['geometry'])
-                                feature_shape = shape(feature['geometry'])
-                                centroid = feature_shape.centroid
-                                if candidate.contains(centroid):
-                                    feature['properties']['parent'] = s['properties']['ident']
-                                    feature['properties']['parent_name'] = s['properties']['name']
+                            feature_shape = shape(feature['geometry'])
+                            centroid = feature_shape.centroid
+                            
+                            parent_found = False
+                            for parent_ident, parent_data in parent_shapes.items():
+                                if parent_data['geometry'].contains(centroid):
+                                    feature['properties']['parent'] = parent_ident
+                                    feature['properties']['parent_name'] = parent_data['name']
                                     mongodb.insert_record('shapes', Polygon(**feature))
-                                else:
-                                    if feature['geometry']['type'] == 'MultiPolygon':
-                                        if len(shape_intersect) == 1:
-                                            feature['properties']['parent'] = s['properties']['ident']
-                                            feature['properties']['parent_name'] = s['properties']['name']
-                                            mongodb.insert_record('shapes', Polygon(**feature))
+                                    parent_found = True
+                                    break
+                            
+                            if not parent_found and feature['geometry']['type'] == 'MultiPolygon':
+                                for parent_ident, parent_data in parent_shapes.items():
+                                    if parent_data['geometry'].intersects(feature_shape):
+                                        feature['properties']['parent'] = parent_ident
+                                        feature['properties']['parent_name'] = parent_data['name']
+                                        mongodb.insert_record('shapes', Polygon(**feature))
+                                        break
                         elif level == 0:
                             mongodb.insert_record('shapes', Polygon(**feature))
 

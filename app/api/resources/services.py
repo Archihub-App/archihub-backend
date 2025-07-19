@@ -868,11 +868,10 @@ def get_accessRights(id):
             }
         else:
             parents = [ObjectId(item['id']) for item in resource['parents']]
-            parents_resources = list(mongodb.get_all_records('resources', {'_id': {'$in': parents}}, fields={'accessRights': 1}))
+            parents_resources = list(mongodb.get_all_records('resources', {'_id': {'$in': parents}}, fields={'accessRights': 1, 'post_type': 1}))
             
             for r in parents_resources:
                 if r['accessRights']:
-                    temp = get_option_by_id(r['accessRights'])
                     return {
                         'id': r['accessRights'],
                         'term': temp['term']
