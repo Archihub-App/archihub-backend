@@ -329,11 +329,16 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                 if 'order' in filesTags[index]:
                     obj_resp['order'] = filesTags[index]['order']
                 resp.append(obj_resp)
-
+                
                 new_parent = [{
                     'id': resource_id,
                     'post_type': resource['post_type']
                 }, *record['parent']]
+                # remove duplicates from new_parent
+                unique_array_parents = set(x['id'] for x in new_parent)
+                new_list = [next(item for item in new_parent if item['id'] == id)
+                            for id in unique_array_parents]
+                new_parent = new_list
 
                 new_parents = [*resource['parents'], *record['parents']]
                 unique_array_parents = set(x['id'] for x in new_parents)
@@ -360,21 +365,21 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
 
                 update_dict['updatedBy'] = current_user if current_user else 'system'
                 update_dict['updatedAt'] = datetime.datetime.now()
+                
                 # actualizar el record
                 update = FileRecordUpdate(**update_dict)
-                mongodb.update_record(
+                result = mongodb.update_record(
                     'records', {'_id': ObjectId(record['_id'])}, update)
-
+                
                 # registrar el log
                 register_log(current_user, log_actions['record_update'], {
                                 'record': str(record['_id'])})
                 
-                print('record_update_parent', update_dict)
                 payload = update_dict
                 payload['_id'] = str(record['_id'])
                 hookHandler.call('record_update_parent', payload)
                 # limpiar la cache
-                
+                get_by_id.invalidate_all()
             else:
                 if upload:
                     # obtener el tamaño del archivo
@@ -490,15 +495,10 @@ def get_by_id(id, current_user, fullFields = False):
     try:
         # Buscar el record en la base de datos
         record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1, 'filepath': 1})
-
+        print("get_by_id", id, record)
         # Si el record no existe, retornar error
         if not record:
-            record = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'_id': 1})
-
-            if not record:
-                return {'msg': _('Record does not exist')}, 404
-            else:
-                return parse_result(record), 200
+            return {'msg': _('Record does not exist')}, 404
         
         if 'accessRights' in record:
             if record['accessRights']:
@@ -546,6 +546,8 @@ def get_by_id(id, current_user, fullFields = False):
 
         if 'parents' in record:
             record.pop('parents')
+            
+        print(record['parent'])
 
         # Si el record existe, retornar el record
         return parse_result(record), 200

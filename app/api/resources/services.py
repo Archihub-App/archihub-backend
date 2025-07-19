@@ -355,6 +355,9 @@ def update_by_id(id, body, user, files, updateCache = True):
         body['filesObj'] = [f for f in body['filesObj'] if f['id'] not in body['deletedFiles']]
 
         update = {
+            'post_type': body['post_type'],
+            'metadata': body['metadata'],
+            '_id': body['_id'],
             'filesObj': [*body['filesObj'], *records],
             'updatedAt': datetime.now(),
             'updatedBy': user if user else 'system'
@@ -378,7 +381,7 @@ def update_by_id(id, body, user, files, updateCache = True):
         mongodb.update_record(
             'resources', {'_id': ObjectId(body['_id'])}, update_)
         
-        hookHandler.call('resource_update', body)
+        hookHandler.call('resource_update', update)
 
         # Registrar el log
         register_log(user, log_actions['resource_update'], {'resource': body})
