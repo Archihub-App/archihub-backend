@@ -495,7 +495,6 @@ def get_by_id(id, current_user, fullFields = False):
     try:
         # Buscar el record en la base de datos
         record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1, 'filepath': 1})
-        print("get_by_id", id, record)
         # Si el record no existe, retornar error
         if not record:
             return {'msg': _('Record does not exist')}, 404
@@ -547,8 +546,6 @@ def get_by_id(id, current_user, fullFields = False):
         if 'parents' in record:
             record.pop('parents')
             
-        print(record['parent'])
-
         # Si el record existe, retornar el record
         return parse_result(record), 200
 
