@@ -284,5 +284,5 @@ def get_all_fields():
     # Llamar al servicio para obtener todos los tipos de campos
     resp = services.get_all_fields_types()
     if isinstance(resp, list):
-        return jsonify(resp), 200
+        return resp[0], 200
     return resp
