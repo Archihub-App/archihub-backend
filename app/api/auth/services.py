@@ -148,7 +148,7 @@ def archihub_login(username, password):
             'reason': 'rate_limited',
             'attempts': len(attempts)
         })
-        return jsonify({'msg': _('Too many login attempts. Please try again in 5 minutes.')}), 429
+        return jsonify({'msg': _('Too many login attempts. Please try again in 10 minutes.')}), 429
     
     expires_delta = timedelta(days=1)
     
