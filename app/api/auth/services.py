@@ -49,7 +49,7 @@ def is_rate_limited(username):
     
     recent_attempts = [
         attempt_time for attempt_time in attempts
-        if (now - datetime.fromisoformat(attempt_time)).total_seconds() < 300  # 300 seconds = 5 minutes
+        if (now - datetime.fromisoformat(attempt_time)).total_seconds() < 600
     ]
     
     is_limited = len(recent_attempts) >= 5
