@@ -949,6 +949,7 @@ def get_resource(id, user):
     temp = []
     for f in resource['fields']:
         if f['type'] != 'file' and f['type'] != 'separator':
+            
             accesRights = None
             if 'accessRights' in f:
                 accesRights = f['accessRights']
@@ -967,6 +968,8 @@ def get_resource(id, user):
                     'type': 'text'
                 })
                 continue
+            
+            temp = hookHandler.call('resource_field', resource, f, temp)
 
             if f['type'] == 'text' or f['type'] == 'text-area':
                 value = get_value_by_path(resource, f['destiny'])

@@ -313,7 +313,6 @@ def get_form_by_slug(slug):
         from app.api.forms.services import get_all_fields_types
         fields_types = get_all_fields_types()
         fields_types = fields_types[0]
-        print("Fields types:", fields_types)
         
         for field in form['fields']:
             for field_type in fields_types:
@@ -337,7 +336,6 @@ def get_form_by_slug(slug):
         # quitamos el id del formulario
         form.pop('_id')
         
-        print(slug, form['fields'])
         # Parsear el resultado
         form = parse_result(form)
         # Retornar el resultado
