@@ -263,7 +263,9 @@ def create(body, user, files, updateCache = True):
             update = {
                 'filesObj': records,
                 'updatedAt': datetime.now(),
-                'updatedBy': user
+                'updatedBy': user,
+                'post_type': body['post_type'],
+                '_id': body['_id'],
             }
 
             update_ = ResourceUpdate(**update)
