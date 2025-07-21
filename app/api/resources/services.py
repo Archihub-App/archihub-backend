@@ -266,6 +266,7 @@ def create(body, user, files, updateCache = True):
                 'updatedBy': user,
                 'post_type': body['post_type'],
                 '_id': body['_id'],
+                'metadata': body['metadata'],
             }
 
             update_ = ResourceUpdate(**update)
