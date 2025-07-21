@@ -524,6 +524,7 @@ def validate_parent(body):
 def validate_fields(body, metadata, errors):
     for field in metadata['fields']:
         try:
+            body = hookHandler.call('validate_field', body, field, metadata, errors)
             if field['type'] != 'file' and field['type'] != 'separator':
                 if field['destiny'] != 'ident':
                     if field['destiny'] == 'metadata.firstLevel.title':

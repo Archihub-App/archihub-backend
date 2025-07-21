@@ -59,7 +59,7 @@ class HookHandler:
                     task_signatures.append(task_signature)
                     task_data.append((funcname, final_args, final_kwargs))
                 else:  # It's a regular synchronous function
-                    final_args = list(reg_args) + [sync_return_value]
+                    final_args = list(reg_args) + list(additional_args)
                     sync_return_value = func(*final_args, **final_kwargs)
             
             if task_signatures:
