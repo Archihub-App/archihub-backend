@@ -275,7 +275,7 @@ def create(body, user, files, updateCache = True):
             if updateCache:
                 update_cache()
             
-            hookHandler.call('resource_files_create', update_)
+            hookHandler.call('resource_files_create', update)
 
         # Retornar el resultado
         resp = {'msg': _('Resource created successfully'), 'id': str(new_resource.inserted_id), 'post_type': body['post_type']}
