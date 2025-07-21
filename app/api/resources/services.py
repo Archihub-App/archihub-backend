@@ -878,6 +878,7 @@ def get_accessRights(id):
             
             for r in parents_resources:
                 if r['accessRights']:
+                    temp = get_option_by_id(r['accessRights'])
                     return {
                         'id': r['accessRights'],
                         'term': temp['term']
