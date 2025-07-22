@@ -26,69 +26,77 @@ def update_cache():
     get_all.invalidate_all()
     get_by_slug.invalidate_all()
     get_type_by_slug.invalidate_all()
-    get_all_fields_types.invalidate_all()
+    _get_all_fields_types.invalidate_all()
     
     
 @cacheHandler.cache.cache()
+def _get_all_fields_types():
+    fields = [
+        {
+            'id': 'text',
+            'label': 'Text',
+        },
+        {
+            'id': 'text-area',
+            'label': 'Text area',
+        },
+        {
+            'id': 'number',
+            'label': 'Number',
+        },
+        {
+            'id': 'simple-date',
+            'label': 'Date',
+        },
+        {
+            'id': 'select',
+            'label': 'Select',
+        },
+        {
+            'id': 'select-multiple2',
+            'label': 'Select multiple',
+        },
+        {
+            'id': 'checkbox',
+            'label': 'Checkbox',
+        },
+        {
+            'id': 'file',
+            'label': 'File',
+        },
+        {
+            'id': 'repeater',
+            'label': 'Repeater',
+        },
+        {
+            'id': 'separator',
+            'label': 'Separator',
+        },
+        {
+            'id': 'author',
+            'label': 'Author',
+        },
+        {
+            'id': 'location',
+            'label': 'Location',
+        },
+        {
+            'id': 'userslit',
+            'label': 'User list',
+        }
+    ]
+    fields_tmp = hookHandler.call('get_fields_types', fields)
+    if fields_tmp:
+        fields = fields_tmp
+    return fields
+
 def get_all_fields_types():
     try:
-        fields = [
-            {
-                'id': 'text',
-                'label': _('Text'),
-            },
-            {
-                'id': 'text-area',
-                'label': _('Text area'),
-            },
-            {
-                'id': 'number',
-                'label': _('Number'),
-            },
-            {
-                'id': 'simple-date',
-                'label': _('Date'),
-            },
-            {
-                'id': 'select',
-                'label': _('Select'),
-            },
-            {
-                'id': 'select-multiple2',
-                'label': _('Select multiple'),
-            },
-            {
-                'id': 'checkbox',
-                'label': _('Checkbox'),
-            },
-            {
-                'id': 'file',
-                'label': _('File'),
-            },
-            {
-                'id': 'repeater',
-                'label': _('Repeater'),
-            },
-            {
-                'id': 'separator',
-                'label': _('Separator'),
-            },
-            {
-                'id': 'author',
-                'label': _('Author'),
-            },
-            {
-                'id': 'location',
-                'label': _('Location'),
-            },
-            {
-                'id': 'userslit',
-                'label': _('User list'),
-            }
-        ]
-        fields_tmp = hookHandler.call('get_fields_types', fields)
-        if fields_tmp:
-            fields = fields_tmp
+        fields = _get_all_fields_types()
+        # Translate labels on every request
+        for field in fields:
+            field['label'] = _(field['label'])
+            
         # Retornar los tipos de campos
         return fields, 200
     except Exception as e:
