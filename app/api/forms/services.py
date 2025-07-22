@@ -16,6 +16,7 @@ from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+hookHandler = HookHandler.HookHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
@@ -25,46 +26,77 @@ def update_cache():
     get_all.invalidate_all()
     get_by_slug.invalidate_all()
     get_type_by_slug.invalidate_all()
-    get_all_fields_types.invalidate_all()
+    _get_all_fields_types.invalidate_all()
     
     
 @cacheHandler.cache.cache()
+def _get_all_fields_types():
+    fields = [
+        {
+            'id': 'text',
+            'label': 'Text',
+        },
+        {
+            'id': 'text-area',
+            'label': 'Text area',
+        },
+        {
+            'id': 'number',
+            'label': 'Number',
+        },
+        {
+            'id': 'simple-date',
+            'label': 'Date',
+        },
+        {
+            'id': 'select',
+            'label': 'Select',
+        },
+        {
+            'id': 'select-multiple2',
+            'label': 'Select multiple',
+        },
+        {
+            'id': 'checkbox',
+            'label': 'Checkbox',
+        },
+        {
+            'id': 'file',
+            'label': 'File',
+        },
+        {
+            'id': 'repeater',
+            'label': 'Repeater',
+        },
+        {
+            'id': 'separator',
+            'label': 'Separator',
+        },
+        {
+            'id': 'author',
+            'label': 'Author',
+        },
+        {
+            'id': 'location',
+            'label': 'Location',
+        },
+        {
+            'id': 'userslit',
+            'label': 'User list',
+        }
+    ]
+    fields_tmp = hookHandler.call('get_fields_types', fields)
+    if fields_tmp:
+        fields = fields_tmp
+    return fields
+
 def get_all_fields_types():
     try:
-        fields = [
-            {
-                'id': 'text',
-                'label': _('Text'),
-            },
-            {
-                'id': 'number',
-                'label': _('Number'),
-            },
-            {
-                'id': 'date',
-                'label': _('Date'),
-            },
-            {
-                'id': 'select',
-                'label': _('Select'),
-            },
-            {
-                'id': 'select-multiple2',
-                'label': _('Select multiple'),
-            },
-            {
-                'id': 'checkbox',
-                'label': _('Checkbox'),
-            },
-            {
-                'id': 'file',
-                'label': _('File'),
-            },
-            {
-                'id': 'repeater',
-                'label': _('Repeater'),
-            },
-        ]
+        fields = _get_all_fields_types()
+        # Translate labels on every request
+        for field in fields:
+            field['label'] = _(field['label'])
+            
         # Retornar los tipos de campos
         return fields, 200
     except Exception as e:
@@ -278,6 +310,8 @@ def validate_form(form):
                 for f in field['accessRights']:
                     if f not in options:
                         raise Exception(_('The value of the accessRights field is not valid'))
+                    
+        hookHandler.call('validate_form_field', field)
                     
     if not hasTitle:
         raise Exception(_('Error: the form must have a field with destiny equal to metadata.firstLevel.title'))

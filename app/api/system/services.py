@@ -754,7 +754,7 @@ def get_system_settings():
         plugin_info = plugin_module.plugin_info.copy()
             
         plugin_bp = plugin_module.ExtendedPluginClass(
-            p, __name__, **plugin_info)
+            p, __name__, **plugin_info, isTask=True)
         
         c = plugin_bp.get_capabilities()
         if c:
@@ -804,7 +804,7 @@ def get_system_actions(placement):
             plugin_info = plugin_module.plugin_info.copy()
                 
             plugin_bp = plugin_module.ExtendedPluginClass(
-                p, __name__, **plugin_info)
+                p, __name__, **plugin_info, isTask=True)
             
             a = plugin_bp.get_actions()
             if a:

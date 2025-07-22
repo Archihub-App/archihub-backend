@@ -257,3 +257,32 @@ def duplicate_by_slug(slug):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Llamar al servicio para duplicar el estándar por su slug
     return services.duplicate_by_slug(slug, current_user)
+
+@bp.route('/fields', methods=['GET'])
+@jwt_required()
+def get_all_fields():
+    """
+    Obtener todos los tipos de campos disponibles para formularios
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Tipos de campos
+    responses:
+        200:
+            description: Lista de tipos de campos obtenida exitosamente
+        401:
+            description: No tienes permisos para realizar esta acción
+        500:
+            description: Error al obtener los tipos de campos
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+    # Llamar al servicio para obtener todos los tipos de campos
+    resp = services.get_all_fields_types()
+    if isinstance(resp, list):
+        return resp[0], 200
+    return resp

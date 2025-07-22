@@ -129,7 +129,7 @@ def get_all(body, user):
                 metadata_field = next((f for f in metadata_fields if f['destiny'] == col), None)
                 if metadata_field and metadata_field['type'] != 'text':
                     filters[col] = {'$exists': True, '$ne': None}
-        
+                    
         resources = list(mongodb.get_all_records(
             'resources', filters, limit=limit, skip=skip, fields=fields, sort=[(sortBy, sort_direction)]))
         # Obtener el total de recursos dado un tipo de contenido
@@ -263,7 +263,10 @@ def create(body, user, files, updateCache = True):
             update = {
                 'filesObj': records,
                 'updatedAt': datetime.now(),
-                'updatedBy': user
+                'updatedBy': user,
+                'post_type': body['post_type'],
+                '_id': body['_id'],
+                'metadata': body['metadata'],
             }
 
             update_ = ResourceUpdate(**update)
@@ -275,7 +278,7 @@ def create(body, user, files, updateCache = True):
             if updateCache:
                 update_cache()
             
-            hookHandler.call('resource_files_create', body)
+            hookHandler.call('resource_files_create', update)
 
         # Retornar el resultado
         resp = {'msg': _('Resource created successfully'), 'id': str(new_resource.inserted_id), 'post_type': body['post_type']}
@@ -521,6 +524,10 @@ def validate_parent(body):
 def validate_fields(body, metadata, errors):
     for field in metadata['fields']:
         try:
+            bodyTmp = hookHandler.call('validate_field', body, field, metadata, errors)
+            if bodyTmp:
+                body = bodyTmp
+                
             if field['type'] != 'file' and field['type'] != 'separator':
                 if field['destiny'] != 'ident':
                     if field['destiny'] == 'metadata.firstLevel.title':
@@ -871,7 +878,7 @@ def get_accessRights(id):
             }
         else:
             parents = [ObjectId(item['id']) for item in resource['parents']]
-            parents_resources = list(mongodb.get_all_records('resources', {'_id': {'$in': parents}}, fields={'accessRights': 1}))
+            parents_resources = list(mongodb.get_all_records('resources', {'_id': {'$in': parents}}, fields={'accessRights': 1, 'post_type': 1}))
             
             for r in parents_resources:
                 if r['accessRights']:
@@ -945,6 +952,7 @@ def get_resource(id, user):
     temp = []
     for f in resource['fields']:
         if f['type'] != 'file' and f['type'] != 'separator':
+            
             accesRights = None
             if 'accessRights' in f:
                 accesRights = f['accessRights']
@@ -963,6 +971,10 @@ def get_resource(id, user):
                     'type': 'text'
                 })
                 continue
+            
+            tempTmp = hookHandler.call('resource_field', resource, f, temp)
+            if tempTmp:
+                temp = tempTmp
 
             if f['type'] == 'text' or f['type'] == 'text-area':
                 value = get_value_by_path(resource, f['destiny'])

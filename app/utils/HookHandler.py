@@ -23,8 +23,16 @@ class HookHandler:
             reg_args = args if args is not None else []
             reg_kwargs = kwargs if kwargs is not None else {}
 
-            if any(f == func and a == reg_args and k == reg_kwargs for _, f, a, k in self.hooks[hook_name]):
-                return
+            is_instance_method = hasattr(func, '__self__') and hasattr(func, '__func__')
+
+            for _, f, a, k in self.hooks[hook_name]:
+                is_f_instance_method = hasattr(f, '__self__') and hasattr(f, '__func__')
+                if is_instance_method and is_f_instance_method:
+                    # Prevent registering if a method from the same class is already registered.
+                    if f.__func__ == func.__func__ and type(f.__self__) is type(func.__self__) and a == reg_args and k == reg_kwargs:
+                        return
+                elif f == func and a == reg_args and k == reg_kwargs:
+                    return
             
             self.hooks[hook_name].append((queue, func, reg_args, reg_kwargs))
         except Exception as e:
@@ -59,7 +67,7 @@ class HookHandler:
                     task_signatures.append(task_signature)
                     task_data.append((funcname, final_args, final_kwargs))
                 else:  # It's a regular synchronous function
-                    final_args = list(reg_args) + [sync_return_value]
+                    final_args = list(reg_args) + list(additional_args)
                     sync_return_value = func(*final_args, **final_kwargs)
             
             if task_signatures:

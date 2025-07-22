@@ -309,6 +309,17 @@ def get_form_by_slug(slug):
     try:
         # Buscar el formulario en la base de datos
         form = mongodb.get_record('forms', {'slug': slug})
+        
+        from app.api.forms.services import get_all_fields_types
+        fields_types = get_all_fields_types()
+        fields_types = fields_types[0]
+        
+        for field in form['fields']:
+            for field_type in fields_types:
+                if field['type'] == field_type['id']:
+                    if 'plugin' in field_type:
+                        field['plugin'] = field_type['plugin']
+        
         # Si el formulario no existe, retornar error
         if not form:
             return {'msg': _('Form not found')}, 404
@@ -324,11 +335,13 @@ def get_form_by_slug(slug):
         })
         # quitamos el id del formulario
         form.pop('_id')
+        
         # Parsear el resultado
         form = parse_result(form)
         # Retornar el resultado
         return form
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 
