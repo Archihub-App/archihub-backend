@@ -254,6 +254,9 @@ def celery_init_app(app: Flask) -> Celery:
         CELERYD_PREFETCH_MULTIPLIER=1,
         CELERY_ACKS_LATE=True
     )
+    celery_app.conf.beat_schedule = {
+        
+    }
     celery_app.set_default()
     app.extensions["celery"] = celery_app
     return celery_app
@@ -269,7 +272,14 @@ def get_locale():
     
 babel = Babel(app, locale_selector=get_locale)
 
+banner_width = 82
+version_str = f"v{__version__}"
+author_str = "Author: BITSOL"
+made_in_str = "Made with ❤️  in Colombia"
+website_str = "Website: https://bit-sol.com.co/"
+
 print(f'''
+{':' * banner_width}
 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 :::'###::::'########:::'######::'##::::'##:'####:'##::::'##:'##::::'##:'########::
 ::'## ##::: ##.... ##:'##... ##: ##:::: ##:. ##:: ##:::: ##: ##:::: ##: ##.... ##:
@@ -279,12 +289,12 @@ print(f'''
  ##.... ##: ##::. ##:: ##::: ##: ##:::: ##:: ##:: ##:::: ##: ##:::: ##: ##:::: ##:
  ##:::: ##: ##:::. ##:. ######:: ##:::: ##:'####: ##:::: ##:. #######:: ########::
 ..:::::..::..:::::..:::......:::..:::::..::....::..:::::..:::.......:::........:::
-::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-v{__version__}::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-Author: BITSOL::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-Made with ❤️  in Colombia::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-Website: https://bit-sol.xyz/:::::::::::::::::::::::::::::::::::::::::::::::::::::
-::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+{':' * banner_width}
+{version_str}{':' * (banner_width - len(version_str))}
+{author_str}{':' * (banner_width - len(author_str))}
+{made_in_str}{':' * (banner_width - len(made_in_str) + 1)}
+{website_str}{':' * (banner_width - len(website_str))}
+{':' * banner_width}
 ''')
 
 if __name__ == '__main__':
