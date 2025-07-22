@@ -190,10 +190,6 @@ msgstr "Error: {e}"
 msgid "Cache cleaned successfully"
 msgstr "Cache limpiada con éxito"
 
-#: api/tasks/services.py:203 api/usertasks/services.py:118
-msgid "Task not found"
-msgstr "Tarea no encontrada"
-
 #: api/tasks/services.py:225
 msgid "Task stopped successfully"
 msgstr "Tarea detenida con éxito"
