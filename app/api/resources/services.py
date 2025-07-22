@@ -972,7 +972,9 @@ def get_resource(id, user):
                 })
                 continue
             
-            temp = hookHandler.call('resource_field', resource, f, temp)
+            tempTmp = hookHandler.call('resource_field', resource, f, temp)
+            if tempTmp:
+                temp = tempTmp
 
             if f['type'] == 'text' or f['type'] == 'text-area':
                 value = get_value_by_path(resource, f['destiny'])
