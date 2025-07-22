@@ -11,8 +11,8 @@ from flasgger import Swagger
 from config import config
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
-from celery import Celery
-from celery import Task
+from celery import Celery, Task
+from celery.schedules import crontab
 from flask import Flask
 from flask_babel import Babel, gettext as _
 
@@ -27,6 +27,24 @@ load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+scheduled_tasks = {}
+
+def get_crontab_schedule(periodicity, hour_execution):
+    try:
+        hour, minute = map(int, hour_execution.split(':'))
+    except (ValueError, AttributeError):
+        hour, minute = 0, 0
+
+    if periodicity == 'once_a_day':
+        return crontab(hour=hour, minute=minute)
+    elif periodicity == 'once_a_week':
+        return crontab(hour=hour, minute=minute, day_of_week='0')
+    elif periodicity == 'once_a_month':
+        return crontab(hour=hour, minute=minute, day_of_month='1')
+    elif periodicity == 'once_a_year':
+        return crontab(hour=hour, minute=minute, day_of_month='1', month_of_year='1')
+    
+    return None
 
 def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.system.services import set_system_setting
@@ -45,9 +63,6 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
         ),
     )
     app.config.from_object(config_class)
-    
-    
-    
     
     # Babel
     app.config['BABEL_DEFAULT_LOCALE'] = 'en'
@@ -235,6 +250,18 @@ def register_plugin(app, plugin_name, plugin_url_prefix):
     plugin_bp.add_routes()
     plugin_bp.get_image()
     plugin_bp.get_settings()
+    capabilities = plugin_bp.get_capabilities()
+    if capabilities and 'scheduler' in capabilities:
+        current = plugin_bp.get_plugin_settings()
+        if current or not current == {}:
+            if 'schedule_tasks' in current and len(current['schedule_tasks']) > 0:
+                for task in current['schedule_tasks']:
+                    if 'task' in task and 'periodicity' in task and 'hour_execution' in task:
+                        label = f"{task['task']} - {task['periodicity']} - {task['hour_execution']}"
+                        scheduled_tasks[label] = {
+                            'task': task['task'],
+                            'schedule': get_crontab_schedule(task['periodicity'], task['hour_execution'])
+                        }
     if os.environ.get('CELERY_WORKER', False):
         plugin_bp.activate_settings()
     app.register_blueprint(plugin_bp, url_prefix=f'/{plugin_url_prefix}')
@@ -255,7 +282,7 @@ def celery_init_app(app: Flask) -> Celery:
         CELERY_ACKS_LATE=True
     )
     celery_app.conf.beat_schedule = {
-        
+        *scheduled_tasks
     }
     celery_app.set_default()
     app.extensions["celery"] = celery_app
