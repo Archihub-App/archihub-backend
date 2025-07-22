@@ -129,7 +129,7 @@ def get_all(body, user):
                 metadata_field = next((f for f in metadata_fields if f['destiny'] == col), None)
                 if metadata_field and metadata_field['type'] != 'text':
                     filters[col] = {'$exists': True, '$ne': None}
-        
+                    
         resources = list(mongodb.get_all_records(
             'resources', filters, limit=limit, skip=skip, fields=fields, sort=[(sortBy, sort_direction)]))
         # Obtener el total de recursos dado un tipo de contenido
