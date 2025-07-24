@@ -1,5 +1,5 @@
 from app.utils import DatabaseHandler, CacheHandler
-from app.api.llms.models import Conversation, ConversationUpdate
+from app.api.aiservices.models import Conversation, ConversationUpdate
 from bson.objectid import ObjectId
 import datetime
 from dotenv import load_dotenv

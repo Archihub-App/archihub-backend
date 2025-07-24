@@ -5,8 +5,8 @@ import os
 import json
 from bson import json_util
 from bson.objectid import ObjectId
-from app.api.llms.models import LlmProvider, LlmProviderUpdate
-from app.api.llms.utils.LLMProviders import OpenAIProvider, GoogleProvider, AzureProvider
+from app.api.aiservices.models import LlmProvider, LlmProviderUpdate
+from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider
 
 PROVIDER_CLASSES = {
     'OpenAI': OpenAIProvider,
@@ -38,7 +38,7 @@ def get_llm_models():
 @cacheHandler.cache.cache()
 def get_llm_providers():
     try:
-        from .utils.LLMProviders import get_llm_providers
+        from .utils.ModelsProviders import get_llm_providers
         providers = get_llm_providers()
         return providers, 200
     except Exception as e:
@@ -46,7 +46,7 @@ def get_llm_providers():
     
 def create_llm_model(model):
     try:
-        from .utils.LLMProviders import get_llm_providers
+        from .utils.ModelsProviders import get_llm_providers
         providers = get_llm_providers()
         if model['provider'] not in providers:
             return {'msg': 'Proveedor no encontrado'}, 404

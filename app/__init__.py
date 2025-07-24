@@ -19,6 +19,7 @@ from flask_babel import Babel, gettext as _
 import os
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import AIHandler
 from app.api.system.services import update_option, clear_cache
 
 # leer variables de entorno desde el archivo .env
@@ -27,6 +28,7 @@ load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+aiHandler = AIHandler.AIHandler()
 scheduled_tasks = {}
 
 def get_crontab_schedule(periodicity, hour_execution):
@@ -174,9 +176,9 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.usertasks import bp as usertasks_bp
     app.register_blueprint(usertasks_bp, url_prefix='/usertasks')
     
-    #Registrar llms blueprint
-    from app.api.llms import bp as llms_bp
-    app.register_blueprint(llms_bp, url_prefix='/llms')
+    #Registrar aiservices blueprint
+    from app.api.aiservices import bp as aiservices_bp
+    app.register_blueprint(aiservices_bp, url_prefix='/aiservices')
 
     # Helper function to find a record by ID
     from app.utils.functions import find_by_id
