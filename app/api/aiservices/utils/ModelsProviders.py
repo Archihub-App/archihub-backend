@@ -80,7 +80,6 @@ class AzureProvider(BaseLLMProvider):
         ]
         
     def call(self, messages, **kwargs):
-        import os
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.key}",
