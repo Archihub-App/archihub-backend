@@ -69,13 +69,16 @@ class AIHandler:
         
         return provider
     
-    def call_model(self, model):
+    def call_model(self, model, messages=[]):
         if not self.models:
             raise Exception('No AI models available')
         
-        print(f"Calling model: {model}")
-        
         provider = self.get_provider_class({'name': model['provider']})
+        model = model['model']
         
+        if not provider:
+            raise Exception('Provider not found')
         
-        # raise Exception('Model not found')
+        provider_response = provider.call(messages, model=model)
+        
+        return provider_response
