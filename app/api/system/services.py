@@ -818,6 +818,8 @@ def get_system_actions(placement):
         }, 200
         
     except Exception as e:
+        print(str(e))
+        print('-'*50)
         return {'msg': str(e)}, 500
 
 

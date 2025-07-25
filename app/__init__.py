@@ -19,7 +19,6 @@ from flask_babel import Babel, gettext as _
 import os
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
-from app.utils import AIHandler
 from app.api.system.services import update_option, clear_cache
 
 # leer variables de entorno desde el archivo .env
@@ -28,7 +27,6 @@ load_dotenv()
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
-aiHandler = AIHandler.AIHandler()
 scheduled_tasks = {}
 
 def get_crontab_schedule(periodicity, hour_execution):

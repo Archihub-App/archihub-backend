@@ -51,6 +51,12 @@ def create_llm_model(model):
         if model['provider'] not in providers:
             return {'msg': 'Proveedor no encontrado'}, 404
         model['key'] = fernet.encrypt(model['key'].encode()).decode()
+
+        # check if there is already a model with the same name
+        existing_model = mongodb.get_record("llm_models", filters={"name": model['name']})
+        if existing_model:
+            return {'msg': 'Ya existe un servicio con ese nombre'}, 400
+        
         model = LlmProvider(**model)
         mongodb.insert_record("llm_models", model)
         update_cache()
@@ -118,7 +124,6 @@ def get_provider_models(id):
     
 def set_conversation(data, user):
     try:
-        print("Setting conversation with data:", data)
         provider = get_provider_class(data['provider']['id'])
         if data['type'] == 'transcription':
             from .utils.TranscriptionProcessing import create_transcription_conversation
