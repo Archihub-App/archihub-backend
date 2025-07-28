@@ -34,3 +34,4 @@ transformers
 tokenizers
 BeautifulSoup4
 PyExifTool
+pypdf
