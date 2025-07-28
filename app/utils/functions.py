@@ -67,6 +67,7 @@ def get_roles():
         # Agregar admin y editor a la lista
         temp.append({'id': 'user', 'term': 'user'})
         temp.append({'id': 'admin', 'term': 'admin'})
+        temp.append({'id': 'super_editor', 'term': 'super_editor'}) # rol que puede editar todo
         temp.append({'id': 'editor', 'term': 'editor'})
         temp.append({'id': 'publisher', 'term': 'publisher'})
         temp.append({'id': 'visualizer', 'term': 'visualizer'})
