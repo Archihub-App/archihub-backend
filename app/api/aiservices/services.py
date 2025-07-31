@@ -144,9 +144,9 @@ def set_conversation(data, user):
 def get_conversation_history(data, user):
     type = data['type']
     id = data['id']
-    
+    print(type, id)
     try:
-        if type == 'record':
+        if type == 'record' or type == 'transcription':
             from app.api.records.services import get_by_id
             resp_, status = get_by_id(id, user)
             if status != 200:
