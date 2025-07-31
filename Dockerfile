@@ -6,13 +6,13 @@ RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y ffmpe
 
 RUN cd /tmp && \
     curl -O https://exiftool.org/Image-ExifTool-13.33.tar.gz && \
-    tar -xzf Image-ExifTool-13.32.tar.gz && \
-    cd Image-ExifTool-13.32 && \
+    tar -xzf Image-ExifTool-13.33.tar.gz && \
+    cd Image-ExifTool-13.33 && \
     perl Makefile.PL && \
     make && \
     make install && \
     cd / && \
-    rm -rf /tmp/Image-ExifTool-13.32*
+    rm -rf /tmp/Image-ExifTool-13.33*
 
 RUN pip install --upgrade pip
 
