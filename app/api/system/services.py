@@ -775,7 +775,7 @@ def get_system_settings():
         if d['id'] == 'files_download':
             files_download = d['value'] if d['value'] else False
             
-    from app.api.llms.services import get_llm_models
+    from app.api.aiservices.services import get_llm_models
     llm_models, status = get_llm_models()
     
     if len(llm_models) > 0:
@@ -818,6 +818,8 @@ def get_system_actions(placement):
         }, 200
         
     except Exception as e:
+        print(str(e))
+        print('-'*50)
         return {'msg': str(e)}, 500
 
 
@@ -834,7 +836,7 @@ def clear_cache():
     from app.api.snaps.services import update_cache as update_cache_snaps
     from app.api.views.services import update_cache as update_cache_views
     from app.api.geosystem.services import update_cache as update_cache_geosystem
-    from app.api.llms.services import update_cache as update_cache_llms
+    from app.api.aiservices.services import update_cache as update_cache_llms
     from app.api.resources.public_services import update_cache as update_cache_resources_public
     from app.api.records.public_services import update_cache as update_cache_records_public
 

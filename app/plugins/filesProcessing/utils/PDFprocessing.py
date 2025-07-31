@@ -2,6 +2,32 @@ import shutil
 from pdf2image import convert_from_path
 from PIL import Image
 import os
+import pypdf
+
+def clean_pdf(file_path):
+    try:
+        reader = pypdf.PdfReader(file_path)
+        writer = pypdf.PdfWriter()
+
+        for page in reader.pages:
+            writer.add_page(page)
+
+        # Remove JavaScript
+        if "/Names" in reader.trailer["/Root"]:
+            names_dict = reader.trailer["/Root"]["/Names"]
+            if "/JavaScript" in names_dict:
+                del names_dict["/JavaScript"]
+
+        if "/OpenAction" in reader.trailer["/Root"]:
+            open_action = reader.trailer["/Root"]["/OpenAction"]
+            if "/S" in open_action and open_action["/S"] == "/JavaScript":
+                del reader.trailer["/Root"]["/OpenAction"]
+
+        with open(file_path, "wb") as f:
+            writer.write(f)
+        return True
+    except Exception as e:
+        raise Exception('Error al convertir el archivo: ' + str(e))
 
 def main(path, output_path):
     try:

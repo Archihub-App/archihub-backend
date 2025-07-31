@@ -1,5 +1,5 @@
 from app.utils import DatabaseHandler, CacheHandler
-from app.api.llms.models import Conversation, ConversationUpdate
+from app.api.aiservices.models import Conversation, ConversationUpdate
 from bson.objectid import ObjectId
 import datetime
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -116,12 +116,6 @@ def create_document_conversation(body, provider, user):
     resp_, status = get_by_id(record_id, user)
     if status != 200:
         raise Exception('Error al obtener el record')
-    
-    print(f"Record: {resp_}")
-    print(f"Processing slug: {processing_slug}")
-    print(f"Conversation ID: {conversation_id}")
-    print(f"Message: {message}")
-    print(f"Page: {page}")
     
     from app.utils.functions import cache_get_block_by_page_id
     try:

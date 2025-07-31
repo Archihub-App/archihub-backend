@@ -103,6 +103,7 @@ def process_file(file, instance=None):
             
             instance.update_data('records', str(file['_id']), update)
     elif 'application/pdf' in file['mime']:
+        PDFprocessing.clean_pdf(path)
         result = PDFprocessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
         folder_path = os.path.join(path_dir, filename).split('.')[0]
 

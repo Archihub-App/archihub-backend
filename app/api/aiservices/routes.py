@@ -1,7 +1,7 @@
-from app.api.llms import bp
+from app.api.aiservices import bp
 from flask import jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.api.llms import services
+from app.api.aiservices import services
 from app.api.users import services as user_services
 from flask_babel import _
 

@@ -105,7 +105,7 @@ def create():
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'super_editor'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     # Obtener el body del request
@@ -211,7 +211,7 @@ def update_by_id(id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Si el usuario no es admin, retornar error
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'super_editor'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     
     body = request.form.to_dict()
@@ -264,8 +264,8 @@ def delete_by_id(id):
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
-    # Si el usuario no es admin, retornar error
-    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
+    # Si el usuario no es admin, editor o super_editor, retornar error
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'super_editor'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Llamar al servicio para eliminar el recurso
     return services.delete_by_id(id, current_user)

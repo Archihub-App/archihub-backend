@@ -307,7 +307,10 @@ def update_by_id(id, body, user, files, updateCache = True):
         if errors:
             return {'msg': _('Error validating fields'), 'errors': errors}, 400
         
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1, 'createdBy': 1})
+        
+        if resource and 'createdBy' in resource and resource['createdBy'] != user and not has_role(user, 'admin') and not has_role(user, 'super_editor'):
+            return {'msg': _('You don\'t have the required authorization')}, 401
 
         validate_files([*body['filesIds'], *resource['filesObj']], metadata, errors)
 
@@ -1298,6 +1301,9 @@ def delete_by_id(id, user):
                 return {'msg': _('You don\'t have the required authorization')}, 401
 
         resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        
+        if resource['createdBy'] != user and not has_role(user, 'admin') and not has_role(user, 'super_editor'):
+            return {'msg': _('You don\'t have the required authorization')}, 401
         
         if 'files' in resource:
             records_list = resource['files']
