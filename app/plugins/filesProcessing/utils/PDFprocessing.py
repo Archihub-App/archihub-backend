@@ -12,7 +12,16 @@ def clean_pdf(file_path):
         for page in reader.pages:
             writer.add_page(page)
 
-        writer.remove_javascript()
+        # Remove JavaScript
+        if "/Names" in reader.trailer["/Root"]:
+            names_dict = reader.trailer["/Root"]["/Names"]
+            if "/JavaScript" in names_dict:
+                del names_dict["/JavaScript"]
+
+        if "/OpenAction" in reader.trailer["/Root"]:
+            open_action = reader.trailer["/Root"]["/OpenAction"]
+            if "/S" in open_action and open_action["/S"] == "/JavaScript":
+                del reader.trailer["/Root"]["/OpenAction"]
 
         with open(file_path, "wb") as f:
             writer.write(f)
