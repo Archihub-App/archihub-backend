@@ -5,7 +5,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y ffmpeg && apt-get install -y poppler-utils && apt-get install -y libreoffice
 
 RUN cd /tmp && \
-    curl -O https://exiftool.org/Image-ExifTool-13.32.tar.gz && \
+    curl -O https://exiftool.org/Image-ExifTool-13.33.tar.gz && \
     tar -xzf Image-ExifTool-13.32.tar.gz && \
     cd Image-ExifTool-13.32 && \
     perl Makefile.PL && \
