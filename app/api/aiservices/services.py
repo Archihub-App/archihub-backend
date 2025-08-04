@@ -5,8 +5,8 @@ import os
 import json
 from bson import json_util
 from bson.objectid import ObjectId
-from app.api.llms.models import LlmProvider, LlmProviderUpdate
-from app.api.llms.utils.LLMProviders import OpenAIProvider, GoogleProvider, AzureProvider
+from app.api.aiservices.models import LlmProvider, LlmProviderUpdate
+from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider
 
 PROVIDER_CLASSES = {
     'OpenAI': OpenAIProvider,
@@ -38,7 +38,7 @@ def get_llm_models():
 @cacheHandler.cache.cache()
 def get_llm_providers():
     try:
-        from .utils.LLMProviders import get_llm_providers
+        from .utils.ModelsProviders import get_llm_providers
         providers = get_llm_providers()
         return providers, 200
     except Exception as e:
@@ -46,11 +46,17 @@ def get_llm_providers():
     
 def create_llm_model(model):
     try:
-        from .utils.LLMProviders import get_llm_providers
+        from .utils.ModelsProviders import get_llm_providers
         providers = get_llm_providers()
         if model['provider'] not in providers:
             return {'msg': 'Proveedor no encontrado'}, 404
         model['key'] = fernet.encrypt(model['key'].encode()).decode()
+
+        # check if there is already a model with the same name
+        existing_model = mongodb.get_record("llm_models", filters={"name": model['name']})
+        if existing_model:
+            return {'msg': 'Ya existe un servicio con ese nombre'}, 400
+        
         model = LlmProvider(**model)
         mongodb.insert_record("llm_models", model)
         update_cache()
@@ -118,7 +124,6 @@ def get_provider_models(id):
     
 def set_conversation(data, user):
     try:
-        print("Setting conversation with data:", data)
         provider = get_provider_class(data['provider']['id'])
         if data['type'] == 'transcription':
             from .utils.TranscriptionProcessing import create_transcription_conversation
@@ -139,9 +144,9 @@ def set_conversation(data, user):
 def get_conversation_history(data, user):
     type = data['type']
     id = data['id']
-    
+    print(type, id)
     try:
-        if type == 'record':
+        if type == 'record' or type == 'transcription':
             from app.api.records.services import get_by_id
             resp_, status = get_by_id(id, user)
             if status != 200:

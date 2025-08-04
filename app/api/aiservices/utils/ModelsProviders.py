@@ -21,7 +21,7 @@ class AzureProvider(BaseLLMProvider):
                 "name": "GPT-4.1",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
                 "cognitive_services": True,
             },
             {
@@ -29,7 +29,7 @@ class AzureProvider(BaseLLMProvider):
                 "name": "GPT-4.1 Mini",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
                 "cognitive_services": True,
             },
             {
@@ -37,7 +37,7 @@ class AzureProvider(BaseLLMProvider):
                 "name": "GPT-4.1 Nano",
                 "type": "chat",
                 "max_tokens": 16384,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
                 "cognitive_services": True,
             },
             {
@@ -45,7 +45,7 @@ class AzureProvider(BaseLLMProvider):
                 "name": "o4 Mini",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
                 "cognitive_services": True,
             },
             {
@@ -53,6 +53,7 @@ class AzureProvider(BaseLLMProvider):
                 "name": "GPT-3.5 Turbo",
                 "type": "chat",
                 "max_tokens": 16384,
+                "capabilities": ["chat"],
                 "cognitive_services": True,
             },
             {
@@ -60,26 +61,25 @@ class AzureProvider(BaseLLMProvider):
                 "name": "Grok 3",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "grok-3-mini",
                 "name": "Grok 3 Mini",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "DeepSeek-R1-0528",
                 "name": "DeepSeek R1 0528",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             }
         ]
         
     def call(self, messages, **kwargs):
-        import os
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.key}",
@@ -170,25 +170,25 @@ class GoogleProvider(BaseLLMProvider):
                 "name": "Gemini 2.0 Flash",
                 "type": "chat",
                 "max_tokens": 2048,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "gemini-2.0-flash-lite",
                 "name": "Gemini 2.0 Flash Lite",
                 "type": "chat",
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "gemini-2.0-flash-thinking-exp-01-21",
                 "name": "Gemini 2.0 Flash Thinking Exp 01-21",
                 "type": "chat",
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "gemini-2.5-pro-preview-03-25",
                 "name": "Gemini 2.5 Pro Preview 03-25",
                 "type": "chat",
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             }
         ]
         
@@ -271,26 +271,27 @@ class OpenAIProvider(BaseLLMProvider):
                 "name": "GPT-4.1 Nano",
                 "type": "chat",
                 "max_tokens": 16384,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "gpt-4.1-mini",
                 "name": "GPT-4.1 Mini",
                 "type": "chat",
                 "max_tokens": 16384,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "gpt-4.1",
                 "name": "GPT-4.1",
                 "type": "chat",
                 "max_tokens": 16384,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "gpt-3.5-turbo",
                 "name": "GPT-3.5 Turbo",
                 "type": "chat",
+                "capabilities": ["chat"],
                 "max_tokens": 16384,
             },
             {
@@ -298,42 +299,42 @@ class OpenAIProvider(BaseLLMProvider):
                 "name": "GPT-4",
                 "type": "chat",
                 "max_tokens": 32768,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "gpt-4-turbo",
                 "name": "GPT-4 Turbo",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "gpt-4o",
                 "name": "GPT-4o",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "gpt-4o-mini",
                 "name": "GPT-4o Mini",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "o1",
                 "name": "o1",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             },
             {
                 "id": "o4-mini",
                 "name": "o4 Mini",
                 "type": "chat",
                 "max_tokens": 100000,
-                "supports_vision": True,
+                "capabilities": ["chat", "image"],
             }
         ]
         

@@ -138,18 +138,23 @@ class IndexHandler:
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     
-    def delete_all_documents(self, index):
+    def delete_all_documents(self, index, query=None):
         url = ELASTIC_DOMAIN + ':' + ELASTIC_PORT + '/' + index + '/_delete_by_query'
-        body = {
-            'query': {
-                'match_all': {}
+        if query is None:
+            query = {
+                'query': {
+                    'match_all': {}
+                }
             }
-        }
+        else:
+            query = {
+                'query': query
+            }
         if self.ssl_context:
-            response = requests.post(url, json=body, auth=HTTPBasicAuth(
+            response = requests.post(url, json=query, auth=HTTPBasicAuth(
                 ELASTIC_USER, ELASTIC_PASSWORD), verify=self.ssl_context)
         else:
-            response = requests.post(url, json=body, auth=HTTPBasicAuth(
+            response = requests.post(url, json=query, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         return response.json()
     

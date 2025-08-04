@@ -66,6 +66,7 @@ def index_resources_task(body={}):
             document = {}
             resouces_count += 1
             post_type = resource['post_type']
+            print(post_type)
             fields = get_metadata(post_type)['fields']
             for f in fields:
                 if f['type'] != 'file' and f['type'] != 'simple-date' and f['type'] != 'repeater':
@@ -171,7 +172,6 @@ def index_resources_task(body={}):
                 if resource['accessRights']:
                     document['accessRights'] = resource['accessRights']
 
-            print(document)
             r = index_handler.index_document(
                 ELASTIC_INDEX_PREFIX + '-resources', str(resource['_id']), document)
             if r.status_code != 201 and r.status_code != 200:

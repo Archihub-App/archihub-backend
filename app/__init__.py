@@ -174,9 +174,9 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.usertasks import bp as usertasks_bp
     app.register_blueprint(usertasks_bp, url_prefix='/usertasks')
     
-    #Registrar llms blueprint
-    from app.api.llms import bp as llms_bp
-    app.register_blueprint(llms_bp, url_prefix='/llms')
+    #Registrar aiservices blueprint
+    from app.api.aiservices import bp as aiservices_bp
+    app.register_blueprint(aiservices_bp, url_prefix='/aiservices')
 
     # Helper function to find a record by ID
     from app.utils.functions import find_by_id
