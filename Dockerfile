@@ -29,6 +29,7 @@ RUN pip install gunicorn
 COPY . .
 
 RUN sed -i 's/\r$//' start.sh
+RUN sed -i 's/\r$//' start_celery.sh
 
 RUN chmod +x /app/start.sh
 RUN chmod +x /app/start_celery.sh
