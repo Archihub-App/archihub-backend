@@ -424,6 +424,13 @@ class OllamaProvider(BaseLLMProvider):
                 "type": "chat",
                 "max_tokens": 100000,
                 "capabilities": ["chat"],
+            },
+            {
+                "id": "gemma3:4b",
+                "name": "Gemma 3 4b",
+                "type": "chat",
+                "max_tokens": 100000,
+                "capabilities": ["chat", "image"],
             }
         ]
     
@@ -442,32 +449,34 @@ class OllamaProvider(BaseLLMProvider):
         for msg in messages:
             if isinstance(msg['content'], str):
                 # Simple text message
-                processed_messages.append(msg)
-            elif isinstance(msg['content'], list):
-                # Mixed content (text + images)
-                content_parts = []
-                for content_item in msg['content']:
-                    if content_item['type'] == 'text':
-                        content_parts.append({
-                            "type": "text",
-                            "text": content_item['text']
-                        })
-                    elif content_item['type'] == 'image_path':
-                        # Convert local image to base64 for OpenAI
-                        image_path = content_item['path']
-                        base64_image = self.process_image(image_path)
-                        content_parts.append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": base64_image
-                            }
-                        })
-
                 processed_messages.append({
                     "role": msg['role'],
-                    "content": content_parts
+                    "content": msg['content']
                 })
+            elif isinstance(msg['content'], list):
+                # Mixed content (text + images) — Ollama expects string content + images array
+                text_chunks = []
+                image_parts = []
+                for content_item in msg['content']:
+                    if content_item['type'] == 'text':
+                        text_chunks.append(content_item['text'])
+                    elif content_item['type'] == 'image_path':
+                        # Convert local image to base64 for Ollama
+                        image_path = content_item['path']
+                        base64_image = self.process_image(image_path)
+                        image_parts.append(base64_image)
+
+                merged_text = "\n".join(text_chunks) if text_chunks else ""
+                message_dict = {
+                    "role": msg['role'],
+                    "content": merged_text
+                }
+                if image_parts:
+                    message_dict["images"] = image_parts
+
+                processed_messages.append(message_dict)
             else:
+                # Fallback: pass through as-is if unexpected structure
                 processed_messages.append(msg)
 
         data = {
@@ -499,9 +508,4 @@ class OllamaProvider(BaseLLMProvider):
     def process_image(self, image_path):
         with open(image_path, "rb") as image_file:
             base64_image = base64.b64encode(image_file.read()).decode('utf-8')
-
-        mime_type, _ = mimetypes.guess_type(image_path)
-        if not mime_type or not mime_type.startswith('image/'):
-            mime_type = 'image/jpeg'
-
-        return f"data:{mime_type};base64,{base64_image}"
+        return base64_image
