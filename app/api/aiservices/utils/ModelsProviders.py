@@ -2,11 +2,13 @@ import requests
 from .BaseLLMProvider import BaseLLMProvider
 import mimetypes
 import base64
+import os
 
 llm_providers = [
     "OpenAI",
     "Google",
     "Azure",
+    "Ollama"
 ]
 
 def get_llm_providers():
@@ -412,3 +414,98 @@ class OpenAIProvider(BaseLLMProvider):
             mime_type = 'image/jpeg'
             
         return f"data:{mime_type};base64,{base64_image}"
+
+class OllamaProvider(BaseLLMProvider):
+    def getModels(self):
+        return [
+            {
+                "id": "gpt-oss:20b",
+                "name": "GPT-OSS 20b",
+                "type": "chat",
+                "max_tokens": 100000,
+                "capabilities": ["chat"],
+            },
+            {
+                "id": "gemma3:4b",
+                "name": "Gemma 3 4b",
+                "type": "chat",
+                "max_tokens": 100000,
+                "capabilities": ["chat", "image"],
+            }
+        ]
+    
+    def call(self, messages, **kwargs):
+        url = f"{os.getenv('OLLAMA_HOST')}:{os.getenv('OLLAMA_PORT')}/api/chat"
+        model = kwargs.get("model", "gpt-oss:20b")
+
+        # check if the model is in the list of models
+        models = self.getModels()
+        model_ids = [model['id'] for model in models]
+        if model not in model_ids:
+            raise ValueError(f"Model {model} is not supported. Supported models are: {model_ids}")
+
+        processed_messages = []
+
+        for msg in messages:
+            if isinstance(msg['content'], str):
+                # Simple text message
+                processed_messages.append({
+                    "role": msg['role'],
+                    "content": msg['content']
+                })
+            elif isinstance(msg['content'], list):
+                # Mixed content (text + images) — Ollama expects string content + images array
+                text_chunks = []
+                image_parts = []
+                for content_item in msg['content']:
+                    if content_item['type'] == 'text':
+                        text_chunks.append(content_item['text'])
+                    elif content_item['type'] == 'image_path':
+                        # Convert local image to base64 for Ollama
+                        image_path = content_item['path']
+                        base64_image = self.process_image(image_path)
+                        image_parts.append(base64_image)
+
+                merged_text = "\n".join(text_chunks) if text_chunks else ""
+                message_dict = {
+                    "role": msg['role'],
+                    "content": merged_text
+                }
+                if image_parts:
+                    message_dict["images"] = image_parts
+
+                processed_messages.append(message_dict)
+            else:
+                # Fallback: pass through as-is if unexpected structure
+                processed_messages.append(msg)
+
+        data = {
+            "model": model,
+            "messages": processed_messages,
+            "stream": False
+        }
+        
+        try:
+            response = requests.post(url, json=data)
+
+            response_data = response.json()
+            if response.status_code != 200:
+                raise ValueError(f"Ollama returned an error: {response.status_code} - {response.text}")
+
+            if response_data.get("error"):
+                raise ValueError(f"Ollama returned an error: {response_data['error']['message']}")
+
+            return {
+                'choices': [
+                    {
+                        'message': response_data['message']
+                    }
+                ]
+            }
+        except requests.exceptions.RequestException as e:
+            raise ValueError(f"Request to Ollama API failed: {e}")
+
+    def process_image(self, image_path):
+        with open(image_path, "rb") as image_file:
+            base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+        return base64_image
