@@ -420,6 +420,9 @@ def cache_get_record_transcription(id, slug, segments=True):
             'speaker': speaker
         }
 
+        obj['label'] = s['label'] if 'label' in s else None
+        obj['location'] = s['location'] if 'location' in s else None
+
         temp.append(obj)
 
     speakers = None
