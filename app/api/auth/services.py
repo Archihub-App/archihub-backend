@@ -3,7 +3,7 @@ from flask_jwt_extended import create_access_token
 from datetime import timedelta, datetime
 from app.api.logs.services import register_log
 from app.utils.LogActions import log_actions
-from flask import jsonify, request
+from flask import jsonify, request, current_app
 from app.api.users.services import get_user
 from app.utils import CacheHandler
 import bcrypt
@@ -66,14 +66,13 @@ def record_login_attempt(username):
     set_login_attempts(username, attempts)
 
 def ldap_login(username, password):
+    import ldap
     try:
-        import ldap
         # Initialize LDAP connection
         ldap_client = ldap.initialize(LDAP_HOST)
 
         # Set TLS options for LDAPS
         if LDAP_HOST and LDAP_HOST.lower().startswith('ldaps://'):
-            ldap_client.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
             if LDAP_TLS_CACERTFILE:
                 ldap_client.set_option(ldap.OPT_X_TLS_CACERTFILE, LDAP_TLS_CACERTFILE)
 
@@ -85,6 +84,8 @@ def ldap_login(username, password):
                     'demand': ldap.OPT_X_TLS_DEMAND
                 }
                 ldap_client.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, cert_options.get(LDAP_TLS_REQUIRE_CERT.lower(), ldap.OPT_X_TLS_DEMAND))
+            
+            ldap_client.set_option(ldap.OPT_X_TLS_NEWCTX, 0)
 
         ldap_client.set_option(ldap.OPT_REFERRALS, 0)
         

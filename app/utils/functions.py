@@ -10,12 +10,19 @@ from PIL import Image
 from flask import Response, jsonify
 import datetime
 import base64
+import unicodedata
 load_dotenv()
 
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+
+def normalize_text(text):
+    if not isinstance(text, str):
+        return text
+    return ''.join(c for c in unicodedata.normalize('NFD', text)
+                   if unicodedata.category(c) != 'Mn').lower()
 
 def clear_cache():
     cache_type_roles.invalidate_all()
@@ -406,9 +413,36 @@ def cache_get_record_transcription(id, slug, segments=True):
 
     temp = []
     hasSpeakers = False
+    labels_array = []
+    locations_array = []
 
     for s in resp['segments']:
         speaker = s['speaker'] if 'speaker' in s else None
+        labels = s['label'] if 'label' in s else None
+        location = s['location'] if 'location' in s else None
+        
+        if labels:
+            for label in labels:
+                normalized_label_name = normalize_text(label['name'])
+                found = False
+                for l in labels_array:
+                    if normalize_text(l['name']) == normalized_label_name:
+                        l['count'] += 1
+                        found = True
+                        break
+                if not found:
+                    labels_array.append({**label, 'count': 1})
+        if location:
+            for loc in location:
+                normalized_loc_name = normalize_text(loc['name'])
+                found = False
+                for l in locations_array:
+                    if normalize_text(l['name']) == normalized_loc_name:
+                        l['count'] += 1
+                        found = True
+                        break
+                if not found:
+                    locations_array.append({**loc, 'count': 1})
 
         if speaker:
             hasSpeakers = True
@@ -420,8 +454,11 @@ def cache_get_record_transcription(id, slug, segments=True):
             'speaker': speaker
         }
 
-        obj['label'] = s['label'] if 'label' in s else None
-        obj['location'] = s['location'] if 'location' in s else None
+        if labels:
+            obj['labels'] = labels
+
+        if location:
+            obj['location'] = location
 
         temp.append(obj)
 
@@ -457,6 +494,15 @@ def cache_get_record_transcription(id, slug, segments=True):
             'segments': temp,
             'speakers': speakers
         }
+
+    labels_array.sort(key=lambda x: x['count'], reverse=True)
+    locations_array.sort(key=lambda x: x['count'], reverse=True)
+
+    if len(labels_array) > 0:
+        transcription['labels'] = labels_array
+
+    if len(locations_array) > 0:
+        transcription['locations'] = locations_array
 
     return transcription
 
