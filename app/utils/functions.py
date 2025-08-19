@@ -549,7 +549,6 @@ def cache_get_record_transcription(id, slug, segments=True):
     if len(frames_array) > 0:
         transcription['frames'] = frames_array
         
-    print(groups)
     if len(groups) > 0:
         transcription['groups'] = groups
 

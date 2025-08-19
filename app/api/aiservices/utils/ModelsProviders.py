@@ -291,6 +291,13 @@ class OpenAIProvider(BaseLLMProvider):
                 "capabilities": ["chat", "image"],
             },
             {
+                "id": "gpt-5",
+                "name": "GPT-5",
+                "type": "chat",
+                "max_tokens": 16384,
+                "capabilities": ["chat", "image"],
+            },
+            {
                 "id": "gpt-3.5-turbo",
                 "name": "GPT-3.5 Turbo",
                 "type": "chat",
