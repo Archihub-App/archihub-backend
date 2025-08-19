@@ -237,7 +237,8 @@ class GoogleProvider(BaseLLMProvider):
             contents=contents,
             config=generate_content_config,
         ):
-            response += chunk.text
+            if chunk.text:
+                response += chunk.text
         
         return {
             'choices': [

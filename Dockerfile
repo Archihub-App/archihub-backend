@@ -2,17 +2,17 @@ FROM python:3.11
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y ffmpeg && apt-get install -y poppler-utils && apt-get install -y libreoffice
+RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y ffmpeg && apt-get install -y poppler-utils && apt-get install -y libreoffice && apt-get install -y libldap2-dev && apt-get install -y libsasl2-dev
 
 RUN cd /tmp && \
-    curl -O https://exiftool.org/Image-ExifTool-13.33.tar.gz && \
-    tar -xzf Image-ExifTool-13.33.tar.gz && \
-    cd Image-ExifTool-13.33 && \
+    curl -O https://exiftool.org/Image-ExifTool-13.34.tar.gz && \
+    tar -xzf Image-ExifTool-13.34.tar.gz && \
+    cd Image-ExifTool-13.34 && \
     perl Makefile.PL && \
     make && \
     make install && \
     cd / && \
-    rm -rf /tmp/Image-ExifTool-13.33*
+    rm -rf /tmp/Image-ExifTool-13.34*
 
 RUN pip install --upgrade pip
 
