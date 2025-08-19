@@ -392,11 +392,10 @@ class OpenAIProvider(BaseLLMProvider):
         }
         
         try:
-            response = requests.post(url, headers=headers, json=data)
+            response = requests.post(url, headers=headers, json=data, timeout=10)
             
+            response.raise_for_status()  # Raises an HTTPError for bad responses (4xx or 5xx)
             response_data = response.json()
-            if response.status_code != 200:
-                raise ValueError(f"OpenAI API returned an error: {response.status_code} - {response.text}")
             
             if response_data.get("error"):
                 raise ValueError(f"OpenAI API returned an error: {response_data['error']['message']}")

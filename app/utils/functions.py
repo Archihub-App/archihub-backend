@@ -415,34 +415,72 @@ def cache_get_record_transcription(id, slug, segments=True):
     hasSpeakers = False
     labels_array = []
     locations_array = []
+    frames_array = []
+    groups = []
+
+    frames = None
+    
+    if 'frames' in record['processing'][slug]['result']:
+        frames = record['processing'][slug]['result']['frames']
+        
+    if frames:
+        for f in frames:
+            labels = f.get('label', [])
+            group = f.get('group', None)
+            if group:
+                if group not in [g['name'] for g in groups]:
+                    groups.append({
+                        'name': group,
+                        'type': 'vision'
+                    })
+            for l in labels:
+                normalized_label_name = normalize_text(l['name'])
+                normalized_group = normalize_text(group)
+                found = False
+                for label in frames_array:
+                    if normalize_text(label['name']) == normalized_label_name and normalize_text(label.get('group', '')) == normalized_group:
+                        label['count'] += 1
+                        found = True
+                        break
+                if not found:
+                    frames_array.append({**l, 'count': 1, 'group': normalized_group})
 
     for s in resp['segments']:
         speaker = s['speaker'] if 'speaker' in s else None
         labels = s['label'] if 'label' in s else None
         location = s['location'] if 'location' in s else None
+        group = s.get('group', None)
+        if group:
+            if group not in [g['name'] for g in groups]:
+                groups.append({
+                    'name': group,
+                    'type': 'transcript'
+                })
         
         if labels:
             for label in labels:
                 normalized_label_name = normalize_text(label['name'])
+                normalized_group = normalize_text(group) if group else ''
                 found = False
                 for l in labels_array:
-                    if normalize_text(l['name']) == normalized_label_name:
+                    if normalize_text(l['name']) == normalized_label_name and normalize_text(l.get('group', '')) == normalized_group:
                         l['count'] += 1
                         found = True
                         break
                 if not found:
-                    labels_array.append({**label, 'count': 1})
+                    labels_array.append({**label, 'count': 1, 'group': normalized_group})
         if location:
             for loc in location:
                 normalized_loc_name = normalize_text(loc['name'])
+                normalized_group = normalize_text(group) if group else ''
                 found = False
                 for l in locations_array:
-                    if normalize_text(l['name']) == normalized_loc_name:
+                    if normalize_text(l['name']) == normalized_loc_name and normalize_text(l.get('group', '')) == normalized_group:
                         l['count'] += 1
                         found = True
                         break
                 if not found:
-                    locations_array.append({**loc, 'count': 1})
+                    locations_array.append({**loc, 'count': 1, 'group': normalized_group})
 
         if speaker:
             hasSpeakers = True
@@ -494,15 +532,26 @@ def cache_get_record_transcription(id, slug, segments=True):
             'segments': temp,
             'speakers': speakers
         }
+        
+    if frames:
+        transcription['vision'] = frames
 
     labels_array.sort(key=lambda x: x['count'], reverse=True)
     locations_array.sort(key=lambda x: x['count'], reverse=True)
+    frames_array.sort(key=lambda x: x['count'], reverse=True)
 
     if len(labels_array) > 0:
         transcription['labels'] = labels_array
 
     if len(locations_array) > 0:
         transcription['locations'] = locations_array
+
+    if len(frames_array) > 0:
+        transcription['frames'] = frames_array
+        
+    print(groups)
+    if len(groups) > 0:
+        transcription['groups'] = groups
 
     return transcription
 
