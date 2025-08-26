@@ -514,6 +514,9 @@ def get_by_id(id, current_user, fullFields = False):
                 keys[key]['type'] = record['processing'][key]['type']
                 if 'metadata' in record['processing'][key]:
                     keys[key]['metadata'] = extract_important_exif(record['processing'][key]['metadata'])
+                if key == 'fileProcessing':
+                    if 'cloud' in record['processing'][key]:
+                        keys[key]['cloud'] = record['processing'][key]['cloud']
 
             record['processing'] = keys
         
