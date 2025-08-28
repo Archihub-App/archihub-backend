@@ -3,6 +3,7 @@ from .BaseLLMProvider import BaseLLMProvider
 import mimetypes
 import base64
 import os
+import time
 
 llm_providers = [
     "OpenAI",
@@ -399,18 +400,38 @@ class OpenAIProvider(BaseLLMProvider):
             "temperature": kwargs.get("temperature", 0.5),
         }
         
-        try:
-            response = requests.post(url, headers=headers, json=data, timeout=30)
-            
-            response.raise_for_status()  # Raises an HTTPError for bad responses (4xx or 5xx)
-            response_data = response.json()
-            
-            if response_data.get("error"):
-                raise ValueError(f"OpenAI API returned an error: {response_data['error']['message']}")
-            
-            return response_data
-        except requests.exceptions.RequestException as e:
-            raise ValueError(f"Request to OpenAI API failed: {e}")
+        max_retries = 5
+        backoff_factor = 1
+
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(url, headers=headers, json=data, timeout=30)
+                
+                if response.status_code == 429:
+                    if attempt < max_retries - 1:
+                        sleep_time = backoff_factor * (2 ** attempt)
+                        # You might want to use a logger here instead of print
+                        print(f"Rate limit exceeded. Retrying in {sleep_time} seconds...")
+                        time.sleep(sleep_time)
+                        continue
+                    else:
+                        # Raise the error on the last attempt
+                        response.raise_for_status()
+
+                response.raise_for_status()  # Raises an HTTPError for other bad responses (4xx or 5xx)
+                response_data = response.json()
+                
+                if response_data.get("error"):
+                    raise ValueError(f"OpenAI API returned an error: {response_data['error']['message']}")
+                
+                return response_data
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries - 1:
+                    raise ValueError(f"Request to OpenAI API failed after {max_retries} retries: {e}")
+        
+        # This part should not be reached if logic is correct, but as a fallback:
+        raise ValueError("Failed to get a response from OpenAI API after multiple retries.")
+        
         
     def process_image(self, image_path):
         with open(image_path, "rb") as image_file:
