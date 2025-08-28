@@ -36,3 +36,4 @@ BeautifulSoup4
 PyExifTool
 pypdf
 pytesseract
+ldap3

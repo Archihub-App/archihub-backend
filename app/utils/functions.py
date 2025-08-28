@@ -496,8 +496,8 @@ def cache_get_record_transcription(id, slug, segments=True):
         if location:
             obj['location'] = location
 
-        if group:
-            obj['group'] = group
+        if groups:
+            obj['groups'] = groups
 
         temp.append(obj)
 

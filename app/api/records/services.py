@@ -167,6 +167,8 @@ def update_record_by_id(id, current_user, body):
 
         body['updatedBy'] = current_user if current_user else 'system'
         body['updatedAt'] = datetime.datetime.now()
+
+        print(body)
         # Si el record existe, actualizarlo
         update = FileRecordUpdate(**body)
 
