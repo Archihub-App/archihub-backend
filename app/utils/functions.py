@@ -426,16 +426,13 @@ def cache_get_record_transcription(id, slug, segments=True):
     if frames:
         for f in frames:
             labels = f.get('label', [])
-            group = f.get('group', None)
-            if group:
-                if group not in [g['name'] for g in groups]:
-                    groups.append({
-                        'name': group,
-                        'type': 'vision'
-                    })
+            
             for l in labels:
                 normalized_label_name = normalize_text(l['name'])
-                normalized_group = normalize_text(group)
+                group = l.get('group', None)
+                normalized_group = normalize_text(group) if group else ''
+                f['group'] = normalized_group
+
                 found = False
                 for label in frames_array:
                     if normalize_text(label['name']) == normalized_label_name and normalize_text(label.get('group', '')) == normalized_group:

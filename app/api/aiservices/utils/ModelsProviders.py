@@ -400,7 +400,7 @@ class OpenAIProvider(BaseLLMProvider):
         }
         
         try:
-            response = requests.post(url, headers=headers, json=data, timeout=10)
+            response = requests.post(url, headers=headers, json=data, timeout=30)
             
             response.raise_for_status()  # Raises an HTTPError for bad responses (4xx or 5xx)
             response_data = response.json()
