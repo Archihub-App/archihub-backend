@@ -289,7 +289,7 @@ def create(body, user, files, updateCache = True):
 
 def update_by_id(id, body, user, files, updateCache = True):
     try:
-        body = validate_parent(body)
+        body = validate_parent(body, True)
         has_new_parent = has_changed_parent(id, body)
         # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
@@ -478,7 +478,7 @@ def update_relations_children(body, metadata, new = False):
                     mongodb.update_record('resources', {'_id': ObjectId(a)}, update_)
 
 # Funcion para validar el padre de un recurso
-def validate_parent(body):
+def validate_parent(body, update = False):
     if 'parents' in body:
         hierarchical = is_hierarchical(body['post_type'])
         if body['parents']:
@@ -1506,7 +1506,7 @@ def get_parents(id):
 def get_parent(id):
     try:
         # Buscar el recurso en la base de datos
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'parent': 1})
         # Si el recurso no existe, retornar error
         if not resource:
             return {'msg': _('Resource does not exist')}, 404
@@ -1516,7 +1516,10 @@ def get_parent(id):
         else:
             if resource['parent']:
                 parent = resource['parent']
-                return parent['id']
+                if isinstance(parent, dict):
+                    return [parent]
+                elif isinstance(parent, list):
+                    return parent
             else:
                 return []
     except Exception as e:
