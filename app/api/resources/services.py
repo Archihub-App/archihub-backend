@@ -291,6 +291,7 @@ def update_by_id(id, body, user, files, updateCache = True):
     try:
         body = validate_parent(body, True)
         has_new_parent = has_changed_parent(id, body)
+        print('HOLA', has_new_parent)
 
         # # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
@@ -303,6 +304,7 @@ def update_by_id(id, body, user, files, updateCache = True):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
+        print('hola2')
         if errors:
             return {'msg': _('Error validating fields'), 'errors': errors}, 400
         
@@ -312,6 +314,7 @@ def update_by_id(id, body, user, files, updateCache = True):
             return {'msg': _('You don\'t have the required authorization')}, 401
 
         validate_files([*body['filesIds'], *resource['filesObj']], metadata, errors)
+        print('hola3')
 
         if errors:
             return {'msg': _('Error validating files'), 'errors': errors}, 400
@@ -329,6 +332,7 @@ def update_by_id(id, body, user, files, updateCache = True):
         if 'filesObj' in resource:
             for f in resource['filesObj']:
                 temp.append(f)
+        print('hola4')
 
         body['filesObj'] = temp
         del body['filesIds']
@@ -341,12 +345,15 @@ def update_by_id(id, body, user, files, updateCache = True):
         except Exception as e:
             print("Validation error details:", e.errors() if hasattr(e, 'errors') else str(e))
 
+        print('hola5')
         # Actualizar el recurso en la base de datos
         updated_resource = mongodb.update_record(
             'resources', {'_id': ObjectId(id)}, resource)
 
         if has_new_parent:
-            update_parents(id, body['post_type'])
+            print('UPDATEW')
+            update_parents(id, body['post_type'], user)
+            print('UPDATEW')
             update_records_parents(id, user)
 
         try:
@@ -1564,7 +1571,7 @@ def get_direct_children(id):
         raise Exception(str(e))
 
 # Funcion para actualizar los padres recursivamente
-def update_parents(id, post_type):
+def update_parents(id, post_type, user):
     try:
         get_parents.invalidate_all()
         get_parent.invalidate_all()
@@ -1572,8 +1579,12 @@ def update_parents(id, post_type):
         children = get_direct_children(id)
         # Si el recurso tiene hijos directos, actualizar el parent de cada hijo
         if children:
+            print('tiene hijos')
             for child in children:
                 parent = child['parent']
+                if isinstance(parent, dict):
+                    parent = [parent]
+                
                 all_ancestors = []
 
                 for p in parent:
@@ -1595,21 +1606,10 @@ def update_parents(id, post_type):
                         unique_parents.append(p)
                         seen_ids.add(p['id'])
 
-                update = ResourceUpdate(**{'parents': unique_parents})
-                # parents = [{
-                #     'post_type': post_type,
-                #     'id': id
-                # }]
-                # parents = [*parents, *get_parents(id)]
-                # parent = {
-                #     'post_type': post_type,
-                #     'id': id
-                # }
-                # update = ResourceUpdate(
-                #     **{'parents': parents, 'parent': parent})
+                update = ResourceUpdate(**{'parents': unique_parents, 'updatedBy': user, 'updatedAt': datetime.now()})
                 mongodb.update_record(
                     'resources', {'_id': ObjectId(child['id'])}, update)
-                update_parents(child['id'], child['post_type'])
+                update_parents(child['id'], child['post_type'], user)
 
     except Exception as e:
         raise Exception(str(e))
