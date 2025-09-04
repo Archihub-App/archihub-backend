@@ -489,6 +489,11 @@ def validate_parent(body, update = False):
         parent = body['parent']
         all_ancestors = []
 
+        if 'parent' not in body:
+            body['parent'] = []
+            body['parents'] = []
+            return body
+        
         for p in parent:
             all_ancestors.extend(get_parents(p['id']))
         
@@ -1579,7 +1584,6 @@ def update_parents(id, post_type, user):
         children = get_direct_children(id)
         # Si el recurso tiene hijos directos, actualizar el parent de cada hijo
         if children:
-            print('tiene hijos')
             for child in children:
                 parent = child['parent']
                 if isinstance(parent, dict):
