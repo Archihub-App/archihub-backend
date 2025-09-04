@@ -503,6 +503,11 @@ def validate_parent(body, update = False):
         
         parents = []
         for p in final_direct_parents:
+            if 'id' not in p:
+                body['parent'] = []
+                body['parents'] = []
+                return body
+
             if update:
                 if p['id'] == body['_id']:
                     raise Exception(_('The resource cannot have itself as parent'))
