@@ -495,6 +495,10 @@ def validate_parent(body, update = False):
             return body
         
         for p in parent:
+            if 'id' not in p:
+                body['parent'] = []
+                body['parents'] = []
+                return body
             all_ancestors.extend(get_parents(p['id']))
         
         ancestor_ids = {ancestor['id'] for ancestor in all_ancestors}
@@ -503,11 +507,6 @@ def validate_parent(body, update = False):
         
         parents = []
         for p in final_direct_parents:
-            if 'id' not in p:
-                body['parent'] = []
-                body['parents'] = []
-                return body
-
             if update:
                 if p['id'] == body['_id']:
                     raise Exception(_('The resource cannot have itself as parent'))
