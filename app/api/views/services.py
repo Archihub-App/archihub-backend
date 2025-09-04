@@ -94,10 +94,9 @@ def get_view_info(view_slug):
     records_types = []
     
     for file_type in distinct_types:
-        if file_type:
-            type_filter = {**filter_condition, 'processing.fileProcessing.type': file_type}
-            count = mongodb.count('records', type_filter)
-            records_types.append({'_id': file_type, 'count': count})
+        type_filter = {**filter_condition, 'processing.fileProcessing.type': file_type}
+        count = mongodb.count('records', type_filter)
+        records_types.append({'_id': file_type, 'count': count})
 
     records_types.sort(key=lambda x: x['count'], reverse=True)
     
