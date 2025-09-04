@@ -489,7 +489,7 @@ def validate_parent(body, update = False):
         parent = body['parent']
         all_ancestors = []
 
-        if 'parent' not in body:
+        if len(parent) == 0:
             body['parent'] = []
             body['parents'] = []
             return body
