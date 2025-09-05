@@ -4,6 +4,69 @@ from app.api.users import services as user_services
 from flask import request, jsonify
 import json
 
+@bp.route('/public/<id>', methods=['GET'])
+def get_by_id_public(id):
+    """
+    Obtener un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: id
+          schema:
+              type: string
+          required: true
+          description: id del record a obtener
+    responses:
+        200:
+            description: Record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Llamar al servicio para obtener un record por su id
+    resp = public_services.get_by_id(id)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
+    
+@bp.route('/public/<id>/stream', methods=['GET'])
+def stream_by_id_public(id):
+    """
+    Obtener un stream de un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: id
+          schema:
+              type: string
+          required: true
+          description: id del record a obtener
+    responses:
+        200:
+            description: Stream del record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    # Llamar al servicio para obtener un record por su id
+    resp = public_services.get_stream(id)
+    return resp
+
 @bp.route('/public/<id>/pages', methods=['POST'])
 def get_page_by_id_public(id):
     """

@@ -132,12 +132,7 @@ def get_by_id(id, fullFields = False):
 
         # Si el record no existe, retornar error
         if not record:
-            record = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'_id': 1})
-
-            if not record:
-                return {'msg': _('Record not found')}, 404
-            else:
-                return parse_result(record), 200
+            return {'msg': _('Record does not exist')}, 404
         
         if 'accessRights' in record:
             if record['accessRights']:
@@ -172,9 +167,24 @@ def get_by_id(id, fullFields = False):
                     to_clean.append(p['id'])
 
             record['parent'] = [x for x in record['parent'] if x['id'] not in to_clean]
+            for p in record['parent']:
+                if 'id' in p:
+                    p['id'] = str(p['id'])
+                    from app.api.resources.services import get_accessRights
+                    p['accessRights'] = get_accessRights(p['id'])
+                    if p['accessRights'] != None:
+                        return {'msg': _('You do not have permission to view this record')}, 401
 
 
         if 'parents' in record:
+            for p in record['parents']:
+                if 'id' in p:
+                    p['id'] = str(p['id'])
+                    from app.api.resources.services import get_accessRights
+                    p['accessRights'] = get_accessRights(p['id'])
+                    if p['accessRights'] != None:
+                        return {'msg': _('You do not have permission to view this record')}, 401
+                    
             record.pop('parents')
 
         # Si el record existe, retornar el record
@@ -183,6 +193,26 @@ def get_by_id(id, fullFields = False):
     except Exception as e:
         return {'msg': str(e)}, 500
     
+def get_stream(id):
+    try:
+        resp_, status = get_by_id(id)
+        if status != 200:
+            return resp_, status
+
+        path, type = cache_get_record_stream(id)
+        
+        path = os.path.join(WEB_FILES_PATH, path)
+
+        if type == 'video':
+            path = path + '.mp4'
+        elif type == 'audio':
+            path = path + '.mp3'
+
+        return send_file(path, as_attachment=True)
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 def download_records(body):
     try:
         if 'id' not in body:
