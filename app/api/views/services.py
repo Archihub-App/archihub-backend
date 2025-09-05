@@ -89,12 +89,16 @@ def get_view_info(view_slug):
 
     records_count = mongodb.count(
             'records', filter_condition)
+    
+    distinct_types = ['video', 'audio', 'document', 'image', 'database']
+    records_types = []
+    
+    for file_type in distinct_types:
+        type_filter = {**filter_condition, 'processing.fileProcessing.type': file_type}
+        count = mongodb.count('records', type_filter)
+        records_types.append({'_id': file_type, 'count': count})
 
-    records_types = list(mongodb.aggregate('records', [
-            {'$match': filter_condition},
-            {'$group': {'_id': '$processing.fileProcessing.type', 'count': {'$sum': 1}}},
-            {'$sort': {'count': -1}}
-        ]))
+    records_types.sort(key=lambda x: x['count'], reverse=True)
     
     view['files'] = {
         'total': records_count,

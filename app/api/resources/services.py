@@ -289,9 +289,10 @@ def create(body, user, files, updateCache = True):
 
 def update_by_id(id, body, user, files, updateCache = True):
     try:
-        body = validate_parent(body)
+        body = validate_parent(body, True)
         has_new_parent = has_changed_parent(id, body)
-        # Obtener los metadatos en función del tipo de contenido
+
+        # # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
         body_tmp = hookHandler.call('resource_pre_update', body)
         if body_tmp:
@@ -302,8 +303,6 @@ def update_by_id(id, body, user, files, updateCache = True):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
-        update_relations_children(body, metadata['fields'])
-        
         if errors:
             return {'msg': _('Error validating fields'), 'errors': errors}, 400
         
@@ -347,7 +346,7 @@ def update_by_id(id, body, user, files, updateCache = True):
             'resources', {'_id': ObjectId(id)}, resource)
 
         if has_new_parent:
-            update_parents(id, body['post_type'])
+            update_parents(id, body['post_type'], user)
             update_records_parents(id, user)
 
         try:
@@ -478,49 +477,64 @@ def update_relations_children(body, metadata, new = False):
                     mongodb.update_record('resources', {'_id': ObjectId(a)}, update_)
 
 # Funcion para validar el padre de un recurso
-def validate_parent(body):
-    if 'parents' in body:
-        hierarchical = is_hierarchical(body['post_type'])
-        if body['parents']:
-            parent = body['parents'][0]
-            # si el padre es el mismo que el hijo, retornar error
-            if '_id' in body:
-                if parent['id'] == body['_id']:
+def validate_parent(body, update = False):
+    if 'parent' in body and body['parent']:
+        parent = body['parent']
+        all_ancestors = []
+
+        print("HOLA", parent)
+        if len(parent) == 0:
+            body['parent'] = []
+            body['parents'] = []
+            return body
+        
+        for p in parent:
+            if 'id' not in p:
+                body['parent'] = []
+                body['parents'] = []
+                return body
+            all_ancestors.extend(get_parents(p['id']))
+        
+        ancestor_ids = {ancestor['id'] for ancestor in all_ancestors}
+        final_direct_parents = [p for p in parent if p['id'] not in ancestor_ids]
+        
+        
+        parents = []
+        for p in final_direct_parents:
+            if update:
+                if p['id'] == body['_id']:
                     raise Exception(_('The resource cannot have itself as parent'))
-            
-            if 'post_type' not in parent:
-                parent_temp = mongodb.get_record('resources', {'_id': ObjectId(parent['id'])}, fields={'post_type': 1})
+
+            if 'post_type' not in p:
+                parent_temp = mongodb.get_record('resources', {'_id': ObjectId(p['id'])}, fields={'post_type': 1})
                 if not parent_temp:
                     raise Exception(_('The parent resource does not exist'))
-                parent['post_type'] = parent_temp['post_type']
-            # si el tipo del padre es el mismo que el del hijo y no es jerarquico, retornar error
-            if parent['post_type'] == body['post_type'] and not hierarchical[0]:
-                raise Exception(_('The resource isn\'t hierarchical'))
-            # si el tipo del padre es diferente al del hijo y el hijo no lo tiene como padre, retornar error
-            elif not has_parent_postType(body['post_type'], parent['post_type']) and not hierarchical[0]:
-                raise Exception(_('The resource post type is not allowed to have a parent of this type'))
+                p['post_type'] = parent_temp['post_type']
 
-            body['parents'] = [parent, *get_parents(parent['id'])]
-            body['parent'] = parent
-            return body
-        else:
-            if hierarchical[0] and hierarchical[1]:
-                body['parents'] = []
-                body['parent'] = None
-                return body
-            elif hierarchical[0] and not hierarchical[1]:
-                body['parents'] = []
-                body['parent'] = None
-                return body
-            elif not hierarchical[0] and hierarchical[1]:
-                raise Exception(_('The post type must have a parent'))
-            elif not hierarchical[0] and not hierarchical[1]:
-                body['parents'] = []
-                body['parent'] = None
-                return body
+            if p['post_type'] == body['post_type']:
+                hierarchical = is_hierarchical(body['post_type'])
+                if not hierarchical[0]:
+                    raise Exception(_('The resource isn\'t hierarchical'))
+                elif not has_parent_postType(body['post_type'], p['post_type']) and not hierarchical[0]:
+                    raise Exception(_('The resource post type is not allowed to have a parent of this type'))
+                
+            parents.append(p)
+            parents = [*parents, *get_parents(p['id'])]
+        
+        unique_parents = []
+        seen_ids = set()
+        for p in parents:
+            if p['id'] not in seen_ids:
+                unique_parents.append(p)
+                seen_ids.add(p['id'])
+
+        body['parents'] = unique_parents
+        body['parent'] = final_direct_parents
+        return body
+    
     else:
+        body['parent'] = []
         body['parents'] = []
-        body['parent'] = None
         return body
 
 # Funcion para validar los campos de la metadata
@@ -1423,11 +1437,11 @@ def get_tree(root, available, user, post_type=None, page=None, status='published
                 
                 resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
-                             "$in": list_available}, 'parent': None, 'status': status_}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
+                             "$in": list_available}, 'parent': {'$in': [None, []]}, 'status': status_}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
             else:
                 resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
-                             "$in": list_available}, 'parent': None, 'status': status_}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             "$in": list_available}, 'parent': {'$in': [None, []]}, 'status': status_}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         else:
             if page is not None:
                 resources = list(mongodb.get_all_records('resources', {'post_type': {
@@ -1506,7 +1520,7 @@ def get_parents(id):
 def get_parent(id):
     try:
         # Buscar el recurso en la base de datos
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'parent': 1})
         # Si el recurso no existe, retornar error
         if not resource:
             return {'msg': _('Resource does not exist')}, 404
@@ -1516,7 +1530,10 @@ def get_parent(id):
         else:
             if resource['parent']:
                 parent = resource['parent']
-                return parent['id']
+                if isinstance(parent, dict):
+                    return [parent]
+                elif isinstance(parent, list):
+                    return parent
             else:
                 return []
     except Exception as e:
@@ -1525,14 +1542,19 @@ def get_parent(id):
 # Funcion para determinar si un recurso cambio de padre
 def has_changed_parent(id, body):
     try:
-        if (len(body['parents']) == 0):
-            return False
-        # Obtener los padres del recurso
         parent = get_parent(id)
-        if parent != body['parents'][0]['id']:
-            return True
-        else:
+        new_parent = body['parent']
+        
+        if not parent and not new_parent:
             return False
+        if not parent or not new_parent:
+            return True
+        if len(parent) != len(new_parent):
+            return True
+        
+        parent_ids = {p['id'] for p in parent}
+        new_parent_ids = {p['id'] for p in new_parent}
+        return parent_ids != new_parent_ids
     except Exception as e:
         raise Exception(str(e))
 
@@ -1541,10 +1563,10 @@ def get_direct_children(id):
     try:
         # Buscar los recursos en la base de datos con parent igual al id
         resources = list(mongodb.get_all_records(
-            'resources', {'parent.id': id}))
+            'resources', {'parent.id': id}, fields={'_id': 1, 'post_type': 1, 'parent': 1}))
 
         resources = [{'post_type': re['post_type'],
-                      'id': str(re['_id'])} for re in resources]
+                      'id': str(re['_id']), 'parent': re['parent']} for re in resources]
 
         return resources
 
@@ -1552,9 +1574,7 @@ def get_direct_children(id):
         raise Exception(str(e))
 
 # Funcion para actualizar los padres recursivamente
-
-
-def update_parents(id, post_type):
+def update_parents(id, post_type, user):
     try:
         get_parents.invalidate_all()
         get_parent.invalidate_all()
@@ -1563,20 +1583,35 @@ def update_parents(id, post_type):
         # Si el recurso tiene hijos directos, actualizar el parent de cada hijo
         if children:
             for child in children:
-                parents = [{
-                    'post_type': post_type,
-                    'id': id
-                }]
-                parents = [*parents, *get_parents(id)]
-                parent = {
-                    'post_type': post_type,
-                    'id': id
-                }
-                updata = ResourceUpdate(
-                    **{'parents': parents, 'parent': parent})
+                parent = child['parent']
+                if isinstance(parent, dict):
+                    parent = [parent]
+                
+                all_ancestors = []
+
+                for p in parent:
+                    all_ancestors.extend(get_parents(p['id']))
+                
+                ancestor_ids = {ancestor['id'] for ancestor in all_ancestors}
+                final_direct_parents = [p for p in parent if p['id'] not in ancestor_ids]
+                
+                
+                parents = []
+                for p in final_direct_parents:
+                    parents.append(p)
+                    parents = [*parents, *get_parents(p['id'])]
+                    
+                unique_parents = []
+                seen_ids = set()
+                for p in parents:
+                    if p['id'] not in seen_ids:
+                        unique_parents.append(p)
+                        seen_ids.add(p['id'])
+
+                update = ResourceUpdate(**{'parents': unique_parents, 'updatedBy': user, 'updatedAt': datetime.now()})
                 mongodb.update_record(
-                    'resources', {'_id': ObjectId(child['id'])}, updata)
-                update_parents(child['id'], child['post_type'])
+                    'resources', {'_id': ObjectId(child['id'])}, update)
+                update_parents(child['id'], child['post_type'], user)
 
     except Exception as e:
         raise Exception(str(e))

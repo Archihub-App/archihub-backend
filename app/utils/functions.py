@@ -426,16 +426,13 @@ def cache_get_record_transcription(id, slug, segments=True):
     if frames:
         for f in frames:
             labels = f.get('label', [])
-            group = f.get('group', None)
-            if group:
-                if group not in [g['name'] for g in groups]:
-                    groups.append({
-                        'name': group,
-                        'type': 'vision'
-                    })
+            
             for l in labels:
                 normalized_label_name = normalize_text(l['name'])
-                normalized_group = normalize_text(group)
+                group = l.get('group', None)
+                normalized_group = normalize_text(group) if group else ''
+                f['group'] = normalized_group
+
                 found = False
                 for label in frames_array:
                     if normalize_text(label['name']) == normalized_label_name and normalize_text(label.get('group', '')) == normalized_group:
@@ -449,18 +446,18 @@ def cache_get_record_transcription(id, slug, segments=True):
         speaker = s['speaker'] if 'speaker' in s else None
         labels = s['label'] if 'label' in s else None
         location = s['location'] if 'location' in s else None
-        group = s.get('group', None)
-        if group:
-            if group not in [g['name'] for g in groups]:
-                groups.append({
-                    'name': group,
-                    'type': 'transcript'
-                })
         
         if labels:
             for label in labels:
+                group = label.get('group', None)
                 normalized_label_name = normalize_text(label['name'])
                 normalized_group = normalize_text(group) if group else ''
+                if normalized_group:
+                    if normalized_group not in [g['name'] for g in groups]:
+                        groups.append({
+                            'name': normalized_group,
+                            'type': 'transcript'
+                        })
                 found = False
                 for l in labels_array:
                     if normalize_text(l['name']) == normalized_label_name and normalize_text(l.get('group', '')) == normalized_group:
@@ -471,6 +468,7 @@ def cache_get_record_transcription(id, slug, segments=True):
                     labels_array.append({**label, 'count': 1, 'group': normalized_group})
         if location:
             for loc in location:
+                group = label.get('group', None)
                 normalized_loc_name = normalize_text(loc['name'])
                 normalized_group = normalize_text(group) if group else ''
                 found = False
@@ -497,6 +495,9 @@ def cache_get_record_transcription(id, slug, segments=True):
 
         if location:
             obj['location'] = location
+
+        if groups:
+            obj['groups'] = groups
 
         temp.append(obj)
 

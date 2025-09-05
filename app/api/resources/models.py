@@ -9,7 +9,7 @@ class Resource(BaseModel):
     post_type: str
     metadata: dict
     parents: Optional[list[dict]] = None
-    parent: Optional[dict] = None
+    parent: Optional[list[dict]] = None
     filesObj: list[dict] = []
     ident: str
     status: str = 'created'
@@ -44,7 +44,7 @@ class ResourceUpdate(BaseModel):
     metadata: Optional[dict] = None
     filesObj: Optional[list[dict]] = None
     parents: Optional[list[dict]] = None
-    parent: Optional[dict] = None
+    parent: Optional[list[dict]] = None
     status: Optional[str] = None
     accessRights: Optional[str] = None
     favCount: Optional[int] = None

@@ -167,6 +167,8 @@ def update_record_by_id(id, current_user, body):
 
         body['updatedBy'] = current_user if current_user else 'system'
         body['updatedAt'] = datetime.datetime.now()
+
+        print(body)
         # Si el record existe, actualizarlo
         update = FileRecordUpdate(**body)
 
@@ -514,6 +516,9 @@ def get_by_id(id, current_user, fullFields = False):
                 keys[key]['type'] = record['processing'][key]['type']
                 if 'metadata' in record['processing'][key]:
                     keys[key]['metadata'] = extract_important_exif(record['processing'][key]['metadata'])
+                if key == 'fileProcessing':
+                    if 'cloud' in record['processing'][key]:
+                        keys[key]['cloud'] = record['processing'][key]['cloud']
 
             record['processing'] = keys
         
