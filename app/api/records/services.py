@@ -549,15 +549,6 @@ def get_by_id(id, current_user, fullFields = False):
 
 
         if 'parents' in record:
-            for p in record['parents']:
-                if 'id' in p:
-                    p['id'] = str(p['id'])
-                    from app.api.resources.services import get_accessRights
-                    p['accessRights'] = get_accessRights(p['id'])
-                    if p['accessRights'] != None:
-                        if not has_right(current_user, p['accessRights']['id']):
-                            return {'msg': _('You do not have permission to view this record')}, 401
-                        
             record.pop('parents')
             
         # Si el record existe, retornar el record
