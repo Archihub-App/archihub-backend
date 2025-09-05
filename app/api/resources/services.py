@@ -291,7 +291,6 @@ def update_by_id(id, body, user, files, updateCache = True):
     try:
         body = validate_parent(body, True)
         has_new_parent = has_changed_parent(id, body)
-        print('HOLA', has_new_parent)
 
         # # Obtener los metadatos en función del tipo de contenido
         metadata = get_metadata(body['post_type'])
@@ -304,7 +303,6 @@ def update_by_id(id, body, user, files, updateCache = True):
         # Validar los campos de la metadata
         body = validate_fields(body, metadata, errors)
 
-        print('hola2')
         if errors:
             return {'msg': _('Error validating fields'), 'errors': errors}, 400
         
@@ -314,7 +312,6 @@ def update_by_id(id, body, user, files, updateCache = True):
             return {'msg': _('You don\'t have the required authorization')}, 401
 
         validate_files([*body['filesIds'], *resource['filesObj']], metadata, errors)
-        print('hola3')
 
         if errors:
             return {'msg': _('Error validating files'), 'errors': errors}, 400
@@ -332,7 +329,6 @@ def update_by_id(id, body, user, files, updateCache = True):
         if 'filesObj' in resource:
             for f in resource['filesObj']:
                 temp.append(f)
-        print('hola4')
 
         body['filesObj'] = temp
         del body['filesIds']
@@ -345,15 +341,12 @@ def update_by_id(id, body, user, files, updateCache = True):
         except Exception as e:
             print("Validation error details:", e.errors() if hasattr(e, 'errors') else str(e))
 
-        print('hola5')
         # Actualizar el recurso en la base de datos
         updated_resource = mongodb.update_record(
             'resources', {'_id': ObjectId(id)}, resource)
 
         if has_new_parent:
-            print('UPDATEW')
             update_parents(id, body['post_type'], user)
-            print('UPDATEW')
             update_records_parents(id, user)
 
         try:
@@ -489,6 +482,7 @@ def validate_parent(body, update = False):
         parent = body['parent']
         all_ancestors = []
 
+        print("HOLA", parent)
         if len(parent) == 0:
             body['parent'] = []
             body['parents'] = []
