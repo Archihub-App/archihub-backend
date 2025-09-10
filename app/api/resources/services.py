@@ -482,7 +482,6 @@ def validate_parent(body, update = False):
         parent = body['parent']
         all_ancestors = []
 
-        print("HOLA", parent)
         if len(parent) == 0:
             body['parent'] = []
             body['parents'] = []
@@ -501,6 +500,7 @@ def validate_parent(body, update = False):
         
         parents = []
         for p in final_direct_parents:
+            p['level'] = 0
             if update:
                 if p['id'] == body['_id']:
                     raise Exception(_('The resource cannot have itself as parent'))
@@ -931,6 +931,9 @@ def get_resource(id, user):
                 r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
                 r['name'] = r_['metadata']['firstLevel']['title']
                 r['icon'] = get_icon(r_['post_type'])
+                
+    if 'parents' in resource:
+        resource['parents'] = sorted(resource['parents'], key=lambda x: x['post_type'].lower())
 
     resource['icon'] = get_icon(resource['post_type'])
 
@@ -1491,19 +1494,45 @@ def has_parent_postType(post_type, compare):
 
 # Funcion para obtener los padres de un recurso
 @cacheHandler.cache.cache(limit=1000)
-def get_parents(id):
+def get_parents(id, level=1):
     try:
         # Buscar el recurso en la base de datos
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'parents': 1})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'parent': 1})
         # Si el recurso no existe, retornar error
         if not resource:
             return []
         # Si el recurso no tiene padre, retornar una lista vacia
-        if 'parents' not in resource:
+        if 'parent' not in resource:
             return []
         else:
-            if resource['parents']:
-                return resource['parents']
+            if resource['parent']:
+                parent = resource['parent']
+                if isinstance(parent, dict):
+                    parent = [parent]
+                
+                all_ancestors = []
+
+                for p in parent:
+                    p['level'] = level
+                    all_ancestors.extend(get_parents(p['id'], level + 1))
+                
+                ancestor_ids = {ancestor['id'] for ancestor in all_ancestors}
+                final_direct_parents = [p for p in parent if p['id'] not in ancestor_ids]
+                
+                
+                parents = []
+                for p in final_direct_parents:
+                    parents.append(p)
+                    parents = [*parents, *get_parents(p['id'], level + 1)]
+                    
+                unique_parents = []
+                seen_ids = set()
+                for p in parents:
+                    if p['id'] not in seen_ids:
+                        unique_parents.append(p)
+                        seen_ids.add(p['id'])
+
+                return unique_parents
             else:
                 return []
     except Exception as e:
