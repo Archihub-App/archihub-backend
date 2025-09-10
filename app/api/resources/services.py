@@ -500,7 +500,6 @@ def validate_parent(body, update = False):
         
         parents = []
         for p in final_direct_parents:
-            p['level'] = 0
             if update:
                 if p['id'] == body['_id']:
                     raise Exception(_('The resource cannot have itself as parent'))
@@ -527,9 +526,28 @@ def validate_parent(body, update = False):
             if p['id'] not in seen_ids:
                 unique_parents.append(p)
                 seen_ids.add(p['id'])
+            else:
+                # find the parent in unique_parents and add the parentOf
+                for up in unique_parents:
+                    if up['id'] == p['id'] and 'parentOf' in p and 'parentOf' in up:
+                        combined_parent_of = up['parentOf'] + p['parentOf']
+                        
+                        def flatten(items):
+                            for item in items:
+                                if isinstance(item, list):
+                                    yield from flatten(item)
+                                else:
+                                    yield item
+                        
+                        flattened_parent_of = list(flatten(combined_parent_of))
+                        up['parentOf'] = list(set(flattened_parent_of))
+                        break
+                
 
         body['parents'] = unique_parents
         body['parent'] = final_direct_parents
+        
+        print(body['parents'])
         return body
     
     else:
@@ -931,9 +949,6 @@ def get_resource(id, user):
                 r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
                 r['name'] = r_['metadata']['firstLevel']['title']
                 r['icon'] = get_icon(r_['post_type'])
-                
-    if 'parents' in resource:
-        resource['parents'] = sorted(resource['parents'], key=lambda x: x['post_type'].lower())
 
     resource['icon'] = get_icon(resource['post_type'])
 
@@ -1514,6 +1529,7 @@ def get_parents(id, level=1):
 
                 for p in parent:
                     p['level'] = level
+                    p['parentOf'] = [id]
                     all_ancestors.extend(get_parents(p['id'], level + 1))
                 
                 ancestor_ids = {ancestor['id'] for ancestor in all_ancestors}
@@ -1531,6 +1547,7 @@ def get_parents(id, level=1):
                     if p['id'] not in seen_ids:
                         unique_parents.append(p)
                         seen_ids.add(p['id'])
+                    
 
                 return unique_parents
             else:
