@@ -1494,7 +1494,7 @@ def has_parent_postType(post_type, compare):
 def get_parents(id):
     try:
         # Buscar el recurso en la base de datos
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'parents': 1})
         # Si el recurso no existe, retornar error
         if not resource:
             return []
@@ -1503,13 +1503,7 @@ def get_parents(id):
             return []
         else:
             if resource['parents']:
-                # Obtener los padres del recurso
-                parents = [{'post_type': item['post_type'], 'id': item['id']}
-                           for item in resource['parents']]
-                if 'parents' in resource:
-                    parents = [*resource['parents']]
-                # Retornar los padres
-                return parents
+                return resource['parents']
             else:
                 return []
     except Exception as e:
