@@ -67,6 +67,37 @@ def stream_by_id_public(id):
     resp = public_services.get_stream(id)
     return resp
 
+@bp.route('/public/<id>/transcription', methods=['POST'])
+def get_transcription_by_id_public(id):
+    """
+    Obtener la transcripción de un record por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Records
+    parameters:
+        - in: path
+          name: id
+          schema:
+              type: string
+          required: true
+          description: id del record a obtener
+    responses:
+        200:
+            description: Transcripción del record
+        401:
+            description: No tiene permisos para obtener un record
+        404:
+            description: Record no existe
+        500:
+            description: Error al obtener el record
+    """
+    body = request.json
+    # Llamar al servicio para obtener un record por su id
+    resp = public_services.get_transcription(id, body.get('slug'))
+    return resp
+
 @bp.route('/public/<id>/pages', methods=['POST'])
 def get_page_by_id_public(id):
     """

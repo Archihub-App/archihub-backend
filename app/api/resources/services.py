@@ -482,7 +482,6 @@ def validate_parent(body, update = False):
         parent = body['parent']
         all_ancestors = []
 
-        print("HOLA", parent)
         if len(parent) == 0:
             body['parent'] = []
             body['parents'] = []
@@ -527,9 +526,28 @@ def validate_parent(body, update = False):
             if p['id'] not in seen_ids:
                 unique_parents.append(p)
                 seen_ids.add(p['id'])
+            else:
+                # find the parent in unique_parents and add the parentOf
+                for up in unique_parents:
+                    if up['id'] == p['id'] and 'parentOf' in p and 'parentOf' in up:
+                        combined_parent_of = up['parentOf'] + p['parentOf']
+                        
+                        def flatten(items):
+                            for item in items:
+                                if isinstance(item, list):
+                                    yield from flatten(item)
+                                else:
+                                    yield item
+                        
+                        flattened_parent_of = list(flatten(combined_parent_of))
+                        up['parentOf'] = list(set(flattened_parent_of))
+                        break
+                
 
         body['parents'] = unique_parents
         body['parent'] = final_direct_parents
+        
+        print(body['parents'])
         return body
     
     else:
@@ -1491,25 +1509,46 @@ def has_parent_postType(post_type, compare):
 
 # Funcion para obtener los padres de un recurso
 @cacheHandler.cache.cache(limit=1000)
-def get_parents(id):
+def get_parents(id, level=1):
     try:
         # Buscar el recurso en la base de datos
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'parent': 1})
         # Si el recurso no existe, retornar error
         if not resource:
             return []
         # Si el recurso no tiene padre, retornar una lista vacia
-        if 'parents' not in resource:
+        if 'parent' not in resource:
             return []
         else:
-            if resource['parents']:
-                # Obtener los padres del recurso
-                parents = [{'post_type': item['post_type'], 'id': item['id']}
-                           for item in resource['parents']]
-                if 'parents' in resource:
-                    parents = [*resource['parents']]
-                # Retornar los padres
-                return parents
+            if resource['parent']:
+                parent = resource['parent']
+                if isinstance(parent, dict):
+                    parent = [parent]
+                
+                all_ancestors = []
+
+                for p in parent:
+                    p['level'] = level
+                    p['parentOf'] = [id]
+                    all_ancestors.extend(get_parents(p['id'], level + 1))
+                
+                ancestor_ids = {ancestor['id'] for ancestor in all_ancestors}
+                final_direct_parents = [p for p in parent if p['id'] not in ancestor_ids]
+                
+                
+                parents = []
+                for p in final_direct_parents:
+                    parents.append(p)
+                    parents = [*parents, *get_parents(p['id'], level + 1)]
+                    
+                unique_parents = []
+                seen_ids = set()
+                for p in parents:
+                    if p['id'] not in seen_ids:
+                        unique_parents.append(p)
+                        seen_ids.add(p['id'])
+
+                return unique_parents
             else:
                 return []
     except Exception as e:

@@ -177,14 +177,6 @@ def get_by_id(id, fullFields = False):
 
 
         if 'parents' in record:
-            for p in record['parents']:
-                if 'id' in p:
-                    p['id'] = str(p['id'])
-                    from app.api.resources.services import get_accessRights
-                    p['accessRights'] = get_accessRights(p['id'])
-                    if p['accessRights'] != None:
-                        return {'msg': _('You do not have permission to view this record')}, 401
-                    
             record.pop('parents')
 
         # Si el record existe, retornar el record
@@ -209,6 +201,19 @@ def get_stream(id):
             path = path + '.mp3'
 
         return send_file(path, as_attachment=True)
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def get_transcription(id, slug):
+    try:
+        resp_, status = get_by_id(id)
+        if status != 200:
+            return resp_, status
+
+        resp = cache_get_record_transcription(id, slug)
+        # Si el record existe, retornar el record
+        return resp, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
