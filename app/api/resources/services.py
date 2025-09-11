@@ -1547,7 +1547,6 @@ def get_parents(id, level=1):
                     if p['id'] not in seen_ids:
                         unique_parents.append(p)
                         seen_ids.add(p['id'])
-                    
 
                 return unique_parents
             else:
