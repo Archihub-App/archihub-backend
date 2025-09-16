@@ -90,8 +90,8 @@ def index_resources_task(body={}):
                     if destiny != '':
                         value = get_value_by_path(resource, destiny)
                         if value != None and isinstance(value, list):
-                            value = list(set(value))
                             value = [str(v['term']) for v in value if 'term' in v]
+                            value = list(set(value))
                             change_value(document, f['destiny'], value)
                 
                 if f['type'] == 'repeater':
