@@ -92,8 +92,6 @@ class PluginClass(Blueprint):
                 
                 resp = mongodb.update_record(collection, {'_id': ObjectId(id)}, update)
                 
-                print(resp)
-                
             self.clear_cache()
             return resp
         except Exception as e:

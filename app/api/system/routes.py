@@ -500,6 +500,22 @@ def get_system_settings():
         return tuple(resp)
     return resp
 
+@bp.route('/set-first-time', methods=['POST'])
+def set_first_time():
+    """
+    Establecer el primer inicio del sistema
+    ---
+    tags:
+        - Ajustes del sistema
+    responses:
+        200:
+            description: Primer inicio establecido exitosamente
+        500:
+            description: Error al establecer el primer inicio
+    """
+    body = request.get_json()
+    return services.set_first_time(body)
+
 @bp.route('/get-actions', methods=['POST'])
 @jwt_required()
 def get_actions():

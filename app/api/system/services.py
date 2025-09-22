@@ -736,10 +736,27 @@ def restart_system():
         import signal
         os.kill(1, signal.SIGTERM)
     threading.Thread(target=shutdown).start()
-    return {'msg': gettext('System restarted successfully')}, 200    
+    return {'msg': gettext('System restarted successfully')}, 200
+
+
+def set_first_time():
+    collections = mongodb.get_collections()
+    if 'system' not in collections or 'post_types' not in collections or 'forms' not in collections or 'users' not in collections:
+        set_system_setting()
+        return {'msg': gettext('System settings initialized successfully')}, 200
 
 @cacheHandler.cache.cache()
 def get_system_settings():
+    # return {
+    #     'first_time': True
+    # }, 200
+    collections = mongodb.get_collections()
+    if 'system' not in collections or 'post_types' not in collections or 'forms' not in collections or 'users' not in collections:
+        return {
+            'first_time': True
+        }, 200
+        
+    
     user_management = mongodb.get_record('system', {'name': 'user_management'})
     language = user_management['data'][2]['value']
     from app.version import __version__
