@@ -220,3 +220,56 @@ settings = [
         ]
     },
 ]
+
+simple_form = {
+  "name": "Formulario",
+  "slug": "formulario",
+  "description": "Un formulario simple con campos básicos",
+  "fields": [
+    {
+      "destiny": "metadata.firstLevel.title",
+      "label": "Nombre",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "type": "text-area",
+      "destiny": "metadata.firstLevel.description",
+      "required": False,
+      "label": "Descripción",
+      "setCondition": False
+    },
+    {
+      "type": "location",
+      "destiny": "metadata.firstLevel.location",
+      "required": False,
+      "label": "Ubicación",
+      "setCondition": False
+    },
+    {
+      "type": "simple-date",
+      "destiny": "metadata.firstLevel.date",
+      "required": False,
+      "label": "Fecha",
+      "setCondition": False
+    },
+    {
+      "type": "file",
+      "destiny": "",
+      "required": False,
+      "label": "Archivos",
+      "filetag": "Archivo asociado",
+      "setCondition": False
+    }
+  ]
+}
+
+simple_post_type = {
+    'name': 'Carpeta',
+    'description': 'Carpeta para agrupar recursos',
+    'slug': 'carpeta',
+    'metadata': 'formulario',
+    'icon': 'folder',
+    'hierarchical': True,
+}

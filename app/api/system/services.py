@@ -833,15 +833,19 @@ def set_first_time(body):
     if status != 201:
         return {'msg': user['msg']}, status
 
-    if 'post_types' not in collections:
-        from app.api.types.services import create as create_type
+    # if 'post_types' not in collections:
+    from app.api.types.services import create as create_type
+    from .default_settings import simple_post_type, simple_form
 
+    type, status = create_type(simple_post_type, None)
+    if status != 201:
+        return {'msg': type['msg']}, status
 
 @cacheHandler.cache.cache()
 def get_system_settings():
-    return {
-        'first_time': True
-    }, 200
+    # return {
+    #     'first_time': True
+    # }, 200
     collections = mongodb.get_collections()
     if 'system' not in collections or 'post_types' not in collections or 'forms' not in collections or 'users' not in collections:
         return {
