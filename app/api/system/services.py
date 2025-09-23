@@ -829,6 +829,7 @@ def set_first_time(body):
     }
 
     user, status = create_user(userPayload)
+    print(user)
 
     if status != 201:
         return {'msg': user['msg']}, status

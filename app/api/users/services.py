@@ -231,15 +231,19 @@ def update_me(body, current_user):
 def register_user(body):
     try:
         # Verificar si el usuario ya existe
-        user = mongodb.get_record('users', {'username': body['username']})
+        collections = mongodb.get_collections()
+        if 'users' not in collections:
+            user = None
+        else:
+            user = mongodb.get_record('users', {'username': body['username']})
         # Si el usuario ya existe, retornar error
         if user:
             return jsonify({'msg': _('User already exists')}), 400
         
         password = body['password']
-       
+
         roles = get_roles()['options']
-        rights = get_access_rights()['options']
+        rights = get_access_rights()['options'] if get_access_rights() else []
 
         for role in body['roles']:
             if role['id'] not in [r['id'] for r in roles]:
@@ -251,6 +255,8 @@ def register_user(body):
             
         body['roles'] = [role['id'] for role in body['roles']]
         body['accessRights'] = [right['id'] for right in body['accessRights']]
+
+
 
         errors = {}
         validate_user_fields(body, errors)
