@@ -22,18 +22,21 @@ from functools import reduce
 from app.utils import HookHandler
 from flask_babel import gettext
 from app.api.system.tasks.elasticTasks import index_resources_task, index_resources_delete_task, regenerate_index_task
-import threading, time
+import threading
+import time
 
 hookHandler = HookHandler.HookHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+
 
 def hookHandlerIndex():
     hookHandler.register('resource_create', index_resources_task, queue=101)
     hookHandler.register('resource_update', index_resources_task, queue=101)
     hookHandler.register(
         'resource_delete', index_resources_delete_task, queue=101)
-    
+
+
 def hookHandlerVector():
     hookHandler.register('resource_create', vector_resources_task, queue=102)
     hookHandler.register('resource_update', vector_resources_task, queue=102)
@@ -41,6 +44,8 @@ def hookHandlerVector():
         'resource_delete', vector_resources_delete_task, queue=102)
 
 # function que recibe un body y una ruta tipo string y cambia el valor en la ruta dejando el resto igual y retornando el body con el valor cambiado. Si el valor no existe, lo crea
+
+
 def change_value(body, path, value):
     try:
         keys = path.split('.')
@@ -54,12 +59,16 @@ def change_value(body, path, value):
                 temp = temp[key]
         return body
     except Exception as e:
-        raise Exception(gettext(u'Error while changing the value of the field {key}', key=key))
+        raise Exception(
+            gettext(u'Error while changing the value of the field {key}', key=key))
+
 
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
 # Funcion para obtener todos los recursos de la coleccion system
+
+
 def get_all_settings():
     try:
         # Obtener todos los recursos de la coleccion system
@@ -68,7 +77,8 @@ def get_all_settings():
         # Retornar el resultado
         return {'settings': parse_result(resources)}
     except Exception as e:
-        raise Exception(gettext(u'Error while getting the resources: {e}', e=str(e)))
+        raise Exception(
+            gettext(u'Error while getting the resources: {e}', e=str(e)))
 
 
 def update_option(name, data):
@@ -93,6 +103,8 @@ def clear_system_cache():
     get_system_actions.invalidate_all()
 
 # Funcion para actualizar los ajustes del sistema
+
+
 def update_settings(settings, current_user):
     try:
         update_option('post_types_settings', settings)
@@ -133,7 +145,8 @@ def get_default_cataloging_type():
                 return {'value': d['value']}, 200
 
     except Exception as e:
-        raise Exception(gettext(u'Error while getting the default cataloging type'))
+        raise Exception(
+            gettext(u'Error while getting the default cataloging type'))
 
 # Funcion para obtener el tipo por defecto del modulo de catalogacion
 
@@ -144,17 +157,20 @@ def get_default_visible_type():
         # Obtener el registro post_types_settings de la colección system
         post_types_settings = mongodb.get_record(
             'system', {'name': 'post_types_settings'})
-        
+
         # Si el registro no existe, retornar error
         if not post_types_settings:
-            raise Exception(gettext(u'The default type of the cataloging module does not exist'))
+            raise Exception(
+                gettext(u'The default type of the cataloging module does not exist'))
 
         for d in post_types_settings['data']:
             if d['id'] == 'tipos_vista_individual':
                 return {'value': d['value']}
 
     except Exception as e:
-        raise Exception(gettext(u'Error while getting the default type of the cataloging module'))
+        raise Exception(
+            gettext(u'Error while getting the default type of the cataloging module'))
+
 
 def update_resources_schema(schema):
     try:
@@ -211,7 +227,8 @@ def get_value_by_path(dict, path):
         return value
 
     except Exception as e:
-        raise Exception(gettext(u'Error while getting the value of the field {key}', key=key))
+        raise Exception(
+            gettext(u'Error while getting the value of the field {key}', key=key))
 
 
 def set_value_in_dict(d, path, value):
@@ -228,13 +245,16 @@ def validate_text(value, field):
         label = field['label']
         # Si el valor no es de tipo string, retornar error
         if not isinstance(value, str):
-            raise Exception(gettext(u'The field {label} must be of type string', label=label))
+            raise Exception(
+                gettext(u'The field {label} must be of type string', label=label))
         # Si field.required entonces el valor no puede ser vacío o == ''
         if field['required'] and (value == '' or value == None):
-            raise Exception(gettext(u'The field {label} is required', label=label))
+            raise Exception(
+                gettext(u'The field {label} is required', label=label))
         return value
     except Exception as e:
-        raise Exception(gettext(u'Error while validating the field {label}', label=label))
+        raise Exception(
+            gettext(u'Error while validating the field {label}', label=label))
 
 # Funcion para validar el formato de una direccion de correo
 
@@ -244,16 +264,20 @@ def validate_email(value, field):
         label = field['label']
         # Si el valor no es de tipo string, retornar error
         if not isinstance(value, str):
-            raise Exception(gettext(u'The field {label} must be of type string', label=label))
+            raise Exception(
+                gettext(u'The field {label} must be of type string', label=label))
         # Si field.required entonces el valor no puede ser vacío o == ''
         if field['required'] and (value == '' or value == None):
-            raise Exception(gettext(u'The field {label} is required', label=label))
+            raise Exception(
+                gettext(u'The field {label} is required', label=label))
         # Si el valor no es un email, retornar error
         if not re.match(r"[^@]+@[^@]+\.[^@]+", value):
-            raise Exception(gettext(u'The field {label} must be an email', label=label))
+            raise Exception(
+                gettext(u'The field {label} must be an email', label=label))
         return value
     except Exception as e:
-        raise Exception(gettext(u'Error while validating the field {label}', label=label))
+        raise Exception(
+            gettext(u'Error while validating the field {label}', label=label))
 
 # Funcion para validar un array de textos
 
@@ -263,24 +287,30 @@ def validate_text_array(value, field):
         label = field['label']
         # Si el valor no es de tipo array, retornar error
         if not isinstance(value, list):
-            raise Exception(gettext(u'The field {label} must be of type array', label=label))
+            raise Exception(
+                gettext(u'The field {label} must be of type array', label=label))
         # Si field.required entonces el valor no puede ser vacío o == []
         if field['required'] and (value == [] or value == None):
-            raise Exception(gettext(u'The field {label} is required', label=label))
+            raise Exception(
+                gettext(u'The field {label} is required', label=label))
         # Si el campo tiene min_items, validar que el array tenga al menos min_items items
         if 'min_items' in field and len(value) < field['min_items']:
-            raise Exception(gettext(u'The field {label} must have at least {min_items} items', label=label, min_items=field['min_items']))
+            raise Exception(gettext(
+                u'The field {label} must have at least {min_items} items', label=label, min_items=field['min_items']))
         # Si el campo tiene max_items, validar que el array tenga como máximo max_items items
         if 'max_items' in field and len(value) > field['max_items']:
-            raise Exception(gettext(u'The field {label} must have at most {max_items} items', label=label, max_items=field['max_items']))
+            raise Exception(gettext(
+                u'The field {label} must have at most {max_items} items', label=label, max_items=field['max_items']))
         # Si el campo tiene items, validar que todos los items del array sean de tipo string
         if 'items' in field:
             for item in value:
                 if not isinstance(item, str):
-                    raise Exception(gettext(u'The field {label} must be of type string', label=label))
+                    raise Exception(
+                        gettext(u'The field {label} must be of type string', label=label))
         return value
     except Exception as e:
-        raise Exception(gettext(u'Error while validating the field {label}', label=label))
+        raise Exception(
+            gettext(u'Error while validating the field {label}', label=label))
 
 # Funcion para validar un valor de tipo autor
 
@@ -290,13 +320,16 @@ def validate_author_array(value, field):
         label = field['label']
         # Si el valor no es de tipo array, retornar error
         if not isinstance(value, list):
-            raise Exception(gettext(u'The field {label} must be of type array', label=label))
+            raise Exception(
+                gettext(u'The field {label} must be of type array', label=label))
         # Si field.required entonces el valor no puede ser vacío o == []
         if field['required'] and (value == [] or value == None):
-            raise Exception(gettext(u'The field {label} is required', label=label))
+            raise Exception(
+                gettext(u'The field {label} is required', label=label))
         for item in value:
             if not isinstance(item, str):
-                raise Exception(gettext(u'The field {label} must be of type string', label=label))
+                raise Exception(
+                    gettext(u'The field {label} must be of type string', label=label))
             split = item.split(',')
             if len(split) != 2:
                 split = item.split('|')
@@ -311,7 +344,8 @@ def validate_author_array(value, field):
 
         return value
     except Exception as e:
-        raise Exception(gettext(u'Error while validating the field {label}', label=label))
+        raise Exception(
+            gettext(u'Error while validating the field {label}', label=label))
 
 # Funcion para validar un text de acuerdo a un regex
 
@@ -321,10 +355,12 @@ def validate_text_regex(value, field):
         label = field['label']
         # Si el valor no es de tipo string, retornar error
         if not isinstance(value, str):
-            raise Exception(gettext(u'The field {label} must be of type string', label=label))
+            raise Exception(
+                gettext(u'The field {label} must be of type string', label=label))
         # Si field.required entonces el valor no puede ser vacío o == ''
         if field['required'] and (value == '' or value == None):
-            raise Exception(gettext(u'The field {label} is required', label=label))
+            raise Exception(
+                gettext(u'The field {label} is required', label=label))
 
         # Si el campo tiene regex, validar que el valor cumpla con el regex
         if 'pattern' in field:
@@ -335,11 +371,13 @@ def validate_text_regex(value, field):
             # si el pattern es url, validar que el valor sea una url
             if not re.match(regex, value):
 
-                raise Exception(gettext(u'The field {label} must be a valid URL', label=label))
+                raise Exception(
+                    gettext(u'The field {label} must be a valid URL', label=label))
         return value
     except Exception as e:
         print(str(e))
-        raise Exception(gettext(u'Error while validating the field {label}', label=label))
+        raise Exception(
+            gettext(u'Error while validating the field {label}', label=label))
 
 # Funcion para validar un valor de fecha
 
@@ -349,13 +387,17 @@ def validate_simple_date(value, field):
         label = field['label']
         # Si el valor no es de tipo string, retornar error
         if not isinstance(value, datetime.datetime):
-            raise Exception(gettext(u'The field {label} must be of type date', label=label))
+            raise Exception(
+                gettext(u'The field {label} must be of type date', label=label))
         # Si field.required entonces el valor no puede ser vacío o == ''
         if field['required'] and (value == '' or value == None):
-            raise Exception(gettext(u'The field {label} is required', label=label))
+            raise Exception(
+                gettext(u'The field {label} is required', label=label))
         return value
     except Exception as e:
-        raise Exception(gettext(u'Error while validating the field {label}', label=label))
+        raise Exception(
+            gettext(u'Error while validating the field {label}', label=label))
+
 
 @cacheHandler.cache.cache()
 def get_plugins():
@@ -388,7 +430,8 @@ def get_plugins():
         return {'plugins': resp}, 200
 
     except Exception as e:
-        raise Exception(gettext(u'Error while getting the plugins: {e}', e=str(e)))
+        raise Exception(
+            gettext(u'Error while getting the plugins: {e}', e=str(e)))
 
 
 def activate_plugin(body, current_user):
@@ -407,13 +450,14 @@ def activate_plugin(body, current_user):
         update_schema = OptionUpdate(**update_dict)
         mongodb.update_record(
             'system', {'name': 'active_plugins'}, update_schema)
-        
+
         get_plugins.invalidate_all()
 
         # Retornar el resultado
         return {'msg': gettext('Plugins successfully updated, please restart the system')}, 200
     except Exception as e:
-        raise Exception(gettext(u'Error while activating the plugins: {e}', e=str(e)))
+        raise Exception(
+            gettext(u'Error while activating the plugins: {e}', e=str(e)))
 
 
 def change_plugin_status(plugin, user):
@@ -438,7 +482,7 @@ def change_plugin_status(plugin, user):
         update_schema = OptionUpdate(**update_dict)
         mongodb.update_record(
             'system', {'name': 'active_plugins'}, update_schema)
-        
+
         get_plugins.invalidate_all()
 
         # Retornar el resultado
@@ -544,7 +588,7 @@ def regenerate_index(user):
                 }
             },
         }
-        
+
         mapping['createdAt'] = {
             'type': 'date'
         }
@@ -566,7 +610,7 @@ def regenerate_index(user):
         mapping = {
             'properties': mapping
         }
-        
+
         task = regenerate_index_task.delay(mapping, user)
         add_task(task.id, 'system.regenerate_index', user, 'msg')
 
@@ -576,10 +620,12 @@ def regenerate_index(user):
     except Exception as e:
         return {'msg': gettext(u'Error: {e}', e=str(e))}, 500
 
+
 def transform_dict_to_mapping(input_dict):
     def map_field(field_def):
         if not isinstance(field_def, dict):
-            raise ValueError(gettext(u'Invalid field definition: {field_def}', field_def=field_def))
+            raise ValueError(
+                gettext(u'Invalid field definition: {field_def}', field_def=field_def))
 
         if 'type' in field_def and isinstance(field_def['type'], str):
             field_type = field_def['type']
@@ -676,7 +722,6 @@ def transform_dict_to_mapping(input_dict):
     return mapping
 
 
-
 def index_resources(user):
     try:
         # Obtener el registro index_management de la colección system
@@ -697,7 +742,7 @@ def index_resources(user):
 
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
 
 def regenerate_index_geometries(user):
     from app.api.geosystem.services import regenerate_index_shapes
@@ -705,18 +750,20 @@ def regenerate_index_geometries(user):
     add_task(task.id, 'geosystem.regenerate_index_shapes', user, 'msg')
     return {'msg': 'Regeneración de geometrías iniciada'}, 200
 
+
 def index_geometries(user):
     from app.api.geosystem.services import index_shapes
     task = index_shapes.delay()
     add_task(task.id, 'geosystem.index_shapes', user, 'msg')
     return {'msg': 'Indexación de geometrías iniciada'}, 200
-    
-    
+
+
 def set_system_setting():
     try:
         from app.api.system.default_settings import settings
         for setting in settings:
-            setting_db = mongodb.get_record('system', {'name': setting['name']})
+            setting_db = mongodb.get_record(
+                'system', {'name': setting['name']})
             if not setting_db:
                 new = Option(**setting)
                 mongodb.insert_record('system', new)
@@ -725,10 +772,12 @@ def set_system_setting():
                     if d['id'] not in [s['id'] for s in setting_db['data']]:
                         setting_db['data'].append(d)
                 update = OptionUpdate(**{'data': setting_db['data']})
-                mongodb.update_record('system', {'name': setting['name']}, update)
+                mongodb.update_record(
+                    'system', {'name': setting['name']}, update)
 
     except Exception as e:
         return {'msg': str(e)}, 500
+
 
 def restart_system():
     def shutdown():
@@ -739,62 +788,106 @@ def restart_system():
     return {'msg': gettext('System restarted successfully')}, 200
 
 
-def set_first_time():
+def set_first_time(body):
+    settings, status = get_system_settings()
+    if 'first_time' not in settings or not settings['first_time']:
+        return {'msg': gettext('The system is already configured')}, 400
+
+    if 'username' not in body or 'password' not in body or 'confirmPassword' not in body or 'typeTemplate' not in body:
+        return {'msg': gettext('Missing required fields')}, 400
+    if body['username'] == '' or body['password'] == '' or body['confirmPassword'] == '' or body['typeTemplate'] == '':
+        return {'msg': gettext('All fields are required')}, 400
+
+    from app.api.users.services import register_user as create_user
+    from app.api.types.services import create as create_type
+    from app.api.forms.services import create as create_form
+    from app.api.lists.services import create as create_list
+    
+    
     collections = mongodb.get_collections()
-    if 'system' not in collections or 'post_types' not in collections or 'forms' not in collections or 'users' not in collections:
+    if 'system' not in collections:
         set_system_setting()
-        return {'msg': gettext('System settings initialized successfully')}, 200
+
+    userPayload = {
+        'name': body['username'],
+        'username': body['username'],
+        'email': body['username'],
+        'password': body['password'],
+        'confirmPassword': body['confirmPassword'],
+        'roles': [{
+            'id': 'admin',
+        }, {
+            'id': 'editor',
+        }, {
+            'id': 'user',
+        }, {
+            'id': 'super_editor'
+        }, {
+            'id': 'publisher'
+        }],
+        'accessRights': []
+    }
+
+    user, status = create_user(userPayload)
+
+    if status != 201:
+        return {'msg': user['msg']}, status
+
+    if 'post_types' not in collections:
+        from app.api.types.services import create as create_type
+
 
 @cacheHandler.cache.cache()
 def get_system_settings():
-    # return {
-    #     'first_time': True
-    # }, 200
+    return {
+        'first_time': True
+    }, 200
     collections = mongodb.get_collections()
     if 'system' not in collections or 'post_types' not in collections or 'forms' not in collections or 'users' not in collections:
         return {
             'first_time': True
         }, 200
-        
-    
+
     user_management = mongodb.get_record('system', {'name': 'user_management'})
     language = user_management['data'][2]['value']
     from app.version import __version__
     version = __version__
-    
+
     plugins = mongodb.get_record('system', {'name': 'active_plugins'})
     capabilities = []
     for p in plugins['data']:
         plugin_module = __import__(f'app.plugins.{p}', fromlist=[
-                               'ExtendedPluginClass', 'plugin_info'])
-        
+            'ExtendedPluginClass', 'plugin_info'])
+
         plugin_info = plugin_module.plugin_info.copy()
-            
+
         plugin_bp = plugin_module.ExtendedPluginClass(
             p, __name__, **plugin_info, isTask=True)
-        
+
         c = plugin_bp.get_capabilities()
         if c:
             capabilities = [*capabilities, *c]
-            
+
     indexing = False
     vector_db = False
-    index_management = mongodb.get_record('system', {'name': 'index_management'})
+    index_management = mongodb.get_record(
+        'system', {'name': 'index_management'})
     for d in index_management['data']:
         if d['id'] == 'index_activation':
             indexing = d['value'] if d['value'] else False
         elif d['id'] == 'vector_activation':
             vector_db = d['value'] if d['value'] else False
-            
+
     files_download = False
-    files_management = mongodb.get_record('system', {'name': 'files_management'})
+    files_management = mongodb.get_record(
+        'system', {'name': 'files_management'})
     for d in files_management['data']:
         if d['id'] == 'files_download':
             files_download = d['value'] if d['value'] else False
-            
+
     from app.api.aiservices.services import get_llm_models
     llm_models, status = get_llm_models()
-    
+
     if len(llm_models) > 0:
         capabilities.append('llm')
     if indexing:
@@ -803,37 +896,39 @@ def get_system_settings():
         capabilities.append('files_download')
     if vector_db:
         capabilities.append('vector_db')
-    
+
     return {
         'language': language,
         'capabilities': capabilities,
         'version': version,
     }, 200
-    
+
+
 @cacheHandler.cache.cache()
 def get_system_actions(placement):
     try:
         plugins = mongodb.get_record('system', {'name': 'active_plugins'})
         actions = []
         for p in plugins['data']:
-            plugin_module = __import__(f'app.plugins.{p}', fromlist=['ExtendedPluginClass', 'plugin_info'])
-            
+            plugin_module = __import__(f'app.plugins.{p}', fromlist=[
+                                       'ExtendedPluginClass', 'plugin_info'])
+
             plugin_info = plugin_module.plugin_info.copy()
-                
+
             plugin_bp = plugin_module.ExtendedPluginClass(
                 p, __name__, **plugin_info, isTask=True)
-            
+
             a = plugin_bp.get_actions()
             if a:
                 for _a in a:
                     if _a['placement'] == placement:
                         _a['plugin'] = p
                         actions.append(_a)
-                
+
         return {
             'actions': actions
         }, 200
-        
+
     except Exception as e:
         print(str(e))
         print('-'*50)
@@ -879,6 +974,3 @@ def clear_cache():
         print(str(e))
         print('-'*50)
         return {'msg': str(e)}, 500
-
-
-

@@ -273,6 +273,7 @@ def register_user(body):
         return jsonify({'msg': _('User registered successfully')}), 201
 
     except Exception as e:
+        print(str(e))
         return jsonify({'msg': str(e)}), 500
     
 def forgot_password(body):
