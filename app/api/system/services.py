@@ -837,40 +837,37 @@ def set_first_time(body):
     
     default_type = body['typeTemplate']
 
-    # if 'post_types' not in collections:
-    if default_type == 'basic':
-        from app.api.types.services import create as create_type
-        from .default_settings import simple_post_type, simple_form
+    if 'post_types' not in collections or 'forms' not in collections or 'users' not in collections:
+        if default_type == 'basic':
+            from app.api.types.services import create as create_type
+            from .default_settings import simple_post_type, simple_form
 
-        type, status = create_type(simple_post_type, None)
-        if status != 201:
-            return {'msg': type['msg']}, status
-        
-        form, status = create_form(simple_form, None)
-        if status != 201:
-            return {'msg': form['msg']}, status
-    elif default_type == 'detailed':
-        from app.api.types.services import create as create_type
-        from .default_settings import detailed_post_type, isadg_form, dublin_form
-
-        for pt in detailed_post_type:
-            type, status = create_type(pt, None)
+            type, status = create_type(simple_post_type, None)
             if status != 201:
                 return {'msg': type['msg']}, status
+            
+            form, status = create_form(simple_form, None)
+            if status != 201:
+                return {'msg': form['msg']}, status
+        elif default_type == 'detailed':
+            from app.api.types.services import create as create_type
+            from .default_settings import detailed_post_type, isadg_form, dublin_form
 
-        form, status = create_form(isadg_form, None)
-        if status != 201:
-            return {'msg': form['msg']}, status
-        
-        form, status = create_form(dublin_form, None)
-        if status != 201:
-            return {'msg': form['msg']}, status
+            for pt in detailed_post_type:
+                type, status = create_type(pt, None)
+                if status != 201:
+                    return {'msg': type['msg']}, status
+
+            form, status = create_form(isadg_form, None)
+            if status != 201:
+                return {'msg': form['msg']}, status
+            
+            form, status = create_form(dublin_form, None)
+            if status != 201:
+                return {'msg': form['msg']}, status
 
 @cacheHandler.cache.cache()
 def get_system_settings():
-    return {
-        'first_time': True
-    }, 200
     collections = mongodb.get_collections()
     if 'system' not in collections or 'post_types' not in collections or 'forms' not in collections or 'users' not in collections:
         return {
