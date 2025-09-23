@@ -912,7 +912,7 @@ def set_first_time(body):
 @cacheHandler.cache.cache()
 def get_system_settings():
     collections = mongodb.get_collections()
-    if 'system' not in collections or 'post_types' not in collections or 'forms' not in collections or 'users' not in collections:
+    if 'system' not in collections or 'users' not in collections:
         return {
             'first_time': True
         }, 200
