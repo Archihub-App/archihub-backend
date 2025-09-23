@@ -558,3 +558,16 @@ detailed_post_type = [
         'parentType': [{'id': 'fondo', 'term': 'Fondo'}, {'id': 'archivo', 'term': 'Archivo'}]
     }
 ]
+
+roles_rights_settings = [
+    {
+        'name': 'Niveles de acceso',
+        'description': '',
+        'options': []
+    },
+    {
+        'name': 'Roles',
+        'description': '',
+        'options': []
+    }
+]

@@ -865,6 +865,49 @@ def set_first_time(body):
             form, status = create_form(dublin_form, None)
             if status != 201:
                 return {'msg': form['msg']}, status
+            
+    if 'lists' not in collections:
+        from .default_settings import roles_rights_settings
+        from app.api.lists.services import create as create_list
+        for lst in roles_rights_settings:
+            list, status = create_list(lst, None)
+            if status != 201:
+                return {'msg': list['msg']}, status
+    
+    post_types_settings = mongodb.get_record(
+        'system', {'name': 'post_types_settings'})
+    
+    for d in post_types_settings['data']:
+        if d['id'] == 'tipo_defecto':
+            if not d['value']:
+                if default_type == 'basic':
+                    d['value'] = 'carpeta'
+                elif default_type == 'detailed':
+                    d['value'] = 'unidad-documental'
+            break
+    update = OptionUpdate(**{'data': post_types_settings['data']})
+    mongodb.update_record(
+        'system', {'name': 'post_types_settings'}, update)
+    
+    access_rights = mongodb.get_record(
+        'system', {'name': 'access_rights'})
+
+    roles_list = mongodb.get_record(
+        'lists', {'name': 'Roles'})
+    access_rights_list = mongodb.get_record(
+        'lists', {'name': 'Niveles de acceso'})
+    
+    for d in access_rights['data']:
+        if 'value' not in d:
+            if d['id'] == 'access_rights_list':
+                d['value'] = str(access_rights_list['_id'])
+            if d['id'] == 'user_roles_list':
+                d['value'] = str(roles_list['_id'])
+    update = OptionUpdate(**{'data': access_rights['data']})
+    mongodb.update_record(
+        'system', {'name': 'access_rights'}, update)
+
+    return {'msg': 'System configured successfully, you can now log in'}, 200
 
 @cacheHandler.cache.cache()
 def get_system_settings():
