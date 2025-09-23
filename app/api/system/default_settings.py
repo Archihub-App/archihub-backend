@@ -553,7 +553,7 @@ detailed_post_type = [
         'description': 'Unidad básica de descripción',
         'slug': 'unidad-documental',
         'metadata': 'isadg',
-        'icon': 'documento',
+        'icon': 'archivo',
         'hierarchical': False,
         'parentType': [{'id': 'fondo', 'term': 'Fondo'}, {'id': 'archivo', 'term': 'Archivo'}]
     }

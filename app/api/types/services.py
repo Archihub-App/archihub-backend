@@ -168,7 +168,7 @@ def delete_by_slug(slug, user):
 # Funcion que devuelve recursivamente los padres de un tipo de post
 def get_parents(post_type, first=True, fields=['name', 'slug', 'icon'], post_types=[]):
     # Si el tipo de post no tiene padre, retornar una lista vacia
-    if len(post_type['parentType']) == 0:
+    if 'parentType' not in post_type or len(post_type['parentType']) == 0:
         return []
     
     # iteramos post_type['parentType'] y armamos una lista con los slugs de cada hijo
