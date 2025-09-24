@@ -220,3 +220,354 @@ settings = [
         ]
     },
 ]
+
+simple_form = {
+  "name": "Formulario",
+  "slug": "formulario",
+  "description": "Un formulario simple con campos básicos",
+  "fields": [
+    {
+      "destiny": "metadata.firstLevel.title",
+      "label": "Nombre",
+      "required": True,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "type": "text-area",
+      "destiny": "metadata.firstLevel.description",
+      "required": False,
+      "label": "Descripción",
+      "setCondition": False
+    },
+    {
+      "type": "location",
+      "destiny": "metadata.firstLevel.location",
+      "required": False,
+      "label": "Ubicación",
+      "setCondition": False
+    },
+    {
+      "type": "simple-date",
+      "destiny": "metadata.firstLevel.date",
+      "required": False,
+      "label": "Fecha",
+      "setCondition": False
+    },
+    {
+      "type": "file",
+      "destiny": "",
+      "required": False,
+      "label": "Archivos",
+      "filetag": "Archivo asociado",
+      "setCondition": False
+    }
+  ]
+}
+
+isadg_form = {
+  "name": "ISAD(G)",
+  "slug": "isadg",
+  "description": "El ISAD(G) (Norma Internacional General de Descripción Archivística) es un estándar internacional utilizado en la archivística para la descripción de documentos y archivos. Proporciona pautas y normas para la creación de descripciones que facilitan la gestión y el acceso a los documentos de archivo, asegurando su organización y comprensión.",
+  "fields": [
+    {
+      "destiny": "file",
+      "filetag": "Archivos asociados",
+      "label": "Archivos",
+      "required": False,
+      "setCondition": False,
+      "type": "file"
+    },
+    {
+      "destiny": "metadata.firstLevel.title",
+      "instructions": "Este es el título del registro",
+      "label": "Título",
+      "required": True,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "type": "text",
+      "destiny": "metadata.firstLevel.label",
+      "required": False,
+      "label": "Etiqueta",
+      "setCondition": False
+    },
+    {
+      "destiny": "metadata.firstLevel.temporalCoverage.start",
+      "label": "Fecha inicial",
+      "required": False,
+      "setCondition": False,
+      "type": "simple-date"
+    },
+    {
+      "destiny": "metadata.firstLevel.temporalCoverage.end",
+      "label": "Fecha final",
+      "required": False,
+      "setCondition": False,
+      "type": "simple-date"
+    },
+    {
+      "destiny": "metadata.firstLevel.descriptionLevel",
+      "label": "Nivel de descripción",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.dataType",
+      "label": "Volumen y soporte de la unidad de descripción",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.producersNames",
+      "label": "Nombre de los productores",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.institutionalHistory",
+      "label": "Historia institucional/ Reseña biográfica",
+      "required": False,
+      "setCondition": False,
+      "type": "text-area"
+    },
+    {
+      "destiny": "metadata.firstLevel.archivalHistory",
+      "label": "Historia archivística",
+      "required": False,
+      "setCondition": False,
+      "type": "text-area"
+    },
+    {
+      "destiny": "metadata.firstLevel.accessionMethod",
+      "label": "Forma de ingreso",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.scopeContent",
+      "label": "Alcance y contenido",
+      "required": False,
+      "setCondition": False,
+      "type": "text-area"
+    },
+    {
+      "destiny": "metadata.firstLevel.appraisalSelectionDisposal",
+      "label": "Valoración, selección y eliminación",
+      "required": False,
+      "setCondition": False,
+      "type": "text-area"
+    },
+    {
+      "destiny": "metadata.firstLevel.organization",
+      "label": "Organización",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.reproductionConditions",
+      "label": "Condiciones de reproducción",
+      "required": False,
+      "setCondition": False,
+      "type": "text-area"
+    },
+    {
+      "destiny": "metadata.firstLevel.language",
+      "label": "Lengua",
+      "list": "66971560609831520efc2ff5",
+      "required": False,
+      "setCondition": False,
+      "type": "select"
+    },
+    {
+      "destiny": "metadata.firstLevel.physicalTechnicalRequirements",
+      "label": "Características físicas y requisitos técnicos",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.descriptionInstruments",
+      "label": "Instrumentos de descripción",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.existenceLocationOriginalDocuments",
+      "label": "Existencia y localización de los documentos originales",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.existenceLocationCopies",
+      "label": "Existencia y localización de copias",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.relatedDescriptionUnits",
+      "label": "Unidades de descripción relacionadas",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.publicationNotes",
+      "label": "Nota de publicaciones",
+      "required": False,
+      "setCondition": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.ubicacion",
+      "label": "Ubicación",
+      "required": False,
+      "setCondition": False,
+      "type": "location"
+    }
+  ]
+}
+
+dublin_form = {
+  "name": "Dublin Core",
+  "slug": "dublin-core",
+  "description": "Estándar para descripción de objetos",
+  "fields": [
+    {
+      "destiny": "metadata.firstLevel.title",
+      "label": "Nombre",
+      "required": True,
+      "type": "text",
+      "instructions": "Este es el título del registro"
+    },
+    {
+      "destiny": "metadata.firstLevel.producersNames",
+      "label": "Creador",
+      "required": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.contributorsNames",
+      "label": "Contribuidor",
+      "required": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.publishersNames",
+      "label": "Editor",
+      "required": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.subject",
+      "label": "Materia",
+      "required": False,
+      "type": "text-area"
+    },
+    {
+      "destiny": "metadata.firstLevel.scopeContent",
+      "label": "Descripción",
+      "required": False,
+      "type": "text-area"
+    },
+    {
+      "destiny": "metadata.firstLevel.geographicLocation",
+      "label": "Cobertura",
+      "required": False,
+      "type": "location"
+    },
+    {
+      "destiny": "metadata.firstLevel.type",
+      "label": "Tipo",
+      "required": False,
+      "type": "text"
+    },
+    {
+      "destiny": "metadata.firstLevel.temporalCoverage.start",
+      "label": "Fecha",
+      "required": False,
+      "type": "simple-date"
+    },
+    {
+      "destiny": "metadata.firstLevel.relations",
+      "label": "Relación",
+      "relation_parent": [],
+      "relation_type": "sección",
+      "required": False,
+      "type": "relation"
+    },
+    {
+      "destiny": "metadata.firstLevel.source",
+      "label": "Fuente",
+      "required": False,
+      "type": "text"
+    },
+    {
+      "destiny": "",
+      "filetag": "Archivos adjuntos",
+      "label": "Archivos",
+      "required": False,
+      "type": "file"
+    }
+  ]
+}
+
+simple_post_type = {
+    'name': 'Carpeta',
+    'description': 'Carpeta para agrupar recursos',
+    'slug': 'carpeta',
+    'metadata': 'formulario',
+    'icon': 'carpeta',
+    'hierarchical': True,
+}
+
+detailed_post_type = [
+    {
+        'name': 'Archivo',
+        'description': 'Unidad documental más alta en la jerarquía',
+        'slug': 'archivo',
+        'metadata': 'isadg',
+        'icon': 'caja',
+        'hierarchical': False,
+    },
+    {
+        'name': 'Fondo',
+        'description': 'Conjunto de unidades documentales',
+        'slug': 'fondo',
+        'metadata': 'isadg',
+        'icon': 'carpeta',
+        'hierarchical': True,
+        'parentType': [{'id': 'archivo', 'term': 'Archivo'}]
+    },
+    {
+        'name': 'Unidad documental',
+        'description': 'Unidad básica de descripción',
+        'slug': 'unidad-documental',
+        'metadata': 'isadg',
+        'icon': 'archivo',
+        'hierarchical': False,
+        'parentType': [{'id': 'fondo', 'term': 'Fondo'}, {'id': 'archivo', 'term': 'Archivo'}]
+    }
+]
+
+roles_rights_settings = [
+    {
+        'name': 'Niveles de acceso',
+        'description': '',
+        'options': []
+    },
+    {
+        'name': 'Roles',
+        'description': '',
+        'options': []
+    }
+]

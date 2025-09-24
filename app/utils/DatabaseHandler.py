@@ -16,6 +16,10 @@ class DatabaseHandler:
             cls._instance.myclient = cls._instance.mongo_conector.get_client()
             cls._instance.mydb = cls._instance.myclient[database_name]
         return cls._instance
+    
+    # esta función sirve para obtener todas las colecciones de la base de datos
+    def get_collections(self):
+        return self.mydb.list_collection_names()
 
     # Esta función sirve para obtener todos los registros de una colección
     def get_all_records(self, collection, filters={}, sort=[], limit=0, skip=0, fields={}):

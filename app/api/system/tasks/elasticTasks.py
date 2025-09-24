@@ -66,7 +66,6 @@ def index_resources_task(body={}):
             document = {}
             resouces_count += 1
             post_type = resource['post_type']
-            print(post_type)
             fields = get_metadata(post_type)['fields']
             for f in fields:
                 if f['type'] != 'file' and f['type'] != 'simple-date' and f['type'] != 'repeater':
@@ -85,6 +84,16 @@ def index_resources_task(body={}):
                             if isinstance(value, datetime.datetime):
                                 value = value.strftime('%Y-%m-%dT%H:%M:%S')
                                 change_value(document, f['destiny'], value)
+                                
+                if f['type'] == 'select-multiple2':
+                    destiny = f['destiny']
+                    if destiny != '':
+                        value = get_value_by_path(resource, destiny)
+                        if value != None and isinstance(value, list):
+                            value = [str(v['term']) for v in value if 'term' in v]
+                            value = list(set(value))
+                            change_value(document, f['destiny'], value)
+                
                 if f['type'] == 'repeater':
                     value = get_value_by_path(resource, f['destiny'])
                     if value:
