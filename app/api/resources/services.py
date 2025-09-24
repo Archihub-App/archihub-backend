@@ -1245,39 +1245,62 @@ def download_resource_files(body, user):
             for r in resource['filesObj']:
                 ids.append(r)
                 
-
-        r_ = get_resource_records(json.dumps(ids), user, 0, None, False)
-        zippath = os.path.join(WEB_FILES_PATH, 'zipfiles', user + '-' + body['id'] + '-' + body['type'] + '.zip')
-        
-        if not os.path.exists(zippath):
-            os.makedirs(os.path.dirname(zippath), exist_ok=True)
-
-            import zipfile
-            zipf = zipfile.ZipFile(zippath, 'w', zipfile.ZIP_DEFLATED)
+        if len(ids) > 1:
+            r_ = get_resource_records(json.dumps(ids), user, 0, None, False)
+            zippath = os.path.join(WEB_FILES_PATH, 'zipfiles', user + '-' + body['id'] + '-' + body['type'] + '.zip')
             
-            for re in r_:
-                if re['filepath']:
-                    if body['type'] == 'original':
-                        path = os.path.join(ORIGINAL_FILES_PATH, re['filepath'])
-                        zipf.write(path, re['name'])
-                        
-                    elif body['type'] == 'small':
-                        path = os.path.join(WEB_FILES_PATH, re['processing']['fileProcessing']['path'])
-                        
-                        if re['processing']['fileProcessing']['type'] == 'image':
-                            path = path + '_large.jpg'
-                        elif re['processing']['fileProcessing']['type'] == 'audio':
-                            path = path + '.mp3'
-                        elif re['processing']['fileProcessing']['type'] == 'video':
-                            path = path + '.mp4'
-                        elif re['processing']['fileProcessing']['type'] == 'document':
+            if not os.path.exists(zippath):
+                os.makedirs(os.path.dirname(zippath), exist_ok=True)
+
+                import zipfile
+                zipf = zipfile.ZipFile(zippath, 'w', zipfile.ZIP_DEFLATED)
+                
+                for re in r_:
+                    if re['filepath']:
+                        if body['type'] == 'original':
                             path = os.path.join(ORIGINAL_FILES_PATH, re['filepath'])
-                        zipf.write(path, re['name'])
+                            zipf.write(path, re['name'])
+                            
+                        elif body['type'] == 'small':
+                            path = os.path.join(WEB_FILES_PATH, re['processing']['fileProcessing']['path'])
+                            
+                            if re['processing']['fileProcessing']['type'] == 'image':
+                                path = path + '_large.jpg'
+                            elif re['processing']['fileProcessing']['type'] == 'audio':
+                                path = path + '.mp3'
+                            elif re['processing']['fileProcessing']['type'] == 'video':
+                                path = path + '.mp4'
+                            elif re['processing']['fileProcessing']['type'] == 'document':
+                                path = os.path.join(ORIGINAL_FILES_PATH, re['filepath'])
+                            zipf.write(path, re['name'])
+                        
+                zipf.close()
+            
+            
+            return send_file(zippath, as_attachment=True)
+        elif len(ids) == 1:
+            r_ = mongodb.get_record('records', {'_id': ObjectId(ids[0]['id'])})
+            if not r_:
+                return {'msg': _('File does not exist')}, 404
+            
+            if body['type'] == 'original':
+                path = os.path.join(ORIGINAL_FILES_PATH, r_['filepath'])
+                filename = r_['name']
+            elif body['type'] == 'small':
+                path = os.path.join(WEB_FILES_PATH, r_['processing']['fileProcessing']['path'])
+                
+                if r_['processing']['fileProcessing']['type'] == 'image':
+                    path = path + '_large.jpg'
+                elif r_['processing']['fileProcessing']['type'] == 'audio':
+                    path = path + '.mp3'
+                elif r_['processing']['fileProcessing']['type'] == 'video':
+                    path = path + '.mp4'
+                elif r_['processing']['fileProcessing']['type'] == 'document':
+                    path = os.path.join(ORIGINAL_FILES_PATH, r_['filepath'])
                     
-            zipf.close()
-        
-        
-        return send_file(zippath, as_attachment=True)
+                filename = r_['name']
+                
+            return send_file(path, as_attachment=True, download_name=filename)
                     
     except Exception as e:
         return {'msg': str(e)}, 500
