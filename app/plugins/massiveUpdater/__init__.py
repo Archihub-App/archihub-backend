@@ -447,10 +447,12 @@ class ExtendedPluginClass(PluginClass):
                 list_ =  {
                     'name': row['name'],
                     'description': row['description'],
+                    'slug': row['id'],
                     'options': options
                 }
                 
-                id = list_['id']
+                id = list_['slug']
+                del list_['slug']
 
                 if id:
                     list = mongodb.get_record('lists', {'_id': ObjectId(id)})
@@ -479,10 +481,9 @@ class ExtendedPluginClass(PluginClass):
                         continue
                 else:
                     try:
-                        slug = list['slug']
-                        del list['slug']
-                        from app.api.lists.services import update_by_slug
-                        resp = update_by_slug(slug, list_, user)
+                        slug = id
+                        from app.api.lists.services import update_by_id
+                        resp = update_by_id(slug, list_, user)
                         if resp[1] != 200:
                             error = {
                                 'index': index,
