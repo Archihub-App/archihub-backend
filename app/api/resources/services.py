@@ -1156,6 +1156,10 @@ def get_resource(id, user):
             
 
     resource['fields'] = temp
+    resource_tmp = hookHandler.call('get_resource', resource)
+    if resource_tmp:
+        resource = resource_tmp
+        
     resource['accessRights'] = get_option_by_id(resource['accessRights'])
     if resource['accessRights'] and 'term' in resource['accessRights']:
         resource['accessRights'] = str(resource['accessRights']['_id'])
