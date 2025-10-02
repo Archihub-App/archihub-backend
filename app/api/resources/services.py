@@ -1156,6 +1156,7 @@ def get_resource(id, user):
             
 
     resource['fields'] = temp
+    print("resource before hook", resource)
     resource_tmp = hookHandler.call('get_resource', resource)
     if resource_tmp:
         resource = resource_tmp

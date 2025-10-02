@@ -1,6 +1,7 @@
 from flask import jsonify, request, send_file
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import HookHandler
 from bson import json_util
 import json
 from bson.objectid import ObjectId
@@ -18,6 +19,7 @@ from app.api.resources.services import get_total, get_accessRights, get_resource
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+hookHandler = HookHandler.HookHandler()
 children_cache = {}
 
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
@@ -228,7 +230,8 @@ def get_resource(id):
                     temp.append({
                         'label': f['label'],
                         'value': value,
-                        'type': f['type']
+                        'type': f['type'],
+                        'isTitle': f.get('destiny', False) == 'metadata.firstLevel.title'
                     })
             elif f['type'] == 'select':
                 value = get_value_by_path(resource, f['destiny'])
@@ -326,7 +329,7 @@ def get_resource(id):
                                 temp__.append({
                                     'label': s['name'],
                                     'value': v[s['destiny']],
-                                    'type': s['type']
+                                    'type': s['type'],
                                 })
                             elif s['type'] == 'number':
                                 temp__.append({
@@ -358,6 +361,10 @@ def get_resource(id):
             
 
     resource['fields'] = temp
+    resource_tmp = hookHandler.call('get_resource', resource)
+    if resource_tmp:
+        resource = resource_tmp
+        
     resource['accessRights'] = get_option_by_id(resource['accessRights'])
     if resource['accessRights'] and 'term' in resource['accessRights']:
         resource['accessRights'] = str(resource['accessRights']['_id'])
