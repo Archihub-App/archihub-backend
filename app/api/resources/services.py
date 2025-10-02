@@ -1018,7 +1018,8 @@ def get_resource(id, user):
                     temp.append({
                         'label': f['label'],
                         'value': value,
-                        'type': f['type']
+                        'type': f['type'],
+                        'isTitle': f.get('destiny', False) == 'metadata.firstLevel.title'
                     })
             elif f['type'] == 'select':
                 value = get_value_by_path(resource, f['destiny'])
@@ -1156,7 +1157,6 @@ def get_resource(id, user):
             
 
     resource['fields'] = temp
-    print("resource before hook", resource)
     resource_tmp = hookHandler.call('get_resource', resource)
     if resource_tmp:
         resource = resource_tmp

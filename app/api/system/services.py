@@ -227,8 +227,7 @@ def get_value_by_path(dict, path):
         return value
 
     except Exception as e:
-        raise Exception(
-            gettext(u'Error while getting the value of the field {key}', key=key))
+        return None
 
 
 def set_value_in_dict(d, path, value):
