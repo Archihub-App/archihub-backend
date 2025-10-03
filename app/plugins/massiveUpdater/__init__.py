@@ -17,6 +17,7 @@ from app.api.system.services import set_value_in_dict, validate_text, validate_s
 from app.api.resources.models import ResourceUpdate
 from dateutil import parser
 from flask_babel import _
+from datetime import datetime
 
 load_dotenv()
 
@@ -268,6 +269,8 @@ class ExtendedPluginClass(PluginClass):
                 
                 if doUpdate:
                     # actualizamos el recurso
+                    update['updatedBy'] = user
+                    update['updatedAt'] = datetime.now()
                     resource = ResourceUpdate(**update)
                     updated_resource = mongodb.update_record('resources', {'_id': ObjectId(row['id'])}, resource)
                     reporte.append({
