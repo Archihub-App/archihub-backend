@@ -15,7 +15,7 @@ def main(filepath, output):
         (
             ffmpeg
             .input(filepath)
-            .output(output_ogg, acodec='libvorbis', ab='128k')
+            .output(output_ogg, acodec='libvorbis', **{'q:a': 4})
             .overwrite_output()
             .run()
         )
