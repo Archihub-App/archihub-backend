@@ -163,6 +163,41 @@ def get_by_id(id):
         return tuple(resp)
     else:
         return resp
+    
+@bp.route('/<id>', methods=['POST'])
+@jwt_required()
+def get_by_id_post(id):
+    """
+    Obtener un recurso por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+    responses:
+        200:
+            description: Recurso obtenido exitosamente
+        401:
+            description: No tiene permisos para obtener el recurso
+        404:
+            description: Recurso no encontrado
+        500:
+            description: Error al obtener el recurso
+    """
+    body = request.json
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Llamar al servicio para obtener el recurso
+    resp = services.get_by_id(id, current_user, True)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para actualizar un recurso por su id
 @bp.route('/<id>', methods=['PUT'])

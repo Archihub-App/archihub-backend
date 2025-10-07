@@ -77,15 +77,17 @@ class ExtendedPluginClass(PluginClass):
             self.validate_roles(current_user, ['admin', 'processing', 'editor'])
             self.validate_fields(body, 'bulk')
             
-            post_type_roles = cache_type_roles(body['post_type'])
-            if post_type_roles['viewRoles']:
-                canView = False
-                for r in post_type_roles['viewRoles']:
-                    if self.has_role(current_user, r) or self.has_role(current_user, 'admin'):
-                        canView = True
-                        break
-                if not canView:
-                    return {'msg': 'No tiene permisos para obtener un recurso'}, 401
+            post_type = body['post_type']
+            for p in post_type:
+                post_type_roles = cache_type_roles(p)
+                if post_type_roles['viewRoles']:
+                    canView = False
+                    for r in post_type_roles['viewRoles']:
+                        if self.has_role(current_user, r) or self.has_role(current_user, 'admin'):
+                            canView = True
+                            break
+                    if not canView:
+                        return {'msg': 'No tiene permisos para obtener un recurso'}, 401
                 
             if 'parent' in body:
                 if body['parent']:
@@ -349,19 +351,30 @@ class ExtendedPluginClass(PluginClass):
             return cleaned_string
 
         filters = {
-            'post_type': body['post_type']
+            'post_type': {'$in': body['post_type']}
         }
 
-        type = get_by_slug(body['post_type'])
-        type_metadata = type['metadata']
-        type_metadata_name = type['name']
+        type_metadata = []
+        for p in body['post_type']:
+            type = get_by_slug(p)
+            if type and 'metadata' in type and 'fields' in type['metadata']:
+                type_metadata.extend(type['metadata']['fields'])
+            
+        unique = {}
+        for f in type_metadata:
+            dest = f.get('destiny')
+            if dest is None:
+                continue
+            if dest not in unique:
+                unique[dest] = f
+        type_metadata = list(unique.values())
 
         resources_df = []
         records_df = []
 
         if 'parent' in body:
             if body['parent']:
-                filters = {'$or': [{'parents.id': body['parent']['id'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent']['id'])}]}
+                filters = {'$or': [{'parents.id': body['parent']['id'], 'post_type': {'$in': body['post_type']}}, {'_id': ObjectId(body['parent']['id'])}]}
 
                 if 'status' not in body:
                     for o in filters['$or']:
@@ -399,9 +412,9 @@ class ExtendedPluginClass(PluginClass):
         obj['id'] = 'id'
         obj['ident'] = 'ident'
 
-        type_metadata['fields'] = [f for f in type_metadata['fields'] if f['type'] != 'file']
+        type_metadata = [f for f in type_metadata if f['type'] != 'file']
 
-        for f in type_metadata['fields']:
+        for f in type_metadata:
             obj[f['label']] = f['destiny']
 
         resources_df.append(obj)
@@ -415,7 +428,7 @@ class ExtendedPluginClass(PluginClass):
             obj['ident'] = r['ident']
             obj['Tipo de contenido'] = r['post_type']
 
-            for f in type_metadata['fields']:
+            for f in type_metadata:
                 if f['type'] == 'text' or f['type'] == 'text-area':
                     obj[f['label']] = clean_string(get_value_by_path(r, f['destiny']))
                 elif f['type'] == 'select':

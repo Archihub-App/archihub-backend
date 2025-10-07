@@ -860,7 +860,7 @@ def validate_files(files, metadata, errors):
                         errors[f['filetag']] = _(u'The field {label} must have a maximum of {maxFiles} files', label=f['label'], maxFiles=f['maxFiles'])
 
 # Nuevo servicio para obtener un recurso por su id
-def get_by_id(id, user):
+def get_by_id(id, user, postQuery = False):
     try:
         # Obtener los accessRights del recurso
         accessRights = get_accessRights(id)
@@ -880,7 +880,7 @@ def get_by_id(id, user):
             if not canView:
                 return {'msg': _('You don\'t have the required authorization')}, 401
 
-        resource = get_resource(id, user)
+        resource = get_resource(id, user, postQuery=postQuery)
 
         register_log(user, log_actions['resource_open'], {'resource': id})
 
@@ -927,7 +927,7 @@ def get_accessRights(id):
     return None
 
 @cacheHandler.cache.cache(limit=5000)
-def get_resource(id, user):
+def get_resource(id, user, postQuery = False):
     # Buscar el recurso en la base de datos
     resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0})
     # Si el recurso no existe, retornar error
@@ -1018,7 +1018,8 @@ def get_resource(id, user):
                     temp.append({
                         'label': f['label'],
                         'value': value,
-                        'type': f['type']
+                        'type': f['type'],
+                        'isTitle': f.get('destiny', False) == 'metadata.firstLevel.title'
                     })
             elif f['type'] == 'select':
                 value = get_value_by_path(resource, f['destiny'])
@@ -1156,6 +1157,16 @@ def get_resource(id, user):
             
 
     resource['fields'] = temp
+    
+    if postQuery:
+        resource_tmp = hookHandler.call('get_resource_post', resource)
+        if resource_tmp:
+            resource = resource_tmp
+    else:
+        resource_tmp = hookHandler.call('get_resource', resource)
+        if resource_tmp:
+            resource = resource_tmp
+        
     resource['accessRights'] = get_option_by_id(resource['accessRights'])
     if resource['accessRights'] and 'term' in resource['accessRights']:
         resource['accessRights'] = str(resource['accessRights']['_id'])
