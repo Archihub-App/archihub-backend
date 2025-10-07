@@ -374,7 +374,7 @@ class ExtendedPluginClass(PluginClass):
 
         if 'parent' in body:
             if body['parent']:
-                filters = {'$or': [{'parents.id': body['parent']['id'], 'post_type': body['post_type']}, {'_id': ObjectId(body['parent']['id'])}]}
+                filters = {'$or': [{'parents.id': body['parent']['id'], 'post_type': {'$in': body['post_type']}}, {'_id': ObjectId(body['parent']['id'])}]}
 
                 if 'status' not in body:
                     for o in filters['$or']:
