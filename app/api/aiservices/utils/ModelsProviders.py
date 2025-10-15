@@ -216,7 +216,7 @@ class GoogleProvider(BaseLLMProvider):
         
         contents = []
         for msg in messages:
-            role = msg['role'] if msg['role'] in ['user', 'assistant'] else 'user'
+            role = 'model' if msg['role'] == 'assistant' else 'user'
             parts = []
             
             if isinstance(msg['content'], str):
