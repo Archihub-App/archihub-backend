@@ -1505,7 +1505,6 @@ def get_tree(root, available, user, post_type=None, page=None, status='published
         resources = [{'name': re['metadata']['firstLevel']['title'], 'post_type': re['post_type'], 'id': str(
             re['_id'])} for re in resources]
         
-
         for resource in resources:
             resource['children'] = get_children(resource['id'], available, False, post_type, status=status)
             resource['icon'] = get_icon(resource['post_type'])
