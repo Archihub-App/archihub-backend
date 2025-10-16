@@ -18,6 +18,7 @@ from app.api.resources.models import ResourceUpdate
 from dateutil import parser
 from flask_babel import _
 from datetime import datetime
+import requests
 
 load_dotenv()
 
@@ -179,11 +180,59 @@ class ExtendedPluginClass(PluginClass):
                         if field['type'] == 'text' or field['type'] == 'text-area':
                             validate_text(row[field['destiny']], field)
                             set_value_in_dict(update, field['destiny'], row[field['destiny']])
+                        elif field['type'] == 'location':
+                            value = row[field['destiny']]
+                            def get_coordinates(text):
+                                arcgis_sugg_path = f"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/suggest?f=json&text={text}&maxSuggestions=1"
+                                arcgis_geo_path = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&magicKey="
+
+                                try:
+                                    sugg_response = requests.get(arcgis_sugg_path)
+                                    sugg_response.raise_for_status()
+                                    sugg_data = sugg_response.json()
+
+                                    if sugg_data.get("suggestions") and len(sugg_data["suggestions"]) > 0:
+                                        magic_key = sugg_data["suggestions"][0]["magicKey"]
+                                        geo_response = requests.get(arcgis_geo_path + magic_key)
+                                        geo_response.raise_for_status()
+                                        geo_data = geo_response.json()
+                                        
+                                        if geo_data.get("candidates") and len(geo_data["candidates"]) > 0:
+                                            location = geo_data["candidates"][0]["location"]
+                                            return {"lat": location["y"], "lng": location["x"]}
+                                        else:
+                                            return None
+                                    else:
+                                        return None
+                                except requests.exceptions.RequestException as e:
+                                    print(f"Error fetching coordinates: {e}")
+                                    return None
+
+                            coords = get_coordinates(value)
+                            if coords:
+                                set_value_in_dict(update, field['destiny'], [
+                                    {
+                                        'coordinates': [coords['lng'], coords['lat']]
+                                    }
+                                ])
+                            else:
+                                error = {
+                                    'index': index,
+                                    'id': row['id'],
+                                    'error': f'No se pudieron obtener las coordenadas para: {value}'
+                                }
+                                errores.append(error)
+                                continue                   
+                            
                         elif field['type'] == 'simple-date':
                             value = row[field['destiny']]
-                            if len(value) == 4:
-                                value = value + '-01-01'
-                            parsed_date = parser.parse(value)
+                            if isinstance(value, datetime):
+                                parsed_date = value
+                            else:
+                                value = str(value)
+                                if len(value) == 4:
+                                    value = value + '-01-01'
+                                parsed_date = parser.parse(value)
                             validate_simple_date(parsed_date, field)
                             set_value_in_dict(update, field['destiny'], parsed_date)
                         elif field['type'] == 'select' or field['type'] == 'select-multiple2':

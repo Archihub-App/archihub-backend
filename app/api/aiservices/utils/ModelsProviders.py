@@ -169,6 +169,12 @@ class GoogleProvider(BaseLLMProvider):
     def getModels(self):
         return [
             {
+                "id": "gemini-2.0-flash-lite",
+                "name": "Gemini 2.0 Flash Lite",
+                "type": "chat",
+                "capabilities": ["chat", "image"],
+            },
+            {
                 "id": "gemini-2.0-flash",
                 "name": "Gemini 2.0 Flash",
                 "type": "chat",
@@ -176,20 +182,20 @@ class GoogleProvider(BaseLLMProvider):
                 "capabilities": ["chat", "image"],
             },
             {
-                "id": "gemini-2.0-flash-lite",
-                "name": "Gemini 2.0 Flash Lite",
+                "id": "gemini-2.5-flash-lite",
+                "name": "Gemini 2.5 Flash Lite",
                 "type": "chat",
                 "capabilities": ["chat", "image"],
             },
             {
-                "id": "gemini-2.0-flash-thinking-exp-01-21",
-                "name": "Gemini 2.0 Flash Thinking Exp 01-21",
+                "id": "gemini-2.5-flash",
+                "name": "Gemini 2.5 Flash",
                 "type": "chat",
                 "capabilities": ["chat", "image"],
             },
             {
-                "id": "gemini-2.5-pro-preview-03-25",
-                "name": "Gemini 2.5 Pro Preview 03-25",
+                "id": "gemini-2.5-pro",
+                "name": "Gemini 2.5 Pro",
                 "type": "chat",
                 "capabilities": ["chat", "image"],
             }
@@ -210,7 +216,7 @@ class GoogleProvider(BaseLLMProvider):
         
         contents = []
         for msg in messages:
-            role = msg['role'] if msg['role'] in ['user', 'assistant'] else 'user'
+            role = 'model' if msg['role'] == 'assistant' else 'user'
             parts = []
             
             if isinstance(msg['content'], str):
@@ -271,6 +277,20 @@ class OpenAIProvider(BaseLLMProvider):
     def getModels(self):
         return [
             {
+                "id": "gpt-4o",
+                "name": "GPT-4o",
+                "type": "chat",
+                "max_tokens": 100000,
+                "capabilities": ["chat", "image"],
+            },
+            {
+                "id": "o4-mini",
+                "name": "o4 Mini",
+                "type": "chat",
+                "max_tokens": 100000,
+                "capabilities": ["chat", "image"],
+            },
+            {
                 "id": "gpt-4.1-nano",
                 "name": "GPT-4.1 Nano",
                 "type": "chat",
@@ -292,67 +312,33 @@ class OpenAIProvider(BaseLLMProvider):
                 "capabilities": ["chat", "image"],
             },
             {
+                "id": "gpt-5-nano",
+                "name": "GPT-5 Nano",
+                "type": "chat",
+                "max_tokens": 16384,
+                "capabilities": ["chat", "image"],
+            },
+            {
+                "id": "gpt-5-mini",
+                "name": "GPT-5 Mini",
+                "type": "chat",
+                "max_tokens": 16384,
+                "capabilities": ["chat", "image"],
+            },
+            {
                 "id": "gpt-5",
                 "name": "GPT-5",
                 "type": "chat",
                 "max_tokens": 16384,
                 "capabilities": ["chat", "image"],
             },
-            {
-                "id": "gpt-3.5-turbo",
-                "name": "GPT-3.5 Turbo",
-                "type": "chat",
-                "capabilities": ["chat"],
-                "max_tokens": 16384,
-            },
-            {
-                "id": "gpt-4",
-                "name": "GPT-4",
-                "type": "chat",
-                "max_tokens": 32768,
-                "capabilities": ["chat", "image"],
-            },
-            {
-                "id": "gpt-4-turbo",
-                "name": "GPT-4 Turbo",
-                "type": "chat",
-                "max_tokens": 100000,
-                "capabilities": ["chat", "image"],
-            },
-            {
-                "id": "gpt-4o",
-                "name": "GPT-4o",
-                "type": "chat",
-                "max_tokens": 100000,
-                "capabilities": ["chat", "image"],
-            },
-            {
-                "id": "gpt-4o-mini",
-                "name": "GPT-4o Mini",
-                "type": "chat",
-                "max_tokens": 100000,
-                "capabilities": ["chat", "image"],
-            },
-            {
-                "id": "o1",
-                "name": "o1",
-                "type": "chat",
-                "max_tokens": 100000,
-                "capabilities": ["chat", "image"],
-            },
-            {
-                "id": "o4-mini",
-                "name": "o4 Mini",
-                "type": "chat",
-                "max_tokens": 100000,
-                "capabilities": ["chat", "image"],
-            }
         ]
         
     def call(self, messages, **kwargs):
         url = 'https://api.openai.com/v1/chat/completions'
         headers = {"Authorization": f"Bearer {self.key}", 'Content-Type': 'application/json'}
         model = kwargs.get("model", "gpt-3.5-turbo")
+        new_models = ["gpt-5", "gpt-5-mini", "gpt-5-nano", "o4-mini"]
         
         # check if the model is in the list of models
         models = self.getModels()
@@ -395,11 +381,15 @@ class OpenAIProvider(BaseLLMProvider):
         
         data = {
             "model": model,
-            "messages": processed_messages,
-            "max_tokens": kwargs.get("max_tokens", 2048),
-            "temperature": kwargs.get("temperature", 0.5),
+            "messages": processed_messages
         }
-        
+
+        if model in new_models:
+            data["max_completion_tokens"] = kwargs.get("max_tokens", 2048)
+        else:
+            data["max_tokens"] = kwargs.get("max_tokens", 2048)
+            data["temperature"] = kwargs.get("temperature", 0.5)
+
         max_retries = 5
         backoff_factor = 1
 
