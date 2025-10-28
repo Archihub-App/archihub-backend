@@ -83,7 +83,7 @@ class ExtendedPluginClass(PluginClass):
                 if post_type_roles['viewRoles']:
                     canView = False
                     for r in post_type_roles['viewRoles']:
-                        if self.has_role(current_user, r) or self.has_role(current_user, 'admin'):
+                        if self.has_role(r, current_user) or self.has_role('admin', current_user):
                             canView = True
                             break
                     if not canView:
@@ -434,14 +434,14 @@ class ExtendedPluginClass(PluginClass):
                 elif f['type'] == 'select':
                     obj[f['label'] + '_id'] = clean_string(get_value_by_path(r, f['destiny']))
                     
-                    if obj[f['label'] + '_id']:
+                    if obj[f['label'] + '_id'] and obj[f['label'] + '_id'] != 'none':
                         option = mongodb.get_record('options', {'_id': ObjectId(obj[f['label'] + '_id'])})
                         if option:
                             obj[f['label']] = option['term']
                 elif f['type'] == 'select-multiple2':
                     obj[f['label'] + '_ids'] = ', '.join([str(o) for o in get_value_by_path(r, f['destiny'])]) if get_value_by_path(r, f['destiny']) else ''
                     if obj[f['label'] + '_ids']:
-                        options = list(mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(o) for o in get_value_by_path(r, f['destiny'])]}}))
+                        options = list(mongodb.get_all_records('options', {'_id': {'$in': [ObjectId(str(o['id'])) for o in get_value_by_path(r, f['destiny'])]}}))
                         if options:
                             obj[f['label']] = ', '.join([o['term'] for o in options]) if options else ''
                 elif f['type'] == 'simple-date':
