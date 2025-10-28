@@ -103,6 +103,7 @@ class ExtendedPluginClass(PluginClass):
         
     @shared_task(ignore_result=False, name='massiveUpdater.update_inventory')
     def update(path, overwrite, user):
+        instance = ExtendedPluginClass('massiveUpdater', '', **plugin_info, isTask=True)
         reporte = []
         errores = []
 

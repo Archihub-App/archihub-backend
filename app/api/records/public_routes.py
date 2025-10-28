@@ -215,4 +215,4 @@ def download_public():
     """
     body = request.json
     # Llamar al servicio para obtener un record por su id
-    return public_services.download_records(body)
+    return public_services.download_reecords(body)
