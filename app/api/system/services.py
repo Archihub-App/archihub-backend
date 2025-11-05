@@ -707,6 +707,8 @@ def transform_dict_to_mapping(input_dict):
                     'type': 'keyword',
                     'ignore_above': 256
                 }
+            else:
+                return None
 
         else:
             return {
@@ -717,7 +719,20 @@ def transform_dict_to_mapping(input_dict):
     mapping = {}
     for key, value in input_dict.items():
         mapping[key] = map_field(value)
+    
+    def remove_none_recursively(d):
+        if not isinstance(d, dict):
+            return d
+        keys_to_remove = [k for k, v in d.items() if v is None]
+        for k in keys_to_remove:
+            d.pop(k)
+        for k, v in d.items():
+            if isinstance(v, dict):
+                remove_none_recursively(v)
+        return d
 
+    mapping = remove_none_recursively(mapping)
+        
     return mapping
 
 

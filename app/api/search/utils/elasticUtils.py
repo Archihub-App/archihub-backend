@@ -159,6 +159,7 @@ def get_resources_by_filters(body, user):
                 })
                 
     if 'location_filters' in body:
+        print(body['location_filters'])
         if len(body['location_filters']) > 0:
             for location_filter in body['location_filters']:
                 location_field = location_filter['destiny']

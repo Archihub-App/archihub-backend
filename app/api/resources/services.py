@@ -586,7 +586,9 @@ def validate_fields(body, metadata, errors):
                                     if not isinstance(l, dict):
                                         errors[field['destiny']
                                             ] = _(u'The field {label} must be a list of dicts', label=field['label'])
-                                    
+                        elif field['required'] and body['status'] == 'published':
+                            errors[field['destiny']
+                                   ] = _(u'The field {label} is required', label=field['label'])      
                         
                         if hasCondition:
                             if conditionField['type'] == 'checkbox':

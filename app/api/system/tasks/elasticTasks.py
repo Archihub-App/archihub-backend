@@ -137,7 +137,6 @@ def index_resources_task(body={}):
                                                     if centroid:
                                                         temp = temp + centroid
                                                         break
-                                                
                             change_value(document, f['destiny'], temp)
                                                 
                                         
