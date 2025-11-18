@@ -1,6 +1,6 @@
 from app.api.users.services import has_right, has_role, get_user_rights
 from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
-from app.utils import IndexHandler
+from app.utils import IndexHandler, HookHandler
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from flask_babel import _
@@ -8,6 +8,7 @@ import os
 import base64
 
 index_handler = IndexHandler.IndexHandler()
+hookHandler = HookHandler.HookHandler()
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
@@ -18,6 +19,11 @@ def get_resources_by_filters(body, user):
     activeColumns = body.get('activeColumns', [])
     size = body.get('size', 20)
     activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
+
+    activeColumns_tmp = hookHandler.call('search_active_columns', body)
+    if activeColumns_tmp:
+        activeColumns = activeColumns_tmp
+    
     metadata_fields = []
     for post_type in post_types:
         from app.api.resources.services import get_metadata
@@ -218,6 +224,10 @@ def get_resources_by_filters(body, user):
     response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
     
     response = index_handler.clean_elastic_search_response(response)
+    
+    response_tmp = hookHandler.call('search_response_post_process', response, body, user)
+    if response_tmp:
+        response = response_tmp
     
     if 'viewType' in body and body['viewType'] == 'gallery':
         for resource in response['resources']:
