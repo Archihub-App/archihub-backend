@@ -20,7 +20,7 @@ def get_resources_by_filters(body, user):
     size = body.get('size', 20)
     activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
 
-    activeColumns_tmp = hookHandler.call('search_active_columns', body)
+    activeColumns_tmp = hookHandler.call('search_active_columns', body, activeColumns)
     if activeColumns_tmp:
         activeColumns = activeColumns_tmp
     
@@ -225,7 +225,7 @@ def get_resources_by_filters(body, user):
     
     response = index_handler.clean_elastic_search_response(response)
     
-    response_tmp = hookHandler.call('search_response_post_process', response, body, user)
+    response_tmp = hookHandler.call('search_response_post_process', body, response)
     if response_tmp:
         response = response_tmp
     
