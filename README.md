@@ -25,3 +25,9 @@ Con el aplicativo andando, debes acceder al endpoint de Swagger en la URL [http:
 ## Citación
 
 Peña, N. (2023-2025). ArchiHUB: Digital public infrastructure for community archives (Version X.X.X) [Computer software]. https://github.com/Archihub-App 
+
+## Documentación del proyecto con DeepWiki
+
+Además de la [documentación oficial](https://archihub-app.github.io/archihub.github.io/), Se ha puesto a disposición de los usuarios una documentación generada automáticamente del proyecto usando DeepWiki. Esta documentación se encuentra disponible aquí:
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Archihub-App/archihub-backend)

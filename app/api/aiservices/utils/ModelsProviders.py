@@ -496,6 +496,9 @@ class OllamaProvider(BaseLLMProvider):
         model_ids = [model['id'] for model in models]
         if model not in model_ids:
             raise ValueError(f"Model {model} is not supported. Supported models are: {model_ids}")
+        
+        model_info = next((m for m in models if m['id'] == model), None)
+        max_tokens = model_info.get('max_tokens', 100000) if model_info else 65536
 
         processed_messages = []
 
@@ -535,7 +538,10 @@ class OllamaProvider(BaseLLMProvider):
         data = {
             "model": model,
             "messages": processed_messages,
-            "stream": False
+            "stream": False,
+            "options": {
+                "num_ctx": max_tokens
+            }
         }
         
         try:
