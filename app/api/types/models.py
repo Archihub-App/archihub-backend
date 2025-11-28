@@ -16,6 +16,7 @@ class PostType(BaseModel):
     parentType: list[dict] = []
     editRoles: list[str] = None
     viewRoles: list[str] = None
+    isArticle: bool = False
 
     class Config:
         populate_by_name = True
@@ -36,6 +37,7 @@ class PostTypeUpdate(BaseModel):
     metadata: Optional[str] = None
     editRoles: Optional[list[str]] = None
     viewRoles: Optional[list[str]] = None
+    isArticle: Optional[bool] = None
 
     class Config:
         populate_by_name = True
