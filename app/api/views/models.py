@@ -10,6 +10,8 @@ class View(BaseModel):
     parent: str
     root: str
     visible: list[str]
+    defaultView: str = 'list'
+    thumbnail: Optional[str] = None
 
     class Config:
         populate_by_name = True
@@ -26,6 +28,8 @@ class ViewUpdate(BaseModel):
     parent: Optional[str] = None
     root: Optional[str] = None
     visible: Optional[list[str]] = None
+    defaultView: Optional[str] = None
+    thumbnail: Optional[str] = None
 
     class Config:
         populate_by_name = True
