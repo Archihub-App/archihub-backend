@@ -246,7 +246,7 @@ def get_transcription_by_id(id):
     body = request.json
     
     # Llamar al servicio para obtener un record por su id
-    resp = services.get_transcription(id, body['slug'], current_user)
+    resp = services.get_transcription(id, body['slug'], current_user, body.get('page', 0))
     
     return resp
 

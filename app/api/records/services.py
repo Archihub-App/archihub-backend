@@ -623,13 +623,13 @@ def get_processing_result(id, slug, current_user):
         return {'msg': str(e)}, 500
     
 # Nuevo servicio para devolver la transcripcion de un plugin
-def get_transcription(id, slug, current_user):
+def get_transcription(id, slug, current_user, page):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
             return {'msg': resp_['msg']}, 500
         
-        resp = cache_get_record_transcription(id, slug)
+        resp = cache_get_record_transcription(id, slug, page)
         # Si el record existe, retornar el record
         return resp, 200
 
