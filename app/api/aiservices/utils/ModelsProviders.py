@@ -91,8 +91,6 @@ class AzureProvider(BaseLLMProvider):
         model = kwargs.get("model", "gpt-4.1")
         models = self.getModels()
         model_ids = [model['id'] for model in models]
-        if model not in model_ids:
-            raise ValueError(f"Model {model} is not supported. Supported models are: {model_ids}")
         
         processed_messages = []
         for msg in messages:
@@ -212,7 +210,7 @@ class GoogleProvider(BaseLLMProvider):
         models = self.getModels()
         model_ids = [model['id'] for model in models]
         if kwargs.get("model") not in model_ids:
-            raise ValueError(f"Model {kwargs.get('model')} is not supported. Supported models are: {model_ids}")
+            raise ValueError(f"Model {kwargs.get('model')} is not supported.{model_ids}")
         
         contents = []
         for msg in messages:
@@ -343,8 +341,6 @@ class OpenAIProvider(BaseLLMProvider):
         # check if the model is in the list of models
         models = self.getModels()
         model_ids = [model['id'] for model in models]
-        if model not in model_ids:
-            raise ValueError(f"Model {model} is not supported. Supported models are: {model_ids}")
         
         processed_messages = []
         
@@ -494,8 +490,6 @@ class OllamaProvider(BaseLLMProvider):
         # check if the model is in the list of models
         models = self.getModels()
         model_ids = [model['id'] for model in models]
-        if model not in model_ids:
-            raise ValueError(f"Model {model} is not supported. Supported models are: {model_ids}")
 
         processed_messages = []
 
@@ -532,6 +526,8 @@ class OllamaProvider(BaseLLMProvider):
                 # Fallback: pass through as-is if unexpected structure
                 processed_messages.append(msg)
 
+        print("Processed Messages for Ollama:", processed_messages)
+        print(processed_messages[0])
         data = {
             "model": model,
             "messages": processed_messages,

@@ -77,6 +77,8 @@ class AIHandler:
         provider = self.get_provider_class({'name': model['provider']})
         model = model['model']
         
+        print("Calling model:", model)
+        
         if not provider:
             raise Exception('Provider not found')
         
