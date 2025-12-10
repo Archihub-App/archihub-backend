@@ -1183,7 +1183,7 @@ def get_resource(id, user, postQuery = False):
 @cacheHandler.cache.cache(limit=1000)
 def get_resource_files(id, user, page, groupImages = False):
     try:
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
         # check if the user has access to the resource
         accessRights = get_accessRights(id)
         if accessRights:
@@ -1231,7 +1231,54 @@ def get_resource_files(id, user, page, groupImages = False):
         return resp, 200
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+@cacheHandler.cache.cache(limit=1000)
+def get_article_body(id, user):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'articleBody': 1})
+        # check if the user has access to the resource
+        accessRights = get_accessRights(id)
+        if accessRights:
+            if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
+                return {'msg': _('You don\'t have the required authorization')}, 401
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': _('Resource does not exist')}, 404
+
+        body = resource['articleBody'] if 'articleBody' in resource else None
+
+        return {'articleBody': body}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def upload_article_body(id, body, user):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        # check if the user has access to edit the resource
+        post_type = resource['post_type']
+        post_type_roles = cache_type_roles(post_type)
+
+        if post_type_roles['editRoles']:
+            canEdit = False
+            for r in post_type_roles['editRoles']:
+                if has_role(user, r) or has_role(user, 'admin'):
+                    canEdit = True
+                    break
+            if not canEdit:
+                return {'msg': _('You don\'t have the required authorization')}, 401
+        
+        if not resource:
+            return {'msg': _('Resource does not exist')}, 404
+
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, {
+                              'articleBody': body, 'updatedAt': datetime.utcnow(), 'updatedBy': user})
+
+        register_log(user, log_actions['resource_edit'], {'resource': id})
+
+        return {'msg': _('Article body updated')}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 def download_resource_files(body, user):
     try:
         from app.api.system.services import get_system_settings

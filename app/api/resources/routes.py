@@ -448,7 +448,87 @@ def get_all_records(resource_id):
         return tuple(resp)
     else:
         return resp
- 
+    
+@bp.route('/<resource_id>/article', methods=['GET'])
+@jwt_required()
+def get_article_body(resource_id):
+    """
+    Obtener el cuerpo del artículo de un recurso
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+            name: resource_id
+            schema:
+                type: string
+    responses:
+        200:
+            description: Cuerpo del artículo obtenido exitosamente
+        401:
+            description: No tiene permisos para obtener el cuerpo del artículo
+        404:
+            description: Recurso no encontrado
+        500:
+            description: Error al obtener el cuerpo del artículo
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    # Llamar al servicio para obtener el cuerpo del artículo
+    resp = services.get_article_body(resource_id, current_user)
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
+
+@bp.route('/<resource_id>/article', methods=['POST'])
+@jwt_required()
+def update_article_body(resource_id):
+    """
+    Actualizar el cuerpo del artículo de un recurso
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+            name: resource_id
+            schema:
+                type: string
+        - in: body
+            name: body
+            schema:
+                type: object
+                properties:
+                    articleBody:
+                        type: array
+    responses:
+        200:
+            description: Cuerpo del artículo actualizado exitosamente
+        401:
+            description: No tiene permisos para actualizar el cuerpo del artículo
+        404:
+            description: Recurso no encontrado
+        500:
+            description: Error al actualizar el cuerpo del artículo
+    """ 
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    body = request.json
+
+    # Llamar al servicio para actualizar el cuerpo del artículo
+    resp = services.update_article_body(resource_id, body, current_user)
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp 
+
 @bp.route('/download_records', methods=['POST'])
 @jwt_required()
 def download_all_records():
