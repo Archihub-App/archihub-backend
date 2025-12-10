@@ -339,8 +339,7 @@ def get_tree():
         current_user = get_jwt_identity()
         # Obtener el body del request
         body = request.json
-        print(body)
-        
+
         if 'view' in body:
             if body['view'] == 'tree':
                 slugs = [item['slug'] for item in body['tree']]
@@ -476,6 +475,9 @@ def get_article_body(resource_id):
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
+    
+    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     # Llamar al servicio para obtener el cuerpo del artículo
     resp = services.get_article_body(resource_id, current_user)
@@ -520,6 +522,9 @@ def update_article_body(resource_id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     body = request.json
+    
+    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     # Llamar al servicio para actualizar el cuerpo del artículo
     resp = services.update_article_body(resource_id, body, current_user)

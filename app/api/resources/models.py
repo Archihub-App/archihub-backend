@@ -19,7 +19,7 @@ class Resource(BaseModel):
     createdAt: datetime
     updatedAt: datetime
     favCount: int = 0
-    articleBody: Optional[str] = None
+    articleBody: Optional[list[dict]] = None
 
     class Config:
         populate_by_name = True
@@ -51,7 +51,7 @@ class ResourceUpdate(BaseModel):
     favCount: Optional[int] = None
     updatedBy: str
     updatedAt: datetime
-    articleBody: Optional[str] = None
+    articleBody: Optional[list[dict]] = None
 
     class Config:
         populate_by_name = True

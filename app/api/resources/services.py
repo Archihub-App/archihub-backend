@@ -931,7 +931,7 @@ def get_accessRights(id):
 @cacheHandler.cache.cache(limit=5000)
 def get_resource(id, user, postQuery = False):
     # Buscar el recurso en la base de datos
-    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0})
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0, 'articleBody': 0})
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception(_('Resource does not exist'))
@@ -1251,12 +1251,16 @@ def get_article_body(id, user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
-def upload_article_body(id, body, user):
+def update_article_body(id, body, user):
     try:
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'post_type': 1})
         # check if the user has access to edit the resource
         post_type = resource['post_type']
         post_type_roles = cache_type_roles(post_type)
+        article_body = body.get('articleBody', None)
+        
+        if article_body is None:
+            return {'msg': _('Article body is required')}, 400
 
         if post_type_roles['editRoles']:
             canEdit = False
@@ -1269,11 +1273,14 @@ def upload_article_body(id, body, user):
         
         if not resource:
             return {'msg': _('Resource does not exist')}, 404
+        
+        update = ResourceUpdate(**{**body, 'updatedAt': datetime.utcnow(), 'updatedBy': user})
 
-        mongodb.update_record('resources', {'_id': ObjectId(id)}, {
-                              'articleBody': body, 'updatedAt': datetime.utcnow(), 'updatedBy': user})
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
+        
+        get_article_body.invalidate(id, user)
 
-        register_log(user, log_actions['resource_edit'], {'resource': id})
+        register_log(user, log_actions['resource_article_update'], {'resource': id, 'articleBody': article_body})
 
         return {'msg': _('Article body updated')}, 200
     except Exception as e:
