@@ -187,6 +187,8 @@ def update_resources_schema(schema):
             mongodb.update_record(
                 'system', {'name': 'resources-schema'}, update)
 
+        hookHandler.call('resource_schema_update', schema)
+
         # Retornar el resultado
         return {'msg': gettext(u'Resources schema updated successfully')}, 200
     except Exception as e:

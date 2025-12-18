@@ -480,6 +480,13 @@ class OllamaProvider(BaseLLMProvider):
                 "type": "chat",
                 "max_tokens": 100000,
                 "capabilities": ["chat", "image"],
+            },
+            {
+                "id": "qwen3-embedding:8b",
+                "name": "Qwen 3 Embedding 8b",
+                "type": "embedding",
+                "max_tokens": 40000,
+                "capabilities": ["embedding"],
             }
         ]
     
