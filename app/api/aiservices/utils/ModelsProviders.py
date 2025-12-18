@@ -487,6 +487,13 @@ class OllamaProvider(BaseLLMProvider):
                 "type": "embedding",
                 "max_tokens": 40000,
                 "capabilities": ["embedding"],
+            },
+            {
+                "id": "nomic-embed-text-v2-moe",
+                "name": "Nomic Embed Text v2 Moe",
+                "type": "embedding",
+                "max_tokens": 512,
+                "capabilities": ["embedding"],
             }
         ]
     
