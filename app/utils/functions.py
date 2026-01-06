@@ -197,6 +197,37 @@ def parse_result(result):
 @cacheHandler.cache.cache(limit=500)
 def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
     ids = json.loads(ids)
+    
+    # Collect existing orders
+    used_orders = set()
+    items_with_order = []
+    items_without_order = []
+    
+    for item in ids:
+        if 'order' in item and item['order'] is not None:
+            used_orders.add(item['order'])
+            items_with_order.append(item)
+        else:
+            items_without_order.append(item)
+    
+    # Assign implicit orders to items without explicit order
+    # Find the next available order starting from 0
+    for item in items_without_order:
+        candidate_order = 0
+        while candidate_order in used_orders:
+            candidate_order += 1
+        item['order'] = candidate_order
+        used_orders.add(candidate_order)
+    
+    # Sort by order
+    ids = sorted(ids, key=lambda x: x.get('order', float('inf')))
+    
+    # Apply pagination to ids
+    if limit is not None:
+        start = page * limit
+        end = start + limit
+        ids = ids[start:end]
+    
     ids_filter = []
     for i in range(len(ids)):
         ids_filter.append(ObjectId(ids[i]['id']))
@@ -211,14 +242,12 @@ def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
         cursor = mongodb.get_all_records('records', filters=filters, fields={
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1, 'filepath': 1})
         
-        if limit is not None:
-            cursor = cursor.skip(page * limit).limit(limit)
-            
         r_ = list(cursor)
         
         for r in r_:
             r['_id'] = str(r['_id'])
             r['tag'] = [x['tag'] for x in ids if x['id'] == r['_id']][0]
+            r['order'] = [x['order'] for x in ids if x['id'] == r['_id']][0]
 
             if 'accessRights' in r:
                 if r['accessRights']:
@@ -238,6 +267,9 @@ def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
             if limit is not None:
                 r.pop('filepath', None)
                 r['processing'] = pro_dict
+
+        # Sort by order
+        r_ = sorted(r_, key=lambda x: x.get('order', float('inf')))
 
         if groupImages:
             img = mongodb.count('records', {'_id': {'$in': ids_filter}, 'processing.fileProcessing.type': 'image'})

@@ -272,6 +272,60 @@ def update_by_id(id):
     else:
         return resp
     # return 'ok'
+    
+@bp.route('/updateorder/<id>', methods=['POST'])
+@jwt_required()
+def update_file_order(id):
+    """
+    Actualizar el orden de los archivos de un recurso por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: id
+            schema:
+                type: string
+        - in: body
+          name: body
+            schema:
+                type: object
+                properties:
+                    filesOrder:
+                        type: array
+                        items:
+                            type: object
+                            properties:
+                                id:
+                                    type: string
+                                order:
+                                    type: integer
+    responses:
+        200:
+            description: Orden de archivos actualizado exitosamente
+        400:
+            description: Error al validar los campos del recurso
+        401:
+            description: No tiene permisos para actualizar el recurso
+        500:
+            description: Error al actualizar el recurso
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'super_editor'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+    
+    body = request.json
+
+    # Llamar al servicio para actualizar el orden de los archivos
+    resp = services.update_files_order(id, body, current_user)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para eliminar un recurso por su id
 @bp.route('/<id>', methods=['DELETE'])

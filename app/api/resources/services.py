@@ -334,6 +334,14 @@ def update_by_id(id, body, user, files, updateCache = True):
         del body['filesIds']
         body['updatedAt'] = datetime.now()
         body['updatedBy'] = user if user else 'system'
+        
+        updatedFiles = body['updatedFiles'] if 'updatedFiles' in body else []
+        if updatedFiles:
+            order_map = {file['id']: file['order'] for file in updatedFiles}
+            
+            for file_obj in body['filesObj']:
+                if file_obj['id'] in order_map:
+                    file_obj['order'] = order_map[file_obj['id']]
 
         # Crear instancia de ResourceUpdate con el body del request
         try:
@@ -355,7 +363,8 @@ def update_by_id(id, body, user, files, updateCache = True):
             return {'msg': str(e)}, 500
 
         delete_records(body['deletedFiles'], id, user)
-        update_records(body['updatedFiles'], user)
+        
+        update_records(updatedFiles, user)
         
         body['filesObj'] = [f for f in body['filesObj'] if f['id'] not in body['deletedFiles']]
 
@@ -1248,6 +1257,66 @@ def get_article_body(id, user):
         body = resource['articleBody'] if 'articleBody' in resource else None
 
         return {'articleBody': body}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def update_files_order(id, body, user):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+        # check if the user has access to edit the resource
+        accessRights = get_accessRights(id)
+        if accessRights:
+            if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
+                return {'msg': _('You don\'t have the required authorization')}, 401
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': _('Resource does not exist')}, 404
+
+        files_order = body.get('files', [])
+        
+        # Create a mapping of id -> target_order from files_order
+        order_map = {file['id']: file.get('order') for file in files_order if 'order' in file}
+        
+        # Get all items sorted by current order
+        all_items = sorted(resource['filesObj'], key=lambda x: x.get('order', float('inf')))
+        
+        # Create mapping of id -> item for quick lookup
+        items_by_id = {item['id']: item for item in all_items}
+        
+        # Get items being repositioned with their target orders
+        repositioned = []
+        for file in files_order:
+            if file['id'] in items_by_id and 'order' in file:
+                repositioned.append((file['order'], items_by_id[file['id']]))
+        
+        # Remove repositioned items from the list
+        repositioned_ids = set(item['id'] for _, item in repositioned)
+        remaining = [item for item in all_items if item['id'] not in repositioned_ids]
+        
+        # Sort by target position to insert in correct order
+        repositioned.sort(key=lambda x: x[0])
+        
+        # Insert repositioned items at their target positions
+        for target_pos, item in repositioned:
+            # Clamp target position to valid range
+            insert_pos = min(max(0, target_pos), len(remaining))
+            remaining.insert(insert_pos, item)
+        
+        # Normalize orders to be sequential starting from 0
+        for idx, item in enumerate(remaining):
+            item['order'] = idx
+
+        resource['filesObj'] = remaining
+
+        update = ResourceUpdate(**{'filesObj': resource['filesObj'], 'updatedAt': datetime.utcnow(), 'updatedBy': user})
+
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
+
+        get_resource_files.invalidate_all()
+
+        register_log(user, log_actions['resource_files_order_update'], {'resource': id, 'files_order': files_order})
+
+        return {'msg': _('Files order updated')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
