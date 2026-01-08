@@ -4,6 +4,7 @@ from flask import jsonify, request
 from app.api.views import services
 from app.api.users import services as user_services
 from flask_babel import _
+import json
 
 @bp.route('/<view_id>', methods=['GET'])
 @jwt_required()
@@ -65,9 +66,12 @@ def update_view(view_id):
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
-    body = request.json
+    body = request.form.to_dict()
+    data = body.get('data')
+    data = json.loads(data)
+    
     # Llamar al servicio para actualizar una vista de consulta
-    return services.update(view_id, body, current_user)
+    return services.update(view_id, data, current_user)
 
 @bp.route('/<view_id>', methods=['DELETE'])
 @jwt_required()
@@ -141,6 +145,8 @@ def new_view():
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
     # Obtener el body del request
-    body = request.json
+    body = request.form.to_dict()
+    data = body.get('data')
+    data = json.loads(data)
     # Llamar al servicio para crear la vista de consulta
-    return services.create(body, current_user)
+    return services.create(data, current_user)
