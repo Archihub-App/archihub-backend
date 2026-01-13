@@ -182,10 +182,15 @@ def create(body, user, files, updateCache = True):
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
         
+        
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': _('The metadata is required')}, 400
 
+
+        body_tmp = hookHandler.call('resource_pre_update', body)
+        if body_tmp:
+            body = body_tmp
 
         status = body['status']
         if status == 'published':
