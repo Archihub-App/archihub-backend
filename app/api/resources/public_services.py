@@ -429,11 +429,11 @@ def get_tree(root, available, post_type=None, page=0):
             if page is not None:
                 resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
-                             "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
+                             "$in": list_available}, 'parent': {'$in': [None, []]}, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields, limit=10, skip=page * 10))
             else:
                 resources = list(mongodb.get_all_records('resources', {
                              'post_type': {
-                             "$in": list_available}, 'parent': None, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
+                             "$in": list_available}, 'parent': {'$in': [None, []]}, 'status': 'published'}, sort=[('metadata.firstLevel.title', 1)], fields=fields))
         else:
             if page is not None:
                 resources = list(mongodb.get_all_records('resources', {'post_type': {
