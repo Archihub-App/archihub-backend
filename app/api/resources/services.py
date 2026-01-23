@@ -950,6 +950,10 @@ def get_resource(id, user, postQuery = False):
     if not resource:
         raise Exception(_('Resource does not exist'))
     
+    post_type = resource['post_type']
+    post_type = get_by_slug(post_type)
+    isArticle = post_type and 'isArticle' in post_type and post_type['isArticle']
+    
     status = resource['status']
     if status == 'draft':
         if not has_role(user, 'publisher') or not has_role(user, 'admin'):
@@ -973,6 +977,9 @@ def get_resource(id, user, postQuery = False):
                                             'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
 
     children = []
+    if isArticle:
+        resource['articleBody'] = get_article_body(resource['_id'], None)
+
     for c in resource['children']:
         c_ = mongodb.get_record('post_types', {'slug': c})
         obj = {
@@ -1253,7 +1260,9 @@ def get_article_body(id, user):
         # check if the user has access to the resource
         accessRights = get_accessRights(id)
         if accessRights:
-            if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
+            if user and not has_right(user, accessRights['id']):
+                return {'msg': _('You don\'t have the required authorization')}, 401
+            elif not user:
                 return {'msg': _('You don\'t have the required authorization')}, 401
         # Si el recurso no existe, retornar error
         if not resource:
