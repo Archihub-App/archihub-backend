@@ -977,8 +977,7 @@ def get_resource(id, user, postQuery = False):
                                             'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
 
     children = []
-    if isArticle:
-        resource['articleBody'] = get_article_body(resource['_id'], None)
+    
 
     for c in resource['children']:
         c_ = mongodb.get_record('post_types', {'slug': c})
@@ -1186,6 +1185,12 @@ def get_resource(id, user, postQuery = False):
         if resource_tmp:
             resource = resource_tmp
     else:
+        if isArticle:
+            resource['articleBody'] = get_article_body(resource['_id'], None)
+            resource['articleBody'] = resource['articleBody'][0]['articleBody']
+            
+            print(resource)
+            
         resource_tmp = hookHandler.call('get_resource', resource)
         if resource_tmp:
             resource = resource_tmp
@@ -1362,6 +1367,7 @@ def update_article_body(id, body, user):
         mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
         
         get_article_body.invalidate(id, user)
+        get_resource.invalidate_all()
 
         register_log(user, log_actions['resource_article_update'], {'resource': id, 'articleBody': article_body})
 
@@ -1982,4 +1988,5 @@ def update_cache():
     get_all.invalidate_all()
     get_resource_images.invalidate_all()
     get_children_cache.invalidate_all()
+    get_article_body.invalidate_all()
     clear_cache()

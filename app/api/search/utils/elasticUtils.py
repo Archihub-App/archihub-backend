@@ -117,8 +117,8 @@ def get_resources_by_filters(body, user):
                         
     if 'viewType' in body and body['viewType'] == 'gallery':
         query['_source'] += ['records']
-        query['size'] = 10
-        query['from'] = body['page'] * 10 if 'page' in body else 0
+        query['size'] = size
+        query['from'] = body['page'] * size if 'page' in body else 0
         query['query']['bool']['filter'].append({
             'term': {
                 'records.type.keyword': 'image'

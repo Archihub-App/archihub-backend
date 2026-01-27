@@ -570,8 +570,11 @@ def get_by_index_gallery(body, current_user):
             for r in resource['filesObj']:
                 ids.append(r['id'])
 
-        img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}, sort=[('name', 1)]).skip(body['index']).limit(1))
-        return get_by_id(str(img[0]['_id']), current_user)
+        img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}))
+        order_dict = {file['id']: file['order'] if 'order' in file else 0 for file in resource['filesObj']}
+        img_sorted = sorted(img, key=lambda x: order_dict.get(x['_id'], float('inf')))
+        
+        return get_by_id(str(img_sorted[body['index']]['_id']), current_user)
 
     except Exception as e:
         return {'msg': str(e)}, 500
