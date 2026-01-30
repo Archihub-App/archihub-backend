@@ -126,7 +126,7 @@ def get_resources_by_filters(body, user):
         })
     
     if 'viewType' in body and body['viewType'] == 'blog':
-        query['_source'] += ['article']
+        query['_source'] += ['article', 'records']
         query['size'] = size
         query['from'] = body['page'] * size if 'page' in body else 0
         query['query']['bool']['filter'].append({
@@ -281,7 +281,20 @@ def get_resources_by_filters(body, user):
             article_content = resource.get('article', '')
             if article_content and len(article_content) > 300:
                 resource['article'] = article_content[:300] + '...'
-                print(resource['article'])
+
+            records = resource.get('records', [])
+            thumbnail_record = next((r for r in records if r.get('tag') == 'thumbnail'), None)
+            if thumbnail_record:
+                from app.api.records.services import get_by_id
+                r, status = get_by_id(thumbnail_record['id'], user, True)
+                if status == 200:
+                    path = r.get('processing', {}).get('fileProcessing', {}).get('path')
+                    path = path + '_medium.jpg'
+                    if path:
+                        file_path = os.path.join(WEB_FILES_PATH, path)
+                        if file_path and os.path.exists(file_path):
+                            with open(file_path, 'rb') as f:
+                                resource['thumbnail'] = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
 
     register_log(user if user is not None else 'public', log_actions['search'], {'filters': body})
     

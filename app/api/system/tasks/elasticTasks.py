@@ -204,8 +204,10 @@ def index_resources_task(body={}):
                     resource['filesObj']) if 'filesObj' in resource else 0
                 
                 records_ids = []
+                records_labels_map = {}
                 if 'filesObj' in resource:
                     records_ids = [r['id'] for r in resource['filesObj']]
+                    records_labels_map = {r['id']: r.get('tag') for r in resource['filesObj'] if 'id' in r}
                 document['records'] = []
                 records_ids = [ObjectId(r) for r in records_ids]
                 if records_ids:
@@ -216,7 +218,15 @@ def index_resources_task(body={}):
                 else:
                     records = []
                     
-                records = [{'id': str(record['_id']), 'type': record['processing']['fileProcessing']['type']} for record in records if 'processing' in record and 'fileProcessing' in record['processing']]
+                records = [
+                    {
+                        'id': str(record['_id']),
+                        'type': record['processing']['fileProcessing']['type'],
+                        'tag': records_labels_map.get(str(record['_id']))
+                    }
+                    for record in records
+                    if 'processing' in record and 'fileProcessing' in record['processing']
+                ]
                 document['records'] = records
 
                 if 'accessRights' in resource:
