@@ -16,7 +16,7 @@ def get_resources_by_filters(body, user):
     post_types = body['post_type']
     sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
     sortBy = body.get('sortBy', 'createdAt')
-    activeColumns = body.get('activeColumns', [])
+    activeColumns = body.get('activeColumns', ['metadata.firstLevel.title'])
     viewType = body.get('viewType', 'list')
     size = body.get('size', 20)
     activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
@@ -25,12 +25,6 @@ def get_resources_by_filters(body, user):
     if activeColumns_tmp:
         activeColumns = activeColumns_tmp
         
-    if viewType == 'gallery' or viewType == 'blog':
-        if len(activeColumns) == 0:
-            activeColumns = ['metadata.firstLevel.title']
-        elif 'metadata.firstLevel.title' not in activeColumns:
-            activeColumns = ['metadata.firstLevel.title'] + activeColumns
-    
     metadata_fields = []
     for post_type in post_types:
         from app.api.resources.services import get_metadata
