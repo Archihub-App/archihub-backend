@@ -16,7 +16,9 @@ def get_resources_by_filters(body, user):
     post_types = body['post_type']
     sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
     sortBy = body.get('sortBy', 'createdAt')
-    activeColumns = body.get('activeColumns', ['metadata.firstLevel.title'])
+    activeColumns = body.get('activeColumns', [{
+        'destiny': 'metadata.firstLevel.title'
+    }])
     viewType = body.get('viewType', 'list')
     size = body.get('size', 20)
     activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
@@ -116,7 +118,7 @@ def get_resources_by_filters(body, user):
                             }
                         })
                         
-    if 'viewType' in body and body['viewType'] == 'gallery':
+    if viewType == 'gallery':
         query['_source'] += ['records']
         query['size'] = size
         query['from'] = body['page'] * size if 'page' in body else 0
@@ -126,7 +128,7 @@ def get_resources_by_filters(body, user):
             }
         })
     
-    if 'viewType' in body and body['viewType'] == 'blog':
+    if viewType == 'blog':
         query['_source'] += ['article', 'records']
         query['size'] = size
         query['from'] = body['page'] * size if 'page' in body else 0

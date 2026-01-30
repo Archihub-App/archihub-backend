@@ -63,7 +63,9 @@ def parse_result(result):
 def get_all(body, user):
     try:
         body = json.loads(body)
-        activeColumns = body.get('activeColumns', ['metadata.firstLevel.title'])
+        activeColumns = body.get('activeColumns', [{
+            'destiny': 'metadata.firstLevel.title'
+        }])
         post_types = body['post_type']
         body.pop('post_type')
         for p in post_types:
