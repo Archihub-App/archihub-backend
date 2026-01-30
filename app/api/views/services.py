@@ -100,6 +100,7 @@ def get_view_info(view_slug):
 
     records_types.sort(key=lambda x: x['count'], reverse=True)
     
+    
     view['files'] = {
         'total': records_count,
         'data': records_types

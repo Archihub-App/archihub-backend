@@ -4,12 +4,38 @@ from app.utils import IndexHandler
 import os
 from bson.objectid import ObjectId
 from app.utils.index.spanish_settings import settings as spanish_settings
-from app.api.types.services import get_metadata
+from app.api.types.services import get_by_slug, get_metadata
 from flask_babel import _
+from html.parser import HTMLParser
+import re
 
 index_handler = IndexHandler.IndexHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
+
+class _HTMLStripper(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._parts = []
+
+    def handle_data(self, data):
+        self._parts.append(data)
+
+    def get_data(self):
+        return ''.join(self._parts)
+
+
+def strip_html(text):
+    if text is None:
+        return None
+    stripper = _HTMLStripper()
+    stripper.feed(text)
+    stripper.close()
+    cleaned = stripper.get_data()
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    cleaned = re.sub(r'\s+([,.;:!?])', r'\1', cleaned)
+    cleaned = re.sub(r'([,.;:!?])([^\s])', r'\1 \2', cleaned)
+    return cleaned.strip()
 
 def get_value_by_path(dict, path):
     try:
@@ -67,7 +93,10 @@ def index_resources_task(body={}):
                 document = {}
                 resouces_count += 1
                 post_type = resource['post_type']
+                post_type_ = get_by_slug(post_type)
                 fields = get_metadata(post_type)['fields']
+                isArticle = post_type_ and 'isArticle' in post_type_ and post_type_['isArticle']
+                
                 for f in fields:
                     if f['type'] != 'file' and f['type'] != 'simple-date' and f['type'] != 'repeater':
                         destiny = f['destiny']
@@ -139,11 +168,24 @@ def index_resources_task(body={}):
                                                         break
                             change_value(document, f['destiny'], temp)
                                                 
-                                        
-
                 document['post_type'] = post_type
+                document['article'] = None
                 
-                if 'createdBy' in resource:
+                if isArticle:
+                    articleBody = resource['articleBody'] if 'articleBody' in resource else []
+                    for p in articleBody:
+                        if 'type' in p and p['type'] == 'paragraph':
+                            if 'content' in p:
+                                if document['article'] is None:
+                                    document['article'] = ''
+                                
+                                content = strip_html(p['content'])
+                                if document['article'] == '':
+                                    document['article'] += content
+                                else:
+                                    document['article'] += ' ' + content
+                
+                if 'createdAt' in resource:
                     created_at = resource['createdAt']
                     created_at = created_at.strftime('%Y-%m-%dT%H:%M:%S')
                     document['createdAt'] = created_at

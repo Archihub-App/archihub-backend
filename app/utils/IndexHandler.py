@@ -225,8 +225,6 @@ class IndexHandler:
         alias_response = self.get_alias_indexes(
             ELASTIC_INDEX_PREFIX + '-' + index)
         
-        print(alias_response)
-        
         if isinstance(alias_response, dict) and 'error' in alias_response and alias_response.get('status') == 404:
             print('Alias not found')
             self.delete_index(ELASTIC_INDEX_PREFIX + '-' + index)

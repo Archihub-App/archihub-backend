@@ -124,6 +124,32 @@ def get_resources_by_filters(body, user):
                 'records.type.keyword': 'image'
             }
         })
+    
+    if 'viewType' in body and body['viewType'] == 'blog':
+        query['_source'] += ['article']
+        query['size'] = size
+        query['from'] = body['page'] * size if 'page' in body else 0
+        query['query']['bool']['filter'].append({
+            'bool': {
+                'must': [
+                    {
+                        'exists': {
+                            'field': 'article'
+                        }
+                    }
+                ],
+                'must_not': [
+                    {
+                        'term': {
+                            'article': ''
+                        }
+                    }
+                ]
+            }
+        })
+        query['sort'] = [
+            { 'createdAt': { "order": "desc" } }
+        ]
 
     if 'keyword' in body:
         if len(body['keyword']) < 1:
@@ -228,7 +254,7 @@ def get_resources_by_filters(body, user):
     response_tmp = hookHandler.call('search_response_post_process', body, response)
     if response_tmp:
         response = response_tmp
-    
+        
     if 'viewType' in body and body['viewType'] == 'gallery':
         for resource in response['resources']:
             if 'records' in resource:
@@ -249,6 +275,13 @@ def get_resources_by_filters(body, user):
                                     record['file'] = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
             else:
                 resource['records'] = []
+                
+    elif 'viewType' in body and body['viewType'] == 'blog':
+        for resource in response['resources']:
+            article_content = resource.get('article', '')
+            if article_content and len(article_content) > 300:
+                resource['article'] = article_content[:300] + '...'
+                print(resource['article'])
 
     register_log(user if user is not None else 'public', log_actions['search'], {'filters': body})
     

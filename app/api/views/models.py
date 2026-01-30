@@ -30,6 +30,7 @@ class ViewUpdate(BaseModel):
     visible: Optional[list[str]] = None
     defaultView: Optional[str] = None
     thumbnail: Optional[str] = None
+    slug: Optional[str] = None
 
     class Config:
         populate_by_name = True

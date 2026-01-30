@@ -171,6 +171,7 @@ def get_all(body, user):
             'total': total,
             'resources': resources
         }
+        
         # Retornar los recursos
         return response, 200
     except Exception as e:

@@ -511,6 +511,10 @@ def regenerate_index(user):
 
         mapping = transform_dict_to_mapping(resources_schema['data'])
         mapping.pop('file', None)
+        
+        mapping['article'] = {
+            'type': 'text'
+        }
 
         mapping['post_type'] = {
             'type': 'text',
