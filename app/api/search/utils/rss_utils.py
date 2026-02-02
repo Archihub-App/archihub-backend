@@ -39,7 +39,8 @@ def build_rss(response, base_url, link_template, feed_title, feed_description):
         if pub_date:
             lines.append(f'<pubDate>{escape(pub_date)}</pubDate>')
         if article:
-            lines.append(f'<description>{escape(article)}</description>')
+            summary = _truncate_text(article, 250)
+            lines.append(f'<description>{escape(summary)}</description>')
             lines.append(f'<content:encoded><![CDATA[{_safe_cdata(article)}]]></content:encoded>')
         lines.append('</item>')
 
@@ -101,3 +102,11 @@ def _get_nested_value(data, path):
 
 def _safe_cdata(text):
     return text.replace(']]>', ']]]]><![CDATA[>')
+
+
+def _truncate_text(text, max_length):
+    if text is None:
+        return ''
+    if len(text) <= max_length:
+        return text
+    return text[:max_length] + '...'
