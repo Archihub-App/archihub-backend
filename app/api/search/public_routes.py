@@ -68,18 +68,6 @@ def get_blog_rss_public():
         - in: query
           name: body
           type: string
-        - in: query
-          name: base_url
-          type: string
-        - in: query
-          name: link_template
-          type: string
-        - in: query
-          name: feed_title
-          type: string
-        - in: query
-          name: feed_description
-          type: string
     responses:
         200:
             description: RSS generado exitosamente
@@ -105,9 +93,6 @@ def get_blog_rss_public():
 
         if request.args.get('keyword'):
             body['keyword'] = request.args.get('keyword')
-
-        if request.args.get('status'):
-            body['status'] = request.args.get('status')
 
         if request.args.get('sortBy'):
             body['sortBy'] = request.args.get('sortBy')
