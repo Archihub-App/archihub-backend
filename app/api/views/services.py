@@ -78,7 +78,7 @@ def get_view_info(view_slug):
     from app.api.types.services import get_icon
     view['icon'] = get_icon(view['root'])
 
-    filter_condition = {'parent.post_type': {'$in': [p['slug'] for p in types]}}
+    filter_condition = {'parent.post_type': {'$in': [p['slug'] for p in types]}, 'status': {'$ne': 'deleted'}}
     if view['parent'] != '':
         filter_condition = {
             '$or': [

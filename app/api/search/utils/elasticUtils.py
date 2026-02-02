@@ -279,9 +279,10 @@ def get_resources_by_filters(body, user):
                 resource['records'] = []
                 
     elif viewType == 'blog':
+        full_article = body.get('full_article', False)
         for resource in response['resources']:
             article_content = resource.get('article', '')
-            if article_content and len(article_content) > 300:
+            if not full_article and article_content and len(article_content) > 300:
                 resource['article'] = article_content[:300] + '...'
 
             records = resource.get('records', [])
