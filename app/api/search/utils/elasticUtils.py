@@ -194,7 +194,6 @@ def get_resources_by_filters(body, user):
                 })
                 
     if 'location_filters' in body:
-        print(body['location_filters'])
         if len(body['location_filters']) > 0:
             for location_filter in body['location_filters']:
                 location_field = location_filter['destiny']
@@ -258,7 +257,7 @@ def get_resources_by_filters(body, user):
     if response_tmp:
         response = response_tmp
         
-    if 'viewType' in body and body['viewType'] == 'gallery':
+    if viewType == 'gallery':
         for resource in response['resources']:
             if 'records' in resource:
                 records = resource.get('records', [])
@@ -279,7 +278,7 @@ def get_resources_by_filters(body, user):
             else:
                 resource['records'] = []
                 
-    elif 'viewType' in body and body['viewType'] == 'blog':
+    elif viewType == 'blog':
         for resource in response['resources']:
             article_content = resource.get('article', '')
             if article_content and len(article_content) > 300:
