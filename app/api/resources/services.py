@@ -33,6 +33,8 @@ import os
 from datetime import datetime
 from dateutil import parser
 import numbers
+import re
+import html
 from flask_babel import _
 
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -57,6 +59,48 @@ def change_value(body, route, value):
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
     return json.loads(json_util.dumps(result))
+
+# Function to extract IDs from uploaded records content
+def extract_uploaded_records_ids(content):
+    if not content:
+        return []
+    
+    try:
+        # First unescape HTML entities
+        unescaped_content = html.unescape(content)
+        
+        # Find data-records attribute value using a simpler approach
+        # Look for data-records=" and then find the matching ]" pattern
+        pattern = r'data-records="(\[.*?\])"'
+        match = re.search(pattern, unescaped_content, re.DOTALL)
+        
+        if not match:
+            # Fallback: look in the original content before unescaping
+            pattern_escaped = r'data-records="(\[.*?\])"'
+            match = re.search(pattern_escaped, content, re.DOTALL)
+            if match:
+                records_json = html.unescape(match.group(1))
+            else:
+                return []
+        else:
+            records_json = match.group(1)
+        
+        parsed = json.loads(records_json)
+        
+        if isinstance(parsed, list):
+            ids = []
+            for record in parsed:
+                if isinstance(record, dict):
+                    record_id = record.get('id') or record.get('_id')
+                    if record_id:
+                        ids.append(record_id)
+            return ids
+            
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"Error parsing uploaded records: {e}")
+        print(f"Content sample: {content[:200]}...")
+    
+    return []
 
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
 @cacheHandler.cache.cache(limit=5000)
@@ -1192,7 +1236,22 @@ def get_resource(id, user, postQuery = False):
             resource['articleBody'] = get_article_body(resource['_id'], None)
             resource['articleBody'] = resource['articleBody'][0]['articleBody']
             
-            print(resource)
+            for b in resource['articleBody']:
+                if b['type'] == 'uploadedRecords':
+                    content = b['content']
+                    record_ids = extract_uploaded_records_ids(content)
+                    
+                    filters = {'_id': {'$in': [ObjectId(rid) for rid in record_ids]}, 'processing.fileProcessing.type': {'$exists': True}}
+                    records = list(mongodb.get_all_records('records', filters, fields={'name': 1, 'displayName': 1, 'processing.fileProcessing.type': 1}))
+                    
+                    out = [{
+                        'id': str(r['_id']),
+                        'name': r['displayName'] if 'displayName' in r else r['name'],
+                        'type': r['processing']['fileProcessing']['type']
+                    } for r in records]
+                    
+                    b['content'] = out
+                    
             
         resource_tmp = hookHandler.call('get_resource', resource)
         if resource_tmp:

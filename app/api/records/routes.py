@@ -153,6 +153,12 @@ def get_stream_by_id(id):
             type: string
             required: true
             description: id del record a obtener
+        - in: query
+          name: size
+          schema:
+            type: string
+            required: false
+            description: tamaño del stream (small, medium, large, original)
     responses:
         200:
             description: Record
@@ -166,8 +172,11 @@ def get_stream_by_id(id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     
+    # Obtener el parámetro size de la query string
+    size = request.args.get('size')
+    
     # Llamar al servicio para obtener un record por su id
-    resp = services.get_stream(id, current_user)
+    resp = services.get_stream(id, current_user, size)
     
     return resp
 

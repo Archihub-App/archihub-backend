@@ -375,8 +375,8 @@ def cache_get_record_stream(id):
             raise Exception('Record no ha sido procesado')
 
     # si el record no es de tipo audio o video, retornar error
-    if record['processing']['fileProcessing']['type'] != 'audio' and record['processing']['fileProcessing']['type'] != 'video':
-        raise Exception('Record no es de tipo audio o video')
+    if record['processing']['fileProcessing']['type'] != 'audio' and record['processing']['fileProcessing']['type'] != 'video' and record['processing']['fileProcessing']['type'] != 'image':
+        raise Exception('Record no es de tipo audio, video o imagen')
 
     # obtener el path del archivo
     path = record['processing']['fileProcessing']['path']

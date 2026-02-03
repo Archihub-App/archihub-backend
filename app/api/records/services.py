@@ -38,6 +38,7 @@ mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 hookHandler = HookHandler.HookHandler()
 
+
 def update_cache():
     get_total.invalidate_all()
     get_by_id.invalidate_all()
@@ -45,6 +46,7 @@ def update_cache():
 
 def parse_result(result):
     return json.loads(json_util.dumps(result))
+
 
 def extract_important_exif(metadata):
     if not metadata:
@@ -85,6 +87,7 @@ def extract_important_exif(metadata):
     cleaned = {k: data[k] for k in keys_of_interest if k in data}
     return cleaned
 
+
 def allowedFile(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -93,10 +96,10 @@ def allowedFile(filename):
 def set_record_metadata(record, metadata):
     if 'metadata' not in record:
         record['metadata'] = {}
-    
+
     for key, value in metadata.items():
         record['metadata'][key] = value
-    
+
     return record
 
 
@@ -108,9 +111,8 @@ def get_by_filters(body, current_user):
         # Si el recurso no existe, retornar error
         if not records:
             return {'msg': _('Record does not exist')}, 404
-        
-        total = get_total(json.dumps(body['filters']))
 
+        total = get_total(json.dumps(body['filters']))
 
         for r in records:
             r['id'] = str(r['_id'])
@@ -125,8 +127,10 @@ def get_by_filters(body, current_user):
 
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
 # Funcion para obtener el total de recursos
+
+
 @cacheHandler.cache.cache(limit=1000)
 def get_total(obj):
     try:
@@ -138,8 +142,10 @@ def get_total(obj):
         return total
     except Exception as e:
         raise Exception(str(e))
-    
+
 # Nuevos servicio para actualizar los campos displayName y accessRights de un record
+
+
 def update_record(record, user):
     try:
         update = {}
@@ -173,11 +179,11 @@ def update_record_by_id(id, current_user, body):
         update = FileRecordUpdate(**body)
 
         mongodb.update_record('records', {'_id': ObjectId(id)}, update)
-        
+
         register_log(current_user, log_actions['record_update'], {
-                        'record': id})
+            'record': id})
         get_by_id.invalidate_all()
-    
+
         payload = body
         payload['_id'] = id
         hookHandler.call('record_update', payload)
@@ -187,8 +193,10 @@ def update_record_by_id(id, current_user, body):
 
     except Exception as e:
         raise Exception(str(e))
-    
+
 # Nuevo servicio para borrar un parent de un record
+
+
 def delete_parent(resource_id, parent_id, current_user):
     try:
         # Buscar el record en la base de datos
@@ -197,7 +205,7 @@ def delete_parent(resource_id, parent_id, current_user):
         # Si el record no existe, retornar error
         if not record:
             return {'msg': _('Record does not exist')}, 404
-        
+
         # Si el record no tiene el recurso como parent, retornar error
         if not any(x['id'] == resource_id for x in record['parent']):
             return {'msg': _('Record does not have the resource as parent')}, 404
@@ -206,7 +214,7 @@ def delete_parent(resource_id, parent_id, current_user):
         # el parent es de tipo dict y tiene los campos id y post_type
         record['parent'] = [x for x in record['parent']
                             if x['id'] != resource_id]
-        
+
         array_parent = set(x['id'] for x in record['parent'])
 
         array_parents_temp = []
@@ -230,7 +238,7 @@ def delete_parent(resource_id, parent_id, current_user):
         # Si el record no tiene parents, cambiar el status a deleted
         if len(record['parent']) == 0:
             status = 'deleted'
-            
+
         # Actualizar el record
         update = FileRecordUpdate(**{
             'parent': array_parent,
@@ -245,7 +253,7 @@ def delete_parent(resource_id, parent_id, current_user):
         # Registrar el log
         register_log(current_user, log_actions['record_update'], {
                      'record': parent_id})
-        
+
         # Retornar el resultado
         return {'msg': _('Parent deleted')}, 200
 
@@ -267,13 +275,14 @@ def update_parent(parent_id, current_user, parents):
 
 
 # Nuevo servicio para crear un record para un recurso
-def create(resource_id, current_user, files, upload = True, filesTags = None):
+def create(resource_id, current_user, files, upload=True, filesTags=None):
     # Buscar el recurso en la base de datos
-    resource = mongodb.get_record('resources', {'_id': ObjectId(resource_id)}, fields={'parents': 1, 'post_type': 1})
+    resource = mongodb.get_record('resources', {'_id': ObjectId(
+        resource_id)}, fields={'parents': 1, 'post_type': 1})
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception(_('Resource does not exist'))
-    
+
     resp = []
     index = 0
 
@@ -282,7 +291,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
             filename = secure_filename(f.filename)
         else:
             filename = f['filename']
-        
+
         if allowedFile(filename):
             print(f)
             if upload:
@@ -307,7 +316,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
 
                 # renombrar el archivo
                 os.rename(os.path.join(path, filename),
-                            os.path.join(path, filename_new))
+                          os.path.join(path, filename_new))
                 # calcular el hash 256 del archivo
                 hash = hashlib.sha256()
                 with open(os.path.join(path, filename_new), 'rb') as f:
@@ -323,7 +332,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
             if record:
                 # eliminar el archivo que se subio
                 os.remove(os.path.join(path, filename_new))
-                
+
                 obj_resp = {
                     'id': str(record['_id']),
                     'tag': filesTags[index]['filetag']
@@ -331,7 +340,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                 if 'order' in filesTags[index]:
                     obj_resp['order'] = filesTags[index]['order']
                 resp.append(obj_resp)
-                
+
                 new_parent = [{
                     'id': resource_id,
                     'post_type': resource['post_type']
@@ -367,16 +376,16 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
 
                 update_dict['updatedBy'] = current_user if current_user else 'system'
                 update_dict['updatedAt'] = datetime.datetime.now()
-                
+
                 # actualizar el record
                 update = FileRecordUpdate(**update_dict)
                 result = mongodb.update_record(
                     'records', {'_id': ObjectId(record['_id'])}, update)
-                
+
                 # registrar el log
                 register_log(current_user, log_actions['record_update'], {
-                                'record': str(record['_id'])})
-                
+                    'record': str(record['_id'])})
+
                 payload = update_dict
                 payload['_id'] = str(record['_id'])
                 hookHandler.call('record_update_parent', payload)
@@ -467,7 +476,7 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
                 payload['_id'] = str(new_record.inserted_id)
                 hookHandler.call('record_create', payload)
                 # limpiar la cache
-                
+
                 get_hash.invalidate_all()
         else:
             raise Exception(_('File type not allowed'))
@@ -476,11 +485,13 @@ def create(resource_id, current_user, files, upload = True, filesTags = None):
     # retornar el resultado
     return resp
 
+
 @cacheHandler.cache.cache(limit=1000)
 def get_hash(hash):
     try:
         # Buscar el recurso en la base de datos
-        record = mongodb.get_record('records', {'hash': hash}, fields={'updatedBy': 0, 'updatedAt': 0})
+        record = mongodb.get_record('records', {'hash': hash}, fields={
+                                    'updatedBy': 0, 'updatedAt': 0})
         # Si el recurso no existe, retornar error
         if not record:
             return None
@@ -490,22 +501,25 @@ def get_hash(hash):
 
     except Exception as e:
         raise Exception(str(e))
-    
+
 # Nuevo servicio para obtener un record por su id verificando el usuario
+
+
 @cacheHandler.cache.cache(limit=5000)
-def get_by_id(id, current_user, fullFields = False):
+def get_by_id(id, current_user, fullFields=False):
     try:
         # Buscar el record en la base de datos
-        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1, 'filepath': 1})
+        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={
+                                    'parent': 1, 'parents': 1, 'accessRights': 1, 'hash': 1, 'processing': 1, 'name': 1, 'displayName': 1, 'size': 1, 'filepath': 1})
         # Si el record no existe, retornar error
         if not record:
             return {'msg': _('Record does not exist')}, 404
-        
+
         if 'accessRights' in record:
             if record['accessRights']:
                 if not has_right(current_user, record['accessRights']) and not has_right(current_user, 'admin'):
                     return {'msg': _('You do not have permission to view this record')}, 401
-        
+
         # get keys from record['processing']
         keys = {}
         fileProcessing = None
@@ -515,13 +529,14 @@ def get_by_id(id, current_user, fullFields = False):
                 keys[key] = {}
                 keys[key]['type'] = record['processing'][key]['type']
                 if 'metadata' in record['processing'][key]:
-                    keys[key]['metadata'] = extract_important_exif(record['processing'][key]['metadata'])
+                    keys[key]['metadata'] = extract_important_exif(
+                        record['processing'][key]['metadata'])
                 if key == 'fileProcessing':
                     if 'cloud' in record['processing'][key]:
                         keys[key]['cloud'] = record['processing'][key]['cloud']
 
             record['processing'] = keys
-        
+
         if not fullFields:
             record.pop('filepath')
 
@@ -530,14 +545,16 @@ def get_by_id(id, current_user, fullFields = False):
         if 'parent' in record:
             to_clean = []
             for p in record['parent']:
-                r_ = mongodb.get_record('resources', {'_id': ObjectId(p['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
+                r_ = mongodb.get_record('resources', {'_id': ObjectId(p['id'])}, fields={
+                                        'metadata.firstLevel.title': 1, 'post_type': 1})
                 if r_:
                     p['name'] = r_['metadata']['firstLevel']['title']
                     p['icon'] = get_icon(r_['post_type'])
                 else:
                     to_clean.append(p['id'])
 
-            record['parent'] = [x for x in record['parent'] if x['id'] not in to_clean]
+            record['parent'] = [x for x in record['parent']
+                                if x['id'] not in to_clean]
             for p in record['parent']:
                 if 'id' in p:
                     p['id'] = str(p['id'])
@@ -547,45 +564,51 @@ def get_by_id(id, current_user, fullFields = False):
                         if not has_right(current_user, p['accessRights']['id']):
                             return {'msg': _('You do not have permission to view this record')}, 401
 
-
         if 'parents' in record:
             record.pop('parents')
-            
+
         # Si el record existe, retornar el record
         return parse_result(record), 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+
 def get_by_index_gallery(body, current_user):
     try:
         if 'id' not in body:
             return {'msg': _('id is missing')}, 400
         if 'index' not in body:
             return {'msg': _('index is missing')}, 400
-        
-        resource = mongodb.get_record('resources', {'_id': ObjectId(body['id'])}, fields={'filesObj': 1})
+
+        resource = mongodb.get_record(
+            'resources', {'_id': ObjectId(body['id'])}, fields={'filesObj': 1})
         ids = []
         if 'filesObj' in resource:
             for r in resource['filesObj']:
                 ids.append(r['id'])
 
-        img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}))
-        order_dict = {file['id']: file['order'] if 'order' in file else 0 for file in resource['filesObj']}
-        img_sorted = sorted(img, key=lambda x: order_dict.get(x['_id'], float('inf')))
-        
+        img = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(
+            id) for id in ids]}, 'processing.fileProcessing.type': 'image'}, fields={'processing': 1}))
+        order_dict = {file['id']: file['order']
+                      if 'order' in file else 0 for file in resource['filesObj']}
+        img_sorted = sorted(
+            img, key=lambda x: order_dict.get(x['_id'], float('inf')))
+
         return get_by_id(str(img_sorted[body['index']]['_id']), current_user)
 
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
 # Nuevo servicio para devolver un stream de un archivo por su id
-def get_stream(id, current_user):
+
+
+def get_stream(id, current_user, size='large'):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
             return {'msg': resp_['msg']}, 500
-        
+
         path, type = cache_get_record_stream(id)
 
         path = os.path.join(WEB_FILES_PATH, path)
@@ -594,44 +617,54 @@ def get_stream(id, current_user):
             path = path + '.mp4'
         elif type == 'audio':
             path = path + '.mp3'
-
+        elif type == 'image':
+            if size == 'large':
+                path = path + '_large.jpg'
+            elif size == 'medium':
+                path = path + '_medium.jpg'
+            else:
+                path = path + '_small.jpg'
         # retornar el archivo
         return send_file(path, as_attachment=False)
 
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+
 def get_processing_metadata(id, slug, current_user):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
             return {'msg': resp_['msg']}, 500
-        
+
         resp = cache_get_processing_metadata(id, slug)
 
         return resp, 200
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+
 def get_processing_result(id, slug, current_user):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
             return {'msg': resp_['msg']}, 500
-        
+
         resp = cache_get_processing_result(id, slug)
 
         return resp, 200
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
 # Nuevo servicio para devolver la transcripcion de un plugin
+
+
 def get_transcription(id, slug, current_user, page):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
             return {'msg': resp_['msg']}, 500
-        
+
         resp = cache_get_record_transcription(id, slug, page)
         # Si el record existe, retornar el record
         return resp, 200
@@ -640,6 +673,8 @@ def get_transcription(id, slug, current_user, page):
         return {'msg': str(e)}, 500
 
 # Nuevo servicio para devolver las paginas en baja de un documento por su id
+
+
 def get_document(id, current_user):
     try:
         resp_, status = get_by_id(id, current_user)
@@ -650,6 +685,7 @@ def get_document(id, current_user):
     except Exception as e:
         return {'msg': str(e)}, 500
 
+
 def get_document_pages(id, pages, size, current_user):
     try:
         resp_, status = get_by_id(id, current_user)
@@ -657,11 +693,13 @@ def get_document_pages(id, pages, size, current_user):
             return {'msg': resp_['msg']}, 500
         pages = json.dumps(pages)
         resp = cache_get_pages_by_id(id, pages, size)
-        response = Response(json.dumps(resp).encode('utf-8'), mimetype='application/json', direct_passthrough=False)
+        response = Response(json.dumps(resp).encode(
+            'utf-8'), mimetype='application/json', direct_passthrough=False)
         return response
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+
 def get_document_gallery(id, pages, size, current_user):
     try:
         from app.api.resources.services import get_by_id as get_resource_by_id
@@ -670,27 +708,31 @@ def get_document_gallery(id, pages, size, current_user):
             return {'msg': resp_['msg']}, 500
         pages = json.dumps(pages)
         resp = cache_get_imgs_gallery_by_id(id, pages, size)
-        response = Response(json.dumps(resp).encode('utf-8'), mimetype='application/json', direct_passthrough=False)
+        response = Response(json.dumps(resp).encode(
+            'utf-8'), mimetype='application/json', direct_passthrough=False)
         return response
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
-    
+
+
 def get_document_block_by_page(current_user, id, page, slug, block=None):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
             return {'msg': resp_['msg']}, 500
-        
+
         print(id, page, slug, block)
         return cache_get_block_by_page_id(id, page, slug, block, current_user)
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+
 def postBlockDocument(current_user, obj):
     try:
         # get record with body['id']
-        record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
+        record = mongodb.get_record(
+            'records', {'_id': ObjectId(obj['id_doc'])})
         # if record exists
         if record:
             # get record['processing'] and update it
@@ -701,7 +743,7 @@ def postBlockDocument(current_user, obj):
                     'bbox': obj['bbox'],
                     **obj['data']
                 })
-            
+
             update = {
                 'processing': processing,
                 'updatedBy': current_user if current_user else 'system',
@@ -709,8 +751,9 @@ def postBlockDocument(current_user, obj):
             }
 
             update = FileRecordUpdate(**update)
-            mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
-            
+            mongodb.update_record(
+                'records', {'_id': ObjectId(obj['id_doc'])}, update)
+
             payload = update.dict()
             payload['_id'] = obj['id_doc']
             hookHandler.call('record_update', payload)
@@ -722,10 +765,12 @@ def postBlockDocument(current_user, obj):
     except Exception as e:
         return {'msg': str(e)}, 500
 
+
 def updateBlockDocument(current_user, obj):
     try:
         # get record with body['id']
-        record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
+        record = mongodb.get_record(
+            'records', {'_id': ObjectId(obj['id_doc'])})
         # if record exists
         if record:
             # get record['processing'] and update it
@@ -733,11 +778,13 @@ def updateBlockDocument(current_user, obj):
 
             for k, val in obj['data'].items():
                 if obj['type_block'] == 'blocks':
-                    processing[obj['slug']]['result'][obj['page'] - 1]['blocks'][obj['index']][k] = val
-            
+                    processing[obj['slug']]['result'][obj['page'] -
+                                                      1]['blocks'][obj['index']][k] = val
+
             if obj['type_block'] == 'blocks':
-                processing[obj['slug']]['result'][obj['page'] - 1]['blocks'][obj['index']]['bbox'] = obj['bbox']
-            
+                processing[obj['slug']]['result'][obj['page'] -
+                                                  1]['blocks'][obj['index']]['bbox'] = obj['bbox']
+
             update = {
                 'processing': processing,
                 'updatedBy': current_user if current_user else 'system',
@@ -745,8 +792,9 @@ def updateBlockDocument(current_user, obj):
             }
 
             update = FileRecordUpdate(**update)
-            mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
-            
+            mongodb.update_record(
+                'records', {'_id': ObjectId(obj['id_doc'])}, update)
+
             payload = update.dict()
             payload['_id'] = obj['id_doc']
             hookHandler.call('record_update', payload)
@@ -757,19 +805,22 @@ def updateBlockDocument(current_user, obj):
             return {'msg': _('Record does not exist')}, 404
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+
 def deleteBlockDocument(current_user, obj):
     try:
         # get record with body['id']
-        record = mongodb.get_record('records', {'_id': ObjectId(obj['id_doc'])})
+        record = mongodb.get_record(
+            'records', {'_id': ObjectId(obj['id_doc'])})
         # if record exists
         if record:
             # get record['processing'] and update it
             processing = record['processing']
 
             if obj['type_block'] == 'blocks':
-                processing[obj['slug']]['result'][obj['page'] - 1]['blocks'].pop(obj['index'])
-            
+                processing[obj['slug']]['result'][obj['page'] -
+                                                  1]['blocks'].pop(obj['index'])
+
             update = {
                 'processing': processing,
                 'updatedBy': current_user if current_user else 'system',
@@ -777,8 +828,9 @@ def deleteBlockDocument(current_user, obj):
             }
 
             update = FileRecordUpdate(**update)
-            mongodb.update_record('records', {'_id': ObjectId(obj['id_doc'])}, update)
-            
+            mongodb.update_record(
+                'records', {'_id': ObjectId(obj['id_doc'])}, update)
+
             payload = update.dict()
             payload['_id'] = obj['id_doc']
             hookHandler.call('record_update', payload)
@@ -789,17 +841,20 @@ def deleteBlockDocument(current_user, obj):
             return {'msg': _('Record does not exist')}, 404
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+
 @cacheHandler.cache.cache(limit=2000)
 def get_favCount(id):
     try:
-        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'favCount': 1})
+        record = mongodb.get_record(
+            'records', {'_id': ObjectId(id)}, fields={'favCount': 1})
         if not record:
             return {'msg': _('Record does not exist')}, 404
         return record['favCount']
     except Exception as e:
         raise Exception(str(e))
-    
+
+
 def add_to_favCount(id):
     try:
         update = {
@@ -814,7 +869,8 @@ def add_to_favCount(id):
         get_favCount.invalidate(id)
     except Exception as e:
         raise Exception(str(e))
-    
+
+
 def remove_from_favCount(id):
     try:
         update = {
@@ -829,12 +885,13 @@ def remove_from_favCount(id):
         get_favCount.invalidate(id)
     except Exception as e:
         raise Exception(str(e))
-    
+
+
 def generate_text_transcription(segments):
     pattern = r'\s*(transcribed by.*|subtitles by.*|by.*\.com|by.*\.org|http.*|.com*)$'
     text = ''
     current_speaker = ''
-    
+
     for segment in segments:
         if re.search(pattern, segment['text']):
             continue
@@ -847,29 +904,33 @@ def generate_text_transcription(segments):
         else:
             text += segment['text'] + ' '
     return text
-    
+
+
 def is_transcriber_can_edit(recordId, user):
     if has_role(user, 'transcriber'):
-        task = mongodb.get_record('usertasks', {'recordId': recordId, 'user': user, 'status': {'$in': ['review', 'pending', 'rejected']}}, fields={'_id': 1})
+        task = mongodb.get_record('usertasks', {'recordId': recordId, 'user': user, 'status': {
+                                  '$in': ['review', 'pending', 'rejected']}}, fields={'_id': 1})
         if task:
             return True
         else:
             return False
-    return None 
-    
+    return None
+
+
 def delete_transcription_segment(id, body, user):
     resp_, status = get_by_id(id, user)
     if status != 200:
         return {'msg': resp_['msg']}, 500
-    
+
     can_edit = is_transcriber_can_edit(id, user)
     if can_edit is False:
         return {'msg': _('You do not have permission to edit this transcription')}, 401
-    
+
     slug = body['slug']
     index = body['index']
 
-    record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
     if not record:
         return {'msg': _('Record does not exist')}, 404
     if 'processing' not in record:
@@ -878,9 +939,8 @@ def delete_transcription_segment(id, body, user):
         return {'msg': _('Record does not have transcription')}, 404
     if record['processing'][slug]['type'] != 'av_transcribe':
         return {'msg': _(u'Record has not been processed with {slug}', slug=slug)}, 404
-    
+
     segments = record['processing'][slug]['result']['segments']
-    
 
     segments.pop(index)
 
@@ -891,11 +951,12 @@ def delete_transcription_segment(id, body, user):
     }
 
     update['processing'][slug]['result']['segments'] = segments
-    update['processing'][slug]['result']['text'] = generate_text_transcription(segments)
+    update['processing'][slug]['result']['text'] = generate_text_transcription(
+        segments)
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
-    
+
     payload = update.dict()
     payload['_id'] = id
     hookHandler.call('record_update', payload)
@@ -905,18 +966,20 @@ def delete_transcription_segment(id, body, user):
 
     return {'msg': _('Transcription segment deleted')}, 200
 
+
 def edit_transcription_speaker(id, body, user):
     resp_, status = get_by_id(id, user)
     if status != 200:
         return {'msg': resp_['msg']}, 500
-    
+
     can_edit = is_transcriber_can_edit(id, user)
     if can_edit is False:
         return {'msg': _('You do not have permission to edit this transcription')}, 401
-    
+
     slug = body['slug']
-    
-    record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
+
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
     if not record:
         return {'msg': _('Record does not exist')}, 404
     if 'processing' not in record:
@@ -925,20 +988,20 @@ def edit_transcription_speaker(id, body, user):
         return {'msg': _('Record does not have transcription')}, 404
     if record['processing'][slug]['type'] != 'av_transcribe':
         return {'msg': _(u'Record has not been processed with {slug}', slug=slug)}, 404
-    
+
     segments = record['processing'][slug]['result']['segments']
     updateSpeaker = False
-    
+
     if 'speaker' in body and 'oldSpeaker' in body:
         updateSpeaker = body['speaker']
         oldSpeaker = body['oldSpeaker']
-        
+
     if updateSpeaker:
         for segment in segments:
             if 'speaker' in segment:
                 if segment['speaker'] == oldSpeaker:
                     segment['speaker'] = updateSpeaker
-                    
+
     update = {
         'processing': record['processing'],
         'updatedBy': user if user else 'system',
@@ -946,32 +1009,35 @@ def edit_transcription_speaker(id, body, user):
     }
 
     update['processing'][slug]['result']['segments'] = segments
-    update['processing'][slug]['result']['text'] = generate_text_transcription(segments)
+    update['processing'][slug]['result']['text'] = generate_text_transcription(
+        segments)
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
-    
+
     payload = update.dict()
     payload['_id'] = id
     hookHandler.call('record_update', payload)
 
     cache_get_record_transcription.invalidate(id, slug)
     cache_get_record_transcription.invalidate(id, slug, False)
-    
+
     return {'msg': _('Transcription speaker edited')}, 200
-    
+
+
 def edit_transcription(id, body, user):
     resp_, status = get_by_id(id, user)
     if status != 200:
         return {'msg': resp_['msg']}, 500
-    
+
     can_edit = is_transcriber_can_edit(id, user)
     if can_edit is False:
         return {'msg': _('You do not have permission to edit this transcription')}, 401
-    
+
     slug = body['slug']
 
-    record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'processing': 1})
+    record = mongodb.get_record(
+        'records', {'_id': ObjectId(id)}, fields={'processing': 1})
     if not record:
         return {'msg': _('Record does not exist')}, 404
     if 'processing' not in record:
@@ -980,7 +1046,7 @@ def edit_transcription(id, body, user):
         return {'msg': _('Record does not have transcription')}, 404
     if record['processing'][slug]['type'] != 'av_transcribe':
         return {'msg': _(u'Record has not been processed with {slug}', slug=slug)}, 404
-    
+
     segments = record['processing'][slug]['result']['segments']
 
     segments[body['index']]['text'] = body['text']
@@ -996,11 +1062,12 @@ def edit_transcription(id, body, user):
     }
 
     update['processing'][slug]['result']['segments'] = segments
-    update['processing'][slug]['result']['text'] = generate_text_transcription(segments)
+    update['processing'][slug]['result']['text'] = generate_text_transcription(
+        segments)
 
     update = FileRecordUpdate(**update)
     mongodb.update_record('records', {'_id': ObjectId(id)}, update)
-    
+
     payload = update.dict()
     payload['_id'] = id
     hookHandler.call('record_update', payload)
@@ -1010,39 +1077,41 @@ def edit_transcription(id, body, user):
 
     return {'msg': _('Transcription segment edited')}, 200
 
+
 def download_records(body, user):
     try:
         from app.api.system.services import get_system_settings
         settings, status = get_system_settings()
         capabilities = settings['capabilities']
-        
+
         if 'files_download' not in capabilities:
             return {'msg': _('Files download isn\'t active')}, 400
-        
+
         if 'id' not in body:
             return {'msg': _('id is missing')}, 400
-        
+
         resp_, status = get_by_id(body['id'], user, True)
         if status != 200:
             return {'msg': resp_['msg']}, 500
-        
+
         record = resp_
         if 'processing' not in record:
             return {'msg': _('Record does not have processing')}, 404
-        
+
         if 'fileProcessing' not in record['processing']:
             return {'msg': _('Record does not have fileProcessing')}, 404
-        
+
         if 'type' not in record['processing']['fileProcessing']:
             return {'msg': _('Record does not have fileProcessing type')}, 404
-        
+
         if 'accessRights' in record:
             if record['accessRights']:
                 if not has_right(user, record['accessRights']) and not has_role(user, 'admin'):
                     return {'msg': _('You do not have permission to view this record')}, 401
-        
-        path = os.path.join(WEB_FILES_PATH, record['processing']['fileProcessing']['path'])
-        
+
+        path = os.path.join(
+            WEB_FILES_PATH, record['processing']['fileProcessing']['path'])
+
         if record['processing']['fileProcessing']['type'] == 'image':
             path = path + '_large.jpg'
         elif record['processing']['fileProcessing']['type'] == 'audio':
@@ -1051,12 +1120,12 @@ def download_records(body, user):
             path = path + '.mp4'
         elif record['processing']['fileProcessing']['type'] == 'document':
             path = os.path.join(ORIGINAL_FILES_PATH, record['filepath'])
-            
+
         if body['type'] == 'original':
             path = os.path.join(ORIGINAL_FILES_PATH, record['filepath'])
             return send_file(path, as_attachment=True)
         elif body['type'] == 'small':
             return send_file(path, as_attachment=True)
-        
+
     except Exception as e:
         return {'msg': str(e)}, 500
