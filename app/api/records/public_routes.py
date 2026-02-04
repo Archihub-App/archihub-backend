@@ -63,8 +63,9 @@ def stream_by_id_public(id):
         500:
             description: Error al obtener el record
     """
+    size = request.args.get('size')
     # Llamar al servicio para obtener un record por su id
-    resp = public_services.get_stream(id)
+    resp = public_services.get_stream(id, size)
     return resp
 
 @bp.route('/public/<id>/transcription', methods=['POST'])

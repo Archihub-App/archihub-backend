@@ -185,13 +185,13 @@ def get_by_id(id, fullFields = False):
     except Exception as e:
         return {'msg': str(e)}, 500
     
-def get_stream(id):
+def get_stream(id, size='large'):
     try:
         resp_, status = get_by_id(id)
         if status != 200:
             return resp_, status
 
-        path, type = cache_get_record_stream(id)
+        path, type = cache_get_record_stream(id, size)
         
         path = os.path.join(WEB_FILES_PATH, path)
 
@@ -199,6 +199,13 @@ def get_stream(id):
             path = path + '.mp4'
         elif type == 'audio':
             path = path + '.mp3'
+        elif type == 'image':
+            if size == 'large':
+                path = path + '_large.jpg'
+            elif size == 'medium':
+                path = path + '_medium.jpg'
+            else:
+                path = path + '_small.jpg'
 
         return send_file(path, as_attachment=True)
 
