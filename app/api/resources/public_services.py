@@ -5,7 +5,7 @@ from app.utils import HookHandler
 from bson import json_util
 import json
 from bson.objectid import ObjectId
-from app.api.types.services import get_icon
+from app.api.types.services import get_by_slug, get_icon
 from app.api.types.services import get_metadata
 from app.api.system.services import get_value_by_path, set_value_in_dict
 from app.api.system.services import get_default_visible_type
@@ -154,6 +154,29 @@ def get_resource(id):
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception('Recurso no existe')
+    post_type = resource['post_type']
+    post_type = get_by_slug(post_type)
+    isArticle = post_type and 'isArticle' in post_type and post_type['isArticle']
+    
+    from app.api.resources.services import get_article_body, extract_uploaded_records_ids
+    if isArticle:
+        resource['articleBody'] = get_article_body(str(resource['_id']), None)
+        resource['articleBody'] = resource['articleBody'][0]['articleBody']
+        
+        for b in resource['articleBody']:
+            if b['type'] == 'uploadedRecords':
+                content = b['content']
+                record_ids = extract_uploaded_records_ids(content)
+                filters = {'_id': {'$in': [ObjectId(rid) for rid in record_ids]}, 'processing.fileProcessing.type': {'$exists': True}}
+                records = list(mongodb.get_all_records('records', filters, fields={'name': 1, 'displayName': 1, 'processing.fileProcessing.type': 1}))
+                
+                out = [{
+                    'id': str(r['_id']),
+                    'name': r['displayName'] if 'displayName' in r else r['name'],
+                    'type': r['processing']['fileProcessing']['type']
+                } for r in records]
+                
+                b['content'] = out
     
     status = resource['status']
     if status == 'draft':

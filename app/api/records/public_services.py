@@ -191,7 +191,7 @@ def get_stream(id, size='large'):
         if status != 200:
             return resp_, status
 
-        path, type = cache_get_record_stream(id, size)
+        path, type = cache_get_record_stream(id)
         
         path = os.path.join(WEB_FILES_PATH, path)
 
