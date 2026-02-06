@@ -129,7 +129,8 @@ def get_by_user_id(user, body):
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
-    
+
+@cacheHandler.cache.cache(limit=5000)
 # Nuevo servicio para obtener un snap por su id
 def get_by_id(id, user):
     try:
@@ -155,10 +156,12 @@ def get_by_id(id, user):
     
 def get_document_snap(user, record_id, data):
     from app.api.records.services import get_by_id
-    record, status = get_by_id(record_id, user)
-    if status != 200:
-        return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
     
+    if user:
+        record, status = get_by_id(record_id, user)
+        if status != 200:
+            return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
+        
     pages = json.dumps([data['page'] - 1])
     from app.utils.functions import cache_get_pages_by_id
     resp = cache_get_pages_by_id(record_id, pages, 'big')
@@ -183,10 +186,10 @@ def get_document_snap(user, record_id, data):
 
 def get_image_snap(user, record_id, data):
     from app.api.records.services import get_by_id
-    record, status = get_by_id(record_id, user)
-    if status != 200:
-        return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
-
+    if user:
+        record, status = get_by_id(record_id, user)
+        if status != 200:
+            return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
     file = mongodb.get_record('records', {'_id': ObjectId(record_id)}, {'processing': 1})
     if file is None:
         return {'msg': _('File not found')}, 404

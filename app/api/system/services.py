@@ -1040,6 +1040,7 @@ def clear_cache():
     from app.api.aiservices.services import update_cache as update_cache_llms
     from app.api.resources.public_services import update_cache as update_cache_resources_public
     from app.api.records.public_services import update_cache as update_cache_records_public
+    from app.api.snaps.public_services import update_cache as update_cache_snaps_public
 
     try:
         clear_system_cache()
@@ -1056,6 +1057,7 @@ def clear_cache():
         update_cache_resources_public()
         update_cache_records_public()
         update_cache_llms()
+        update_cache_snaps_public()
 
         print('-'*50)
         return {'msg': gettext('Cache cleaned successfully')}, 200
