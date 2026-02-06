@@ -1293,6 +1293,19 @@ def get_resource(id, user, postQuery = False):
                     } for r in records]
                     
                     b['content'] = out
+                elif b['type'] == 'snap':
+                    content = b['content']
+                    snaps_ids = extract_snaps_ids(content)
+                    b['content'] = snaps_ids
+                    snaps = list(mongodb.get_all_records('snaps', {'_id': {'$in': [ObjectId(sid) for sid in snaps_ids]}}, fields={'data': 1, 'type': 1}))
+                    
+                    out = [{
+                        'id': str(s['_id']),
+                        'data': s['data'],
+                        'type': s['type']
+                    } for s in snaps]
+                    
+                    b['content'] = out
                     
             
         resource_tmp = hookHandler.call('get_resource', resource)
