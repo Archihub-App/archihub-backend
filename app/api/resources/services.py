@@ -102,6 +102,48 @@ def extract_uploaded_records_ids(content):
     
     return []
 
+# Function to extract IDs from snaps content
+def extract_snaps_ids(content):
+    if not content:
+        return []
+    
+    try:
+        # First unescape HTML entities
+        unescaped_content = html.unescape(content)
+        
+        # Find data-snaps attribute value using a simpler approach
+        # Look for data-snaps=" and then find the matching ]" pattern
+        pattern = r'data-snaps="(\[.*?\])"'
+        match = re.search(pattern, unescaped_content, re.DOTALL)
+        
+        if not match:
+            # Fallback: look in the original content before unescaping
+            pattern_escaped = r'data-snaps="(\[.*?\])"'
+            match = re.search(pattern_escaped, content, re.DOTALL)
+            if match:
+                snaps_json = html.unescape(match.group(1))
+            else:
+                return []
+        else:
+            snaps_json = match.group(1)
+        
+        parsed = json.loads(snaps_json)
+        
+        if isinstance(parsed, list):
+            ids = []
+            for snap in parsed:
+                if isinstance(snap, dict):
+                    snap_id = snap.get('id')
+                    if snap_id:
+                        ids.append(snap_id)
+            return ids
+            
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"Error parsing snaps: {e}")
+        print(f"Content sample: {content[:200]}...")
+    
+    return []
+
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
 @cacheHandler.cache.cache(limit=5000)
 def get_all(body, user):

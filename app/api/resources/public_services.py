@@ -158,7 +158,7 @@ def get_resource(id):
     post_type = get_by_slug(post_type)
     isArticle = post_type and 'isArticle' in post_type and post_type['isArticle']
     
-    from app.api.resources.services import get_article_body, extract_uploaded_records_ids
+    from app.api.resources.services import get_article_body, extract_uploaded_records_ids, extract_snaps_ids
     if isArticle:
         resource['articleBody'] = get_article_body(str(resource['_id']), None)
         resource['articleBody'] = resource['articleBody'][0]['articleBody']
@@ -175,6 +175,19 @@ def get_resource(id):
                     'name': r['displayName'] if 'displayName' in r else r['name'],
                     'type': r['processing']['fileProcessing']['type']
                 } for r in records]
+                
+                b['content'] = out
+            elif b['type'] == 'snap':
+                content = b['content']
+                snaps_ids = extract_snaps_ids(content)
+                b['content'] = snaps_ids
+                snaps = list(mongodb.get_all_records('snaps', {'_id': {'$in': [ObjectId(sid) for sid in snaps_ids]}}, fields={'data': 1, 'type': 1}))
+                
+                out = [{
+                    'id': str(s['_id']),
+                    'data': s['data'],
+                    'type': s['type']
+                } for s in snaps]
                 
                 b['content'] = out
     
