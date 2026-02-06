@@ -27,8 +27,4 @@ def get_public_snap(id):
             description: Error obteniendo el recorte
     """
     resp = public_services.get_by_id(id)
-    print(resp)
-    if isinstance(resp, list):
-        return tuple(resp)
-        
     return resp

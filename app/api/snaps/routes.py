@@ -83,4 +83,5 @@ def get_snap(id):
     """
     user = get_jwt_identity()
 
-    return services.get_by_id(id, user)
+    resp = services.get_by_id(id, user)
+    return resp

@@ -130,7 +130,6 @@ def get_by_user_id(user, body):
         print(str(e))
         return {'msg': str(e)}, 500
 
-@cacheHandler.cache.cache(limit=5000)
 # Nuevo servicio para obtener un snap por su id
 def get_by_id(id, user):
     try:

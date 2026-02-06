@@ -3,12 +3,11 @@ from flask_babel import _
 from bson.objectid import ObjectId
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
-from app.api.records.public_services import get_by_id
+from app.api.records.public_services import get_by_id as get_by_id_record
 
 cacheHandler = CacheHandler.CacheHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
 
-@cacheHandler.cache.cache(limit=5000)
 def get_by_id(id):
     try:
         # Obtener el snap por su id
@@ -18,8 +17,7 @@ def get_by_id(id):
         if snap is None:
             return {'msg': _('Snap not found')}, 404
         
-        
-        record, status = get_by_id(snap['record_id'])
+        record, status = get_by_id_record(snap['record_id'])
         
         if status != 200:
             return record , 500
