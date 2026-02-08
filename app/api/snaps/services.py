@@ -161,14 +161,16 @@ def get_video_snap(user, record_id, data):
         record, status = get_by_id(record_id, user)
         if status != 200:
             return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
-        return get_stream(record_id, user, start_ms=data.get('start_ms'), end_ms=data.get('end_ms'))
+        
+        print(data)
+        return get_stream(record_id, user, start_ms=data.get('begin'), end_ms=data.get('end'))
     else:
         from app.api.records.public_services import get_by_id as get_by_id_public
         from app.api.records.public_services import get_stream as get_stream_public
         record, status = get_by_id_public(record_id)
         if status != 200:
             return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
-        return get_stream_public(record_id, start_ms=data.get('start_ms'), end_ms=data.get('end_ms'))
+        return get_stream_public(record_id, start_ms=data.get('begin'), end_ms=data.get('end'))
     
 def get_document_snap(user, record_id, data):
     

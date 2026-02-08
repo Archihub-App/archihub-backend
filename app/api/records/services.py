@@ -18,7 +18,7 @@ import shutil
 import hashlib
 import magic
 import uuid
-import mimetypes
+import ffmpeg
 from dotenv import load_dotenv
 from flask_babel import _
 import re
@@ -26,6 +26,7 @@ load_dotenv()
 
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
+TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', '')
 
 if not os.path.exists(ORIGINAL_FILES_PATH):
     os.makedirs(ORIGINAL_FILES_PATH)
@@ -613,57 +614,54 @@ def _parse_ms(value):
         return None
 
 
-def _build_partial_response(path, start_byte, end_byte):
-    size = os.path.getsize(path)
-    if start_byte < 0:
-        start_byte = 0
-    if end_byte >= size:
-        end_byte = size - 1
-    if end_byte < start_byte:
+def _stream_video_fragment(path, record_id, start_ms, end_ms):
+    start_sec = start_ms
+    duration_sec = (end_ms - start_ms)
+    if duration_sec <= 0:
         return None
 
-    length = end_byte - start_byte + 1
-    with open(path, 'rb') as f:
-        f.seek(start_byte)
-        data = f.read(length)
+    if not TEMPORAL_FILES_PATH:
+        return {'msg': _('Temporal path is not configured')}, 500
+    if not os.path.exists(TEMPORAL_FILES_PATH):
+        os.makedirs(TEMPORAL_FILES_PATH)
 
-    mimetype, _ = mimetypes.guess_type(path)
-    resp = Response(data, 206, mimetype=mimetype or 'application/octet-stream', direct_passthrough=True)
-    resp.headers['Content-Range'] = f'bytes {start_byte}-{end_byte}/{size}'
-    resp.headers['Accept-Ranges'] = 'bytes'
-    resp.headers['Content-Length'] = str(length)
-    return resp
+    temp_filename = f"{record_id}_{start_ms}_{end_ms}_fragment.mp4"
+    temp_path = os.path.join(TEMPORAL_FILES_PATH, temp_filename)
 
+    if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+        response = send_file(temp_path, as_attachment=False)
+        response.call_on_close(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+        return response
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
 
-def _get_video_byte_range(path, metadata, start_ms, end_ms):
-    if not metadata:
-        return None
-    duration_ms = metadata.get('duration_ms')
-    if not duration_ms:
-        return None
     try:
-        duration_ms = float(duration_ms)
-    except (TypeError, ValueError):
-        return None
-    if duration_ms <= 0:
-        return None
+        (
+            ffmpeg
+            .input(path)
+            .output(
+                temp_path,
+                ss=start_sec,
+                t=duration_sec,
+                vcodec='libx264',
+                acodec='aac',
+                movflags='faststart',
+                avoid_negative_ts='make_zero',
+                **{'fflags': '+genpts'}
+            )
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+    except ffmpeg.Error as e:
+        error_output = e.stderr.decode('utf-8', errors='replace') if e.stderr else str(e)
+        return {'msg': error_output or 'ffmpeg failed to produce output'}, 500
 
-    size = os.path.getsize(path)
-    bit_rate = metadata.get('bit_rate')
-    try:
-        bit_rate = float(bit_rate) if bit_rate is not None else None
-    except (TypeError, ValueError):
-        bit_rate = None
+    if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+        error_output = ''
+        return {'msg': error_output or 'ffmpeg failed to produce output'}, 500
 
-    if bit_rate and bit_rate > 0:
-        bytes_per_ms = bit_rate / 8.0 / 1000.0
-        start_byte = int(start_ms * bytes_per_ms)
-        end_byte = int(end_ms * bytes_per_ms) - 1
-    else:
-        start_byte = int((start_ms / duration_ms) * size)
-        end_byte = int((end_ms / duration_ms) * size) - 1
-
-    return start_byte, end_byte
+    response = send_file(temp_path, as_attachment=False)
+    response.call_on_close(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+    return response
 
 
 def get_stream(id, current_user, size='large', start_ms=None, end_ms=None):
@@ -695,13 +693,9 @@ def get_stream(id, current_user, size='large', start_ms=None, end_ms=None):
             if start_val < 0 or end_val <= start_val:
                 return {'msg': _('Invalid start_ms or end_ms')}, 400
 
-            processing = resp_.get('processing', {})
-            metadata = processing.get('fileProcessing', {}).get('metadata', {})
-            byte_range = _get_video_byte_range(path, metadata, start_val, end_val)
-            if byte_range:
-                response = _build_partial_response(path, byte_range[0], byte_range[1])
-                if response:
-                    return response
+            response = _stream_video_fragment(path, id, start_val, end_val)
+            if response:
+                return response
 
         # retornar el archivo
         return send_file(path, as_attachment=False)
