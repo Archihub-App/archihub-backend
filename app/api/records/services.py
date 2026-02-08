@@ -663,6 +663,51 @@ def _stream_video_fragment(path, record_id, start_ms, end_ms):
     response.call_on_close(lambda: os.path.exists(temp_path) and os.remove(temp_path))
     return response
 
+def _stream_audio_fragment(path, record_id, start_ms, end_ms):
+    start_sec = start_ms
+    duration_sec = (end_ms - start_ms)
+    if duration_sec <= 0:
+        return None
+
+    if not TEMPORAL_FILES_PATH:
+        return {'msg': _('Temporal path is not configured')}, 500
+    if not os.path.exists(TEMPORAL_FILES_PATH):
+        os.makedirs(TEMPORAL_FILES_PATH)
+
+    temp_filename = f"{record_id}_{start_ms}_{end_ms}_fragment.mp3"
+    temp_path = os.path.join(TEMPORAL_FILES_PATH, temp_filename)
+
+    if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+        response = send_file(temp_path, as_attachment=False)
+        response.call_on_close(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+        return response
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+
+    try:
+        (
+            ffmpeg
+            .input(path)
+            .output(
+                temp_path,
+                ss=start_sec,
+                t=duration_sec,
+                acodec='libmp3lame',
+            )
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+    except ffmpeg.Error as e:
+        error_output = e.stderr.decode('utf-8', errors='replace') if e.stderr else str(e)
+        return {'msg': error_output or 'ffmpeg failed to produce output'}, 500
+
+    if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+        error_output = ''
+        return {'msg': error_output or 'ffmpeg failed to produce output'}, 500
+
+    response = send_file(temp_path, as_attachment=False)
+    response.call_on_close(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+    return response
+
 
 def get_stream(id, current_user, size='large', start_ms=None, end_ms=None):
     try:
@@ -694,6 +739,15 @@ def get_stream(id, current_user, size='large', start_ms=None, end_ms=None):
                 return {'msg': _('Invalid start_ms or end_ms')}, 400
 
             response = _stream_video_fragment(path, id, start_val, end_val)
+            if response:
+                return response
+        elif type == 'audio' and (start_ms is not None or end_ms is not None):
+            if start_val is None or end_val is None:
+                return {'msg': _('Invalid start_ms or end_ms')}, 400
+            if start_val < 0 or end_val <= start_val:
+                return {'msg': _('Invalid start_ms or end_ms')}, 400
+
+            response = _stream_audio_fragment(path, id, start_val, end_val)
             if response:
                 return response
 

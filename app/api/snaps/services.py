@@ -147,6 +147,8 @@ def get_by_id(id, user):
             return get_image_snap(user, snap['record_id'], snap['data'])
         elif snap['type'] == 'video':
             return get_video_snap(user, snap['record_id'], snap['data'])
+        elif snap['type'] == 'audio':
+            return get_audio_snap(user, snap['record_id'], snap['data'])
 
         snap['_id'] = str(snap['_id'])
         
@@ -155,6 +157,22 @@ def get_by_id(id, user):
     except Exception as e:
         return {'msg': str(e)}, 500
     
+def get_audio_snap(user, record_id, data):
+    if user:
+        from app.api.records.services import get_by_id, get_stream
+        record, status = get_by_id(record_id, user)
+        if status != 200:
+            return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
+        
+        return get_stream(record_id, user, start_ms=data.get('begin'), end_ms=data.get('end'))
+    else:
+        from app.api.records.public_services import get_by_id as get_by_id_public
+        from app.api.records.public_services import get_stream as get_stream_public
+        record, status = get_by_id_public(record_id)
+        if status != 200:
+            return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
+        return get_stream_public(record_id, start_ms=data.get('begin'), end_ms=data.get('end'))
+    
 def get_video_snap(user, record_id, data):
     if user:
         from app.api.records.services import get_by_id, get_stream
@@ -162,7 +180,6 @@ def get_video_snap(user, record_id, data):
         if status != 200:
             return {'msg': _(u'Error while getting the file: {error}', error = record['msg'])} , 500
         
-        print(data)
         return get_stream(record_id, user, start_ms=data.get('begin'), end_ms=data.get('end'))
     else:
         from app.api.records.public_services import get_by_id as get_by_id_public
