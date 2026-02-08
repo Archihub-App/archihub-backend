@@ -275,9 +275,8 @@ def _stream_audio_fragment(path, record_id, start_ms, end_ms):
                 temp_path,
                 ss=start_sec,
                 t=duration_sec,
-                acodec='aac',
+                acodec='libmp3lame',
             )
-            .overwrite_output()
             .run(capture_stdout=True, capture_stderr=True)
         )
     except ffmpeg.Error as e:
@@ -338,6 +337,7 @@ def get_stream(id, size='large', start_ms=None, end_ms=None):
         return send_file(path, as_attachment=True)
 
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 def get_transcription(id, slug):

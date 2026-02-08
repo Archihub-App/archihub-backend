@@ -1,4 +1,4 @@
-from app.api.snaps.services import get_document_snap, get_image_snap
+from app.api.snaps.services import get_document_snap, get_image_snap, get_video_snap, get_audio_snap
 from flask_babel import _
 from bson.objectid import ObjectId
 from app.utils import DatabaseHandler
@@ -26,6 +26,10 @@ def get_by_id(id):
             return get_document_snap(None, snap['record_id'], snap['data'])
         elif snap['type'] == 'image':
             return get_image_snap(None, snap['record_id'], snap['data'])
+        elif snap['type'] == 'video':
+            return get_video_snap(None, snap['record_id'], snap['data'])
+        elif snap['type'] == 'audio':
+            return get_audio_snap(None, snap['record_id'], snap['data'])
 
         snap['_id'] = str(snap['_id'])
         

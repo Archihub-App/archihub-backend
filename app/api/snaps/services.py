@@ -249,7 +249,6 @@ def get_image_snap(user, record_id, data):
         return {'msg': _('File not found')}, 404
 
     path = file['processing']['fileProcessing']['path']
-    print(record_id, path)
     path_img = os.path.join(WEB_FILES_PATH, path)
     path_img = path_img + '_large.jpg'
 
