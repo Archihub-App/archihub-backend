@@ -1297,10 +1297,11 @@ def get_resource(id, user, postQuery = False):
                     content = b['content']
                     snaps_ids = extract_snaps_ids(content)
                     b['content'] = snaps_ids
-                    snaps = list(mongodb.get_all_records('snaps', {'_id': {'$in': [ObjectId(sid) for sid in snaps_ids]}}, fields={'data': 1, 'type': 1}))
+                    snaps = list(mongodb.get_all_records('snaps', {'_id': {'$in': [ObjectId(sid) for sid in snaps_ids]}}, fields={'data': 1, 'type': 1, 'record_id': 1}))
                     
                     out = [{
                         'id': str(s['_id']),
+                        'recordId': str(s['record_id']) if 'record_id' in s else None,
                         'data': s['data'],
                         'type': s['type']
                     } for s in snaps]
