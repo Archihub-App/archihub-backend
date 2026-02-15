@@ -33,7 +33,33 @@ import os
 from datetime import datetime
 from dateutil import parser
 import numbers
+import re
+import html
 from flask_babel import _
+from html.parser import HTMLParser
+
+class _HTMLStripper(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._parts = []
+
+    def handle_data(self, data):
+        self._parts.append(data)
+
+    def get_data(self):
+        return ''.join(self._parts)
+
+def strip_html(text):
+    if text is None:
+        return None
+    stripper = _HTMLStripper()
+    stripper.feed(text)
+    stripper.close()
+    cleaned = stripper.get_data()
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    cleaned = re.sub(r'\s+([,.;:!?])', r'\1', cleaned)
+    cleaned = re.sub(r'([,.;:!?])([^\s])', r'\1 \2', cleaned)
+    return cleaned.strip()
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -58,12 +84,125 @@ def change_value(body, route, value):
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
+# Function to extract IDs from uploaded records content
+def extract_uploaded_records_ids(content):
+    if not content:
+        return []
+    
+    try:
+        # First unescape HTML entities
+        unescaped_content = html.unescape(content)
+        
+        pattern = r'data-records="(\[.*?\])"'
+        match = re.search(pattern, unescaped_content, re.DOTALL)
+        
+        if not match:
+            # Fallback: look in the original content before unescaping
+            pattern_escaped = r'data-records="(\[.*?\])"'
+            match = re.search(pattern_escaped, content, re.DOTALL)
+            if match:
+                records_json = html.unescape(match.group(1))
+            else:
+                return []
+        else:
+            records_json = match.group(1)
+        
+        parsed = json.loads(records_json)
+        
+        if isinstance(parsed, list):
+            ids = []
+            for record in parsed:
+                if isinstance(record, dict):
+                    record_id = record.get('id') or record.get('_id')
+                    if record_id:
+                        ids.append(record_id)
+            return ids
+            
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"Error parsing uploaded records: {e}")
+        print(f"Content sample: {content[:200]}...")
+    
+    return []
+
+# Function to extract IDs from snaps content
+def extract_snaps_ids(content):
+    if not content:
+        return []
+    
+    try:
+        # First unescape HTML entities
+        unescaped_content = html.unescape(content)
+        
+        pattern = r'data-snaps="(\[.*?\])"'
+        match = re.search(pattern, unescaped_content, re.DOTALL)
+        
+        if not match:
+            # Fallback: look in the original content before unescaping
+            pattern_escaped = r'data-snaps="(\[.*?\])"'
+            match = re.search(pattern_escaped, content, re.DOTALL)
+            if match:
+                snaps_json = html.unescape(match.group(1))
+            else:
+                return []
+        else:
+            snaps_json = match.group(1)
+        
+        parsed = json.loads(snaps_json)
+        
+        if isinstance(parsed, list):
+            ids = []
+            for snap in parsed:
+                if isinstance(snap, dict):
+                    snap_id = snap.get('id')
+                    if snap_id:
+                        ids.append(snap_id)
+            return ids
+            
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"Error parsing snaps: {e}")
+        print(f"Content sample: {content[:200]}...")
+    
+    return []
+
+# Function to extract a favorite ID from content
+def extract_favorite_id(content):
+    if not content:
+        return None, None
+
+    try:
+        unescaped_content = html.unescape(content)
+        id_pattern = r'data-favorite-id="([^"]+)"'
+        source_pattern = r'data-favorite-source="([^"]+)"'
+        match = re.search(id_pattern, unescaped_content)
+        source_match = re.search(source_pattern, unescaped_content)
+
+        if not match:
+            match = re.search(id_pattern, content)
+            if not match:
+                return None, None
+            source_match = re.search(source_pattern, content)
+
+        favorite_id = match.group(1) if match else None
+        favorite_source = source_match.group(1) if source_match else None
+
+        if not favorite_id:
+            return None, None
+
+        return favorite_id, favorite_source
+    except Exception as e:
+        print(f"Error parsing favorite id: {e}")
+        print(f"Content sample: {content[:200]}...")
+
+    return None, None
+
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
 @cacheHandler.cache.cache(limit=5000)
 def get_all(body, user):
     try:
         body = json.loads(body)
-        activeColumns = body.get('activeColumns', [])
+        activeColumns = body.get('activeColumns', [{
+            'destiny': 'metadata.firstLevel.title'
+        }])
         post_types = body['post_type']
         body.pop('post_type')
         for p in post_types:
@@ -171,6 +310,7 @@ def get_all(body, user):
             'total': total,
             'resources': resources
         }
+        
         # Retornar los recursos
         return response, 200
     except Exception as e:
@@ -182,10 +322,15 @@ def create(body, user, files, updateCache = True):
         # si el body tiene parents, verificar que el recurso sea jerarquico
         body = validate_parent(body)
         
+        
         # Si el body no tiene metadata, retornar error
         if 'metadata' not in body:
             return {'msg': _('The metadata is required')}, 400
 
+
+        body_tmp = hookHandler.call('resource_pre_update', body)
+        if body_tmp:
+            body = body_tmp
 
         status = body['status']
         if status == 'published':
@@ -334,6 +479,14 @@ def update_by_id(id, body, user, files, updateCache = True):
         del body['filesIds']
         body['updatedAt'] = datetime.now()
         body['updatedBy'] = user if user else 'system'
+        
+        updatedFiles = body['updatedFiles'] if 'updatedFiles' in body else []
+        if updatedFiles:
+            order_map = {file['id']: file['order'] for file in updatedFiles}
+            
+            for file_obj in body['filesObj']:
+                if file_obj['id'] in order_map:
+                    file_obj['order'] = order_map[file_obj['id']]
 
         # Crear instancia de ResourceUpdate con el body del request
         try:
@@ -355,7 +508,8 @@ def update_by_id(id, body, user, files, updateCache = True):
             return {'msg': str(e)}, 500
 
         delete_records(body['deletedFiles'], id, user)
-        update_records(body['updatedFiles'], user)
+        
+        update_records(updatedFiles, user)
         
         body['filesObj'] = [f for f in body['filesObj'] if f['id'] not in body['deletedFiles']]
 
@@ -931,10 +1085,14 @@ def get_accessRights(id):
 @cacheHandler.cache.cache(limit=5000)
 def get_resource(id, user, postQuery = False):
     # Buscar el recurso en la base de datos
-    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0})
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0, 'articleBody': 0})
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception(_('Resource does not exist'))
+    
+    post_type = resource['post_type']
+    post_type = get_by_slug(post_type)
+    isArticle = post_type and 'isArticle' in post_type and post_type['isArticle']
     
     status = resource['status']
     if status == 'draft':
@@ -959,6 +1117,8 @@ def get_resource(id, user, postQuery = False):
                                             'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
 
     children = []
+    
+
     for c in resource['children']:
         c_ = mongodb.get_record('post_types', {'slug': c})
         obj = {
@@ -1045,7 +1205,6 @@ def get_resource(id, user, postQuery = False):
                 if value:
                     temp_ = []
                     for v in value:
-                        # si v tiene el caracter | o ,
                         if '|' in v:
                             temp_.append(' '.join(v.split('|')))
                         elif ',' in v:
@@ -1165,6 +1324,101 @@ def get_resource(id, user, postQuery = False):
         if resource_tmp:
             resource = resource_tmp
     else:
+        if isArticle:
+            resource['articleBody'] = get_article_body(resource['_id'], None)
+            resource['articleBody'] = resource['articleBody'][0]['articleBody']
+            
+            for b in resource['articleBody']:
+                if b['type'] == 'uploadedRecords':
+                    content = b['content']
+                    record_ids = extract_uploaded_records_ids(content)
+                    
+                    filters = {'_id': {'$in': [ObjectId(rid) for rid in record_ids]}, 'processing.fileProcessing.type': {'$exists': True}}
+                    records = list(mongodb.get_all_records('records', filters, fields={'name': 1, 'displayName': 1, 'processing.fileProcessing.type': 1}))
+                    
+                    out = [{
+                        'id': str(r['_id']),
+                        'name': r['displayName'] if 'displayName' in r else r['name'],
+                        'type': r['processing']['fileProcessing']['type']
+                    } for r in records]
+                    
+                    b['content'] = out
+                elif b['type'] == 'snap':
+                    content = b['content']
+                    snaps_ids = extract_snaps_ids(content)
+                    b['content'] = snaps_ids
+                    snaps = list(mongodb.get_all_records('snaps', {'_id': {'$in': [ObjectId(sid) for sid in snaps_ids]}}, fields={'data': 1, 'type': 1, 'record_id': 1}))
+                    
+                    out = [{
+                        'id': str(s['_id']),
+                        'recordId': str(s['record_id']) if 'record_id' in s else None,
+                        'data': s['data'],
+                        'type': s['type']
+                    } for s in snaps]
+                    
+                    b['content'] = out
+                elif b['type'] == 'favorite':
+                    content = b['content']
+                    favorite_id, favorite_source = extract_favorite_id(content)
+                    
+                    if not favorite_id:
+                        b['content'] = []
+                        continue
+                    b['content'] = favorite_id
+                    fields = {'metadata.firstLevel.title': 1, 'filesObj': 1, 'articleBody': 1} if favorite_source == 'resources' else {'processing.fileProcessing.type': 1}
+                    favorite = mongodb.get_record(favorite_source, {'_id': ObjectId(favorite_id)}, fields=fields)
+                    
+                    articleBody = favorite['articleBody'] if 'articleBody' in favorite else []
+                    for p in articleBody:
+                        if 'type' in p and p['type'] == 'paragraph':
+                            if 'content' in p:
+                                if favorite['articleBody'] is None:
+                                    favorite['articleBody'] = ''
+                                
+
+                                content = strip_html(p['content'])
+                                if favorite['articleBody'] == '':
+                                    favorite['articleBody'] += content
+                                else:
+                                    favorite['articleBody'] += ' ' + content
+                                    
+                                    if len(favorite['articleBody']) > 300:
+                                        favorite['articleBody'] = favorite['articleBody'][:300]
+                                        break
+                    
+                    files = favorite['filesObj'] if 'filesObj' in favorite else None
+                    imagesFiles = []
+                    imagePath = None
+                    if files:
+                        records = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(f['id']) for f in files]}, 'processing.fileProcessing.type': 'image'}, fields={'name': 1, 'displayName': 1, 'processing.fileProcessing.path': 1}))
+                        imagesFiles = records
+                        
+                    if favorite_source == 'resources' and imagesFiles:
+                        image = imagesFiles[0]
+                        imagePath = image['processing']['fileProcessing']['path'] if 'processing' in image and 'fileProcessing' in image['processing'] and 'path' in image['processing']['fileProcessing'] else None
+                        imagePath = imagePath + '_medium.jpg'
+                        if imagePath:
+                            import base64
+                            file_path = os.path.join(WEB_FILES_PATH, imagePath)
+                            if file_path and os.path.exists(file_path):
+                                with open(file_path, 'rb') as f:
+                                    image = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
+                    
+                    out = {
+                        'id': str(favorite['_id']),
+                        'source': favorite_source,
+                        'data': {
+                            'name': favorite['metadata']['firstLevel']['title'] if 'metadata' in favorite and 'firstLevel' in favorite['metadata'] and 'title' in favorite['metadata']['firstLevel'] else None,
+                            'files': len(favorite['filesObj']) if 'filesObj' in favorite else None,
+                            'articleBody': favorite['articleBody'] if 'articleBody' in favorite else None,
+                            'thumbnail': image if imagePath else None,
+                            'type': favorite['processing']['fileProcessing']['type'] if 'processing' in favorite and 'fileProcessing' in favorite['processing'] and 'type' in favorite['processing']['fileProcessing'] else None
+                        }
+                    }
+                    
+                    b['content'] = out
+                    
+            
         resource_tmp = hookHandler.call('get_resource', resource)
         if resource_tmp:
             resource = resource_tmp
@@ -1183,7 +1437,7 @@ def get_resource(id, user, postQuery = False):
 @cacheHandler.cache.cache(limit=1000)
 def get_resource_files(id, user, page, groupImages = False):
     try:
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
         # check if the user has access to the resource
         accessRights = get_accessRights(id)
         if accessRights:
@@ -1231,7 +1485,124 @@ def get_resource_files(id, user, page, groupImages = False):
         return resp, 200
     except Exception as e:
         return {'msg': str(e)}, 500
-    
+
+@cacheHandler.cache.cache(limit=1000)
+def get_article_body(id, user):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'articleBody': 1})
+        # check if the user has access to the resource
+        accessRights = get_accessRights(id)
+        if accessRights:
+            if user and not has_right(user, accessRights['id']):
+                return {'msg': _('You don\'t have the required authorization')}, 401
+            elif not user:
+                return {'msg': _('You don\'t have the required authorization')}, 401
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': _('Resource does not exist')}, 404
+
+        body = resource['articleBody'] if 'articleBody' in resource else None
+
+        return {'articleBody': body}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def update_files_order(id, body, user):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+        # check if the user has access to edit the resource
+        accessRights = get_accessRights(id)
+        if accessRights:
+            if not has_right(user, accessRights['id']) and not has_role(user, 'admin'):
+                return {'msg': _('You don\'t have the required authorization')}, 401
+        # Si el recurso no existe, retornar error
+        if not resource:
+            return {'msg': _('Resource does not exist')}, 404
+
+        files_order = body.get('files', [])
+        
+        # Create a mapping of id -> target_order from files_order
+        order_map = {file['id']: file.get('order') for file in files_order if 'order' in file}
+        
+        # Get all items sorted by current order
+        all_items = sorted(resource['filesObj'], key=lambda x: x.get('order', float('inf')))
+        
+        # Create mapping of id -> item for quick lookup
+        items_by_id = {item['id']: item for item in all_items}
+        
+        # Get items being repositioned with their target orders
+        repositioned = []
+        for file in files_order:
+            if file['id'] in items_by_id and 'order' in file:
+                repositioned.append((file['order'], items_by_id[file['id']]))
+        
+        # Remove repositioned items from the list
+        repositioned_ids = set(item['id'] for _, item in repositioned)
+        remaining = [item for item in all_items if item['id'] not in repositioned_ids]
+        
+        # Sort by target position to insert in correct order
+        repositioned.sort(key=lambda x: x[0])
+        
+        # Insert repositioned items at their target positions
+        for target_pos, item in repositioned:
+            # Clamp target position to valid range
+            insert_pos = min(max(0, target_pos), len(remaining))
+            remaining.insert(insert_pos, item)
+        
+        # Normalize orders to be sequential starting from 0
+        for idx, item in enumerate(remaining):
+            item['order'] = idx
+
+        resource['filesObj'] = remaining
+
+        update = ResourceUpdate(**{'filesObj': resource['filesObj'], 'updatedAt': datetime.utcnow(), 'updatedBy': user})
+
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
+
+        get_resource_files.invalidate_all()
+
+        register_log(user, log_actions['resource_files_order_update'], {'resource': id, 'files_order': files_order})
+
+        return {'msg': _('Files order updated')}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def update_article_body(id, body, user):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'post_type': 1})
+        # check if the user has access to edit the resource
+        post_type = resource['post_type']
+        post_type_roles = cache_type_roles(post_type)
+        article_body = body.get('articleBody', None)
+        
+        if article_body is None:
+            return {'msg': _('Article body is required')}, 400
+
+        if post_type_roles['editRoles']:
+            canEdit = False
+            for r in post_type_roles['editRoles']:
+                if has_role(user, r) or has_role(user, 'admin'):
+                    canEdit = True
+                    break
+            if not canEdit:
+                return {'msg': _('You don\'t have the required authorization')}, 401
+        
+        if not resource:
+            return {'msg': _('Resource does not exist')}, 404
+        
+        update = ResourceUpdate(**{**body, 'updatedAt': datetime.utcnow(), 'updatedBy': user})
+
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
+        
+        get_article_body.invalidate(id, user)
+        get_resource.invalidate_all()
+
+        register_log(user, log_actions['resource_article_update'], {'resource': id, 'articleBody': article_body})
+
+        return {'msg': _('Article body updated')}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 def download_resource_files(body, user):
     try:
         from app.api.system.services import get_system_settings
@@ -1845,4 +2216,5 @@ def update_cache():
     get_all.invalidate_all()
     get_resource_images.invalidate_all()
     get_children_cache.invalidate_all()
+    get_article_body.invalidate_all()
     clear_cache()

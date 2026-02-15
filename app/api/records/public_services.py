@@ -17,12 +17,14 @@ import shutil
 import hashlib
 import magic
 import uuid
+import ffmpeg
 from dotenv import load_dotenv
 from flask_babel import _
 load_dotenv()
 
 ORIGINAL_FILES_PATH = os.environ.get('ORIGINAL_FILES_PATH', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
+TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', '')
 
 if not os.path.exists(ORIGINAL_FILES_PATH):
     os.makedirs(ORIGINAL_FILES_PATH)
@@ -185,9 +187,113 @@ def get_by_id(id, fullFields = False):
     except Exception as e:
         return {'msg': str(e)}, 500
     
-def get_stream(id):
+def _parse_ms(value):
+    if value is None:
+        return None
     try:
-        resp_, status = get_by_id(id)
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _stream_video_fragment(path, record_id, start_ms, end_ms):
+    start_sec = start_ms
+    duration_sec = (end_ms - start_ms)
+    if duration_sec <= 0:
+        return None
+
+    if not TEMPORAL_FILES_PATH:
+        return {'msg': _('Temporal path is not configured')}, 500
+    if not os.path.exists(TEMPORAL_FILES_PATH):
+        os.makedirs(TEMPORAL_FILES_PATH)
+
+    temp_filename = f"{record_id}_{start_ms}_{end_ms}_fragment.mp4"
+    temp_path = os.path.join(TEMPORAL_FILES_PATH, temp_filename)
+
+    if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+        response = send_file(temp_path, as_attachment=True)
+        response.call_on_close(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+        return response
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+
+    try:
+        (
+            ffmpeg
+            .input(path)
+            .output(
+                temp_path,
+                ss=start_sec,
+                t=duration_sec,
+                vcodec='libx264',
+                acodec='aac',
+                movflags='faststart',
+                avoid_negative_ts='make_zero',
+                **{'fflags': '+genpts'}
+            )
+            .overwrite_output()
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+    except ffmpeg.Error as e:
+        error_output = e.stderr.decode('utf-8', errors='replace') if e.stderr else str(e)
+        return {'msg': error_output or 'ffmpeg failed to produce output'}, 500
+
+    if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+        error_output = ''
+        return {'msg': error_output or 'ffmpeg failed to produce output'}, 500
+
+    response = send_file(temp_path, as_attachment=True)
+    response.call_on_close(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+    return response
+
+def _stream_audio_fragment(path, record_id, start_ms, end_ms):
+    start_sec = start_ms
+    duration_sec = (end_ms - start_ms)
+    if duration_sec <= 0:
+        return None
+
+    if not TEMPORAL_FILES_PATH:
+        return {'msg': _('Temporal path is not configured')}, 500
+    if not os.path.exists(TEMPORAL_FILES_PATH):
+        os.makedirs(TEMPORAL_FILES_PATH)
+
+    temp_filename = f"{record_id}_{start_ms}_{end_ms}_fragment.mp3"
+    temp_path = os.path.join(TEMPORAL_FILES_PATH, temp_filename)
+
+    if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+        response = send_file(temp_path, as_attachment=True)
+        response.call_on_close(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+        return response
+    if os.path.exists(temp_path):
+        os.remove(temp_path)
+
+    try:
+        (
+            ffmpeg
+            .input(path)
+            .output(
+                temp_path,
+                ss=start_sec,
+                t=duration_sec,
+                acodec='libmp3lame',
+            )
+            .run(capture_stdout=True, capture_stderr=True)
+        )
+    except ffmpeg.Error as e:
+        error_output = e.stderr.decode('utf-8', errors='replace') if e.stderr else str(e)
+        return {'msg': error_output or 'ffmpeg failed to produce output'}, 500
+
+    if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+        error_output = ''
+        return {'msg': error_output or 'ffmpeg failed to produce output'}, 500
+
+    response = send_file(temp_path, as_attachment=True)
+    response.call_on_close(lambda: os.path.exists(temp_path) and os.remove(temp_path))
+    return response
+
+def get_stream(id, size='large', start_ms=None, end_ms=None):
+    try:
+        resp_, status = get_by_id(id, True)
         if status != 200:
             return resp_, status
 
@@ -199,10 +305,39 @@ def get_stream(id):
             path = path + '.mp4'
         elif type == 'audio':
             path = path + '.mp3'
+        elif type == 'image':
+            if size == 'large':
+                path = path + '_large.jpg'
+            elif size == 'medium':
+                path = path + '_medium.jpg'
+            else:
+                path = path + '_small.jpg'
+
+        start_val = _parse_ms(start_ms)
+        end_val = _parse_ms(end_ms)
+        if type == 'video' and (start_ms is not None or end_ms is not None):
+            if start_val is None or end_val is None:
+                return {'msg': _('Invalid start_ms or end_ms')}, 400
+            if start_val < 0 or end_val <= start_val:
+                return {'msg': _('Invalid start_ms or end_ms')}, 400
+
+            response = _stream_video_fragment(path, id, start_val, end_val)
+            if response:
+                return response
+        elif type == 'audio' and (start_ms is not None or end_ms is not None):
+            if start_val is None or end_val is None:
+                return {'msg': _('Invalid start_ms or end_ms')}, 400
+            if start_val < 0 or end_val <= start_val:
+                return {'msg': _('Invalid start_ms or end_ms')}, 400
+
+            response = _stream_audio_fragment(path, id, start_val, end_val)
+            if response:
+                return response
 
         return send_file(path, as_attachment=True)
 
     except Exception as e:
+        print(str(e))
         return {'msg': str(e)}, 500
 
 def get_transcription(id, slug):

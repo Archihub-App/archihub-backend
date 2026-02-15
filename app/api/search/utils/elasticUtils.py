@@ -16,14 +16,17 @@ def get_resources_by_filters(body, user):
     post_types = body['post_type']
     sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
     sortBy = body.get('sortBy', 'createdAt')
-    activeColumns = body.get('activeColumns', [])
+    activeColumns = body.get('activeColumns', [{
+        'destiny': 'metadata.firstLevel.title'
+    }])
+    viewType = body.get('viewType', 'list')
     size = body.get('size', 20)
     activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
 
     activeColumns_tmp = hookHandler.call('search_active_columns', body, activeColumns)
     if activeColumns_tmp:
         activeColumns = activeColumns_tmp
-    
+        
     metadata_fields = []
     for post_type in post_types:
         from app.api.resources.services import get_metadata
@@ -115,15 +118,41 @@ def get_resources_by_filters(body, user):
                             }
                         })
                         
-    if 'viewType' in body and body['viewType'] == 'gallery':
+    if viewType == 'gallery':
         query['_source'] += ['records']
-        query['size'] = 10
-        query['from'] = body['page'] * 10 if 'page' in body else 0
+        query['size'] = size
+        query['from'] = body['page'] * size if 'page' in body else 0
         query['query']['bool']['filter'].append({
             'term': {
                 'records.type.keyword': 'image'
             }
         })
+    
+    if viewType == 'blog':
+        query['_source'] += ['article', 'records']
+        query['size'] = size
+        query['from'] = body['page'] * size if 'page' in body else 0
+        query['query']['bool']['filter'].append({
+            'bool': {
+                'must': [
+                    {
+                        'exists': {
+                            'field': 'article'
+                        }
+                    }
+                ],
+                'must_not': [
+                    {
+                        'term': {
+                            'article': ''
+                        }
+                    }
+                ]
+            }
+        })
+        query['sort'] = [
+            { 'createdAt': { "order": "desc" } }
+        ]
 
     if 'keyword' in body:
         if len(body['keyword']) < 1:
@@ -165,7 +194,6 @@ def get_resources_by_filters(body, user):
                 })
                 
     if 'location_filters' in body:
-        print(body['location_filters'])
         if len(body['location_filters']) > 0:
             for location_filter in body['location_filters']:
                 location_field = location_filter['destiny']
@@ -228,8 +256,8 @@ def get_resources_by_filters(body, user):
     response_tmp = hookHandler.call('search_response_post_process', body, response)
     if response_tmp:
         response = response_tmp
-    
-    if 'viewType' in body and body['viewType'] == 'gallery':
+        
+    if viewType == 'gallery':
         for resource in response['resources']:
             if 'records' in resource:
                 records = resource.get('records', [])
@@ -249,6 +277,27 @@ def get_resources_by_filters(body, user):
                                     record['file'] = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
             else:
                 resource['records'] = []
+                
+    elif viewType == 'blog':
+        full_article = body.get('full_article', False)
+        for resource in response['resources']:
+            article_content = resource.get('article', '')
+            if not full_article and article_content and len(article_content) > 300:
+                resource['article'] = article_content[:300] + '...'
+
+            records = resource.get('records', [])
+            thumbnail_record = next((r for r in records if r.get('tag') == 'thumbnail'), None)
+            if thumbnail_record:
+                from app.api.records.services import get_by_id
+                r, status = get_by_id(thumbnail_record['id'], user, True)
+                if status == 200:
+                    path = r.get('processing', {}).get('fileProcessing', {}).get('path')
+                    path = path + '_medium.jpg'
+                    if path:
+                        file_path = os.path.join(WEB_FILES_PATH, path)
+                        if file_path and os.path.exists(file_path):
+                            with open(file_path, 'rb') as f:
+                                resource['thumbnail'] = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
 
     register_log(user if user is not None else 'public', log_actions['search'], {'filters': body})
     

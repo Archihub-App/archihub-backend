@@ -187,6 +187,8 @@ def update_resources_schema(schema):
             mongodb.update_record(
                 'system', {'name': 'resources-schema'}, update)
 
+        hookHandler.call('resource_schema_update', schema)
+
         # Retornar el resultado
         return {'msg': gettext(u'Resources schema updated successfully')}, 200
     except Exception as e:
@@ -509,6 +511,10 @@ def regenerate_index(user):
 
         mapping = transform_dict_to_mapping(resources_schema['data'])
         mapping.pop('file', None)
+        
+        mapping['article'] = {
+            'type': 'text'
+        }
 
         mapping['post_type'] = {
             'type': 'text',
@@ -1034,6 +1040,7 @@ def clear_cache():
     from app.api.aiservices.services import update_cache as update_cache_llms
     from app.api.resources.public_services import update_cache as update_cache_resources_public
     from app.api.records.public_services import update_cache as update_cache_records_public
+    from app.api.snaps.public_services import update_cache as update_cache_snaps_public
 
     try:
         clear_system_cache()
@@ -1050,6 +1057,7 @@ def clear_cache():
         update_cache_resources_public()
         update_cache_records_public()
         update_cache_llms()
+        update_cache_snaps_public()
 
         print('-'*50)
         return {'msg': gettext('Cache cleaned successfully')}, 200

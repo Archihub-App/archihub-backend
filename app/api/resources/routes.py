@@ -272,6 +272,60 @@ def update_by_id(id):
     else:
         return resp
     # return 'ok'
+    
+@bp.route('/updateorder/<id>', methods=['POST'])
+@jwt_required()
+def update_file_order(id):
+    """
+    Actualizar el orden de los archivos de un recurso por su id
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+          name: id
+            schema:
+                type: string
+        - in: body
+          name: body
+            schema:
+                type: object
+                properties:
+                    filesOrder:
+                        type: array
+                        items:
+                            type: object
+                            properties:
+                                id:
+                                    type: string
+                                order:
+                                    type: integer
+    responses:
+        200:
+            description: Orden de archivos actualizado exitosamente
+        400:
+            description: Error al validar los campos del recurso
+        401:
+            description: No tiene permisos para actualizar el recurso
+        500:
+            description: Error al actualizar el recurso
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'super_editor'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+    
+    body = request.json
+
+    # Llamar al servicio para actualizar el orden de los archivos
+    resp = services.update_files_order(id, body, current_user)
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
 
 # Nuevo endpoint para eliminar un recurso por su id
 @bp.route('/<id>', methods=['DELETE'])
@@ -339,8 +393,7 @@ def get_tree():
         current_user = get_jwt_identity()
         # Obtener el body del request
         body = request.json
-        print(body)
-        
+
         if 'view' in body:
             if body['view'] == 'tree':
                 slugs = [item['slug'] for item in body['tree']]
@@ -448,7 +501,93 @@ def get_all_records(resource_id):
         return tuple(resp)
     else:
         return resp
- 
+    
+@bp.route('/<resource_id>/article', methods=['GET'])
+@jwt_required()
+def get_article_body(resource_id):
+    """
+    Obtener el cuerpo del artículo de un recurso
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+            name: resource_id
+            schema:
+                type: string
+    responses:
+        200:
+            description: Cuerpo del artículo obtenido exitosamente
+        401:
+            description: No tiene permisos para obtener el cuerpo del artículo
+        404:
+            description: Recurso no encontrado
+        500:
+            description: Error al obtener el cuerpo del artículo
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    
+    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    # Llamar al servicio para obtener el cuerpo del artículo
+    resp = services.get_article_body(resource_id, current_user)
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
+
+@bp.route('/<resource_id>/article', methods=['POST'])
+@jwt_required()
+def update_article_body(resource_id):
+    """
+    Actualizar el cuerpo del artículo de un recurso
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+            name: resource_id
+            schema:
+                type: string
+        - in: body
+            name: body
+            schema:
+                type: object
+                properties:
+                    articleBody:
+                        type: array
+    responses:
+        200:
+            description: Cuerpo del artículo actualizado exitosamente
+        401:
+            description: No tiene permisos para actualizar el cuerpo del artículo
+        404:
+            description: Recurso no encontrado
+        500:
+            description: Error al actualizar el cuerpo del artículo
+    """ 
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    body = request.json
+    
+    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    # Llamar al servicio para actualizar el cuerpo del artículo
+    resp = services.update_article_body(resource_id, body, current_user)
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp 
+
 @bp.route('/download_records', methods=['POST'])
 @jwt_required()
 def download_all_records():

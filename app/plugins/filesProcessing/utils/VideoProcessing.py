@@ -2,6 +2,29 @@ import ffprobe3
 import ffmpeg
 import os
 
+
+def get_metadata(filepath):
+    try:
+        probe = ffmpeg.probe(filepath)
+    except Exception:
+        return {}
+
+    fmt = probe.get('format', {})
+    duration = fmt.get('duration')
+    bit_rate = fmt.get('bit_rate')
+    metadata = {}
+    if duration:
+        try:
+            metadata['duration_ms'] = int(float(duration) * 1000)
+        except (TypeError, ValueError):
+            pass
+    if bit_rate:
+        try:
+            metadata['bit_rate'] = int(float(bit_rate))
+        except (TypeError, ValueError):
+            pass
+    return metadata
+
 def main(filepath, output):
     try:
         if not os.path.exists(filepath):

@@ -49,6 +49,7 @@ def process_file(file, instance=None):
     if 'audio' in file['mime']:
         result = AudioProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
         if result:
+            metadata = AudioProcessing.get_metadata(path)
             update = {
                 'processing': {
                     'fileProcessing': {
@@ -57,12 +58,15 @@ def process_file(file, instance=None):
                     }
                 }
             }
+            if metadata:
+                update['processing']['fileProcessing']['metadata'] = metadata
             instance.update_data('records', str(file['_id']), update)
 
     elif 'video' in file['mime']:
         result_audio, result_video = VideoProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
         if result_video or result_audio:
             type = 'video' if result_video else 'audio' if result_audio else None
+            metadata = VideoProcessing.get_metadata(path)
             update = {
                 'processing': {
                     'fileProcessing': {
@@ -71,6 +75,8 @@ def process_file(file, instance=None):
                     }
                 }
             }
+            if metadata:
+                update['processing']['fileProcessing']['metadata'] = metadata
             
             instance.update_data('records', str(file['_id']), update)
     elif 'image' in file['mime']:

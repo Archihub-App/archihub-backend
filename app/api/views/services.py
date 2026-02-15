@@ -78,7 +78,7 @@ def get_view_info(view_slug):
     from app.api.types.services import get_icon
     view['icon'] = get_icon(view['root'])
 
-    filter_condition = {'parent.post_type': {'$in': [p['slug'] for p in types]}}
+    filter_condition = {'parent.post_type': {'$in': [p['slug'] for p in types]}, 'status': {'$ne': 'deleted'}}
     if view['parent'] != '':
         filter_condition = {
             '$or': [
@@ -99,6 +99,7 @@ def get_view_info(view_slug):
         records_types.append({'_id': file_type, 'count': count})
 
     records_types.sort(key=lambda x: x['count'], reverse=True)
+    
     
     view['files'] = {
         'total': records_count,

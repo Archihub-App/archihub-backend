@@ -14,6 +14,12 @@ import unicodedata
 load_dotenv()
 
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
+try:
+    TRANSCRIPTION_PAGE_CHAR_LIMIT = int(os.environ.get('TRANSCRIPTION_PAGE_CHAR_LIMIT', 6000))
+    if TRANSCRIPTION_PAGE_CHAR_LIMIT <= 0:
+        raise ValueError
+except (TypeError, ValueError):
+    TRANSCRIPTION_PAGE_CHAR_LIMIT = 6000
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -191,6 +197,37 @@ def parse_result(result):
 @cacheHandler.cache.cache(limit=500)
 def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
     ids = json.loads(ids)
+    
+    # Collect existing orders
+    used_orders = set()
+    items_with_order = []
+    items_without_order = []
+    
+    for item in ids:
+        if 'order' in item and item['order'] is not None:
+            used_orders.add(item['order'])
+            items_with_order.append(item)
+        else:
+            items_without_order.append(item)
+    
+    # Assign implicit orders to items without explicit order
+    # Find the next available order starting from 0
+    for item in items_without_order:
+        candidate_order = 0
+        while candidate_order in used_orders:
+            candidate_order += 1
+        item['order'] = candidate_order
+        used_orders.add(candidate_order)
+    
+    # Sort by order
+    ids = sorted(ids, key=lambda x: x.get('order', float('inf')))
+    
+    # Apply pagination to ids
+    if limit is not None:
+        start = page * limit
+        end = start + limit
+        ids = ids[start:end]
+    
     ids_filter = []
     for i in range(len(ids)):
         ids_filter.append(ObjectId(ids[i]['id']))
@@ -205,14 +242,12 @@ def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
         cursor = mongodb.get_all_records('records', filters=filters, fields={
                   'name': 1, 'size': 1, 'accessRights': 1, 'displayName': 1, 'processing': 1, 'hash': 1, 'filepath': 1})
         
-        if limit is not None:
-            cursor = cursor.skip(page * limit).limit(limit)
-            
         r_ = list(cursor)
         
         for r in r_:
             r['_id'] = str(r['_id'])
             r['tag'] = [x['tag'] for x in ids if x['id'] == r['_id']][0]
+            r['order'] = [x['order'] for x in ids if x['id'] == r['_id']][0]
 
             if 'accessRights' in r:
                 if r['accessRights']:
@@ -232,6 +267,9 @@ def get_resource_records(ids, user, page=0, limit=10, groupImages=False):
             if limit is not None:
                 r.pop('filepath', None)
                 r['processing'] = pro_dict
+
+        # Sort by order
+        r_ = sorted(r_, key=lambda x: x.get('order', float('inf')))
 
         if groupImages:
             img = mongodb.count('records', {'_id': {'$in': ids_filter}, 'processing.fileProcessing.type': 'image'})
@@ -337,8 +375,8 @@ def cache_get_record_stream(id):
             raise Exception('Record no ha sido procesado')
 
     # si el record no es de tipo audio o video, retornar error
-    if record['processing']['fileProcessing']['type'] != 'audio' and record['processing']['fileProcessing']['type'] != 'video':
-        raise Exception('Record no es de tipo audio o video')
+    if record['processing']['fileProcessing']['type'] != 'audio' and record['processing']['fileProcessing']['type'] != 'video' and record['processing']['fileProcessing']['type'] != 'image':
+        raise Exception('Record no es de tipo audio, video o imagen')
 
     # obtener el path del archivo
     path = record['processing']['fileProcessing']['path']
@@ -392,168 +430,258 @@ def cache_get_processing_metadata(id, slug):
 
     return record['processing'][slug]['result']['metadata']
 
+def _build_segment_page_boundaries(segments, char_limit):
+    if not segments:
+        return [(0, 0)]
+    if not char_limit or char_limit <= 0:
+        return [(0, len(segments))]
+
+    boundaries = []
+    start_index = 0
+    current_chars = 0
+
+    for index, segment in enumerate(segments):
+        segment_text = segment.get('text') or ''
+        segment_length = len(segment_text)
+
+        if index > start_index and current_chars + segment_length > char_limit:
+            boundaries.append((start_index, index))
+            start_index = index
+            current_chars = 0
+
+        current_chars += segment_length
+
+    boundaries.append((start_index, len(segments)))
+    return boundaries
+
+
 @cacheHandler.cache.cache(limit=1000)
-def cache_get_record_transcription(id, slug, segments=True):
-    # Buscar el record en la base de datos
+def _get_transcription_result_cached(id, slug):
     record = mongodb.get_record(
         'records', {'_id': ObjectId(id)}, fields={'processing': 1})
 
-    # Si el record no existe, retornar error
     if not record:
         raise Exception('Record no existe')
-    # si el record no se ha procesado, retornar error
-    if slug not in record['processing']:
+
+    processing = record.get('processing')
+    if not processing or slug not in processing:
         raise Exception('Record no ha sido procesado')
-    if record['processing'][slug]['type'] != 'av_transcribe':
+
+    processing_entry = processing[slug]
+    if processing_entry.get('type') != 'av_transcribe':
         raise Exception('Record no ha sido procesado con el slug ' + slug)
 
-    resp = {
-        'segments': record['processing'][slug]['result']['segments']
-    }
+    return processing_entry.get('result', {})
 
-    temp = []
-    hasSpeakers = False
-    labels_array = []
-    locations_array = []
-    frames_array = []
+
+def cache_get_record_transcription(id, slug, segments=True, page=0):
+    if isinstance(segments, int) and (page == 0 or page is None):
+        page = segments
+        segments = True
+
+    if isinstance(segments, str):
+        segments_flag = segments.lower() not in ('false', '0', 'no', 'off')
+    else:
+        segments_flag = bool(segments)
+
+    try:
+        page_index = int(page)
+    except (TypeError, ValueError):
+        page_index = 0
+
+    if page_index < 0:
+        page_index = 0
+
+    result = _get_transcription_result_cached(id, slug)
+
+    segments_source = result.get('segments') or []
+    frames_source = result.get('frames') or []
+    full_text = result.get('text', '')
+
+    total_chars = sum(len(segment.get('text') or '') for segment in segments_source)
+    boundaries = _build_segment_page_boundaries(segments_source, TRANSCRIPTION_PAGE_CHAR_LIMIT)
+    total_pages = len(boundaries)
+
+    if total_pages == 0:
+        boundaries = [(0, 0)]
+        total_pages = 1
+
+    if page_index >= total_pages:
+        page_index = total_pages - 1
+
+    start_idx, end_idx = boundaries[page_index]
+    visible_segments = segments_source[start_idx:end_idx]
+    page_chars = sum(len(segment.get('text') or '') for segment in visible_segments)
+
+    labels_counter = {}
+    locations_counter = {}
+    frames_counter = {}
     groups = []
+    groups_seen = set()
+    processed_segments = []
+    has_speakers = False
 
-    frames = None
-    
-    if 'frames' in record['processing'][slug]['result']:
-        frames = record['processing'][slug]['result']['frames']
-        
-    if frames:
-        for f in frames:
-            labels = f.get('label', [])
-            
-            for l in labels:
-                normalized_label_name = normalize_text(l['name'])
-                group = l.get('group', None)
-                normalized_group = normalize_text(group) if group else ''
-                f['group'] = normalized_group
-
-                found = False
-                for label in frames_array:
-                    if normalize_text(label['name']) == normalized_label_name and normalize_text(label.get('group', '')) == normalized_group:
-                        label['count'] += 1
-                        found = True
-                        break
-                if not found:
-                    frames_array.append({**l, 'count': 1, 'group': normalized_group})
-
-    for s in resp['segments']:
-        speaker = s['speaker'] if 'speaker' in s else None
-        labels = s['label'] if 'label' in s else None
-        location = s['location'] if 'location' in s else None
-        
-        if labels:
-            for label in labels:
-                group = label.get('group', None)
-                normalized_label_name = normalize_text(label['name'])
-                normalized_group = normalize_text(group) if group else ''
-                if normalized_group:
-                    if normalized_group not in [g['name'] for g in groups]:
-                        groups.append({
-                            'name': normalized_group,
-                            'type': 'transcript'
-                        })
-                found = False
-                for l in labels_array:
-                    if normalize_text(l['name']) == normalized_label_name and normalize_text(l.get('group', '')) == normalized_group:
-                        l['count'] += 1
-                        found = True
-                        break
-                if not found:
-                    labels_array.append({**label, 'count': 1, 'group': normalized_group})
-        if location:
-            for loc in location:
-                group = label.get('group', None)
-                normalized_loc_name = normalize_text(loc['name'])
-                normalized_group = normalize_text(group) if group else ''
-                found = False
-                for l in locations_array:
-                    if normalize_text(l['name']) == normalized_loc_name and normalize_text(l.get('group', '')) == normalized_group:
-                        l['count'] += 1
-                        found = True
-                        break
-                if not found:
-                    locations_array.append({**loc, 'count': 1, 'group': normalized_group})
-
-        if speaker:
-            hasSpeakers = True
+    for segment in visible_segments:
+        speaker = segment.get('speaker')
+        labels = segment.get('label') or []
+        locations = segment.get('location') or []
 
         obj = {
-            'text': s['text'],
-            'start': s['start'],
-            'end': s['end'],
+            'text': segment.get('text', ''),
+            'start': segment.get('start'),
+            'end': segment.get('end'),
             'speaker': speaker
         }
 
         if labels:
             obj['labels'] = labels
+            for label in labels:
+                group = label.get('group')
+                normalized_group = normalize_text(group) if group else ''
+                normalized_label_name = normalize_text(label.get('name'))
+                if normalized_group and normalized_group not in groups_seen:
+                    groups.append({'name': normalized_group, 'type': 'transcript'})
+                    groups_seen.add(normalized_group)
+                key = (normalized_label_name, normalized_group)
+                if key in labels_counter:
+                    labels_counter[key]['count'] += 1
+                else:
+                    labels_counter[key] = {**label, 'count': 1, 'group': normalized_group}
 
-        if location:
-            obj['location'] = location
+        if locations:
+            obj['location'] = locations
+            for loc in locations:
+                group = loc.get('group')
+                normalized_group = normalize_text(group) if group else ''
+                normalized_loc_name = normalize_text(loc.get('name'))
+                key = (normalized_loc_name, normalized_group)
+                if key in locations_counter:
+                    locations_counter[key]['count'] += 1
+                else:
+                    locations_counter[key] = {**loc, 'count': 1, 'group': normalized_group}
 
         if groups:
             obj['groups'] = groups
 
-        temp.append(obj)
+        if speaker:
+            has_speakers = True
+
+        processed_segments.append(obj)
 
     speakers = None
-    if hasSpeakers:
+    if has_speakers and processed_segments:
         speakers = []
-        for s in temp:
-            if s['speaker']:
-                if s['speaker'] not in [sp['name'] for sp in speakers]:
-                    speakers.append({'name': s['speaker'], 'segments': [
-                        {'start': s['start'], 'end': s['end']}
-                    ]})
+        for segment in processed_segments:
+            speaker_name = segment.get('speaker')
+            if not speaker_name:
+                continue
+
+            existing = next((item for item in speakers if item['name'] == speaker_name), None)
+            if not existing:
+                existing = {
+                    'name': speaker_name,
+                    'segments': [{'start': segment.get('start'), 'end': segment.get('end')}]
+                }
+                speakers.append(existing)
+            else:
+                last_segment = existing['segments'][-1]
+                start_value = segment.get('start')
+                end_value = segment.get('end')
+                if start_value is not None and last_segment['end'] is not None and start_value - last_segment['end'] < 5:
+                    last_segment['end'] = end_value
                 else:
-                    for sp in speakers:
-                        if sp['name'] == s['speaker']:
-                            if s['start'] - sp['segments'][-1]['end'] < 5:
-                                sp['segments'][-1]['end'] = s['end']
-                            else:
-                                sp['segments'].append({'start': s['start'], 'end': s['end']})
-        
-        for sp in speakers:
+                    existing['segments'].append({'start': start_value, 'end': end_value})
+
+        for speaker_entry in speakers:
             total = 0
-            for seg in sp['segments']:
-                total += seg['end'] - seg['start']
-            sp['total'] = total
-                
-    transcription = {
-        'text': record['processing'][slug]['result']['text'],
+            for seg in speaker_entry['segments']:
+                start_value = seg.get('start')
+                end_value = seg.get('end')
+                if start_value is None or end_value is None:
+                    continue
+                total += end_value - start_value
+            speaker_entry['total'] = total
+
+    labels_array = sorted(labels_counter.values(), key=lambda x: x['count'], reverse=True)
+    locations_array = sorted(locations_counter.values(), key=lambda x: x['count'], reverse=True)
+
+    normalized_frames = []
+    for frame in frames_source:
+        frame_obj = {**frame}
+        labels = frame_obj.get('label') or []
+        normalized_group = frame_obj.get('group')
+        normalized_group = normalize_text(normalized_group) if normalized_group else ''
+
+        for label in labels:
+            group = label.get('group')
+            normalized_label_group = normalize_text(group) if group else ''
+            normalized_label_name = normalize_text(label.get('name'))
+            key = (normalized_label_name, normalized_label_group)
+            if key in frames_counter:
+                frames_counter[key]['count'] += 1
+            else:
+                frames_counter[key] = {**label, 'count': 1, 'group': normalized_label_group}
+            if normalized_label_group:
+                normalized_group = normalized_label_group
+
+        if normalized_group:
+            frame_obj['group'] = normalized_group
+
+        normalized_frames.append(frame_obj)
+
+    frames_array = sorted(frames_counter.values(), key=lambda x: x['count'], reverse=True)
+
+    pagination = {
+        'page': page_index,
+        'total_pages': total_pages,
+        'page_char_limit': TRANSCRIPTION_PAGE_CHAR_LIMIT,
+        'total_characters': total_chars,
+        'page_characters': page_chars,
+        'total_segments': len(segments_source),
+        'page_segments': len(visible_segments),
+        'from_segment': start_idx,
+        'to_segment': end_idx - 1 if end_idx > start_idx else -1,
+        'has_more': page_index < (total_pages - 1)
     }
-    
-    if segments:
-        transcription = {
-            'segments': temp,
-            'speakers': speakers
-        }
-        
-    if frames:
-        transcription['vision'] = frames
 
-    labels_array.sort(key=lambda x: x['count'], reverse=True)
-    locations_array.sort(key=lambda x: x['count'], reverse=True)
-    frames_array.sort(key=lambda x: x['count'], reverse=True)
+    transcription = {
+        'text': full_text
+    }
 
-    if len(labels_array) > 0:
+    if segments_flag:
+        transcription['segments'] = processed_segments
+        transcription['speakers'] = speakers
+        transcription['pagination'] = pagination
+    elif total_pages > 1:
+        transcription['pagination'] = pagination
+
+    if normalized_frames:
+        transcription['vision'] = normalized_frames
+
+    if labels_array:
         transcription['labels'] = labels_array
 
-    if len(locations_array) > 0:
+    if locations_array:
         transcription['locations'] = locations_array
 
-    if len(frames_array) > 0:
+    if frames_array:
         transcription['frames'] = frames_array
-        
-    if len(groups) > 0:
+
+    if groups:
         transcription['groups'] = groups
 
     return transcription
+
+
+def _invalidate_cached_transcription(*args, **kwargs):
+    if args:
+        key_args = list(args)[:2]
+        return _get_transcription_result_cached.invalidate(*key_args, **kwargs)
+    return _get_transcription_result_cached.invalidate(**kwargs)
+
+
+cache_get_record_transcription.invalidate = _invalidate_cached_transcription
+cache_get_record_transcription.invalidate_all = _get_transcription_result_cached.invalidate_all
 
 
 @cacheHandler.cache.cache(limit=1000)

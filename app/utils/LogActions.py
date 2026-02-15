@@ -14,6 +14,7 @@ log_actions = {
     'list_delete': 'LIST_DELETE',
     'resource_create': 'RESOURCE_CREATE',
     'resource_update': 'RESOURCE_UPDATE',
+    'resource_article_update': 'RESOURCE_ARTICLE_UPDATE',
     'resource_delete': 'RESOURCE_DELETE',
     'resource_open': 'RESOURCE_OPEN',
     'record_create': 'RECORD_CREATE',
@@ -32,4 +33,5 @@ log_actions = {
     'lt_extraction': 'LT_EXTRACTION',
     'img_analyze': 'IMG_ANALYZE',
     'search': 'SEARCH',
+    'resource_files_order_update': 'RESOURCE_FILES_ORDER_UPDATE'
 }
