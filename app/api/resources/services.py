@@ -69,8 +69,6 @@ def extract_uploaded_records_ids(content):
         # First unescape HTML entities
         unescaped_content = html.unescape(content)
         
-        # Find data-records attribute value using a simpler approach
-        # Look for data-records=" and then find the matching ]" pattern
         pattern = r'data-records="(\[.*?\])"'
         match = re.search(pattern, unescaped_content, re.DOTALL)
         
@@ -111,8 +109,6 @@ def extract_snaps_ids(content):
         # First unescape HTML entities
         unescaped_content = html.unescape(content)
         
-        # Find data-snaps attribute value using a simpler approach
-        # Look for data-snaps=" and then find the matching ]" pattern
         pattern = r'data-snaps="(\[.*?\])"'
         match = re.search(pattern, unescaped_content, re.DOTALL)
         
@@ -143,6 +139,37 @@ def extract_snaps_ids(content):
         print(f"Content sample: {content[:200]}...")
     
     return []
+
+# Function to extract a favorite ID from content
+def extract_favorite_id(content):
+    if not content:
+        return None, None
+
+    try:
+        unescaped_content = html.unescape(content)
+        id_pattern = r'data-favorite-id="([^"]+)"'
+        source_pattern = r'data-favorite-source="([^"]+)"'
+        match = re.search(id_pattern, unescaped_content)
+        source_match = re.search(source_pattern, unescaped_content)
+
+        if not match:
+            match = re.search(id_pattern, content)
+            if not match:
+                return None, None
+            source_match = re.search(source_pattern, content)
+
+        favorite_id = match.group(1) if match else None
+        favorite_source = source_match.group(1) if source_match else None
+
+        if not favorite_id:
+            return None, None
+
+        return favorite_id, favorite_source
+    except Exception as e:
+        print(f"Error parsing favorite id: {e}")
+        print(f"Content sample: {content[:200]}...")
+
+    return None, None
 
 # Nuevo servicio para obtener todos los recursos dado un tipo de contenido
 @cacheHandler.cache.cache(limit=5000)
@@ -1305,6 +1332,29 @@ def get_resource(id, user, postQuery = False):
                         'data': s['data'],
                         'type': s['type']
                     } for s in snaps]
+                    
+                    b['content'] = out
+                elif b['type'] == 'favorite':
+                    content = b['content']
+                    favorite_id, favorite_source = extract_favorite_id(content)
+                    
+                    if not favorite_id:
+                        b['content'] = []
+                        continue
+                    b['content'] = favorite_id
+                    fields = {'metadata.firstLevel.title': 1, 'filesObj': 1, 'articleBody': 1} if favorite_source == 'resources' else {'processing.fileProcessing.type': 1}
+                    favorite = mongodb.get_record(favorite_source, {'_id': ObjectId(favorite_id)}, fields=fields)
+                    
+                    out = {
+                        'id': str(favorite['_id']),
+                        'source': favorite_source,
+                        'data': {
+                            'name': favorite['metadata']['firstLevel']['title'] if 'metadata' in favorite and 'firstLevel' in favorite['metadata'] and 'title' in favorite['metadata']['firstLevel'] else None,
+                            'files': favorite['filesObj'] if 'filesObj' in favorite else None,
+                            'articleBody': favorite['articleBody'] if 'articleBody' in favorite else None,
+                            'type': favorite['processing']['fileProcessing']['type'] if 'processing' in favorite and 'fileProcessing' in favorite['processing'] and 'type' in favorite['processing']['fileProcessing'] else None
+                        }
+                    }
                     
                     b['content'] = out
                     
