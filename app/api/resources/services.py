@@ -1181,7 +1181,6 @@ def get_resource(id, user, postQuery = False):
                 if value:
                     temp_ = []
                     for v in value:
-                        # si v tiene el caracter | o ,
                         if '|' in v:
                             temp_.append(' '.join(v.split('|')))
                         elif ',' in v:

@@ -40,4 +40,4 @@ def get_by_id(id):
     
     
 def update_cache():
-    get_by_id.invalidate_all()
+    pass
