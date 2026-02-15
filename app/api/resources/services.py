@@ -36,6 +36,30 @@ import numbers
 import re
 import html
 from flask_babel import _
+from html.parser import HTMLParser
+
+class _HTMLStripper(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._parts = []
+
+    def handle_data(self, data):
+        self._parts.append(data)
+
+    def get_data(self):
+        return ''.join(self._parts)
+
+def strip_html(text):
+    if text is None:
+        return None
+    stripper = _HTMLStripper()
+    stripper.feed(text)
+    stripper.close()
+    cleaned = stripper.get_data()
+    cleaned = re.sub(r'\s+', ' ', cleaned)
+    cleaned = re.sub(r'\s+([,.;:!?])', r'\1', cleaned)
+    cleaned = re.sub(r'([,.;:!?])([^\s])', r'\1 \2', cleaned)
+    return cleaned.strip()
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -1344,13 +1368,50 @@ def get_resource(id, user, postQuery = False):
                     fields = {'metadata.firstLevel.title': 1, 'filesObj': 1, 'articleBody': 1} if favorite_source == 'resources' else {'processing.fileProcessing.type': 1}
                     favorite = mongodb.get_record(favorite_source, {'_id': ObjectId(favorite_id)}, fields=fields)
                     
+                    articleBody = favorite['articleBody'] if 'articleBody' in favorite else []
+                    for p in articleBody:
+                        if 'type' in p and p['type'] == 'paragraph':
+                            if 'content' in p:
+                                if favorite['articleBody'] is None:
+                                    favorite['articleBody'] = ''
+                                
+
+                                content = strip_html(p['content'])
+                                if favorite['articleBody'] == '':
+                                    favorite['articleBody'] += content
+                                else:
+                                    favorite['articleBody'] += ' ' + content
+                                    
+                                    if len(favorite['articleBody']) > 300:
+                                        favorite['articleBody'] = favorite['articleBody'][:300]
+                                        break
+                    
+                    files = favorite['filesObj'] if 'filesObj' in favorite else None
+                    imagesFiles = []
+                    imagePath = None
+                    if files:
+                        records = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(f['id']) for f in files]}, 'processing.fileProcessing.type': 'image'}, fields={'name': 1, 'displayName': 1, 'processing.fileProcessing.path': 1}))
+                        imagesFiles = records
+                        
+                    if favorite_source == 'resources' and imagesFiles:
+                        image = imagesFiles[0]
+                        imagePath = image['processing']['fileProcessing']['path'] if 'processing' in image and 'fileProcessing' in image['processing'] and 'path' in image['processing']['fileProcessing'] else None
+                        imagePath = imagePath + '_medium.jpg'
+                        if imagePath:
+                            import base64
+                            file_path = os.path.join(WEB_FILES_PATH, imagePath)
+                            if file_path and os.path.exists(file_path):
+                                with open(file_path, 'rb') as f:
+                                    image = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
+                    
                     out = {
                         'id': str(favorite['_id']),
                         'source': favorite_source,
                         'data': {
                             'name': favorite['metadata']['firstLevel']['title'] if 'metadata' in favorite and 'firstLevel' in favorite['metadata'] and 'title' in favorite['metadata']['firstLevel'] else None,
-                            'files': favorite['filesObj'] if 'filesObj' in favorite else None,
+                            'files': len(favorite['filesObj']) if 'filesObj' in favorite else None,
                             'articleBody': favorite['articleBody'] if 'articleBody' in favorite else None,
+                            'thumbnail': image if imagePath else None,
                             'type': favorite['processing']['fileProcessing']['type'] if 'processing' in favorite and 'fileProcessing' in favorite['processing'] and 'type' in favorite['processing']['fileProcessing'] else None
                         }
                     }
