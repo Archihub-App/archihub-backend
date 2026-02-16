@@ -15,7 +15,8 @@ import os
 from flask_babel import _
 from datetime import datetime
 from dateutil import parser
-from app.api.resources.services import get_total, get_accessRights, get_resource_type, get_children, get_children_cache
+from app.api.resources.services import get_total, get_accessRights, get_resource_type, get_children, get_children_cache, strip_html
+
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -158,7 +159,7 @@ def get_resource(id):
     post_type = get_by_slug(post_type)
     isArticle = post_type and 'isArticle' in post_type and post_type['isArticle']
     
-    from app.api.resources.services import get_article_body, extract_uploaded_records_ids, extract_snaps_ids
+    from app.api.resources.services import get_article_body, extract_uploaded_records_ids, extract_snaps_ids, extract_favorite_id
     if isArticle:
         resource['articleBody'] = get_article_body(str(resource['_id']), None)
         resource['articleBody'] = resource['articleBody'][0]['articleBody']
@@ -191,6 +192,72 @@ def get_resource(id):
                 } for s in snaps]
                 
                 b['content'] = out
+            elif b['type'] == 'favorite':
+                    content = b['content']
+                    favorite_id, favorite_source = extract_favorite_id(content)
+                    
+                    if not favorite_id:
+                        b['content'] = []
+                        continue
+                    b['content'] = favorite_id
+                    fields = {'metadata.firstLevel.title': 1, 'filesObj': 1, 'articleBody': 1, 'accessRights': 1} if favorite_source == 'resources' else {'processing.fileProcessing.type': 1}
+                    favorite, status = get_by_id(favorite_id)
+                    
+                    if status != 200:
+                        b['content'] = []
+                        continue
+                    
+                    articleBody = favorite['articleBody'] if 'articleBody' in favorite else []
+                    for p in articleBody:
+                        if 'type' in p and p['type'] == 'paragraph':
+                            if 'content' in p:
+                                if favorite['articleBody'] is None:
+                                    favorite['articleBody'] = ''
+                                
+
+                                content = strip_html(p['content'])
+                                if favorite['articleBody'] == '':
+                                    favorite['articleBody'] += content
+                                else:
+                                    favorite['articleBody'] += ' ' + content
+                                    
+                                    if len(favorite['articleBody']) > 300:
+                                        favorite['articleBody'] = favorite['articleBody'][:300]
+                                        break
+                    
+                    files = favorite['filesObj'] if 'filesObj' in favorite else None
+                    imagesFiles = []
+                    imagePath = None
+                    if files:
+                        records = list(mongodb.get_all_records('records', {'_id': {'$in': [ObjectId(f['id']) for f in files]}, 'processing.fileProcessing.type': 'image'}, fields={'name': 1, 'displayName': 1, 'processing.fileProcessing.path': 1}))
+                        imagesFiles = records
+                        
+                    if favorite_source == 'resources' and imagesFiles:
+                        image = imagesFiles[0]
+                        from app.api.records.public_services import get_by_id as get_by_id_record
+                        record, status = get_by_id_record(image['_id'])
+                        
+                        if status == 200:
+                            imagePath = image['processing']['fileProcessing']['path'] if 'processing' in image and 'fileProcessing' in image['processing'] and 'path' in image['processing']['fileProcessing'] else None
+                            imagePath = imagePath + '_medium.jpg'
+                            if imagePath:
+                                import base64
+                                file_path = os.path.join(WEB_FILES_PATH, imagePath)
+                                if file_path and os.path.exists(file_path):
+                                    with open(file_path, 'rb') as f:
+                                        image = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
+                    
+                    out = {
+                        'id': str(favorite['_id']),
+                        'source': favorite_source,
+                        'data': {
+                            'name': favorite['metadata']['firstLevel']['title'] if 'metadata' in favorite and 'firstLevel' in favorite['metadata'] and 'title' in favorite['metadata']['firstLevel'] else None,
+                            'files': len(favorite['filesObj']) if 'filesObj' in favorite else None,
+                            'articleBody': favorite['articleBody'] if 'articleBody' in favorite else None,
+                            'thumbnail': image if imagePath else None,
+                            'type': favorite['processing']['fileProcessing']['type'] if 'processing' in favorite and 'fileProcessing' in favorite['processing'] and 'type' in favorite['processing']['fileProcessing'] else None
+                        }
+                    }
     
     status = resource['status']
     if status == 'draft':
