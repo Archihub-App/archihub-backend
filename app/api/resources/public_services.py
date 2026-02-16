@@ -199,8 +199,13 @@ def get_resource(id):
                         b['content'] = []
                         continue
                     b['content'] = favorite_id
-                    fields = {'metadata.firstLevel.title': 1, 'filesObj': 1, 'articleBody': 1} if favorite_source == 'resources' else {'processing.fileProcessing.type': 1}
+                    fields = {'metadata.firstLevel.title': 1, 'filesObj': 1, 'articleBody': 1, 'accessRights': 1} if favorite_source == 'resources' else {'processing.fileProcessing.type': 1}
                     favorite = mongodb.get_record(favorite_source, {'_id': ObjectId(favorite_id)}, fields=fields)
+                    
+                    if favorite_source == 'resources':
+                        if favorite['accessRights']:
+                            b['content'] = []
+                            continue
                     
                     articleBody = favorite['articleBody'] if 'articleBody' in favorite else []
                     for p in articleBody:
@@ -229,14 +234,17 @@ def get_resource(id):
                         
                     if favorite_source == 'resources' and imagesFiles:
                         image = imagesFiles[0]
-                        imagePath = image['processing']['fileProcessing']['path'] if 'processing' in image and 'fileProcessing' in image['processing'] and 'path' in image['processing']['fileProcessing'] else None
-                        imagePath = imagePath + '_medium.jpg'
-                        if imagePath:
-                            import base64
-                            file_path = os.path.join(WEB_FILES_PATH, imagePath)
-                            if file_path and os.path.exists(file_path):
-                                with open(file_path, 'rb') as f:
-                                    image = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
+                        from app.api.records.public_services import get_by_id as get_by_id_record
+                        record, status = get_by_id_record(str(image['_id']))
+                        if status == 200:
+                            imagePath = image['processing']['fileProcessing']['path'] if 'processing' in image and 'fileProcessing' in image['processing'] and 'path' in image['processing']['fileProcessing'] else None
+                            imagePath = imagePath + '_medium.jpg'
+                            if imagePath:
+                                import base64
+                                file_path = os.path.join(WEB_FILES_PATH, imagePath)
+                                if file_path and os.path.exists(file_path):
+                                    with open(file_path, 'rb') as f:
+                                        image = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
                     
                     out = {
                         'id': str(favorite['_id']),
