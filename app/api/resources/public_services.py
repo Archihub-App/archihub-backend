@@ -15,8 +15,7 @@ import os
 from flask_babel import _
 from datetime import datetime
 from dateutil import parser
-from app.api.resources.services import get_total, get_accessRights, get_resource_type, get_children, get_children_cache, strip_html
-
+from app.api.resources.services import get_total, get_accessRights, get_resource_type, get_children, get_children_cache
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -159,7 +158,7 @@ def get_resource(id):
     post_type = get_by_slug(post_type)
     isArticle = post_type and 'isArticle' in post_type and post_type['isArticle']
     
-    from app.api.resources.services import get_article_body, extract_uploaded_records_ids, extract_snaps_ids, extract_favorite_id
+    from app.api.resources.services import get_article_body, extract_uploaded_records_ids, extract_snaps_ids, extract_favorite_id, strip_html
     if isArticle:
         resource['articleBody'] = get_article_body(str(resource['_id']), None)
         resource['articleBody'] = resource['articleBody'][0]['articleBody']
@@ -200,12 +199,8 @@ def get_resource(id):
                         b['content'] = []
                         continue
                     b['content'] = favorite_id
-                    fields = {'metadata.firstLevel.title': 1, 'filesObj': 1, 'articleBody': 1, 'accessRights': 1} if favorite_source == 'resources' else {'processing.fileProcessing.type': 1}
-                    favorite, status = get_by_id(favorite_id)
-                    
-                    if status != 200:
-                        b['content'] = []
-                        continue
+                    fields = {'metadata.firstLevel.title': 1, 'filesObj': 1, 'articleBody': 1} if favorite_source == 'resources' else {'processing.fileProcessing.type': 1}
+                    favorite = mongodb.get_record(favorite_source, {'_id': ObjectId(favorite_id)}, fields=fields)
                     
                     articleBody = favorite['articleBody'] if 'articleBody' in favorite else []
                     for p in articleBody:
@@ -234,18 +229,14 @@ def get_resource(id):
                         
                     if favorite_source == 'resources' and imagesFiles:
                         image = imagesFiles[0]
-                        from app.api.records.public_services import get_by_id as get_by_id_record
-                        record, status = get_by_id_record(str(image['_id']))
-                        
-                        if status == 200:
-                            imagePath = image['processing']['fileProcessing']['path'] if 'processing' in image and 'fileProcessing' in image['processing'] and 'path' in image['processing']['fileProcessing'] else None
-                            imagePath = imagePath + '_medium.jpg'
-                            if imagePath:
-                                import base64
-                                file_path = os.path.join(WEB_FILES_PATH, imagePath)
-                                if file_path and os.path.exists(file_path):
-                                    with open(file_path, 'rb') as f:
-                                        image = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
+                        imagePath = image['processing']['fileProcessing']['path'] if 'processing' in image and 'fileProcessing' in image['processing'] and 'path' in image['processing']['fileProcessing'] else None
+                        imagePath = imagePath + '_medium.jpg'
+                        if imagePath:
+                            import base64
+                            file_path = os.path.join(WEB_FILES_PATH, imagePath)
+                            if file_path and os.path.exists(file_path):
+                                with open(file_path, 'rb') as f:
+                                    image = 'data:image/jpeg;base64,' + base64.b64encode(f.read()).decode('utf-8')
                     
                     out = {
                         'id': str(favorite['_id']),
@@ -258,6 +249,8 @@ def get_resource(id):
                             'type': favorite['processing']['fileProcessing']['type'] if 'processing' in favorite and 'fileProcessing' in favorite['processing'] and 'type' in favorite['processing']['fileProcessing'] else None
                         }
                     }
+                    
+                    b['content'] = out
     
     status = resource['status']
     if status == 'draft':
