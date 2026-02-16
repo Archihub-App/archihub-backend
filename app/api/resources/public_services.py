@@ -235,7 +235,7 @@ def get_resource(id):
                     if favorite_source == 'resources' and imagesFiles:
                         image = imagesFiles[0]
                         from app.api.records.public_services import get_by_id as get_by_id_record
-                        record, status = get_by_id_record(image['_id'])
+                        record, status = get_by_id_record(str(image['_id']))
                         
                         if status == 200:
                             imagePath = image['processing']['fileProcessing']['path'] if 'processing' in image and 'fileProcessing' in image['processing'] and 'path' in image['processing']['fileProcessing'] else None
