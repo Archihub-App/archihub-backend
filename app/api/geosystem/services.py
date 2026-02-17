@@ -297,3 +297,18 @@ def get_shape_centroid(ident, parent, level):
             return [mapping(centroid)]
     except Exception as e:
         raise Exception(f'Error al obtener el centroide de la forma {ident}')
+    
+@cacheHandler.cache.cache(limit=5000)
+def get_shape_by_ident(ident, parent, level):
+    try:
+        filters = {
+            'properties.admin_level': level,
+            'properties.ident': ident
+        }
+        if parent:
+            filters['properties.parent'] = parent
+            
+        record = mongodb.get_record('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1})
+        return record, 200
+    except Exception as e:
+        raise Exception(f'Error al obtener la forma {ident}')
