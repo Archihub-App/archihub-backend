@@ -283,16 +283,6 @@ def update_granular_by_id(id):
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'super_editor'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
-    post_type = services.get_resource_type(id)
-    post_type_roles = cache_type_roles(post_type)
-    if post_type_roles['editRoles']:
-        canEdit = False
-        for r in post_type_roles['editRoles']:
-            if user_services.has_role(current_user, r) or user_services.has_role(current_user, 'admin'):
-                canEdit = True
-        if not canEdit:
-            return jsonify({'msg': _('You don\'t have the required authorization')}), 401
-
     body = request.json or {}
     metadata_path = body.get('metadataPath')
     value = body.get('value', '')
