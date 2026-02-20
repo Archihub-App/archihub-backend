@@ -70,8 +70,10 @@ def update_view(view_id):
     data = body.get('data')
     data = json.loads(data)
     
+    files = request.files.getlist('files')
+    
     # Llamar al servicio para actualizar una vista de consulta
-    return services.update(view_id, data, current_user)
+    return services.update(view_id, data, current_user, files)
 
 @bp.route('/<view_id>', methods=['DELETE'])
 @jwt_required()
@@ -148,5 +150,7 @@ def new_view():
     body = request.form.to_dict()
     data = body.get('data')
     data = json.loads(data)
+    
+    files = request.files.getlist('files')
     # Llamar al servicio para crear la vista de consulta
-    return services.create(data, current_user)
+    return services.create(data, current_user, files)

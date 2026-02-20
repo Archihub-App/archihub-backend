@@ -5,6 +5,8 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from bson.objectid import ObjectId
 from flask_babel import _
+from app.api.records.services import create as create_record
+from app.api.records.services import delete_parent
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -108,9 +110,35 @@ def get_view_info(view_slug):
     
     return view, 200
 
-def update(id, body, user):
+def update(id, body, user, files):
     try:
-        view = ViewUpdate(**body)
+        if files and len(files) > 1:
+            return {'msg': _('A view can only have one file')}, 400
+
+        current_view = mongodb.get_record('views', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+        if not current_view:
+            return {'msg': _('View not found')}, 404
+
+        update_body = {**body}
+
+        if files and len(files) == 1:
+            if 'filesObj' in current_view and current_view['filesObj']:
+                for file_obj in current_view['filesObj']:
+                    if 'id' in file_obj:
+                        resp = delete_parent(id, file_obj['id'], user)
+                        if isinstance(resp, tuple) and len(resp) == 2 and resp[1] != 200:
+                            return resp
+
+            records = create_record(
+                id,
+                user,
+                files,
+                filesTags=[{'filetag': 'thumbnail'}],
+                parent_data={'post_type': 'view', 'parents': []}
+            )
+            update_body['filesObj'] = records[:1]
+
+        view = ViewUpdate(**update_body)
         view_updated = mongodb.update_record('views', {'_id': ObjectId(id)}, view)
         update_cache()
 
@@ -132,10 +160,27 @@ def get_all():
 
     return resp, 200
 
-def create(body, user):
+def create(body, user, files):
     try:
+        if files and len(files) > 1:
+            return {'msg': _('A view can only have one file')}, 400
+
+        if 'filesObj' not in body:
+            body['filesObj'] = []
+
         view = View(**body)
         view_created = mongodb.insert_record('views', view)
+
+        if files and len(files) == 1:
+            records = create_record(
+                str(view_created.inserted_id),
+                user,
+                files,
+                filesTags=[{'filetag': 'thumbnail'}],
+                parent_data={'post_type': 'view', 'parents': []}
+            )
+            update = ViewUpdate(**{'filesObj': records[:1]})
+            mongodb.update_record('views', {'_id': ObjectId(view_created.inserted_id)}, update)
 
         update_cache()
 
@@ -151,6 +196,14 @@ def create(body, user):
     
 def delete(id, user):
     try:
+        view = mongodb.get_record('views', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+        if view and 'filesObj' in view and view['filesObj']:
+            for file_obj in view['filesObj']:
+                if 'id' in file_obj:
+                    resp = delete_parent(id, file_obj['id'], user)
+                    if isinstance(resp, tuple) and len(resp) == 2 and resp[1] != 200:
+                        return resp
+
         view_deleted = mongodb.delete_record('views', {'_id': ObjectId(id)})
 
         log = {
