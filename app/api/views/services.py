@@ -105,7 +105,7 @@ def get(id, user):
 
 @cacheHandler.cache.cache()
 def get_view_info(view_slug):
-    view = mongodb.get_record('views', {'slug': view_slug}, fields={'name': 1, 'description': 1, 'parent': 1, 'root': 1, 'visible': 1})
+    view = mongodb.get_record('views', {'slug': view_slug}, fields={'name': 1, 'description': 1, 'parent': 1, 'root': 1, 'visible': 1, 'defaultView': 1})
 
     forms = []
     fields= []
