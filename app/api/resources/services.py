@@ -552,6 +552,121 @@ def update_by_id(id, body, user, files, updateCache = True):
     except Exception as e:
         return {'msg': str(e)}, 500
 
+def update_granular_by_id(id, metadata_path, value, user, concat = False, updateCache = True):
+    try:
+        if not metadata_path or not isinstance(metadata_path, str):
+            return {'msg': _('Metadata path is required')}, 400
+
+        if not isinstance(value, str):
+            return {'msg': _('Value must be a string')}, 400
+
+        record = mongodb.get_record('records', {'_id': ObjectId(id)}, fields={'parent': 1})
+        if not record:
+            return {'msg': _('Record does not exist')}, 404
+
+        parents = record.get('parent', [])
+        if not parents:
+            return {'msg': _('Record does not have parent resources')}, 404
+
+        updated_resources = []
+
+        for parent in parents:
+            if not isinstance(parent, dict) or 'id' not in parent:
+                continue
+
+            resource = mongodb.get_record('resources', {'_id': ObjectId(parent['id'])}, fields={'metadata': 1, 'post_type': 1, 'createdBy': 1, 'status': 1})
+            if not resource:
+                continue
+
+            if resource['createdBy'] != user and not has_role(user, 'admin') and not has_role(user, 'super_editor'):
+                return {'msg': _('You don\'t have the required authorization')}, 401
+
+            post_type_roles = cache_type_roles(resource['post_type'])
+            if post_type_roles['editRoles']:
+                canEdit = False
+                for r in post_type_roles['editRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canEdit = True
+                        break
+                if not canEdit:
+                    return {'msg': _('You don\'t have the required authorization')}, 401
+
+            if resource.get('status') == 'published' and user:
+                if not has_role(user, 'publisher') and not has_role(user, 'admin'):
+                    return {'msg': _('You don\'t have the required authorization')}, 401
+
+            metadata = get_metadata(resource['post_type'])
+            allowed_field = next((f for f in metadata['fields'] if f.get('destiny') == metadata_path), None)
+
+            # Only update resources whose post_type form contains this destiny as text/text-area
+            if not allowed_field or allowed_field.get('type') not in ['text', 'text-area']:
+                continue
+
+            body = {
+                '_id': str(parent['id']),
+                'post_type': resource['post_type'],
+                'metadata': resource.get('metadata', {}),
+                'status': resource.get('status', 'draft')
+            }
+
+            current_value = get_value_by_path(body, metadata_path)
+            new_value = value
+
+            if concat:
+                current_text = current_value.strip() if isinstance(current_value, str) else ''
+                incoming_text = value.strip()
+                if current_text and incoming_text:
+                    new_value = current_text + ' ' + incoming_text
+                else:
+                    new_value = current_text or incoming_text
+
+            set_value_in_dict(body, metadata_path, new_value)
+
+            body_tmp = hookHandler.call('resource_pre_update', body)
+            if body_tmp:
+                body = body_tmp
+
+            value_to_validate = get_value_by_path(body, metadata_path)
+            validate_text(value_to_validate, allowed_field)
+
+            update = {
+                '_id': str(parent['id']),
+                'post_type': body['post_type'],
+                'metadata': body['metadata'],
+                'updatedAt': datetime.now(),
+                'updatedBy': user if user else 'system'
+            }
+
+            update_ = ResourceUpdate(**update)
+            mongodb.update_record('resources', {'_id': ObjectId(parent['id'])}, update_)
+
+            hookHandler.call('resource_update', update)
+            updated_resources.append({
+                'id': str(parent['id']),
+                'post_type': resource['post_type']
+            })
+
+        if not updated_resources:
+            return {'msg': _('No parent resource contains the requested text field')}, 400
+
+        register_log(user, log_actions['resource_update'], {
+            'record': id,
+            'metadataPath': metadata_path,
+            'concat': concat,
+            'updatedResources': updated_resources
+        })
+
+        if updateCache:
+            update_cache()
+
+        return {
+            'msg': _('Resource updated successfully'),
+            'updated': len(updated_resources),
+            'resources': updated_resources
+        }, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
 
 # Funcion para actualizar los recursos relacionados si el post_type es igual al del padre
 def update_relations_children(body, metadata, new = False):
@@ -1369,6 +1484,7 @@ def get_resource(id, user, postQuery = False):
                     favorite = mongodb.get_record(favorite_source, {'_id': ObjectId(favorite_id)}, fields=fields)
                     
                     articleBody = favorite['articleBody'] if 'articleBody' in favorite else []
+                    contentArticle = ''
                     for p in articleBody:
                         if 'type' in p and p['type'] == 'paragraph':
                             if 'content' in p:
@@ -1377,15 +1493,16 @@ def get_resource(id, user, postQuery = False):
                                 
 
                                 content = strip_html(p['content'])
-                                if favorite['articleBody'] == '':
-                                    favorite['articleBody'] += content
+                                if contentArticle == '':
+                                    contentArticle += content
                                 else:
-                                    favorite['articleBody'] += ' ' + content
+                                    contentArticle += ' ' + content
                                     
-                                    if len(favorite['articleBody']) > 300:
-                                        favorite['articleBody'] = favorite['articleBody'][:300]
-                                        break
+                                if len(contentArticle) > 300:
+                                    contentArticle = contentArticle[:300]
+                                    break
                     
+                    favorite['articleBody'] = contentArticle
                     files = favorite['filesObj'] if 'filesObj' in favorite else None
                     imagesFiles = []
                     imagePath = None

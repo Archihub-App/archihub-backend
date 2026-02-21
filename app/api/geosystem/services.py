@@ -10,6 +10,7 @@ from celery import shared_task
 from bson.objectid import ObjectId
 from shapely.validation import make_valid
 from shapely.ops import orient
+from flask import jsonify
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
@@ -20,6 +21,7 @@ def update_cache():
     get_level.invalidate_all()
     get_level_info.invalidate_all()
     get_shape_centroid.invalidate_all()
+    get_shape_by_ident.invalidate_all()
 
 def upload_shapes():
     try:
@@ -297,3 +299,19 @@ def get_shape_centroid(ident, parent, level):
             return [mapping(centroid)]
     except Exception as e:
         raise Exception(f'Error al obtener el centroide de la forma {ident}')
+    
+@cacheHandler.cache.cache(limit=5000)
+def get_shape_by_ident(ident, parent, level):
+    try:
+        filters = {
+            'properties.admin_level': level,
+            'properties.ident': ident
+        }
+        if parent:
+            filters['properties.parent'] = parent
+            
+        record = mongodb.get_record('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1, 'type': 1})
+        record.pop('_id')
+        return record, 200
+    except Exception as e:
+        raise Exception(f'Error al obtener la forma {ident}')

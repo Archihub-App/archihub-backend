@@ -208,6 +208,7 @@ def get_resource(id):
                             continue
                     
                     articleBody = favorite['articleBody'] if 'articleBody' in favorite else []
+                    contentArticle = ''
                     for p in articleBody:
                         if 'type' in p and p['type'] == 'paragraph':
                             if 'content' in p:
@@ -216,15 +217,16 @@ def get_resource(id):
                                 
 
                                 content = strip_html(p['content'])
-                                if favorite['articleBody'] == '':
-                                    favorite['articleBody'] += content
+                                if contentArticle == '':
+                                    contentArticle += content
                                 else:
-                                    favorite['articleBody'] += ' ' + content
+                                    contentArticle += ' ' + content
                                     
-                                    if len(favorite['articleBody']) > 300:
-                                        favorite['articleBody'] = favorite['articleBody'][:300]
-                                        break
+                                if len(contentArticle) > 300:
+                                    contentArticle = contentArticle[:300]
+                                    break
                     
+                    favorite['articleBody'] = contentArticle
                     files = favorite['filesObj'] if 'filesObj' in favorite else None
                     imagesFiles = []
                     imagePath = None

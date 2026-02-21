@@ -11,7 +11,7 @@ class View(BaseModel):
     root: str
     visible: list[str]
     defaultView: str = 'list'
-    thumbnail: Optional[str] = None
+    filesObj: Optional[list[dict]] = None
 
     class Config:
         populate_by_name = True
@@ -29,7 +29,7 @@ class ViewUpdate(BaseModel):
     root: Optional[str] = None
     visible: Optional[list[str]] = None
     defaultView: Optional[str] = None
-    thumbnail: Optional[str] = None
+    filesObj: Optional[list[dict]] = None
     slug: Optional[str] = None
 
     class Config:

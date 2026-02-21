@@ -217,12 +217,16 @@ def delete_parent(resource_id, parent_id, current_user):
         record['parent'] = [x for x in record['parent']
                             if x['id'] != resource_id]
 
-        array_parent = set(x['id'] for x in record['parent'])
-
         array_parents_temp = []
         # iterar sobre parent y en un nuevo array ir guardando los padres de cada parent
-        for p in array_parent:
-            r = mongodb.get_record('resources', {'_id': ObjectId(p)})
+        for p in record['parent']:
+            if not isinstance(p, dict) or 'id' not in p:
+                continue
+
+            if p.get('post_type') == 'view':
+                continue
+
+            r = mongodb.get_record('resources', {'_id': ObjectId(p['id'])})
 
             if r:
                 # se agregan los parents a array_parents si no estan ya en el array. Cada parent en el array_parents es del tipo {id: id, post_type: post_type}
@@ -243,7 +247,7 @@ def delete_parent(resource_id, parent_id, current_user):
 
         # Actualizar el record
         update = FileRecordUpdate(**{
-            'parent': array_parent,
+            'parent': record['parent'],
             'parents': array_parents,
             'status': status,
             'updatedBy': current_user if current_user else 'system',
@@ -277,13 +281,19 @@ def update_parent(parent_id, current_user, parents):
 
 
 # Nuevo servicio para crear un record para un recurso
-def create(resource_id, current_user, files, upload=True, filesTags=None):
+def create(resource_id, current_user, files, upload=True, filesTags=None, parent_data=None):
     # Buscar el recurso en la base de datos
-    resource = mongodb.get_record('resources', {'_id': ObjectId(
-        resource_id)}, fields={'parents': 1, 'post_type': 1})
-    # Si el recurso no existe, retornar error
-    if not resource:
-        raise Exception(_('Resource does not exist'))
+    if parent_data:
+        resource = {
+            'parents': parent_data.get('parents', []),
+            'post_type': parent_data.get('post_type', 'resource')
+        }
+    else:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(
+            resource_id)}, fields={'parents': 1, 'post_type': 1})
+        # Si el recurso no existe, retornar error
+        if not resource:
+            raise Exception(_('Resource does not exist'))
 
     resp = []
     index = 0

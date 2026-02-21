@@ -5,14 +5,91 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from bson.objectid import ObjectId
 from flask_babel import _
+from app.api.records.services import create as create_record
+from app.api.records.services import delete_parent
+import os
+import base64
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 def update_cache():
     get.invalidate_all()
     get_view_info.invalidate_all()
     get_all.invalidate_all()
+
+
+def _is_image_upload(file):
+    mime = getattr(file, 'mimetype', None)
+    if mime and 'image' in mime:
+        return True
+
+    filename = getattr(file, 'filename', '') or ''
+    ext = os.path.splitext(filename)[1].lower()
+    return ext in ['.jpg', '.jpeg', '.png', '.gif', '.tif', '.tiff', '.heic', '.bmp', '.webp']
+
+
+def _process_uploaded_record(record_id):
+    record = mongodb.get_record('records', {'_id': ObjectId(record_id)}, fields={'mime': 1, 'filepath': 1, 'processing.fileProcessing.type': 1})
+    if not record:
+        return {'msg': _('Record does not exist')}, 404
+
+    if 'mime' not in record or not record['mime'] or 'image' not in record['mime']:
+        return {'msg': _('Only image files are allowed for views')}, 400
+
+    from app.plugins.filesProcessing import process_file, ExtendedPluginClass, plugin_info
+    instance = ExtendedPluginClass('filesProcessing', '', isTask=True, **plugin_info)
+    process_file({'_id': ObjectId(record_id), 'mime': record['mime'], 'filepath': record['filepath']}, instance)
+
+    processed = mongodb.get_record('records', {'_id': ObjectId(record_id)}, fields={'processing.fileProcessing.type': 1})
+    processed_type = processed.get('processing', {}).get('fileProcessing', {}).get('type') if processed else None
+    if processed_type != 'image':
+        return {'msg': _('File processing failed for image')}, 500
+
+    return None
+
+
+def _get_thumbnail_from_files_obj(files_obj):
+    if not files_obj or not isinstance(files_obj, list):
+        return None
+
+    thumbnail_file = next((f for f in files_obj if isinstance(f, dict) and f.get('tag') == 'thumbnail'), None)
+    if not thumbnail_file:
+        thumbnail_file = next((f for f in files_obj if isinstance(f, dict) and f.get('id')), None)
+
+    if not thumbnail_file or 'id' not in thumbnail_file:
+        return None
+
+    try:
+        record = mongodb.get_record(
+            'records',
+            {'_id': ObjectId(thumbnail_file['id'])},
+            fields={'processing.fileProcessing.path': 1, 'processing.fileProcessing.type': 1}
+        )
+    except Exception:
+        return None
+
+    if not record:
+        return None
+
+    file_processing = record.get('processing', {}).get('fileProcessing', {})
+    if file_processing.get('type') != 'image' or 'path' not in file_processing:
+        return None
+
+    image_path = os.path.join(WEB_FILES_PATH, file_processing['path'] + '_medium.jpg')
+    if not os.path.exists(image_path):
+        return None
+
+    with open(image_path, 'rb') as image_file:
+        return 'data:image/jpeg;base64,' + base64.b64encode(image_file.read()).decode('utf-8')
+
+
+def _map_view_thumbnail(view):
+    view['thumbnail'] = _get_thumbnail_from_files_obj(view.get('filesObj'))
+    if 'filesObj' in view:
+        view.pop('filesObj')
+    return view
 
 @cacheHandler.cache.cache()
 def get(id, user):
@@ -21,13 +98,14 @@ def get(id, user):
     if not view:
         return {'msg': _('View not found')}, 404
     
+    _map_view_thumbnail(view)
     view.pop('_id')
 
     return view, 200
 
 @cacheHandler.cache.cache()
 def get_view_info(view_slug):
-    view = mongodb.get_record('views', {'slug': view_slug})
+    view = mongodb.get_record('views', {'slug': view_slug}, fields={'name': 1, 'description': 1, 'parent': 1, 'root': 1, 'visible': 1, 'defaultView': 1})
 
     forms = []
     fields= []
@@ -108,9 +186,44 @@ def get_view_info(view_slug):
     
     return view, 200
 
-def update(id, body, user):
+def update(id, body, user, files):
     try:
-        view = ViewUpdate(**body)
+        if files and len(files) > 1:
+            return {'msg': _('A view can only have one file')}, 400
+
+        if files and len(files) == 1 and not _is_image_upload(files[0]):
+            return {'msg': _('Only image files are allowed for views')}, 400
+
+        current_view = mongodb.get_record('views', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+        if not current_view:
+            return {'msg': _('View not found')}, 404
+
+        update_body = {**body}
+
+        if files and len(files) == 1:
+            if 'filesObj' in current_view and current_view['filesObj']:
+                for file_obj in current_view['filesObj']:
+                    if 'id' in file_obj:
+                        resp = delete_parent(id, file_obj['id'], user)
+                        if isinstance(resp, tuple) and len(resp) == 2 and resp[1] != 200:
+                            return resp
+
+            records = create_record(
+                id,
+                user,
+                files,
+                filesTags=[{'filetag': 'thumbnail'}],
+                parent_data={'post_type': 'view', 'parents': []}
+            )
+
+            process_error = _process_uploaded_record(records[0]['id'])
+            if process_error:
+                delete_parent(id, records[0]['id'], user)
+                return process_error
+
+            update_body['filesObj'] = records[:1]
+
+        view = ViewUpdate(**update_body)
         view_updated = mongodb.update_record('views', {'_id': ObjectId(id)}, view)
         update_cache()
 
@@ -128,14 +241,50 @@ def update(id, body, user):
 def get_all():
     views = mongodb.get_all_records('views', {}, [('name', 1), ('description', 1), ('slug', 1)])
 
-    resp = [{ 'name': view['name'], 'id': str(view['_id']), 'description': view['description'], 'slug': view['slug'] } for view in views]
+    resp = []
+    for view in views:
+        _map_view_thumbnail(view)
+        resp.append({
+            'name': view['name'],
+            'id': str(view['_id']),
+            'description': view['description'],
+            'slug': view['slug'],
+            'thumbnail': view.get('thumbnail')
+        })
 
     return resp, 200
 
-def create(body, user):
+def create(body, user, files):
     try:
+        if files and len(files) > 1:
+            return {'msg': _('A view can only have one file')}, 400
+
+        if files and len(files) == 1 and not _is_image_upload(files[0]):
+            return {'msg': _('Only image files are allowed for views')}, 400
+
+        if 'filesObj' not in body:
+            body['filesObj'] = []
+
         view = View(**body)
         view_created = mongodb.insert_record('views', view)
+
+        if files and len(files) == 1:
+            records = create_record(
+                str(view_created.inserted_id),
+                user,
+                files,
+                filesTags=[{'filetag': 'thumbnail'}],
+                parent_data={'post_type': 'view', 'parents': []}
+            )
+
+            process_error = _process_uploaded_record(records[0]['id'])
+            if process_error:
+                delete_parent(str(view_created.inserted_id), records[0]['id'], user)
+                mongodb.delete_record('views', {'_id': ObjectId(view_created.inserted_id)})
+                return process_error
+
+            update = ViewUpdate(**{'filesObj': records[:1]})
+            mongodb.update_record('views', {'_id': ObjectId(view_created.inserted_id)}, update)
 
         update_cache()
 
@@ -151,6 +300,14 @@ def create(body, user):
     
 def delete(id, user):
     try:
+        view = mongodb.get_record('views', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+        if view and 'filesObj' in view and view['filesObj']:
+            for file_obj in view['filesObj']:
+                if 'id' in file_obj:
+                    resp = delete_parent(id, file_obj['id'], user)
+                    if isinstance(resp, tuple) and len(resp) == 2 and resp[1] != 200:
+                        return resp
+
         view_deleted = mongodb.delete_record('views', {'_id': ObjectId(id)})
 
         log = {

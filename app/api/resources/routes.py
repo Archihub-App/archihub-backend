@@ -272,6 +272,28 @@ def update_by_id(id):
     else:
         return resp
     # return 'ok'
+
+@bp.route('/<id>/granular', methods=['PUT'])
+@jwt_required()
+def update_granular_by_id(id):
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+
+    # Si el usuario no es admin, editor o super_editor, retornar error
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'super_editor'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    body = request.json or {}
+    metadata_path = body.get('metadataPath')
+    value = body.get('value', '')
+    concat = body.get('concat', False)
+
+    resp = services.update_granular_by_id(id, metadata_path, value, current_user, concat)
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
     
 @bp.route('/updateorder/<id>', methods=['POST'])
 @jwt_required()
