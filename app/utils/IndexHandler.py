@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from app.utils.functions import get_access_rights
 from flask_babel import _
+from app.utils import HookHandler
 
 
 ELASTIC_USER = os.environ.get('ELASTIC_USER', '')
@@ -14,6 +15,8 @@ ELASTIC_DOMAIN = os.environ.get('ELASTIC_DOMAIN', '')
 ELASTIC_PORT = os.environ.get('ELASTIC_PORT', '')
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 ELASTIC_CERT = os.environ.get('ELASTIC_CERT', '')
+
+hookHandler = HookHandler.HookHandler()
 
 class IndexHandler:
     _instance = None
@@ -75,8 +78,13 @@ class IndexHandler:
         else:
             from .index.spanish_settings import settings as _settings
             json['settings'] = _settings
+        
         if mapping:
             json['mappings'] = mapping
+            
+        json_temp = hookHandler.call('index_create', json)
+        if json_temp:
+            json = json_temp
 
         if self.ssl_context:
             response = requests.put(url, json=json, auth=HTTPBasicAuth(
@@ -85,7 +93,6 @@ class IndexHandler:
             response = requests.put(url, json=json, auth=HTTPBasicAuth(
             ELASTIC_USER, ELASTIC_PASSWORD))
         
-        print(response.json())
         return response.json()
 
     def add_to_alias(self, alias, index):
