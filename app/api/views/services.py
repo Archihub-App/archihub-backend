@@ -146,7 +146,8 @@ def get_view_info(view_slug):
             'slug': v,
             'description': pt['description'],
             'name': pt['name'],
-            'icon': pt['icon']
+            'icon': pt['icon'],
+            'form': pt['form']
         })
 
     view.pop('_id')

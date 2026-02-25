@@ -99,6 +99,7 @@ def get_by_slug(slug):
         post_type['parentsTypes'] = parents
         # Si el campo metadata es un string y es distinto a '', recuperar el formulario con ese slug
         if type(post_type['metadata']) == str and post_type['metadata'] != '':
+            post_type['form'] = post_type['metadata']
             post_type['metadata'] = get_form_by_slug(post_type['metadata'])
             # dejar solo los campos name y slug del formulario
             post_type['metadata'] = {'name': post_type['metadata']['name'],
