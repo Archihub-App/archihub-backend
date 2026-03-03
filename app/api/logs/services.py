@@ -168,3 +168,6 @@ def get_logs(body, resource_id):
         return changes, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+def get_log_actions():
+    return LogActions.log_actions, 200
