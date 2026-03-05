@@ -10,7 +10,7 @@ from app.utils.FernetAuth import fernetAuthenticate
 # En este archivo se registran las rutas de la API para los logs
 
 
-@bp.route('/logactions', methods=['GET'])
+@bp.route('/actions', methods=['GET'])
 @jwt_required()
 def get_log_actions():
     """

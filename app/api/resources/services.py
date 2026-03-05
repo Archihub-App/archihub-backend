@@ -649,7 +649,7 @@ def update_granular_by_id(id, metadata_path, value, user, concat = False, update
         if not updated_resources:
             return {'msg': _('No parent resource contains the requested text field')}, 400
 
-        register_log(user, log_actions['resource_update'], {
+        register_log(user, log_actions['resource_granular_update'], {
             'record': id,
             'metadataPath': metadata_path,
             'concat': concat,
