@@ -1864,11 +1864,14 @@ def delete_by_id(id, user):
         if 'files' in resource:
             records_list = resource['files']
             delete_records(records_list, id, user)
-
-
-        delete_children(id)
-        # Eliminar el recurso de la base de datos
-        deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})
+        delete_children(id, user)
+        # Marcar el recurso como eliminado en la base de datos
+        update = ResourceUpdate(**{
+            'status': 'deleted',
+            'updatedAt': datetime.now(),
+            'updatedBy': user if user else 'system'
+        })
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
 
         hookHandler.call('resource_delete', {'_id': id})
         # Eliminar los hijos del recurso
@@ -2207,14 +2210,14 @@ def update_records_parents(id, user):
 # Funcion para eliminar los hijos recursivamente
 
 
-def delete_children(id):
+def delete_children(id, user=None):
     try:
         # Hijos directos del recurso
         children = get_direct_children(id)
         # Si el recurso tiene hijos directos, eliminar cada hijo
         if children:
             for child in children:
-                delete_children(child['id'])
+                delete_children(child['id'], user)
                 # buscar el recurso en la base de datos
                 resource = mongodb.get_record(
                     'resources', {'_id': ObjectId(child['id'])}, fields={'files': 1})
@@ -2223,9 +2226,14 @@ def delete_children(id):
                     records_list = resource['filesObj']
                     records_list = [r['id'] for r in records_list]
                     delete_records(records_list, child['id'], None)
-                # eliminar el recurso de la base de datos
-                mongodb.delete_record(
-                    'resources', {'_id': ObjectId(child['id'])})
+                # marcar el recurso hijo como eliminado en la base de datos
+                update = ResourceUpdate(**{
+                    'status': 'deleted',
+                    'updatedAt': datetime.now(),
+                    'updatedBy': user if user else 'system'
+                })
+                mongodb.update_record(
+                    'resources', {'_id': ObjectId(child['id'])}, update)
                 
                 hookHandler.call('resource_delete', {'_id': child['id']})
 
