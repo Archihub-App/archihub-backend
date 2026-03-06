@@ -349,10 +349,10 @@ def update_file_order(id):
     else:
         return resp
 
-# Nuevo endpoint para eliminar un recurso por su id
-@bp.route('/<id>', methods=['DELETE'])
+# Nuevo endpoint para eliminar recursos por arreglo de ids
+@bp.route('', methods=['DELETE'])
 @jwt_required()
-def delete_by_id(id):
+def delete_by_id():
     """
     Eliminar un recurso por su id
     ---
@@ -360,11 +360,13 @@ def delete_by_id(id):
         - JWT: []
     tags:
         - Recursos
-    parameters:
-        - in: path
-          name: id
-          schema:
-            type: string
+        parameters:
+                - in: body
+                    name: body
+                    schema:
+                        type: array
+                        items:
+                                type: string
     responses:
         200:
             description: Recurso eliminado exitosamente
@@ -378,8 +380,15 @@ def delete_by_id(id):
     # Si el usuario no es admin, editor o super_editor, retornar error
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'super_editor'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
-    # Llamar al servicio para eliminar el recurso
-    return services.delete_by_id(id, current_user)
+
+    body = request.json
+    if not isinstance(body, list):
+        return jsonify({'msg': _('Body must be an array of resource ids')}), 400
+
+    if any(not isinstance(item, str) for item in body):
+        return jsonify({'msg': _('Body must be an array of string ids')}), 400
+
+    return services.delete_by_id(body, current_user)
 
 # Nuevo endpoint para obtener las estructura de arból de un tipo de contenido y sus recursos
 @bp.route('/tree', methods=['POST'])

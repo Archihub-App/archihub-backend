@@ -1832,59 +1832,65 @@ def delete_inventory_files():
         print(str(e))
         return {'msg': str(e)}, 500
 
-# Nuevo servicio para eliminar un recurso
-def delete_by_id(id, user):
+# Nuevo servicio para eliminar recursos por un arreglo de ids
+def delete_by_id(ids, user):
     try:
-        post_type = get_resource_type(id)
-        post_type_roles = cache_type_roles(post_type)
+        if not isinstance(ids, list):
+            return {'msg': _('A list of resource ids is required')}, 400
 
-        if post_type_roles['editRoles']:
-            canEdit = False
-            for r in post_type_roles['editRoles']:
-                if has_role(user, r) or has_role(user, 'admin'):
-                    canEdit = True
-                    break
-            if not canEdit:
+        deleted_ids = []
+
+        for id in ids:
+            post_type = get_resource_type(id)
+            post_type_roles = cache_type_roles(post_type)
+
+            if post_type_roles['editRoles']:
+                canEdit = False
+                for r in post_type_roles['editRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canEdit = True
+                        break
+                if not canEdit:
+                    return {'msg': _('You don\'t have the required authorization')}, 401
+            
+            if post_type_roles['viewRoles']:
+                canView = False
+                for r in post_type_roles['viewRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canView = True
+                        break
+                if not canView:
+                    return {'msg': _('You don\'t have the required authorization')}, 401
+
+            resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+            if not resource:
+                return {'msg': _('Resource does not exist')}, 404
+            
+            if resource['createdBy'] != user and not has_role(user, 'admin') and not has_role(user, 'super_editor'):
                 return {'msg': _('You don\'t have the required authorization')}, 401
-        
-        if post_type_roles['viewRoles']:
-            canView = False
-            for r in post_type_roles['viewRoles']:
-                if has_role(user, r) or has_role(user, 'admin'):
-                    canView = True
-                    break
-            if not canView:
-                return {'msg': _('You don\'t have the required authorization')}, 401
+            
+            if 'files' in resource:
+                records_list = resource['files']
+                delete_records(records_list, id, user)
+            delete_children(id, user)
 
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
-        
-        if resource['createdBy'] != user and not has_role(user, 'admin') and not has_role(user, 'super_editor'):
-            return {'msg': _('You don\'t have the required authorization')}, 401
-        
-        if 'files' in resource:
-            records_list = resource['files']
-            delete_records(records_list, id, user)
-        delete_children(id, user)
-        
-        # Marcar el recurso como eliminado en la base de datos
-        update = ResourceUpdate(**{
-            'status': 'deleted',
-            'updatedAt': datetime.now(),
-            'updatedBy': user if user else 'system'
-        })
-        mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
+            update = ResourceUpdate(**{
+                'status': 'deleted',
+                'updatedAt': datetime.now(),
+                'updatedBy': user if user else 'system'
+            })
+            mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
 
-        hookHandler.call('resource_delete', {'_id': id})
-        # Eliminar los hijos del recurso
-        # Registrar el log
-        register_log(user, log_actions['resource_delete'], {'resource': id})
-        # limpiar la cache
+            hookHandler.call('resource_delete', {'_id': id})
+            register_log(user, log_actions['resource_delete'], {'resource': id})
+            deleted_ids.append(id)
+
         update_cache()
 
-        # Retornar el resultado
-        return {'msg': _('Resource deleted')}, 200
+        return {'msg': _('Resources deleted'), 'ids': deleted_ids}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+
     
 @cacheHandler.cache.cache()
 def get_resource_images(id, user):
