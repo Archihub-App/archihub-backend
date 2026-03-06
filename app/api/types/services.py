@@ -1,6 +1,7 @@
 from flask import jsonify
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import HookHandler
 from bson import json_util
 import json
 from app.api.types.models import PostType
@@ -16,6 +17,7 @@ from datetime import datetime
 
 cacheHandler = CacheHandler.CacheHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
+hookHandler = HookHandler.HookHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 
@@ -166,6 +168,10 @@ def delete_by_slug(slug, user):
         'name': post_type['name'],
         'slug': post_type['slug'],
     }})
+
+    hookHandler.call('resources_update_by_filters', {
+        'slug': slug
+    })
     # Limpiar la cache
     update_cache()
     # Retornar el resultado

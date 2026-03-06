@@ -33,8 +33,8 @@ cacheHandler = CacheHandler.CacheHandler()
 def hookHandlerIndex():
     hookHandler.register('resource_create', index_resources_task, queue=101)
     hookHandler.register('resource_update', index_resources_task, queue=101)
-    hookHandler.register(
-        'resource_delete', index_resources_delete_task, queue=101)
+    hookHandler.register('resource_delete', index_resources_delete_task, queue=101)
+    hookHandler.register('resources_update_by_filter', index_resources_task, queue=101)
 
 
 def hookHandlerVector():

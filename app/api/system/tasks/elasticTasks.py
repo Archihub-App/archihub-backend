@@ -91,6 +91,8 @@ def index_resources_task(body={}):
     loop = True
     if '_id' in body:
         filters['_id'] = ObjectId(body['_id'])
+    else:
+        filters = body
 
     resources = list(mongodb.get_all_records(
         'resources', filters, limit=1000, skip=skip))
