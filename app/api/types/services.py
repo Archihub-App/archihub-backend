@@ -12,6 +12,7 @@ from app.api.system.services import get_access_rights_id
 from app.utils.functions import verify_role_exists
 from app.utils.functions import clear_cache
 from flask_babel import _
+from datetime import datetime
 
 cacheHandler = CacheHandler.CacheHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -154,8 +155,12 @@ def delete_by_slug(slug, user):
         return {'msg': _('Post type not found')}, 404
     # Eliminar el tipo de post
     mongodb.delete_record('post_types', {'slug': slug})
-    # Eliminar todos los recursos del tipo de post
-    mongodb.delete_records('resources', {'post_type': slug})
+    # Marcar todos los recursos del tipo de post como eliminados
+    mongodb.update_records('resources', {'post_type': slug}, {
+        'status': 'deleted',
+        'updatedAt': datetime.now(),
+        'updatedBy': user if user else 'system'
+    })
     # Registrar el log
     register_log(user, log_actions['type_delete'], {'post_type': {
         'name': post_type['name'],

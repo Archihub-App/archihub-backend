@@ -1865,6 +1865,7 @@ def delete_by_id(id, user):
             records_list = resource['files']
             delete_records(records_list, id, user)
         delete_children(id, user)
+        
         # Marcar el recurso como eliminado en la base de datos
         update = ResourceUpdate(**{
             'status': 'deleted',

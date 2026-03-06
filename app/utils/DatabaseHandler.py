@@ -35,6 +35,10 @@ class DatabaseHandler:
     # Esta función sirve para actualizar un registro de una colección dado un filtro y un modelo de actualización. El modelo de actualización debe ser un pydantic model
     def update_record(self, collection, filters, update_model):
         return self.mydb[collection].update_one(filters, {'$set': update_model.dict(exclude_unset=True)})
+
+    # Esta función sirve para actualizar varios registros de una colección dado un filtro y un diccionario de actualización
+    def update_records(self, collection, filters, update_fields):
+        return self.mydb[collection].update_many(filters, {'$set': update_fields})
     
     # Esta función sirve para ejecutar un operador de mongodb en un registro de una colección
     def update_record_operator(self, collection, filters, operator):
