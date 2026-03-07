@@ -1215,7 +1215,6 @@ def get_resource(id, user, postQuery = False):
             if resource['createdBy'] != user and not has_role(user, 'editor'):
                 raise Exception(_('You don\'t have the required authorization'))
         
-    # Registrar el log
     resource['_id'] = str(resource['_id'])
     
     if 'parents' in resource:
@@ -1232,7 +1231,6 @@ def get_resource(id, user, postQuery = False):
                                             'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
 
     children = []
-    
 
     for c in resource['children']:
         c_ = mongodb.get_record('post_types', {'slug': c})
@@ -1433,7 +1431,7 @@ def get_resource(id, user, postQuery = False):
             
 
     resource['fields'] = temp
-    
+
     if postQuery:
         resource_tmp = hookHandler.call('get_resource_post', resource)
         if resource_tmp:
@@ -1442,6 +1440,7 @@ def get_resource(id, user, postQuery = False):
         if isArticle:
             resource['articleBody'] = get_article_body(resource['_id'], None)
             resource['articleBody'] = resource['articleBody'][0]['articleBody']
+            resource['articleBody'] = [] if resource['articleBody'] is None else resource['articleBody']
             
             for b in resource['articleBody']:
                 if b['type'] == 'uploadedRecords':
