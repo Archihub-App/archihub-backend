@@ -390,6 +390,62 @@ def delete_by_id():
 
     return services.delete_by_id(body, current_user)
 
+# Nuevo endpoint para restaurar recursos por arreglo de ids
+@bp.route('/restore', methods=['POST'])
+@jwt_required()
+def restore_by_id():
+    """
+    Restaurar recursos eliminados por un arreglo de ids
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                ids:
+                    type: array
+                    items:
+                        type: string
+                recursive:
+                    type: boolean
+    responses:
+        200:
+            description: Recursos restaurados exitosamente
+        400:
+            description: Error de validación en el body
+        401:
+            description: No tiene permisos para restaurar recursos
+        500:
+            description: Error al restaurar recursos
+    """
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    body = request.json
+    if not isinstance(body, dict):
+        return jsonify({'msg': _('Body must be an object with ids and recursive')}), 400
+
+    ids = body.get('ids')
+    recursive = body.get('recursive', False)
+
+    if not isinstance(ids, list):
+        return jsonify({'msg': _('ids must be an array of resource ids')}), 400
+
+    if any(not isinstance(item, str) for item in ids):
+        return jsonify({'msg': _('ids must be an array of string ids')}), 400
+
+    if not isinstance(recursive, bool):
+        return jsonify({'msg': _('recursive must be a boolean')}), 400
+
+    return services.restore_by_id(ids, current_user, recursive)
+
 # Nuevo endpoint para obtener las estructura de arból de un tipo de contenido y sus recursos
 @bp.route('/tree', methods=['POST'])
 @jwt_required()

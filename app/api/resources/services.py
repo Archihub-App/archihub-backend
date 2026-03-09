@@ -25,6 +25,7 @@ from app.api.records.services import delete_parent
 from app.api.records.services import update_parent
 from app.api.records.services import update_record
 from app.api.records.services import create as create_record
+from app.api.records.models import RecordUpdate as FileRecordUpdate
 from app.api.system.services import get_access_rights
 from app.api.users.services import has_right, has_role
 from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
@@ -1831,6 +1832,109 @@ def delete_inventory_files():
         print(str(e))
         return {'msg': str(e)}, 500
 
+def _dedupe_parent_list(parents):
+    if not parents:
+        return []
+
+    unique_parents = []
+    seen_ids = set()
+
+    for parent in parents:
+        if not isinstance(parent, dict) or 'id' not in parent:
+            continue
+        if parent['id'] in seen_ids:
+            continue
+        unique_parents.append(parent)
+        seen_ids.add(parent['id'])
+
+    return unique_parents
+
+def _restore_files_for_resource(resource_id, resource, user):
+    records = resource.get('filesObj', [])
+    if not records:
+        return
+
+    for record_ref in records:
+        if not isinstance(record_ref, dict) or 'id' not in record_ref:
+            continue
+
+        record_id = record_ref['id']
+        record = mongodb.get_record('records', {'_id': ObjectId(record_id)}, fields={'parent': 1, 'parents': 1, 'status': 1, 'processing': 1})
+        if not record:
+            continue
+
+        current_parent = record.get('parent', [])
+        if isinstance(current_parent, dict):
+            current_parent = [current_parent]
+
+        new_parent = [{
+            'id': resource_id,
+            'post_type': resource['post_type']
+        }, *current_parent]
+        new_parent = _dedupe_parent_list(new_parent)
+
+        new_parents = [*(resource.get('parents') or []), *(record.get('parents') or [])]
+        new_parents = _dedupe_parent_list(new_parents)
+
+        update_dict = {
+            'parent': new_parent,
+            'parents': new_parents,
+            'updatedBy': user if user else 'system',
+            'updatedAt': datetime.now()
+        }
+
+        if record.get('status') == 'deleted':
+            if 'processing' in record and isinstance(record['processing'], dict) and 'files' in record['processing'] and len(record['processing']['files']) > 0:
+                update_dict['status'] = 'processed'
+            else:
+                update_dict['status'] = 'uploaded'
+
+        update = FileRecordUpdate(**update_dict)
+        mongodb.update_record('records', {'_id': ObjectId(record_id)}, update)
+
+def _restore_resource(resource_id, user):
+    resource = mongodb.get_record('resources', {'_id': ObjectId(resource_id)}, fields={'status': 1, 'post_type': 1, 'parents': 1, 'filesObj': 1})
+    if not resource:
+        return {'msg': _('Resource does not exist')}, 404
+
+    if resource.get('status') != 'deleted':
+        return {'msg': _('Resource must have deleted status to be restored'), 'id': resource_id}, 400
+
+    _restore_files_for_resource(resource_id, resource, user)
+
+    update = ResourceUpdate(**{
+        'status': 'draft',
+        'updatedAt': datetime.now(),
+        'updatedBy': user if user else 'system'
+    })
+    mongodb.update_record('resources', {'_id': ObjectId(resource_id)}, update)
+
+    register_log(user, log_actions['resource_update'], {'resource': resource_id, 'status': 'draft'})
+    return None
+
+def _restore_deleted_children(parent_id, excluded_ids, user, restored_ids, visited):
+    if parent_id in visited:
+        return
+
+    visited.add(parent_id)
+    children = get_direct_children(parent_id)
+
+    if not children:
+        return
+
+    for child in children:
+        child_id = child['id']
+
+        if child_id not in excluded_ids:
+            child_resource = mongodb.get_record('resources', {'_id': ObjectId(child_id)}, fields={'status': 1})
+            if child_resource and child_resource.get('status') == 'deleted':
+                resp = _restore_resource(child_id, user)
+                if resp:
+                    continue
+                restored_ids.add(child_id)
+
+        _restore_deleted_children(child_id, excluded_ids, user, restored_ids, visited)
+
 # Nuevo servicio para eliminar recursos por un arreglo de ids
 def delete_by_id(ids, user):
     try:
@@ -1887,6 +1991,52 @@ def delete_by_id(ids, user):
         update_cache()
 
         return {'msg': _('Resources deleted'), 'ids': deleted_ids}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def restore_by_id(ids, user, recursive=False):
+    try:
+        if not isinstance(ids, list):
+            return {'msg': _('A list of resource ids is required')}, 400
+
+        restored_ids = set()
+        requested_ids = set(ids)
+        visited = set()
+
+        for id in ids:
+            post_type = get_resource_type(id)
+            post_type_roles = cache_type_roles(post_type)
+
+            if post_type_roles['editRoles']:
+                canEdit = False
+                for r in post_type_roles['editRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canEdit = True
+                        break
+                if not canEdit:
+                    return {'msg': _('You don\'t have the required authorization')}, 401
+
+            if post_type_roles['viewRoles']:
+                canView = False
+                for r in post_type_roles['viewRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canView = True
+                        break
+                if not canView:
+                    return {'msg': _('You don\'t have the required authorization')}, 401
+
+            resp = _restore_resource(id, user)
+            if resp:
+                return resp
+
+            restored_ids.add(id)
+
+            if recursive:
+                _restore_deleted_children(id, requested_ids, user, restored_ids, visited)
+
+        update_cache()
+
+        return {'msg': _('Resources restored'), 'ids': list(restored_ids)}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
