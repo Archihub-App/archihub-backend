@@ -150,7 +150,14 @@ def get_default_cataloging_type():
             (d for d in post_types_settings['data'] if d.get('id') == 'tipo_defecto'), None)
 
         if not default_setting:
-            return {'msg': gettext(u'There is no default cataloging type')}, 404
+            default_setting = {
+                'id': 'tipo_defecto',
+                'value': valid_post_types[0]
+            }
+            post_types_settings['data'].append(default_setting)
+            update = OptionUpdate(**{'data': post_types_settings['data']})
+            mongodb.update_record('system', {'name': 'post_types_settings'}, update)
+            return {'value': default_setting['value']}, 200
 
         selected_post_type = default_setting.get('value')
 
