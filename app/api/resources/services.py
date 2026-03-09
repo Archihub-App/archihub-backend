@@ -1909,7 +1909,7 @@ def _restore_resource(resource_id, user):
     })
     mongodb.update_record('resources', {'_id': ObjectId(resource_id)}, update)
 
-    register_log(user, log_actions['resource_update'], {'resource': resource_id, 'status': 'draft'})
+    register_log(user, log_actions['resource_restore'], {'resource': resource_id, 'status': 'draft'})
     return None
 
 def _restore_deleted_children(parent_id, excluded_ids, user, restored_ids, visited):
