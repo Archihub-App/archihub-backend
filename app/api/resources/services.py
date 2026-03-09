@@ -85,6 +85,9 @@ def change_value(body, route, value):
 def parse_result(result):
     return json.loads(json_util.dumps(result))
 
+def can_view_deleted(user):
+    return has_role(user, 'admin')
+
 # Function to extract IDs from uploaded records content
 def extract_uploaded_records_ids(content):
     if not content:
@@ -247,7 +250,12 @@ def get_all(body, user):
             if body['files']:
                 filters['filesObj'] = {'$exists': True, '$ne': []}
 
-        filters['status'] = body['status']
+        requested_status = body['status']
+
+        if requested_status == 'deleted' and not can_view_deleted(user):
+            return {'msg': _('You don\'t have the required authorization')}, 401
+
+        filters['status'] = requested_status
 
         if filters['status'] == 'draft':
             filters.pop('status')
@@ -1134,6 +1142,13 @@ def validate_files(files, metadata, errors):
 # Nuevo servicio para obtener un recurso por su id
 def get_by_id(id, user, postQuery = False):
     try:
+        resource_status = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'status': 1})
+        if not resource_status:
+            return {'msg': _('Resource does not exist')}, 404
+
+        if resource_status.get('status') == 'deleted' and not can_view_deleted(user):
+            return {'msg': _('You don\'t have the required authorization')}, 401
+
         # Obtener los accessRights del recurso
         accessRights = get_accessRights(id)
         if accessRights:
@@ -1205,6 +1220,9 @@ def get_resource(id, user, postQuery = False):
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception(_('Resource does not exist'))
+
+    if resource.get('status') == 'deleted' and not can_view_deleted(user):
+        raise Exception(_('You don\'t have the required authorization'))
     
     post_type = resource['post_type']
     post_type = get_by_slug(post_type)
@@ -2065,8 +2083,13 @@ def get_resource_images(id, user):
 
 # Funcion para obtener los hijos de un recurso
 @cacheHandler.cache.cache(limit=3000)
-def get_children(id, available, resp=False, post_type=None, status='published'):
+def get_children(id, available, resp=False, post_type=None, status='published', user=None):
     try:
+        if status == 'deleted' and not can_view_deleted(user):
+            if not resp:
+                return False
+            return []
+
         list_available = available.split('|')
         if post_type:
             list_available = [post_type]
@@ -2132,6 +2155,10 @@ def get_tree(root, available, user, post_type=None, page=None, status='published
         status_ = 'published'
         if status == 'draft':
             status_ = {'$in': ['draft', 'published']}
+        elif status == 'deleted':
+            if not can_view_deleted(user):
+                return {'msg': _('You don\'t have the required authorization')}, 401
+            status_ = 'deleted'
 
         if root == 'all':
             if page is not None:
@@ -2155,7 +2182,7 @@ def get_tree(root, available, user, post_type=None, page=None, status='published
             re['_id'])} for re in resources]
         
         for resource in resources:
-            resource['children'] = get_children(resource['id'], available, False, post_type, status=status)
+            resource['children'] = get_children(resource['id'], available, False, post_type, status=status, user=user)
             resource['icon'] = get_icon(resource['post_type'])
             resource['type'] = get_by_slug(resource['post_type'])
             name = resource['type']['name']
