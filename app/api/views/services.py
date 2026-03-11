@@ -146,7 +146,8 @@ def get_view_info(view_slug):
             'slug': v,
             'description': pt['description'],
             'name': pt['name'],
-            'icon': pt['icon']
+            'icon': pt['icon'],
+            'form': pt['form']
         })
 
     view.pop('_id')
@@ -228,7 +229,11 @@ def update(id, body, user, files):
         update_cache()
 
         log = {
-            'data': view_updated.raw_result
+            'data': {
+                'id': id,
+                'updated_fields': list(body.keys()),
+                'name': body.get('name', '')
+            }
         }
 
         register_log(user, log_actions['view_update'], log)
@@ -289,7 +294,10 @@ def create(body, user, files):
         update_cache()
 
         log = {
-            'data': view_created.inserted_id
+            'data': {
+                'id': str(view_created.inserted_id),
+                'name': body['name']
+            }
         }
 
         register_log(user, log_actions['view_create'], log)
@@ -311,7 +319,10 @@ def delete(id, user):
         view_deleted = mongodb.delete_record('views', {'_id': ObjectId(id)})
 
         log = {
-            'data': view_deleted.raw_result
+            'data': {
+                'id': id,
+                'name': view['name'] if view and 'name' in view else ''
+            }
         }
         
         

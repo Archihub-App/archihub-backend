@@ -150,7 +150,7 @@ def get_by_id(id):
 @cacheHandler.cache.cache(limit=5000)
 def get_resource(id):
     # Buscar el recurso en la base de datos
-    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0})
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id), 'status': 'published'}, fields={'updatedAt': 0, 'updatedBy': 0})
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception('Recurso no existe')
@@ -486,7 +486,7 @@ def get_resource(id):
 @cacheHandler.cache.cache(limit=1000)
 def get_resource_files(id, page, groupImages = False):
     try:
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id), 'status': 'published'})
         # check accessRights
         accessRights = get_accessRights(id)
         if accessRights:
@@ -563,7 +563,7 @@ def get_tree(root, available, post_type=None, page=0):
 
 @cacheHandler.cache.cache()
 def get_resource_images(id):
-    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'filesObj': 1})
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id), 'status': 'published'}, fields={'filesObj': 1})
 
     if not resource:
         return {'msg': _('Resource does not exist')}, 404
@@ -585,7 +585,7 @@ def get_resource_images(id):
 
 def download_resource_files(body):
     try:
-        resource = mongodb.get_record('resources', {'_id': ObjectId(body['id'])})
+        resource = mongodb.get_record('resources', {'_id': ObjectId(body['id']), 'status': 'published'})
         # check if the user has access to the resource
         accessRights = get_accessRights(body['id'])
         if accessRights:

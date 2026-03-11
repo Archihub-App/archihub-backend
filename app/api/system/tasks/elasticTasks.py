@@ -8,6 +8,7 @@ from app.api.types.services import get_by_slug, get_metadata
 from flask_babel import _
 from html.parser import HTMLParser
 import re
+from datetime import datetime, timezone
 
 index_handler = IndexHandler.IndexHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -36,6 +37,16 @@ def strip_html(text):
     cleaned = re.sub(r'\s+([,.;:!?])', r'\1', cleaned)
     cleaned = re.sub(r'([,.;:!?])([^\s])', r'\1 \2', cleaned)
     return cleaned.strip()
+
+
+def to_utc_iso(value):
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        else:
+            value = value.astimezone(timezone.utc)
+        return value.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+    return value
 
 def get_value_by_path(dict, path):
     try:
@@ -80,6 +91,8 @@ def index_resources_task(body={}):
     loop = True
     if '_id' in body:
         filters['_id'] = ObjectId(body['_id'])
+    else:
+        filters = body
 
     resources = list(mongodb.get_all_records(
         'resources', filters, limit=1000, skip=skip))
@@ -110,9 +123,8 @@ def index_resources_task(body={}):
                         if destiny != '':
                             value = get_value_by_path(resource, destiny)
                             if value != None:
-                                import datetime
-                                if isinstance(value, datetime.datetime):
-                                    value = value.strftime('%Y-%m-%dT%H:%M:%S')
+                                if isinstance(value, datetime):
+                                    value = to_utc_iso(value)
                                     change_value(document, f['destiny'], value)
                                     
                     if f['type'] == 'select-multiple2':
@@ -132,7 +144,7 @@ def index_resources_task(body={}):
                                     if s['type'] == 'simple-date':
                                         date = get_value_by_path(v, s['destiny'])
                                         if date:
-                                            date = date.strftime('%Y-%m-%dT%H:%M:%S')
+                                            date = to_utc_iso(date)
                                             change_value(v, s['destiny'], date)
                     if f['type'] == 'location':
                         value = get_value_by_path(document, f['destiny'])
@@ -187,7 +199,7 @@ def index_resources_task(body={}):
                 
                 if 'createdAt' in resource:
                     created_at = resource['createdAt']
-                    created_at = created_at.strftime('%Y-%m-%dT%H:%M:%S')
+                    created_at = to_utc_iso(created_at)
                     document['createdAt'] = created_at
                 
                 if 'parents' in resource:

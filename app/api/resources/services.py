@@ -25,6 +25,7 @@ from app.api.records.services import delete_parent
 from app.api.records.services import update_parent
 from app.api.records.services import update_record
 from app.api.records.services import create as create_record
+from app.api.records.models import RecordUpdate as FileRecordUpdate
 from app.api.system.services import get_access_rights
 from app.api.users.services import has_right, has_role
 from app.utils.functions import get_resource_records, cache_type_roles, clear_cache
@@ -83,6 +84,9 @@ def change_value(body, route, value):
 # Funcion para parsear el resultado de una consulta a la base de datos
 def parse_result(result):
     return json.loads(json_util.dumps(result))
+
+def can_view_deleted(user):
+    return has_role(user, 'admin')
 
 # Function to extract IDs from uploaded records content
 def extract_uploaded_records_ids(content):
@@ -246,7 +250,12 @@ def get_all(body, user):
             if body['files']:
                 filters['filesObj'] = {'$exists': True, '$ne': []}
 
-        filters['status'] = body['status']
+        requested_status = body['status']
+
+        if requested_status == 'deleted' and not can_view_deleted(user):
+            return {'msg': _('You don\'t have the required authorization')}, 401
+
+        filters['status'] = requested_status
 
         if filters['status'] == 'draft':
             filters.pop('status')
@@ -649,7 +658,7 @@ def update_granular_by_id(id, metadata_path, value, user, concat = False, update
         if not updated_resources:
             return {'msg': _('No parent resource contains the requested text field')}, 400
 
-        register_log(user, log_actions['resource_update'], {
+        register_log(user, log_actions['resource_granular_update'], {
             'record': id,
             'metadataPath': metadata_path,
             'concat': concat,
@@ -1133,6 +1142,13 @@ def validate_files(files, metadata, errors):
 # Nuevo servicio para obtener un recurso por su id
 def get_by_id(id, user, postQuery = False):
     try:
+        resource_status = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'status': 1})
+        if not resource_status:
+            return {'msg': _('Resource does not exist')}, 404
+
+        if resource_status.get('status') == 'deleted' and not can_view_deleted(user):
+            return {'msg': _('You don\'t have the required authorization')}, 401
+
         # Obtener los accessRights del recurso
         accessRights = get_accessRights(id)
         if accessRights:
@@ -1204,6 +1220,9 @@ def get_resource(id, user, postQuery = False):
     # Si el recurso no existe, retornar error
     if not resource:
         raise Exception(_('Resource does not exist'))
+
+    if resource.get('status') == 'deleted' and not can_view_deleted(user):
+        raise Exception(_('You don\'t have the required authorization'))
     
     post_type = resource['post_type']
     post_type = get_by_slug(post_type)
@@ -1215,7 +1234,6 @@ def get_resource(id, user, postQuery = False):
             if resource['createdBy'] != user and not has_role(user, 'editor'):
                 raise Exception(_('You don\'t have the required authorization'))
         
-    # Registrar el log
     resource['_id'] = str(resource['_id'])
     
     if 'parents' in resource:
@@ -1232,7 +1250,6 @@ def get_resource(id, user, postQuery = False):
                                             'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
 
     children = []
-    
 
     for c in resource['children']:
         c_ = mongodb.get_record('post_types', {'slug': c})
@@ -1433,7 +1450,7 @@ def get_resource(id, user, postQuery = False):
             
 
     resource['fields'] = temp
-    
+
     if postQuery:
         resource_tmp = hookHandler.call('get_resource_post', resource)
         if resource_tmp:
@@ -1442,6 +1459,7 @@ def get_resource(id, user, postQuery = False):
         if isArticle:
             resource['articleBody'] = get_article_body(resource['_id'], None)
             resource['articleBody'] = resource['articleBody'][0]['articleBody']
+            resource['articleBody'] = [] if resource['articleBody'] is None else resource['articleBody']
             
             for b in resource['articleBody']:
                 if b['type'] == 'uploadedRecords':
@@ -1832,55 +1850,214 @@ def delete_inventory_files():
         print(str(e))
         return {'msg': str(e)}, 500
 
-# Nuevo servicio para eliminar un recurso
-def delete_by_id(id, user):
+def _dedupe_parent_list(parents):
+    if not parents:
+        return []
+
+    unique_parents = []
+    seen_ids = set()
+
+    for parent in parents:
+        if not isinstance(parent, dict) or 'id' not in parent:
+            continue
+        if parent['id'] in seen_ids:
+            continue
+        unique_parents.append(parent)
+        seen_ids.add(parent['id'])
+
+    return unique_parents
+
+def _restore_files_for_resource(resource_id, resource, user):
+    records = resource.get('filesObj', [])
+    if not records:
+        return
+
+    for record_ref in records:
+        if not isinstance(record_ref, dict) or 'id' not in record_ref:
+            continue
+
+        record_id = record_ref['id']
+        record = mongodb.get_record('records', {'_id': ObjectId(record_id)}, fields={'parent': 1, 'parents': 1, 'status': 1, 'processing': 1})
+        if not record:
+            continue
+
+        current_parent = record.get('parent', [])
+        if isinstance(current_parent, dict):
+            current_parent = [current_parent]
+
+        new_parent = [{
+            'id': resource_id,
+            'post_type': resource['post_type']
+        }, *current_parent]
+        new_parent = _dedupe_parent_list(new_parent)
+
+        new_parents = [*(resource.get('parents') or []), *(record.get('parents') or [])]
+        new_parents = _dedupe_parent_list(new_parents)
+
+        update_dict = {
+            'parent': new_parent,
+            'parents': new_parents,
+            'updatedBy': user if user else 'system',
+            'updatedAt': datetime.now()
+        }
+
+        if record.get('status') == 'deleted':
+            if 'processing' in record and isinstance(record['processing'], dict) and 'files' in record['processing'] and len(record['processing']['files']) > 0:
+                update_dict['status'] = 'processed'
+            else:
+                update_dict['status'] = 'uploaded'
+
+        update = FileRecordUpdate(**update_dict)
+        mongodb.update_record('records', {'_id': ObjectId(record_id)}, update)
+
+def _restore_resource(resource_id, user):
+    resource = mongodb.get_record('resources', {'_id': ObjectId(resource_id)}, fields={'status': 1, 'post_type': 1, 'parents': 1, 'filesObj': 1})
+    if not resource:
+        return {'msg': _('Resource does not exist')}, 404
+
+    if resource.get('status') != 'deleted':
+        return {'msg': _('Resource must have deleted status to be restored'), 'id': resource_id}, 400
+
+    _restore_files_for_resource(resource_id, resource, user)
+
+    update = ResourceUpdate(**{
+        'status': 'draft',
+        'updatedAt': datetime.now(),
+        'updatedBy': user if user else 'system'
+    })
+    mongodb.update_record('resources', {'_id': ObjectId(resource_id)}, update)
+
+    register_log(user, log_actions['resource_restore'], {'resource': resource_id, 'status': 'draft'})
+    return None
+
+def _restore_deleted_children(parent_id, excluded_ids, user, restored_ids, visited):
+    if parent_id in visited:
+        return
+
+    visited.add(parent_id)
+    children = get_direct_children(parent_id)
+
+    if not children:
+        return
+
+    for child in children:
+        child_id = child['id']
+
+        if child_id not in excluded_ids:
+            child_resource = mongodb.get_record('resources', {'_id': ObjectId(child_id)}, fields={'status': 1})
+            if child_resource and child_resource.get('status') == 'deleted':
+                resp = _restore_resource(child_id, user)
+                if resp:
+                    continue
+                restored_ids.add(child_id)
+
+        _restore_deleted_children(child_id, excluded_ids, user, restored_ids, visited)
+
+# Nuevo servicio para eliminar recursos por un arreglo de ids
+def delete_by_id(ids, user):
     try:
-        post_type = get_resource_type(id)
-        post_type_roles = cache_type_roles(post_type)
+        if not isinstance(ids, list):
+            return {'msg': _('A list of resource ids is required')}, 400
 
-        if post_type_roles['editRoles']:
-            canEdit = False
-            for r in post_type_roles['editRoles']:
-                if has_role(user, r) or has_role(user, 'admin'):
-                    canEdit = True
-                    break
-            if not canEdit:
+        deleted_ids = []
+
+        for id in ids:
+            post_type = get_resource_type(id)
+            post_type_roles = cache_type_roles(post_type)
+
+            if post_type_roles['editRoles']:
+                canEdit = False
+                for r in post_type_roles['editRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canEdit = True
+                        break
+                if not canEdit:
+                    return {'msg': _('You don\'t have the required authorization')}, 401
+            
+            if post_type_roles['viewRoles']:
+                canView = False
+                for r in post_type_roles['viewRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canView = True
+                        break
+                if not canView:
+                    return {'msg': _('You don\'t have the required authorization')}, 401
+
+            resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
+            if not resource:
+                return {'msg': _('Resource does not exist')}, 404
+            
+            if resource['createdBy'] != user and not has_role(user, 'admin') and not has_role(user, 'super_editor'):
                 return {'msg': _('You don\'t have the required authorization')}, 401
-        
-        if post_type_roles['viewRoles']:
-            canView = False
-            for r in post_type_roles['viewRoles']:
-                if has_role(user, r) or has_role(user, 'admin'):
-                    canView = True
-                    break
-            if not canView:
-                return {'msg': _('You don\'t have the required authorization')}, 401
+            
+            if 'files' in resource:
+                records_list = resource['files']
+                delete_records(records_list, id, user)
+            delete_children(id, user)
 
-        resource = mongodb.get_record('resources', {'_id': ObjectId(id)})
-        
-        if resource['createdBy'] != user and not has_role(user, 'admin') and not has_role(user, 'super_editor'):
-            return {'msg': _('You don\'t have the required authorization')}, 401
-        
-        if 'files' in resource:
-            records_list = resource['files']
-            delete_records(records_list, id, user)
+            update = ResourceUpdate(**{
+                'status': 'deleted',
+                'updatedAt': datetime.now(),
+                'updatedBy': user if user else 'system'
+            })
+            mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
 
+            hookHandler.call('resource_delete', {'_id': id})
+            register_log(user, log_actions['resource_delete'], {'resource': id})
+            deleted_ids.append(id)
 
-        delete_children(id)
-        # Eliminar el recurso de la base de datos
-        deleted_resource = mongodb.delete_record('resources', {'_id': ObjectId(id)})
-
-        hookHandler.call('resource_delete', {'_id': id})
-        # Eliminar los hijos del recurso
-        # Registrar el log
-        register_log(user, log_actions['resource_delete'], {'resource': id})
-        # limpiar la cache
         update_cache()
 
-        # Retornar el resultado
-        return {'msg': _('Resource deleted')}, 200
+        return {'msg': _('Resources deleted'), 'ids': deleted_ids}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+
+def restore_by_id(ids, user, recursive=False):
+    try:
+        if not isinstance(ids, list):
+            return {'msg': _('A list of resource ids is required')}, 400
+
+        restored_ids = set()
+        requested_ids = set(ids)
+        visited = set()
+
+        for id in ids:
+            post_type = get_resource_type(id)
+            post_type_roles = cache_type_roles(post_type)
+
+            if post_type_roles['editRoles']:
+                canEdit = False
+                for r in post_type_roles['editRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canEdit = True
+                        break
+                if not canEdit:
+                    return {'msg': _('You don\'t have the required authorization')}, 401
+
+            if post_type_roles['viewRoles']:
+                canView = False
+                for r in post_type_roles['viewRoles']:
+                    if has_role(user, r) or has_role(user, 'admin'):
+                        canView = True
+                        break
+                if not canView:
+                    return {'msg': _('You don\'t have the required authorization')}, 401
+
+            resp = _restore_resource(id, user)
+            if resp:
+                return resp
+
+            restored_ids.add(id)
+
+            if recursive:
+                _restore_deleted_children(id, requested_ids, user, restored_ids, visited)
+
+        update_cache()
+
+        return {'msg': _('Resources restored'), 'ids': list(restored_ids)}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
     
 @cacheHandler.cache.cache()
 def get_resource_images(id, user):
@@ -1906,8 +2083,13 @@ def get_resource_images(id, user):
 
 # Funcion para obtener los hijos de un recurso
 @cacheHandler.cache.cache(limit=3000)
-def get_children(id, available, resp=False, post_type=None, status='published'):
+def get_children(id, available, resp=False, post_type=None, status='published', user=None):
     try:
+        if status == 'deleted' and not can_view_deleted(user):
+            if not resp:
+                return False
+            return []
+
         list_available = available.split('|')
         if post_type:
             list_available = [post_type]
@@ -1973,6 +2155,10 @@ def get_tree(root, available, user, post_type=None, page=None, status='published
         status_ = 'published'
         if status == 'draft':
             status_ = {'$in': ['draft', 'published']}
+        elif status == 'deleted':
+            if not can_view_deleted(user):
+                return {'msg': _('You don\'t have the required authorization')}, 401
+            status_ = 'deleted'
 
         if root == 'all':
             if page is not None:
@@ -1996,7 +2182,7 @@ def get_tree(root, available, user, post_type=None, page=None, status='published
             re['_id'])} for re in resources]
         
         for resource in resources:
-            resource['children'] = get_children(resource['id'], available, False, post_type, status=status)
+            resource['children'] = get_children(resource['id'], available, False, post_type, status=status, user=user)
             resource['icon'] = get_icon(resource['post_type'])
             resource['type'] = get_by_slug(resource['post_type'])
             name = resource['type']['name']
@@ -2207,14 +2393,14 @@ def update_records_parents(id, user):
 # Funcion para eliminar los hijos recursivamente
 
 
-def delete_children(id):
+def delete_children(id, user=None):
     try:
         # Hijos directos del recurso
         children = get_direct_children(id)
         # Si el recurso tiene hijos directos, eliminar cada hijo
         if children:
             for child in children:
-                delete_children(child['id'])
+                delete_children(child['id'], user)
                 # buscar el recurso en la base de datos
                 resource = mongodb.get_record(
                     'resources', {'_id': ObjectId(child['id'])}, fields={'files': 1})
@@ -2223,9 +2409,14 @@ def delete_children(id):
                     records_list = resource['filesObj']
                     records_list = [r['id'] for r in records_list]
                     delete_records(records_list, child['id'], None)
-                # eliminar el recurso de la base de datos
-                mongodb.delete_record(
-                    'resources', {'_id': ObjectId(child['id'])})
+                # marcar el recurso hijo como eliminado en la base de datos
+                update = ResourceUpdate(**{
+                    'status': 'deleted',
+                    'updatedAt': datetime.now(),
+                    'updatedBy': user if user else 'system'
+                })
+                mongodb.update_record(
+                    'resources', {'_id': ObjectId(child['id'])}, update)
                 
                 hookHandler.call('resource_delete', {'_id': child['id']})
 

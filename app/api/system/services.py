@@ -33,8 +33,8 @@ cacheHandler = CacheHandler.CacheHandler()
 def hookHandlerIndex():
     hookHandler.register('resource_create', index_resources_task, queue=101)
     hookHandler.register('resource_update', index_resources_task, queue=101)
-    hookHandler.register(
-        'resource_delete', index_resources_delete_task, queue=101)
+    hookHandler.register('resource_delete', index_resources_delete_task, queue=101)
+    hookHandler.register('resources_update_by_filter', index_resources_task, queue=101)
 
 
 def hookHandlerVector():
@@ -138,11 +138,37 @@ def get_default_cataloging_type():
             'system', {'name': 'post_types_settings'})
         # Si el registro no existe, retornar error
         if not post_types_settings:
-            return {'msg': gettext(u'There si no default cataloging type')}, 404
+            return {'msg': gettext(u'There is no default cataloging type')}, 404
 
-        for d in post_types_settings['data']:
-            if d['id'] == 'tipo_defecto':
-                return {'value': d['value']}, 200
+        post_types = list(mongodb.get_all_records('post_types', {}))
+        valid_post_types = [pt.get('slug') for pt in post_types if pt.get('slug')]
+
+        if not valid_post_types:
+            return {'msg': gettext(u'There are no post types available')}, 404
+
+        default_setting = next(
+            (d for d in post_types_settings['data'] if d.get('id') == 'tipo_defecto'), None)
+
+        if not default_setting:
+            default_setting = {
+                'id': 'tipo_defecto',
+                'value': valid_post_types[0]
+            }
+            post_types_settings['data'].append(default_setting)
+            update = OptionUpdate(**{'data': post_types_settings['data']})
+            mongodb.update_record('system', {'name': 'post_types_settings'}, update)
+            return {'value': default_setting['value']}, 200
+
+        selected_post_type = default_setting.get('value')
+
+        if selected_post_type in valid_post_types:
+            return {'value': selected_post_type}, 200
+
+        default_setting['value'] = valid_post_types[0]
+        update = OptionUpdate(**{'data': post_types_settings['data']})
+        mongodb.update_record('system', {'name': 'post_types_settings'}, update)
+
+        return {'value': default_setting['value']}, 200
 
     except Exception as e:
         raise Exception(

@@ -1,6 +1,7 @@
 from flask import jsonify
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
+from app.utils import HookHandler
 from bson import json_util
 import json
 from app.api.types.models import PostType
@@ -12,9 +13,11 @@ from app.api.system.services import get_access_rights_id
 from app.utils.functions import verify_role_exists
 from app.utils.functions import clear_cache
 from flask_babel import _
+from datetime import datetime
 
 cacheHandler = CacheHandler.CacheHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
+hookHandler = HookHandler.HookHandler()
 
 # Funcion para parsear el resultado de una consulta a la base de datos
 
@@ -99,6 +102,7 @@ def get_by_slug(slug):
         post_type['parentsTypes'] = parents
         # Si el campo metadata es un string y es distinto a '', recuperar el formulario con ese slug
         if type(post_type['metadata']) == str and post_type['metadata'] != '':
+            post_type['form'] = post_type['metadata']
             post_type['metadata'] = get_form_by_slug(post_type['metadata'])
             # dejar solo los campos name y slug del formulario
             post_type['metadata'] = {'name': post_type['metadata']['name'],
@@ -153,13 +157,21 @@ def delete_by_slug(slug, user):
         return {'msg': _('Post type not found')}, 404
     # Eliminar el tipo de post
     mongodb.delete_record('post_types', {'slug': slug})
-    # Eliminar todos los recursos del tipo de post
-    mongodb.delete_records('resources', {'post_type': slug})
+    # Marcar todos los recursos del tipo de post como eliminados
+    mongodb.update_records('resources', {'post_type': slug}, {
+        'status': 'deleted',
+        'updatedAt': datetime.now(),
+        'updatedBy': user if user else 'system'
+    })
     # Registrar el log
     register_log(user, log_actions['type_delete'], {'post_type': {
         'name': post_type['name'],
         'slug': post_type['slug'],
     }})
+
+    hookHandler.call('resources_update_by_filters', {
+        'slug': slug
+    })
     # Limpiar la cache
     update_cache()
     # Retornar el resultado

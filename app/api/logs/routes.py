@@ -9,6 +9,33 @@ from flask_babel import _
 from app.utils.FernetAuth import fernetAuthenticate
 # En este archivo se registran las rutas de la API para los logs
 
+
+@bp.route('/actions', methods=['GET'])
+@jwt_required()
+def get_log_actions():
+    """
+    Obtener las acciones de log disponibles
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Logs del sistema
+    responses:
+        200:
+            description: Acciones de log obtenidas exitosamente
+        403:
+            description: No tienes permisos para realizar esta acción
+        500:
+            description: Error obteniendo acciones de log
+    """
+    # Obtener el usuario actual
+    current_user = get_jwt_identity()
+    # Si el usuario no es admin, retornar error
+    if not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+    # Llamar al servicio para obtener las acciones de log
+    return services.get_log_actions()
+
 # Nuevo POST endpoint para obtener los logs de acuerdo a un filtro
 @bp.route('', methods=['POST'])
 @jwt_required()

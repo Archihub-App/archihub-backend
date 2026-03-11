@@ -19,6 +19,99 @@ def parse_result(result):
 def get_current_date():
     return datetime.now()
 
+
+def _extract_resource_ids(resources, fallback_ids=None):
+    resource_ids = []
+
+    if isinstance(resources, list):
+        for resource in resources:
+            if isinstance(resource, dict):
+                resource_id = resource.get('_id')
+                if resource_id is not None:
+                    resource_ids.append(resource_id)
+            elif resource is not None:
+                resource_ids.append(resource)
+
+    if not resource_ids:
+        if isinstance(fallback_ids, list):
+            resource_ids = [item for item in fallback_ids if item is not None]
+        elif fallback_ids is not None:
+            resource_ids = [fallback_ids]
+
+    return resource_ids
+
+
+def _build_details(action, metadata):
+    metadata = metadata if isinstance(metadata, dict) else {}
+    form = metadata.get('form') if isinstance(metadata.get('form'), dict) else {}
+
+    if action in [
+        LogActions.log_actions['av_transcribe'],
+        LogActions.log_actions['img_analyze']
+    ]:
+        return {
+            'form': {
+                'resources': _extract_resource_ids(form.get('resources'), metadata.get('ids'))
+            },
+            'prompt': form.get('prompt', metadata.get('prompt')),
+            'parent': form.get('parent', metadata.get('parent')),
+            'post_type': form.get('post_type', metadata.get('post_type'))
+        }
+
+    if action in [
+        LogActions.log_actions['form_create'],
+        LogActions.log_actions['form_delete'],
+        LogActions.log_actions['form_update'],
+        LogActions.log_actions['form_duplicate']
+    ]:
+        return {
+            'form': {
+                'name': form.get('name'),
+                'slug': form.get('slug')
+            }
+        }
+
+    if action == LogActions.log_actions['search']:
+        filters = metadata.get('filters') if isinstance(metadata.get('filters'), dict) else {}
+        return {
+            'filters': {
+                'keyword': filters.get('keyword')
+            },
+            'page': filters.get('page', metadata.get('page'))
+        }
+
+    if action == LogActions.log_actions['resource_article_update']:
+        details = dict(metadata)
+        details.pop('articleBody', None)
+
+        resource = details.get('resource')
+        if isinstance(resource, dict):
+            resource = dict(resource)
+            resource.pop('articleBody', None)
+
+            resource_metadata = resource.get('metadata')
+            if isinstance(resource_metadata, dict):
+                resource_metadata = dict(resource_metadata)
+                resource_metadata.pop('articleBody', None)
+                resource['metadata'] = resource_metadata
+
+            details['resource'] = resource
+
+        return details
+
+    return metadata
+
+
+def _normalize_log_details(logs):
+    normalized_logs = []
+
+    for log in logs:
+        metadata = log.pop('metadata', {})
+        log['details'] = _build_details(log.get('action'), metadata)
+        normalized_logs.append(log)
+
+    return normalized_logs
+
 # Nuevo servicio para registrar un log
 def register_log(username, action, metadata=None):
     # Obtener la fecha actual
@@ -36,7 +129,7 @@ def filter(body):
     try:
         # Obtener todos los logs de la coleccion logs
         logs = mongodb.get_all_records('logs', body['filters'], limit=20, sort=[
-                                        ('date', -1)], skip=body['page'] * 20, fields={'_id': 0, 'metadata': 0})
+                                        ('date', -1)], skip=body['page'] * 20, fields={'_id': 0})
         # Si no hay logs, retornar error
         if not logs:
             return {'msg': _('Logs not found')}, 404
@@ -44,6 +137,8 @@ def filter(body):
         total = get_total(json.dumps(body['filters']))
         # Parsear el resultado
         logs = parse_result(logs)
+        # Normalizar metadata para details
+        logs = _normalize_log_details(logs)
         # Agregar el total al resultado
         for r in logs:
             r['total'] = total
@@ -168,3 +263,6 @@ def get_logs(body, resource_id):
         return changes, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+def get_log_actions():
+    return LogActions.log_actions, 200
