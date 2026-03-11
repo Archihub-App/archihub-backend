@@ -32,6 +32,13 @@ settings = [
                 'label': 'Listado para los roles de usuario',
                 'id': 'user_roles_list',
                 'instructions': 'Los roles de usuario definen la capacidad de los usuarios para manejar información. Por defecto existen admin y editor. Se pueden implementar nuevos roles para cada tipo de contenido.'
+            },
+            {
+                'type':  'checkbox_single',
+                'label': 'Activar la visualización de metadatos para todos los usuarios',
+                'id': 'metadata_access',
+                'instructions': 'Activar esta opción habilita los metadatos para todos los usuarios, de lo contrario los metadatos solo serán visibles para los usuarios con permisos',
+                'value': False
             }
         ]
     },
