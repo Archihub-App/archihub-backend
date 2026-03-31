@@ -17,6 +17,7 @@ from flask import Flask
 from flask_babel import Babel, gettext as _
 
 import os
+import sys
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from app.api.system.services import update_option, clear_cache
@@ -70,10 +71,13 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     app.config['BABEL_TRANSLATION_DIRECTORIES'] = os.path.join(os.path.abspath(os.path.dirname(__file__)), "translations")
     
     # agregar CORS
+    frontend_url = os.environ.get('URL_FRONTEND')
+    origins = frontend_url.split(',') if frontend_url else "*"
+
     CORS(app, resources={
         r"/adminApi/*": {"origins": "*"},
         r"/publicApi/*": {"origins": "*"},
-        r"/*": {"origins": os.environ.get('URL_FRONTEND', '*').split(',')},
+        r"/*": {"origins": origins},
     })
     
     # Inicializar JWT
@@ -276,11 +280,19 @@ def celery_init_app(app: Flask) -> Celery:
     celery_app = Celery(app.name, task_cls=FlaskTask)
     celery_app.config_from_object(app.config["CELERY"])
     celery_app.conf.timezone = 'UTC'
-    celery_app.conf.update(
-        CELERYD_CONCURRENCY=int(os.environ.get("CELERYD_CONCURRENCY", 1)),
-        CELERYD_PREFETCH_MULTIPLIER=1,
-        CELERY_ACKS_LATE=True
-    )
+    worker_pool = os.environ.get("CELERY_WORKER_POOL")
+    if not worker_pool and sys.platform == "darwin":
+        worker_pool = "solo"
+
+    celery_config = {
+        "worker_concurrency": 1 if worker_pool == "solo" else int(os.environ.get("CELERYD_CONCURRENCY", 1)),
+        "worker_prefetch_multiplier": 1,
+        "task_acks_late": True,
+    }
+    if worker_pool:
+        celery_config["worker_pool"] = worker_pool
+
+    celery_app.conf.update(**celery_config)
     celery_app.conf.beat_schedule = {
         *scheduled_tasks
     }
