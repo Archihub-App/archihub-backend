@@ -45,7 +45,7 @@ settings = [
     {
         'name': 'active_plugins',
         'label': 'Plugins activos',
-        'data': [],
+        'data': ['inventoryMaker', 'filesProcessing', 'liquidText', 'massiveUpdater'],
         'plugins_settings': {}
     },
     {
