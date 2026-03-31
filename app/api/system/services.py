@@ -6,6 +6,7 @@ from app.utils import VectorDatabaseHandler
 from bson import json_util
 import json
 import re
+import ast
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.system.models import Option
@@ -13,7 +14,6 @@ from app.api.system.models import OptionUpdate
 from app.api.lists.services import get_by_id
 from app.utils.functions import get_access_rights_id, get_roles_id, get_access_rights, get_roles
 import os
-import importlib
 from app.utils import IndexHandler
 from celery import shared_task
 from app.api.tasks.services import add_task
@@ -426,6 +426,75 @@ def validate_simple_date(value, field):
             gettext(u'Error while validating the field {label}', label=label))
 
 
+def evaluate_plugin_info_node(node, context):
+    if isinstance(node, ast.Constant):
+        return node.value
+
+    if isinstance(node, ast.Name):
+        if node.id not in context:
+            raise ValueError(f'Unknown name: {node.id}')
+        return context[node.id]
+
+    if isinstance(node, ast.List):
+        values = []
+        for element in node.elts:
+            if isinstance(element, ast.Starred):
+                values.extend(evaluate_plugin_info_node(element.value, context))
+            else:
+                values.append(evaluate_plugin_info_node(element, context))
+        return values
+
+    if isinstance(node, ast.Tuple):
+        values = []
+        for element in node.elts:
+            if isinstance(element, ast.Starred):
+                values.extend(evaluate_plugin_info_node(element.value, context))
+            else:
+                values.append(evaluate_plugin_info_node(element, context))
+        return tuple(values)
+
+    if isinstance(node, ast.Dict):
+        value = {}
+        for key_node, value_node in zip(node.keys, node.values):
+            if key_node is None:
+                value.update(evaluate_plugin_info_node(value_node, context))
+                continue
+            key = evaluate_plugin_info_node(key_node, context)
+            value[key] = evaluate_plugin_info_node(value_node, context)
+        return value
+
+    raise ValueError(f'Unsupported node type: {type(node).__name__}')
+
+
+def get_plugin_info_from_file(plugin_init_path):
+    with open(plugin_init_path, 'r', encoding='utf-8') as plugin_file:
+        tree = ast.parse(plugin_file.read(), filename=plugin_init_path)
+
+    context = {}
+
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+
+        try:
+            value = evaluate_plugin_info_node(node.value, context)
+        except (TypeError, ValueError):
+            continue
+
+        for target in node.targets:
+            if not isinstance(target, ast.Name):
+                continue
+
+            context[target.id] = value
+
+            if target.id == 'plugin_info':
+                if not isinstance(value, dict):
+                    raise ValueError('plugin_info must be a dictionary')
+                return value.copy()
+
+    raise ValueError('plugin_info not found')
+
+
 @cacheHandler.cache.cache()
 def get_plugins():
     try:
@@ -440,10 +509,9 @@ def get_plugins():
 
         resp = []
         for plugin in plugins:
-            if os.path.isfile(f'{plugins_path}/{plugin}/__init__.py'):
-                plugin_module = importlib.import_module(
-                    f'app.plugins.{plugin}')
-                plugin_instance = plugin_module.plugin_info
+            plugin_init_path = f'{plugins_path}/{plugin}/__init__.py'
+            if os.path.isfile(plugin_init_path):
+                plugin_instance = get_plugin_info_from_file(plugin_init_path)
                 plugin_instance['slug'] = plugin
 
                 if plugin in active_plugins['data']:
