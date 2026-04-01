@@ -107,6 +107,7 @@ def clear_system_cache():
 
 def update_settings(settings, current_user):
     try:
+
         update_option('post_types_settings', settings)
         update_option('access_rights', settings)
         update_option('api_activation', settings)

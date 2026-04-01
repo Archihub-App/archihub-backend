@@ -6,6 +6,14 @@ from app.utils.FernetAuth import fernetAuthenticate
 import json
 from flask_babel import _
 
+@bp.route('/get_system_info', methods=['GET'])
+@fernetAuthenticate
+def get_info(username, isAdmin):
+    if not isAdmin:
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    return ({'user': username},200)
+
 # Nuevo POST endpoint para crear nuevos recursos
 @bp.route('/create', methods=['POST'])
 @fernetAuthenticate
