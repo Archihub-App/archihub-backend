@@ -31,6 +31,7 @@ def update_cache():
     has_right.invalidate_all()
     has_role.invalidate_all()
     get_total.invalidate_all()
+    get_user_favorites.invalidate_all()
 
 # Nueva funcion para devolver el usuario por su id
 def get_by_id(id):
@@ -666,7 +667,7 @@ def delete_favorite(user, body):
 def get_user_favorites(username):
     try:
         user_fav = mongodb.get_record('users', {'username': username}, fields={'favorites': 1})
-        user_fav = user_fav['favorites']
+        user_fav = user_fav['favorites'] if 'favorites' in user_fav else []
         return user_fav
     except Exception as e:
         return {'msg': str(e)}, 500
