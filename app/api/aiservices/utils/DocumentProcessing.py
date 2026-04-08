@@ -1,4 +1,4 @@
-from app.utils import DatabaseHandler, CacheHandler
+from app.utils import DatabaseHandler
 from app.api.aiservices.models import Conversation, ConversationUpdate
 from bson.objectid import ObjectId
 import datetime
@@ -154,36 +154,20 @@ def create_document_conversation(body, provider, user):
                 'content': msg['content']
             })
             
-    messages.append(
-        {
-            'role': 'user',
-            'content': "Document content:\n\n" + clean_text
-        }
-    )
-    
-    messages.append(
-        {
-            'role': 'user',
-            'content': message
-        }
-    )
-    
+    # Combine document context and user question into a single user turn so that
+    # providers which reject consecutive same-role messages work correctly.
+    messages.append({
+        'role': 'user',
+        'content': f"Document content:\n\n{clean_text}\n\n---\n\n{message}"
+    })
+
     resp = provider.call(messages, model=model)
     
+    user_turn = {'role': 'user', 'content': f"Document content:\n\n{clean_text}\n\n---\n\n{message}"}
+    assistant_turn = {'role': 'assistant', 'content': resp['choices'][0]['message']['content']}
+
     if conversation_id:
-        messages = conversation['messages'] + [
-            {
-                'role': 'user',
-                'content': "Document content:\n\n" + clean_text
-            },{
-                'role': 'user',
-                'content': message
-            },
-            {
-                'role': 'assistant',
-                'content': resp['choices'][0]['message']['content']
-            }
-        ]
+        messages = conversation['messages'] + [user_turn, assistant_turn]
         
         payload = ConversationUpdate(
             messages=messages,
@@ -198,21 +182,8 @@ def create_document_conversation(body, provider, user):
     else:
         payload = {
             'user': user,
-            'messages': [
-                {
-                    'role': 'user',
-                    'content': "Document content:\n\n" + clean_text
-                },
-                {
-                    'role': 'user',
-                    'content': message
-                },
-                {
-                    'role': 'assistant',
-                    'content': resp['choices'][0]['message']['content']
-                }
-            ],
-            'type': 'transcription',
+            'messages': [user_turn, assistant_turn],
+            'type': 'document',
             'processing_slug': processing_slug,
             'record_id': record_id,
             'created_at': datetime.datetime.now(),

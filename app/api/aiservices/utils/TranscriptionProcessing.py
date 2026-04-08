@@ -1,4 +1,4 @@
-from app.utils import DatabaseHandler, CacheHandler
+from app.utils import DatabaseHandler
 from app.api.aiservices.models import Conversation, ConversationUpdate
 from bson.objectid import ObjectId
 import datetime
@@ -28,7 +28,13 @@ def create_transcription_conversation(body, provider, user):
     print(f"Tokens: {tokens}")
     
     from . import prompts
-    
+
+    # Build the message list:
+    #  1. System prompt
+    #  2. Transcription as a user context message (so providers that reject
+    #     mid-conversation system messages work correctly)
+    #  3. Conversation history (if resuming)
+    #  4. New user question
     messages = [
         {
             'role': 'system',
@@ -36,22 +42,20 @@ def create_transcription_conversation(body, provider, user):
         },
         {
             'role': 'user',
-            'content': message
+            'content': "Transcription:\n\n" + processing['text']
         },
         {
-            'role': 'system',
-            'content': "Transcription:\n\n" + processing['text']
+            'role': 'assistant',
+            'content': 'I have read the transcription. How can I help?'
         }
     ]
-    
+
     if conversation_id:
         conversation = mongodb.get_record('conversations', {'_id': ObjectId(conversation_id)}, fields={'messages': 1})
-        
         for msg in conversation['messages']:
-            messages.append({
-                'role': msg['role'],
-                'content': msg['content']
-            })
+            messages.append({'role': msg['role'], 'content': msg['content']})
+
+    messages.append({'role': 'user', 'content': message})
     
     resp = provider.call(messages, model=model)
     
