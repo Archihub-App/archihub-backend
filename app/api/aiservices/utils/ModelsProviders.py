@@ -315,11 +315,6 @@ class GoogleProvider(BaseLLMProvider):
 
 class OpenAIProvider(BaseLLMProvider):
     def getModels(self):
-        """
-        Fetch available chat models dynamically from the OpenAI models endpoint,
-        overlaying known capability/context metadata. Falls back to hardcoded
-        defaults if the API is unreachable.
-        """
         cache_key = "openai:models"
 
         def fetch():
@@ -387,11 +382,6 @@ class OllamaProvider(BaseLLMProvider):
         return f"{host}:{port}"
 
     def getModels(self):
-        """
-        Fetch installed models dynamically from the Ollama /api/tags endpoint.
-        Model type (chat/embedding) and vision capability are inferred from the
-        model name. Falls back to an empty list if Ollama is unreachable.
-        """
         api_url = self._get_api_url()
         cache_key = f"ollama:{api_url}"
 
@@ -526,11 +516,6 @@ class LlamaServerProvider(BaseLLMProvider):
 
     def process_image(self, image_path):
         return _process_image_to_data_url(image_path)
-
-
-# ---------------------------------------------------------------------------
-# Hardcoded fallbacks (used when the live API is unreachable)
-# ---------------------------------------------------------------------------
 
 def _openai_fallback():
     return [
