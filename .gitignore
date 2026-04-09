@@ -17,3 +17,6 @@ requirements.txt.bak
 !/app/plugins/liquidText
 
 /app/utils/geo/*
+
+# Avoid VSCode settings folder
+.vscode/

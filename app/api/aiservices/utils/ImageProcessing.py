@@ -1,4 +1,4 @@
-from app.utils import DatabaseHandler, CacheHandler
+from app.utils import DatabaseHandler
 from app.api.aiservices.models import Conversation, ConversationUpdate
 from bson.objectid import ObjectId
 import datetime

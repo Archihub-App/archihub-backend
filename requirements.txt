@@ -28,8 +28,9 @@ qdrant-client
 sentence-transformers
 flask-babel
 google
-google.genai
 openai
+aisuite[openai]
+tiktoken
 transformers
 tokenizers
 BeautifulSoup4
