@@ -368,13 +368,15 @@ class OpenAIProvider(BaseLLMProvider):
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gpt-3.5-turbo")
+        stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
+        new_models = {"gpt-5", "gpt-5-mini", "gpt-5-nano", "o4-mini", "o3", "o3-mini", "o1", "o1-mini"}
         uses_max_completion_tokens = model.startswith(("gpt-5", "o1", "o3", "o4"))
 
         processed_messages = _preprocess_messages_openai_compat(messages, self.process_image)
 
         client = ai.Client({"openai": {"api_key": self.key}})
 
-        create_kwargs: dict = {"model": f"openai:{model}", "messages": processed_messages}
+        create_kwargs: dict = {"model": f"openai:{model}", "messages": processed_messages, "stream": stream}
         if uses_max_completion_tokens:
             create_kwargs["max_completion_tokens"] = kwargs.get("max_tokens", 2048)
         else:
