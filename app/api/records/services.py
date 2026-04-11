@@ -855,9 +855,16 @@ def get_document_block_by_page(current_user, id, page, slug, block=None):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
-            return {'msg': resp_['msg']}, 500
+            record, status = get_by_index_gallery({
+                'id': id,
+                'index': page
+            }, current_user)
 
-        print(id, page, slug, block)
+            if status != 200:
+                return {'msg': str(e)}, 500
+            
+            id = record['_id']['$oid']
+
         return cache_get_block_by_page_id(id, page, slug, block, current_user)
     except Exception as e:
         return {'msg': str(e)}, 500

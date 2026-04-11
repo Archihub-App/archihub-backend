@@ -501,10 +501,8 @@ class LlamaServerProvider(BaseLLMProvider):
                         "capabilities": m.get('capabilities', [])
                     })
 
-                print(result)
                 return result
             except Exception:
-                print("ERRRRORRRRRR")
                 return []
 
         return _get_cached(cache_key, fetch)
