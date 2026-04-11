@@ -3,16 +3,18 @@ from cryptography.fernet import Fernet
 from config import config
 import os
 import json
+from flask import Response
 from bson import json_util
 from bson.objectid import ObjectId
 from app.api.aiservices.models import LlmProvider, LlmProviderUpdate
-from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider, OllamaProvider
+from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider, OllamaProvider, LlamaServerProvider
 
 PROVIDER_CLASSES = {
     'OpenAI': OpenAIProvider,
     'Google': GoogleProvider,
     'Azure': AzureProvider,
-    'Ollama': OllamaProvider
+    'Ollama': OllamaProvider,
+    'LlamaServer': LlamaServerProvider
 }
 
 fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
@@ -129,14 +131,20 @@ def set_conversation(data, user):
         if data['type'] == 'transcription':
             from .utils.TranscriptionProcessing import create_transcription_conversation
             response = create_transcription_conversation(data, provider, user)
+            if isinstance(response, Response):
+                return response
             return response, 200
         elif data['type'] == 'document':
             from .utils.DocumentProcessing import create_document_conversation
             response = create_document_conversation(data, provider, user)
+            if isinstance(response, Response):
+                return response
             return response, 200
         elif data['type'] == 'image_gallery':
             from .utils.ImageProcessing import create_image_gallery_conversation
             response = create_image_gallery_conversation(data, provider, user)
+            if isinstance(response, Response):
+                return response
             return response, 200
     except Exception as e:
         print(str(e))
@@ -206,6 +214,9 @@ def get_conversation(id, user):
         return conversations, 200
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+def delete_conversation(id):
+    pass
     
 def process_img_message_content(message):
     import base64

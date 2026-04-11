@@ -52,7 +52,7 @@ _GOOGLE_META: dict = {
 # Families / substrings that imply vision support in Ollama model names
 _OLLAMA_VISION_FAMILIES = (
     "llava", "bakllava", "moondream", "minicpm-v", "qwen-vl", "qwen3-vl",
-    "gemma3", "pixtral", "vision",
+    "gemma3", "pixtral", "vision", "gemma4"
 )
 # Substrings that imply embedding models
 _OLLAMA_EMBED_FAMILIES = (
@@ -215,6 +215,7 @@ class AzureProvider(BaseLLMProvider):
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gpt-4.1")
+        stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         model_info = next((m for m in self.getModels() if m['id'] == model), None)
 
         url = self.endpoint if not (model_info and model_info.get("cognitive_services")) else self.endpointCognitive
@@ -228,11 +229,28 @@ class AzureProvider(BaseLLMProvider):
             "messages": processed_messages,
             "max_tokens": kwargs.get("max_tokens", 2048),
             "temperature": kwargs.get("temperature", 0.5),
+            "stream": stream,
         }
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.key}",
         }
+
+        if stream:
+            def iter_stream_lines():
+                try:
+                    with httpx.stream("POST", url, headers=headers, json=data, timeout=60) as resp:
+                        resp.raise_for_status()
+                        for line in resp.iter_lines():
+                            if line:
+                                yield line
+                except httpx.HTTPStatusError as e:
+                    raise ValueError(f"Azure API returned an error: {e}")
+                except httpx.ConnectError as e:
+                    raise ValueError(f"Connection to Azure API failed: {e}")
+
+            return iter_stream_lines()
+
         try:
             resp = httpx.post(url, headers=headers, json=data, timeout=30)
             resp.raise_for_status()
@@ -287,6 +305,7 @@ class GoogleProvider(BaseLLMProvider):
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gemini-2.0-flash")
+        stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         model_ids = [m['id'] for m in self.getModels()]
         if model not in model_ids:
             raise ValueError(f"Model {model} is not supported. Available: {model_ids}")
@@ -305,7 +324,11 @@ class GoogleProvider(BaseLLMProvider):
             messages=processed_messages,
             temperature=kwargs.get("temperature", 0.5),
             max_tokens=kwargs.get("max_tokens", 2048),
+            stream=stream,
         )
+
+        if stream:
+            return response
 
         return _aisuite_response_to_dict(response)
 
@@ -345,13 +368,14 @@ class OpenAIProvider(BaseLLMProvider):
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gpt-3.5-turbo")
+        stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         new_models = {"gpt-5", "gpt-5-mini", "gpt-5-nano", "o4-mini", "o3", "o3-mini", "o1", "o1-mini"}
 
         processed_messages = _preprocess_messages_openai_compat(messages, self.process_image)
 
         client = ai.Client({"openai": {"api_key": self.key}})
 
-        create_kwargs: dict = {"model": f"openai:{model}", "messages": processed_messages}
+        create_kwargs: dict = {"model": f"openai:{model}", "messages": processed_messages, "stream": stream}
         if model in new_models:
             create_kwargs["max_completion_tokens"] = kwargs.get("max_tokens", 2048)
         else:
@@ -361,7 +385,10 @@ class OpenAIProvider(BaseLLMProvider):
         max_retries, backoff_factor = 5, 1
         for attempt in range(max_retries):
             try:
-                return _aisuite_response_to_dict(client.chat.completions.create(**create_kwargs))
+                response = client.chat.completions.create(**create_kwargs)
+                if stream:
+                    return response
+                return _aisuite_response_to_dict(response)
             except Exception as e:
                 if "429" in str(e) and attempt < max_retries - 1:
                     sleep_time = backoff_factor * (2 ** attempt)
@@ -411,6 +438,7 @@ class OllamaProvider(BaseLLMProvider):
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gpt-oss:20b")
+        stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         models = self.getModels()
         model_ids = [m['id'] for m in models]
         if models and model not in model_ids:
@@ -427,7 +455,11 @@ class OllamaProvider(BaseLLMProvider):
             model=f"ollama:{model}",
             messages=processed_messages,
             options={"num_ctx": max_tokens},
+            stream=stream,
         )
+
+        if stream:
+            return response
 
         return _aisuite_response_to_dict(response)
 
@@ -458,27 +490,27 @@ class LlamaServerProvider(BaseLLMProvider):
                 resp = httpx.get(f"{base_url}/v1/models", timeout=5)
                 resp.raise_for_status()
                 result = []
-                for m in resp.json().get("data", []):
-                    mid = m["id"]
-                    name_lower = mid.lower()
-                    is_embed = any(f in name_lower for f in _OLLAMA_EMBED_FAMILIES)
-                    is_vision = any(f in name_lower for f in _OLLAMA_VISION_FAMILIES)
+                for m in resp.json().get("models", []):
+                    mid = m["name"]
+
                     result.append({
                         "id": mid,
                         "name": mid,
-                        "type": "embedding" if is_embed else "chat",
-                        "max_tokens": 512 if is_embed else 100000,
-                        "capabilities": ["embedding"] if is_embed
-                                         else (["chat", "image"] if is_vision else ["chat"]),
+                        "type": "chat",
+                        "capabilities": m.get('capabilities', [])
                     })
+
+                print(result)
                 return result
             except Exception:
+                print("ERRRRORRRRRR")
                 return []
 
         return _get_cached(cache_key, fetch)
 
     def call(self, messages, **kwargs):
         base_url = self._get_base_url()
+        stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         models = self.getModels()
         model_ids = [m['id'] for m in models]
 
@@ -510,7 +542,11 @@ class LlamaServerProvider(BaseLLMProvider):
             messages=processed_messages,
             temperature=kwargs.get("temperature", 0.5),
             max_tokens=max_tokens,
+            stream=stream,
         )
+
+        if stream:
+            return response
 
         return _aisuite_response_to_dict(response)
 
