@@ -1213,75 +1213,11 @@ def get_accessRights(id):
         
     return None
 
-@cacheHandler.cache.cache(limit=5000)
-def get_resource(id, user, postQuery = False):
-    # Buscar el recurso en la base de datos
-    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0, 'articleBody': 0})
-    # Si el recurso no existe, retornar error
-    if not resource:
-        raise Exception(_('Resource does not exist'))
 
-    if resource.get('status') == 'deleted' and not can_view_deleted(user):
-        raise Exception(_('You don\'t have the required authorization'))
-    
-    post_type = resource['post_type']
-    post_type = get_by_slug(post_type)
-    isArticle = post_type and 'isArticle' in post_type and post_type['isArticle']
-    
-    status = resource['status']
-    if status == 'draft':
-        if not has_role(user, 'publisher') or not has_role(user, 'admin'):
-            if resource['createdBy'] != user and not has_role(user, 'editor'):
-                raise Exception(_('You don\'t have the required authorization'))
-        
-    resource['_id'] = str(resource['_id'])
-    
-    if 'parents' in resource:
-        if resource['parents']:
-            for r in resource['parents']:
-                r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
-                r['name'] = r_['metadata']['firstLevel']['title']
-                r['icon'] = get_icon(r_['post_type'])
-
-    resource['icon'] = get_icon(resource['post_type'])
-
-    default_visible_type = get_default_visible_type()
-    resource['children'] = mongodb.distinct('resources', 'post_type', {
-                                            'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
-
-    children = []
-
-    for c in resource['children']:
-        c_ = mongodb.get_record('post_types', {'slug': c})
-        obj = {
-            'post_type': c,
-            'name': c_['name'],
-            'icon': c_['icon'],
-            'slug': c_['slug'],
-        }
-        children.append(obj)
-
-    resource['children'] = children
-
-    if 'filesObj' in resource:
-        if len(resource['filesObj']) > 0:
-            resource['children'] = [{
-                'post_type': 'files',
-                'name': _('Asociated files'),
-                'icon': 'archivo',
-                'slug': 'files',
-            }, *resource['children']]
-
-            resource['files'] = len(resource['filesObj'])
-        else:
-            resource['files'] = None
-
-    resource['fields'] = get_metadata(resource['post_type'])['fields']
-
-    temp = []
+def _build_resource_fields(temp, resource, user):
     for f in resource['fields']:
         if f['type'] != 'file' and f['type'] != 'separator':
-            
+
             accesRights = None
             if 'accessRights' in f:
                 accesRights = f['accessRights']
@@ -1291,7 +1227,7 @@ def get_resource(id, user, postQuery = False):
                 for a in accesRights:
                     if not has_right(user, a) and not has_role(user, 'admin'):
                         canView = False
-            
+
             if not canView:
                 set_value_in_dict(resource, f['destiny'], _('You don\'t have the required authorization'))
                 temp.append({
@@ -1300,7 +1236,7 @@ def get_resource(id, user, postQuery = False):
                     'type': 'text'
                 })
                 continue
-            
+
             tempTmp = hookHandler.call('resource_field', resource, f, temp)
             if tempTmp:
                 temp = tempTmp
@@ -1447,7 +1383,76 @@ def get_resource(id, user, postQuery = False):
                         'value': temp_,
                         'type': 'repeater'
                     })
-            
+
+    return temp
+
+@cacheHandler.cache.cache(limit=5000)
+def get_resource(id, user, postQuery = False):
+    # Buscar el recurso en la base de datos
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0, 'articleBody': 0})
+    # Si el recurso no existe, retornar error
+    if not resource:
+        raise Exception(_('Resource does not exist'))
+
+    if resource.get('status') == 'deleted' and not can_view_deleted(user):
+        raise Exception(_('You don\'t have the required authorization'))
+    
+    post_type = resource['post_type']
+    post_type = get_by_slug(post_type)
+    isArticle = post_type and 'isArticle' in post_type and post_type['isArticle']
+    
+    status = resource['status']
+    if status == 'draft':
+        if not has_role(user, 'publisher') or not has_role(user, 'admin'):
+            if resource['createdBy'] != user and not has_role(user, 'editor'):
+                raise Exception(_('You don\'t have the required authorization'))
+        
+    resource['_id'] = str(resource['_id'])
+    
+    if 'parents' in resource:
+        if resource['parents']:
+            for r in resource['parents']:
+                r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
+                r['name'] = r_['metadata']['firstLevel']['title']
+                r['icon'] = get_icon(r_['post_type'])
+
+    resource['icon'] = get_icon(resource['post_type'])
+
+    default_visible_type = get_default_visible_type()
+    resource['children'] = mongodb.distinct('resources', 'post_type', {
+                                            'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
+
+    children = []
+
+    for c in resource['children']:
+        c_ = mongodb.get_record('post_types', {'slug': c})
+        obj = {
+            'post_type': c,
+            'name': c_['name'],
+            'icon': c_['icon'],
+            'slug': c_['slug'],
+        }
+        children.append(obj)
+
+    resource['children'] = children
+
+    if 'filesObj' in resource:
+        if len(resource['filesObj']) > 0:
+            resource['children'] = [{
+                'post_type': 'files',
+                'name': _('Asociated files'),
+                'icon': 'archivo',
+                'slug': 'files',
+            }, *resource['children']]
+
+            resource['files'] = len(resource['filesObj'])
+        else:
+            resource['files'] = None
+
+    resource['fields'] = get_metadata(resource['post_type'])['fields']
+
+    temp = []
+    temp = _build_resource_fields(temp, resource, user)
 
     resource['fields'] = temp
 

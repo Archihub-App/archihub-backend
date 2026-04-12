@@ -78,13 +78,20 @@ class AIHandler:
 
         if messages is None:
             messages = []
-        
-        provider = self.get_provider_class({'name': model['provider']})
-        model = model['model']
+
+        model_payload = model if isinstance(model, dict) else {}
+        provider = self.get_provider_class({'name': model_payload['provider']})
+        model_name = model_payload['model']
         
         if not provider:
             raise Exception('Provider not found')
-        
-        provider_response = provider.call(messages, model=model, stream=stream)
+
+        call_kwargs = {
+            key: value
+            for key, value in model_payload.items()
+            if key not in {'provider', 'model', 'stream'}
+        }
+
+        provider_response = provider.call(messages, model=model_name, stream=stream, **call_kwargs)
         
         return provider_response
