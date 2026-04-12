@@ -468,6 +468,10 @@ def _get_transcription_result_cached(id, slug):
         raise Exception('Record no ha sido procesado')
 
     processing_entry = processing[slug]
+
+    if processing_entry.get('type') == 'labeling':
+        return processing_entry.get('result', {})
+    
     if processing_entry.get('type') != 'av_transcribe':
         raise Exception('Record no ha sido procesado con el slug ' + slug)
 
@@ -495,7 +499,13 @@ def cache_get_record_transcription(id, slug, segments=True, page=0):
     result = _get_transcription_result_cached(id, slug)
 
     segments_source = result.get('segments') or []
-    frames_source = result.get('frames') or []
+    vision_segments_source = result.get('vision_segment')
+    if vision_segments_source is None:
+        vision_segments_source = result.get('vision_segments')
+    if vision_segments_source is None:
+        vision_segments_source = result.get('frames')
+    if not isinstance(vision_segments_source, list):
+        vision_segments_source = []
     full_text = result.get('text', '')
 
     total_chars = sum(len(segment.get('text') or '') for segment in segments_source)
@@ -515,7 +525,7 @@ def cache_get_record_transcription(id, slug, segments=True, page=0):
 
     labels_counter = {}
     locations_counter = {}
-    frames_counter = {}
+    vision_counter = {}
     groups = []
     groups_seen = set()
     processed_segments = []
@@ -539,9 +549,10 @@ def cache_get_record_transcription(id, slug, segments=True, page=0):
                 group = label.get('group')
                 normalized_group = normalize_text(group) if group else ''
                 normalized_label_name = normalize_text(label.get('name'))
-                if normalized_group and normalized_group not in groups_seen:
+                group_key = (normalized_group, 'transcript')
+                if normalized_group and group_key not in groups_seen:
                     groups.append({'name': normalized_group, 'type': 'transcript'})
-                    groups_seen.add(normalized_group)
+                    groups_seen.add(group_key)
                 key = (normalized_label_name, normalized_group)
                 if key in labels_counter:
                     labels_counter[key]['count'] += 1
@@ -605,31 +616,57 @@ def cache_get_record_transcription(id, slug, segments=True, page=0):
     labels_array = sorted(labels_counter.values(), key=lambda x: x['count'], reverse=True)
     locations_array = sorted(locations_counter.values(), key=lambda x: x['count'], reverse=True)
 
-    normalized_frames = []
-    for frame in frames_source:
-        frame_obj = {**frame}
-        labels = frame_obj.get('label') or []
-        normalized_group = frame_obj.get('group')
-        normalized_group = normalize_text(normalized_group) if normalized_group else ''
+    normalized_vision_segments = []
+    for vision_segment in vision_segments_source:
+        labels = vision_segment.get('label')
+        if labels is None:
+            labels = vision_segment.get('labels')
+        if not isinstance(labels, list):
+            labels = []
+
+        segment_group = vision_segment.get('group')
+        normalized_segment_group = normalize_text(segment_group) if segment_group else ''
+
+        vision_obj = {
+            'start': vision_segment.get('start'),
+            'end': vision_segment.get('end'),
+            'labels': []
+        }
 
         for label in labels:
-            group = label.get('group')
-            normalized_label_group = normalize_text(group) if group else ''
+            if not isinstance(label, dict):
+                continue
+
+            label_group = label.get('group')
+            if not label_group:
+                label_group = normalized_segment_group
+
+            normalized_label_group = normalize_text(label_group) if label_group else ''
             normalized_label_name = normalize_text(label.get('name'))
-            key = (normalized_label_name, normalized_label_group)
-            if key in frames_counter:
-                frames_counter[key]['count'] += 1
+            label_type = label.get('type') or 'vision_segment'
+
+            normalized_label = {
+                **label,
+                'group': normalized_label_group,
+                'type': label_type
+            }
+
+            vision_obj['labels'].append(normalized_label)
+
+            key = (normalized_label_name, normalized_label_group, label_type)
+            if key in vision_counter:
+                vision_counter[key]['count'] += 1
             else:
-                frames_counter[key] = {**label, 'count': 1, 'group': normalized_label_group}
-            if normalized_label_group:
-                normalized_group = normalized_label_group
+                vision_counter[key] = {**normalized_label, 'count': 1}
 
-        if normalized_group:
-            frame_obj['group'] = normalized_group
+            vision_group_key = (normalized_label_group, 'vision_segment')
+            if normalized_label_group and vision_group_key not in groups_seen:
+                groups.append({'name': normalized_label_group, 'type': 'vision_segment'})
+                groups_seen.add(vision_group_key)
 
-        normalized_frames.append(frame_obj)
+        normalized_vision_segments.append(vision_obj)
 
-    frames_array = sorted(frames_counter.values(), key=lambda x: x['count'], reverse=True)
+    frames_array = sorted(vision_counter.values(), key=lambda x: x['count'], reverse=True)
 
     pagination = {
         'page': page_index,
@@ -655,8 +692,8 @@ def cache_get_record_transcription(id, slug, segments=True, page=0):
     elif total_pages > 1:
         transcription['pagination'] = pagination
 
-    if normalized_frames:
-        transcription['vision'] = normalized_frames
+    if normalized_vision_segments:
+        transcription['vision_segment'] = normalized_vision_segments
 
     if labels_array:
         transcription['labels'] = labels_array
