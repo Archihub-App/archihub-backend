@@ -1049,6 +1049,8 @@ def generate_text_transcription(segments):
 
 
 def is_transcriber_can_edit(recordId, user):
+    if has_role(user, 'admin') or has_role(user, 'team_lead'):
+        return True
     if has_role(user, 'transcriber'):
         task = mongodb.get_record('usertasks', {'recordId': recordId, 'user': user, 'status': {
                                   '$in': ['review', 'pending', 'rejected']}}, fields={'_id': 1})
@@ -1173,6 +1175,7 @@ def edit_transcription(id, body, user):
         return {'msg': resp_['msg']}, 500
 
     can_edit = is_transcriber_can_edit(id, user)
+    print(can_edit)
     if can_edit is False:
         return {'msg': _('You do not have permission to edit this transcription')}, 401
 
