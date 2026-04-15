@@ -66,7 +66,8 @@ class PluginClass(Blueprint):
         return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in allowed_extensions
            
-    def update_data(self, collection, id, update):
+    @classmethod
+    def update_data(cls, collection, id, update):
         try:
             if collection == 'records':
                 from app.api.records.services import update_record_by_id
@@ -92,7 +93,7 @@ class PluginClass(Blueprint):
                 
                 resp = mongodb.update_record(collection, {'_id': ObjectId(id)}, update)
                 
-            self.clear_cache()
+            cls.clear_cache()
             return resp
         except Exception as e:
             raise Exception(str(e))
@@ -156,6 +157,7 @@ class PluginClass(Blueprint):
         update = OptionUpdate(**settings_old)
         mongodb.update_record('system', {'name': 'active_plugins'}, update)
     
+    @classmethod
     def clear_cache(self):
         try:
             headers = {

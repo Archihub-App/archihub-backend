@@ -816,7 +816,7 @@ def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
             raise Exception('No existe el archivo')
 
         resp = record['processing'][slug]['result'][page - 1]
-        labels = record['processing'][slug]['labels']
+        labels = record['processing'][slug]['labels'] if 'labels' in record['processing'][slug] else []
 
         if block == 'blocks':
             resp['labels'] = labels
@@ -841,6 +841,7 @@ def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
     elif record['processing']['fileProcessing']['type'] == 'image':
         resp = record['processing'][slug]['result']
 
+        
         if 'blocks' in resp:
             return resp['blocks'], 200
         else:
