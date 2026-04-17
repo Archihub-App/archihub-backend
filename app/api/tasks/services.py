@@ -5,7 +5,7 @@ from bson import json_util
 import json
 from app.api.tasks.models import Task
 from app.api.tasks.models import TaskUpdate
-from datetime import datetime
+from datetime import datetime, timedelta
 from celery.result import AsyncResult
 import os
 from flask_babel import _
@@ -64,7 +64,8 @@ def get_tasks(user, body):
                     mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
 
                 elif result.successful() and result.ready():
-                    if type(result.result) == str:
+                    # Permite str, dict, y list. (Si un nodo retorna JSON/Dict, no fallará)
+                    if isinstance(result.result, (str, dict, list)):
                         update = {
                             'status': 'completed',
                             'result': result.result,
@@ -78,18 +79,18 @@ def get_tasks(user, body):
                         t['status'] = 'completed'
                         t['result'] = result.result
                     else:
+                        # Fallback en caso de que devuelva un objeto raro, lo forzamos a string
+                        safe_result = str(result.result)
                         update = {
-                            'status': 'failed',
-                            'result': '',
+                            'status': 'completed',
+                            'result': safe_result,
                         }
 
                         task = TaskUpdate(**update)
+                        mongodb.update_record('tasks', {'taskId': t['taskId']}, task)
 
-                        mongodb.update_record(
-                            'tasks', {'taskId': t['taskId']}, task)
-
-                        t['status'] = 'failed'
-                        t['result'] = ''
+                        t['status'] = 'completed'
+                        t['result'] = safe_result
 
                 elif not result.successful() and result.ready():
                     update = {
@@ -104,6 +105,49 @@ def get_tasks(user, body):
 
                     t['status'] = 'failed'
                     t['result'] = ''
+
+                elif result.state == 'PENDING':
+                    from datetime import datetime, timedelta, timezone # Asegúrate de importar timezone arriba
+                    
+                    task_date_raw = t.get('date')
+                    task_date = None
+                    
+                    # 1. Normalizar la fecha (BSON dict, String o Datetime nativo)
+                    if task_date_raw:
+                        if isinstance(task_date_raw, dict) and '$date' in task_date_raw:
+                            date_val = task_date_raw['$date']
+                            if isinstance(date_val, (int, float)):
+                                # Es un timestamp en milisegundos
+                                task_date = datetime.fromtimestamp(date_val / 1000.0, tz=timezone.utc)
+                            elif isinstance(date_val, str):
+                                # Es un string ISO
+                                task_date = datetime.fromisoformat(date_val.replace('Z', '+00:00'))
+                        elif isinstance(task_date_raw, str):
+                            task_date = datetime.fromisoformat(task_date_raw.replace('Z', '+00:00'))
+                        elif isinstance(task_date_raw, datetime):
+                            task_date = task_date_raw
+
+                    # 2. Hacer la matemática de tiempo de forma segura
+                    if task_date:
+                        # Si la fecha de la base de datos tiene zona horaria (UTC), usamos now(utc) para que coincidan
+                        now = datetime.now(timezone.utc) if task_date.tzinfo else datetime.now()
+                        
+                        tiempo_transcurrido = now - task_date
+                        
+                        # Límite de 30 minutos
+                        if tiempo_transcurrido > timedelta(minutes=30):
+                            update = {
+                                'status': 'failed',
+                                'result': 'Timeout: La tarea excedió el tiempo de espera o el proceso falló inesperadamente.',
+                            }
+
+                            # Actualizar en BD
+                            task_update_model = TaskUpdate(**update)
+                            mongodb.update_record('tasks', {'taskId': t['taskId']}, task_update_model)
+
+                            # Actualizar el objeto que se envía al frontend
+                            t['status'] = 'failed'
+                            t['result'] = update['result']
 
         # Retornar las tasks
         return jsonify(tasks), 200

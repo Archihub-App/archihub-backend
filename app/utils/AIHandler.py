@@ -42,7 +42,6 @@ class AIHandler:
     def get_models_with_capabilities(self, capabilities):
         if not self.models:
             return []
-        
         filtered_models = []
         for model in self.models:
             available_models = model.get('models', [])
