@@ -146,6 +146,13 @@ def set_conversation(data, user):
             if isinstance(response, Response):
                 return response
             return response, 200
+        elif data['type'] == 'atlas':
+            from app.plugins.atlas.services import create_atlas_conversation
+            response = create_atlas_conversation(data, provider, user)
+            if isinstance(response, Response):
+                return response
+            return response, 200
+
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
@@ -153,7 +160,6 @@ def set_conversation(data, user):
 def get_conversation_history(data, user):
     type = data['type']
     id = data['id']
-    print(type, id)
     try:
         if type == 'record' or type == 'transcription':
             from app.api.records.services import get_by_id
