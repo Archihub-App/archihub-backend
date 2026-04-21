@@ -532,8 +532,7 @@ def get_plugins():
 def activate_plugin(body, current_user):
     try:
         # Obtener la ruta de la carpeta plugins
-        plugins_path = os.path.join(os.path.dirname(
-            os.path.abspath(__file__)), '../../plugins')
+        plugins_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'plugins'))
 
         temp = []
 
