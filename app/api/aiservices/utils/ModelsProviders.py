@@ -135,13 +135,41 @@ def _process_image_to_base64(image_path):
 
 def _aisuite_response_to_dict(response):
     """Normalize an aisuite ChatCompletionResponse to the internal dict format."""
+    message = response.choices[0].message
+    content = getattr(message, 'content', None)
+
+    tool_calls = []
+    raw_tool_calls = getattr(message, 'tool_calls', None) or []
+    for call in raw_tool_calls:
+        function_obj = getattr(call, 'function', None)
+        function_name = getattr(function_obj, 'name', None)
+        function_arguments = getattr(function_obj, 'arguments', None)
+
+        if isinstance(call, dict):
+            function_payload = call.get('function') or {}
+            function_name = function_name or function_payload.get('name')
+            function_arguments = function_arguments or function_payload.get('arguments')
+
+        tool_calls.append({
+            'id': getattr(call, 'id', None) or (call.get('id') if isinstance(call, dict) else None),
+            'type': getattr(call, 'type', None) or (call.get('type') if isinstance(call, dict) else 'function') or 'function',
+            'function': {
+                'name': function_name,
+                'arguments': function_arguments or '{}'
+            }
+        })
+
+    normalized_message = {
+        'role': 'assistant',
+        'content': content if content is not None else '',
+    }
+    if tool_calls:
+        normalized_message['tool_calls'] = tool_calls
+
     return {
         'choices': [
             {
-                'message': {
-                    'role': 'assistant',
-                    'content': response.choices[0].message.content,
-                }
+                'message': normalized_message
             }
         ]
     }
@@ -216,6 +244,8 @@ class AzureProvider(BaseLLMProvider):
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gpt-4.1")
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
+        tools = kwargs.get('tools')
+        tool_choice = kwargs.get('tool_choice')
         model_info = next((m for m in self.getModels() if m['id'] == model), None)
 
         url = self.endpoint if not (model_info and model_info.get("cognitive_services")) else self.endpointCognitive
@@ -231,6 +261,10 @@ class AzureProvider(BaseLLMProvider):
             "temperature": kwargs.get("temperature", 0.5),
             "stream": stream,
         }
+        if tools:
+            data['tools'] = tools
+            if tool_choice:
+                data['tool_choice'] = tool_choice
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.key}",
@@ -306,6 +340,8 @@ class GoogleProvider(BaseLLMProvider):
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gemini-2.0-flash")
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
+        tools = kwargs.get('tools')
+        tool_choice = kwargs.get('tool_choice')
         model_ids = [m['id'] for m in self.getModels()]
         if model not in model_ids:
             raise ValueError(f"Model {model} is not supported. Available: {model_ids}")
@@ -319,13 +355,19 @@ class GoogleProvider(BaseLLMProvider):
             }
         })
 
-        response = client.chat.completions.create(
-            model=f"openai:{model}",
-            messages=processed_messages,
-            temperature=kwargs.get("temperature", 0.5),
-            max_tokens=kwargs.get("max_tokens", 2048),
-            stream=stream,
-        )
+        create_kwargs = {
+            'model': f"openai:{model}",
+            'messages': processed_messages,
+            'temperature': kwargs.get("temperature", 0.5),
+            'max_tokens': kwargs.get("max_tokens", 2048),
+            'stream': stream,
+        }
+        if tools:
+            create_kwargs['tools'] = tools
+            if tool_choice:
+                create_kwargs['tool_choice'] = tool_choice
+
+        response = client.chat.completions.create(**create_kwargs)
 
         if stream:
             return response
@@ -369,6 +411,8 @@ class OpenAIProvider(BaseLLMProvider):
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gpt-3.5-turbo")
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
+        tools = kwargs.get('tools')
+        tool_choice = kwargs.get('tool_choice')
         new_models = {"gpt-5", "gpt-5-mini", "gpt-5-nano", "o4-mini", "o3", "o3-mini", "o1", "o1-mini"}
         uses_max_completion_tokens = model.startswith(("gpt-5", "o1", "o3", "o4"))
 
@@ -382,6 +426,10 @@ class OpenAIProvider(BaseLLMProvider):
         else:
             create_kwargs["max_tokens"] = kwargs.get("max_tokens", 2048)
             create_kwargs["temperature"] = kwargs.get("temperature", 0.5)
+        if tools:
+            create_kwargs['tools'] = tools
+            if tool_choice:
+                create_kwargs['tool_choice'] = tool_choice
 
         max_retries, backoff_factor = 5, 1
         for attempt in range(max_retries):
@@ -510,6 +558,8 @@ class LlamaServerProvider(BaseLLMProvider):
     def call(self, messages, **kwargs):
         base_url = self._get_base_url()
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
+        tools = kwargs.get('tools')
+        tool_choice = kwargs.get('tool_choice')
         models = self.getModels()
         model_ids = [m['id'] for m in models]
 
@@ -536,13 +586,19 @@ class LlamaServerProvider(BaseLLMProvider):
             }
         })
 
-        response = client.chat.completions.create(
-            model=f"openai:{model}",
-            messages=processed_messages,
-            temperature=kwargs.get("temperature", 0.5),
-            max_tokens=max_tokens,
-            stream=stream,
-        )
+        create_kwargs = {
+            'model': f"openai:{model}",
+            'messages': processed_messages,
+            'temperature': kwargs.get("temperature", 0.5),
+            'max_tokens': max_tokens,
+            'stream': stream,
+        }
+        if tools:
+            create_kwargs['tools'] = tools
+            if tool_choice:
+                create_kwargs['tool_choice'] = tool_choice
+
+        response = client.chat.completions.create(**create_kwargs)
 
         if stream:
             return response
