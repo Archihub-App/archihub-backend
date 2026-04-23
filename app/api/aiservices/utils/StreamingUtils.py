@@ -240,6 +240,54 @@ def _content_to_text(content):
     return ""
 
 
+def _join_non_empty(parts, separator=""):
+    filtered = [part for part in parts if part]
+    if not filtered:
+        return ""
+    return separator.join(filtered)
+
+
+def _extract_typed_content_parts(content):
+    thinking_parts = []
+    response_parts = []
+
+    if content is None:
+        return {"thinking": "", "response": ""}
+
+    items = content if isinstance(content, list) else [content]
+    for item in items:
+        if isinstance(item, str):
+            response_parts.append(item)
+            continue
+
+        item_type = ""
+        text_value = ""
+
+        if isinstance(item, dict):
+            item_type = str(item.get("type", "text") or "text").strip().lower()
+            text_value = _content_to_text(item.get("text"))
+            if not text_value:
+                text_value = _content_to_text(item.get("content"))
+        else:
+            item_type = str(getattr(item, "type", "text") or "text").strip().lower()
+            text_value = _content_to_text(getattr(item, "text", None))
+            if not text_value:
+                text_value = _content_to_text(getattr(item, "content", None))
+
+        if not text_value:
+            continue
+
+        if item_type in {"reasoning", "thinking"}:
+            thinking_parts.append(text_value)
+        else:
+            response_parts.append(text_value)
+
+    return {
+        "thinking": _join_non_empty(thinking_parts, separator="\n\n"),
+        "response": _join_non_empty(response_parts, separator="\n\n"),
+    }
+
+
 def _extract_text_from_openai_like_payload(payload):
     parts = _extract_stream_parts_from_openai_like_payload(payload)
     return parts.get("response") or parts.get("thinking") or ""
@@ -248,8 +296,63 @@ def _extract_text_from_openai_like_payload(payload):
 def _extract_stream_parts_from_openai_like_payload(payload):
     result = {"thinking": "", "response": ""}
 
+    if not isinstance(payload, dict):
+        return result
+
+    # ReAct-style structured JSON payloads.
+    thought_text = _content_to_text(payload.get("thought"))
+    if thought_text:
+        result["thinking"] = thought_text
+
+    final_answer_text = _content_to_text(payload.get("final_answer"))
+    if final_answer_text:
+        result["response"] = final_answer_text
+
+    if result["thinking"] or result["response"]:
+        return result
+
+    # Anthropic SSE style deltas.
+    msg_type = payload.get("type")
+    if msg_type == "content_block_delta":
+        delta = payload.get("delta")
+        if isinstance(delta, dict):
+            delta_text = _content_to_text(delta.get("text"))
+            if not delta_text:
+                delta_text = _content_to_text(delta.get("content"))
+            if delta_text:
+                result["response"] = delta_text
+        return result
+
+    if msg_type == "content_block_start":
+        typed_parts = _extract_typed_content_parts(payload.get("content_block"))
+        if typed_parts.get("thinking"):
+            result["thinking"] = typed_parts["thinking"]
+        if typed_parts.get("response"):
+            result["response"] = typed_parts["response"]
+        return result
+
     choices = payload.get("choices") or []
     if not choices:
+        typed_parts = _extract_typed_content_parts(payload.get("content"))
+        if typed_parts.get("thinking"):
+            result["thinking"] = typed_parts["thinking"]
+        if typed_parts.get("response"):
+            result["response"] = typed_parts["response"]
+
+        if not result["thinking"]:
+            result["thinking"] = (
+                _content_to_text(payload.get("reasoning_content"))
+                or _content_to_text(payload.get("reasoning"))
+                or _content_to_text(payload.get("thinking"))
+            )
+
+        if not result["response"]:
+            response_text = _content_to_text(payload.get("response"))
+            if response_text:
+                result["response"] = response_text
+            elif not isinstance(payload.get("content"), list):
+                result["response"] = _content_to_text(payload.get("content"))
+
         return result
 
     first_choice = choices[0]
@@ -258,27 +361,62 @@ def _extract_stream_parts_from_openai_like_payload(payload):
 
     delta = first_choice.get("delta")
     if isinstance(delta, dict):
+        thinking_chunks = []
+        response_chunks = []
+
         reasoning_text = _content_to_text(delta.get("reasoning_content"))
         if not reasoning_text:
             reasoning_text = _content_to_text(delta.get("reasoning"))
         if reasoning_text:
-            result["thinking"] = reasoning_text
+            thinking_chunks.append(reasoning_text)
 
-        delta_text = _content_to_text(delta.get("content"))
-        if delta_text:
-            result["response"] = delta_text
+        typed_parts = _extract_typed_content_parts(delta.get("content"))
+        if typed_parts.get("thinking"):
+            thinking_chunks.append(typed_parts["thinking"])
+
+        if typed_parts.get("response"):
+            response_chunks.append(typed_parts["response"])
+        elif not isinstance(delta.get("content"), list):
+            delta_text = _content_to_text(delta.get("content"))
+            if delta_text:
+                response_chunks.append(delta_text)
+
+        result["thinking"] = _join_non_empty(thinking_chunks, separator="\n\n")
+        result["response"] = _join_non_empty(response_chunks, separator="")
 
         return result
 
     reasoning_text = _content_to_text(first_choice.get("reasoning_content"))
+    if not reasoning_text:
+        reasoning_text = _content_to_text(first_choice.get("reasoning"))
     if reasoning_text:
         result["thinking"] = reasoning_text
 
     message = first_choice.get("message")
     if isinstance(message, dict):
-        message_text = _content_to_text(message.get("content"))
-        if message_text:
-            result["response"] = message_text
+        message_reasoning = _content_to_text(message.get("reasoning_content"))
+        if not message_reasoning:
+            message_reasoning = _content_to_text(message.get("reasoning"))
+        if message_reasoning:
+            result["thinking"] = _join_non_empty(
+                [result["thinking"], message_reasoning],
+                separator="\n\n",
+            )
+
+        typed_parts = _extract_typed_content_parts(message.get("content"))
+
+        if typed_parts.get("thinking"):
+            result["thinking"] = _join_non_empty(
+                [result["thinking"], typed_parts["thinking"]],
+                separator="\n\n",
+            )
+
+        if typed_parts.get("response"):
+            result["response"] = typed_parts["response"]
+        else:
+            message_text = _content_to_text(message.get("content"))
+            if message_text:
+                result["response"] = message_text
 
     return result
 
@@ -321,23 +459,55 @@ def extract_stream_chunk_parts(chunk):
     first_choice = choices[0]
     delta = getattr(first_choice, "delta", None)
     if delta is not None:
+        thinking_chunks = []
+        response_chunks = []
+
         reasoning_content = _content_to_text(getattr(delta, "reasoning_content", None))
         if not reasoning_content:
             reasoning_content = _content_to_text(getattr(delta, "reasoning", None))
         if reasoning_content:
-            result["thinking"] = reasoning_content
+            thinking_chunks.append(reasoning_content)
 
-        delta_content = _content_to_text(getattr(delta, "content", None))
-        if delta_content:
-            result["response"] = delta_content
+        raw_delta_content = getattr(delta, "content", None)
+        typed_parts = _extract_typed_content_parts(raw_delta_content)
+        if typed_parts.get("thinking"):
+            thinking_chunks.append(typed_parts["thinking"])
+
+        if typed_parts.get("response"):
+            response_chunks.append(typed_parts["response"])
+        elif not isinstance(raw_delta_content, list):
+            delta_content = _content_to_text(raw_delta_content)
+            if delta_content:
+                response_chunks.append(delta_content)
+
+        result["thinking"] = _join_non_empty(thinking_chunks, separator="\n\n")
+        result["response"] = _join_non_empty(response_chunks, separator="")
 
         return result
 
     message = getattr(first_choice, "message", None)
     if message is not None:
-        message_content = _content_to_text(getattr(message, "content", None))
-        if message_content:
-            result["response"] = message_content
+        message_reasoning = _content_to_text(getattr(message, "reasoning_content", None))
+        if not message_reasoning:
+            message_reasoning = _content_to_text(getattr(message, "reasoning", None))
+        if message_reasoning:
+            result["thinking"] = _join_non_empty(
+                [result["thinking"], message_reasoning],
+                separator="\n\n",
+            )
+
+        message_content_raw = getattr(message, "content", None)
+        typed_parts = _extract_typed_content_parts(message_content_raw)
+
+        if typed_parts.get("thinking"):
+            result["thinking"] = typed_parts["thinking"]
+
+        if typed_parts.get("response"):
+            result["response"] = typed_parts["response"]
+        else:
+            message_content = _content_to_text(message_content_raw)
+            if message_content:
+                result["response"] = message_content
 
     return result
 
