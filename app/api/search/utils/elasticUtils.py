@@ -21,6 +21,7 @@ def get_resources_by_filters(body, user):
     }])
     viewType = body.get('viewType', 'list')
     size = body.get('size', 20)
+    operator = body.get('operator', 'AND')
     activeColumns = [col['destiny'] for col in activeColumns if col['destiny'] != '' and col['destiny'] != 'createdAt' and col['destiny'] != 'ident' and col['destiny'] != 'files' and col['destiny'] != 'accessRights']
 
     activeColumns_tmp = hookHandler.call('search_active_columns', body, activeColumns)
@@ -84,7 +85,7 @@ def get_resources_by_filters(body, user):
                     {
                         'query_string': {
                             'query': body['keyword'] if 'keyword' in body else '',
-                            'default_operator': 'AND'
+                            'default_operator': operator
                         }
                     }
                 ]
@@ -249,6 +250,7 @@ def get_resources_by_filters(body, user):
                                 }
                             })
 
+    print(query)
     response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
     
     response = index_handler.clean_elastic_search_response(response)
