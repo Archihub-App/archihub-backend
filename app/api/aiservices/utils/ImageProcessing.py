@@ -5,7 +5,12 @@ import datetime
 from dotenv import load_dotenv
 import os
 from flask import Response, stream_with_context
-from .StreamingUtils import extract_stream_chunk_parts, resolve_stream_flag, sse_data
+from .StreamingUtils import (
+    ThinkingStepTracker,
+    extract_stream_chunk_parts,
+    resolve_stream_flag,
+    sse_data,
+)
 
 load_dotenv()
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -109,13 +114,15 @@ def create_image_gallery_conversation(body, provider, user):
     if stream and not isinstance(resp, dict):
         def generate():
             response_parts = []
+            thinking_tracker = ThinkingStepTracker()
             try:
                 for chunk in resp:
                     chunk_parts = extract_stream_chunk_parts(chunk)
 
                     thinking_delta = chunk_parts.get('thinking', '')
                     if thinking_delta:
-                        yield sse_data({'type': 'thinking', 'delta': thinking_delta})
+                        for step_event in thinking_tracker.consume_thinking(thinking_delta):
+                            yield sse_data(step_event)
 
                     response_delta = chunk_parts.get('response', '')
                     if response_delta:
@@ -155,7 +162,15 @@ def create_image_gallery_conversation(body, provider, user):
                     inserted_doc = mongodb.insert_record('conversations', payload)
                     final_conversation_id = str(inserted_doc.inserted_id)
 
-                yield sse_data({'type': 'done', 'done': True, 'conversation_id': final_conversation_id})
+                for step_event in thinking_tracker.finalize():
+                    yield sse_data(step_event)
+
+                yield sse_data({
+                    'type': 'done',
+                    'done': True,
+                    'conversation_id': final_conversation_id,
+                    'thinking_steps': thinking_tracker.summary(),
+                })
             except Exception as e:
                 yield sse_data({'type': 'error', 'error': str(e), 'done': True})
 

@@ -348,15 +348,8 @@ class GoogleProvider(BaseLLMProvider):
 
         processed_messages = _preprocess_messages_openai_compat(messages, self.process_image)
 
-        client = ai.Client({
-            "openai": {
-                "api_key": self.key,
-                "base_url": GOOGLE_OPENAI_BASE_URL,
-            }
-        })
-
         create_kwargs = {
-            'model': f"openai:{model}",
+            'model': model,
             'messages': processed_messages,
             'temperature': kwargs.get("temperature", 0.5),
             'max_tokens': kwargs.get("max_tokens", 2048),
@@ -367,7 +360,23 @@ class GoogleProvider(BaseLLMProvider):
             if tool_choice:
                 create_kwargs['tool_choice'] = tool_choice
 
-        response = client.chat.completions.create(**create_kwargs)
+        if tools:
+            import openai as _openai
+            client = _openai.OpenAI(
+                api_key=self.key,
+                base_url=GOOGLE_OPENAI_BASE_URL,
+            )
+            response = client.chat.completions.create(**create_kwargs)
+        else:
+            client = ai.Client({
+                "openai": {
+                    "api_key": self.key,
+                    "base_url": GOOGLE_OPENAI_BASE_URL,
+                }
+            })
+            aisuite_kwargs = create_kwargs.copy()
+            aisuite_kwargs['model'] = f"openai:{model}"
+            response = client.chat.completions.create(**aisuite_kwargs)
 
         if stream:
             return response
@@ -418,9 +427,7 @@ class OpenAIProvider(BaseLLMProvider):
 
         processed_messages = _preprocess_messages_openai_compat(messages, self.process_image)
 
-        client = ai.Client({"openai": {"api_key": self.key}})
-
-        create_kwargs: dict = {"model": f"openai:{model}", "messages": processed_messages, "stream": stream}
+        create_kwargs: dict = {"model": model, "messages": processed_messages, "stream": stream}
         if uses_max_completion_tokens:
             create_kwargs["max_completion_tokens"] = kwargs.get("max_tokens", 2048)
         else:
@@ -434,7 +441,15 @@ class OpenAIProvider(BaseLLMProvider):
         max_retries, backoff_factor = 5, 1
         for attempt in range(max_retries):
             try:
-                response = client.chat.completions.create(**create_kwargs)
+                if tools:
+                    import openai as _openai
+                    client = _openai.OpenAI(api_key=self.key)
+                    response = client.chat.completions.create(**create_kwargs)
+                else:
+                    client = ai.Client({"openai": {"api_key": self.key}})
+                    aisuite_kwargs = create_kwargs.copy()
+                    aisuite_kwargs["model"] = f"openai:{model}"
+                    response = client.chat.completions.create(**aisuite_kwargs)
                 if stream:
                     return response
                 return _aisuite_response_to_dict(response)
@@ -579,15 +594,8 @@ class LlamaServerProvider(BaseLLMProvider):
 
         processed_messages = _preprocess_messages_openai_compat(messages, self.process_image)
 
-        client = ai.Client({
-            "openai": {
-                "api_key": self.key or "not-needed",
-                "base_url": f"{base_url}/v1/",
-            }
-        })
-
         create_kwargs = {
-            'model': f"openai:{model}",
+            'model': model,
             'messages': processed_messages,
             'temperature': kwargs.get("temperature", 0.5),
             'max_tokens': max_tokens,
@@ -598,7 +606,23 @@ class LlamaServerProvider(BaseLLMProvider):
             if tool_choice:
                 create_kwargs['tool_choice'] = tool_choice
 
-        response = client.chat.completions.create(**create_kwargs)
+        if tools:
+            import openai as _openai
+            client = _openai.OpenAI(
+                api_key=self.key or "not-needed",
+                base_url=f"{base_url}/v1/",
+            )
+            response = client.chat.completions.create(**create_kwargs)
+        else:
+            client = ai.Client({
+                "openai": {
+                    "api_key": self.key or "not-needed",
+                    "base_url": f"{base_url}/v1/",
+                }
+            })
+            aisuite_kwargs = create_kwargs.copy()
+            aisuite_kwargs['model'] = f"openai:{model}"
+            response = client.chat.completions.create(**aisuite_kwargs)
 
         if stream:
             return response
