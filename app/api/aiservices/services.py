@@ -127,6 +127,9 @@ def get_provider_models(id):
     
 def set_conversation(data, user):
     try:
+        from app.api.system.services import get_system_settings
+        settings, status = get_system_settings()
+        capabilities = settings['capabilities']
         provider = get_provider_class(data['provider']['id'])
         if data['type'] == 'transcription':
             from .utils.TranscriptionProcessing import create_transcription_conversation
@@ -146,7 +149,7 @@ def set_conversation(data, user):
             if isinstance(response, Response):
                 return response
             return response, 200
-        elif data['type'] == 'atlas':
+        elif data['type'] == 'atlas' and 'atlas' in capabilities:
             from app.plugins.atlas.services import create_atlas_conversation
             response = create_atlas_conversation(data, provider, user)
             if isinstance(response, Response):

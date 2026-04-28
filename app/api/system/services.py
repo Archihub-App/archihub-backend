@@ -1043,6 +1043,8 @@ def get_system_settings():
 
         plugin_info = plugin_module.plugin_info.copy()
 
+        print(p, plugin_info)
+
         plugin_bp = plugin_module.ExtendedPluginClass(
             p, __name__, **plugin_info, isTask=True)
 
