@@ -250,6 +250,14 @@ def _process_image_to_base64(image_path):
         return base64.b64encode(f.read()).decode('utf-8')
 
 
+def _to_positive_int(value):
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 1 else None
+
+
 def _aisuite_response_to_dict(response):
     """Normalize an aisuite ChatCompletionResponse to the internal dict format."""
     message = response.choices[0].message
@@ -554,10 +562,13 @@ class OpenAIProvider(BaseLLMProvider):
             processed_messages = _preprocess_messages_openai_compat(call_messages, self.process_image)
 
             create_kwargs: dict = {"model": model, "messages": processed_messages, "stream": stream}
+            max_tokens_value = _to_positive_int(kwargs.get("max_tokens"))
             if uses_max_completion_tokens:
-                create_kwargs["max_completion_tokens"] = kwargs.get("max_tokens", 2048)
+                if max_tokens_value is not None:
+                    create_kwargs["max_completion_tokens"] = max_tokens_value
             else:
-                create_kwargs["max_tokens"] = kwargs.get("max_tokens", 2048)
+                if max_tokens_value is not None:
+                    create_kwargs["max_tokens"] = max_tokens_value
                 create_kwargs["temperature"] = kwargs.get("temperature", 0.5)
             if tools:
                 create_kwargs['tools'] = tools
@@ -618,7 +629,7 @@ class OllamaProvider(BaseLLMProvider):
                         "id": mid,
                         "name": mid,
                         "type": "embedding" if is_embed else "chat",
-                        "max_tokens": 512 if is_embed else 100000,
+                        "max_tokens": 512 if is_embed else 65000,
                         "capabilities": ["embedding"] if is_embed
                                         else (["chat", "image"] if is_vision else ["chat"]),
                     })
@@ -637,7 +648,7 @@ class OllamaProvider(BaseLLMProvider):
             raise ValueError(f"Model {model} is not installed in Ollama. Available: {model_ids}")
 
         model_info = next((m for m in models if m['id'] == model), None)
-        max_tokens = model_info.get('max_tokens', 100000) if model_info else 100000
+        max_tokens = model_info.get('max_tokens', 65000) if model_info else 65000
 
         def _do_request(call_messages):
             processed_messages = _preprocess_messages_ollama(call_messages, self.process_image)
