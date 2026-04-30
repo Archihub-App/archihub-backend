@@ -1762,7 +1762,10 @@ def update_article_body(id, body, user):
         # check if the user has access to edit the resource
         post_type = resource['post_type']
         post_type_roles = cache_type_roles(post_type)
+        print(body)
         article_body = body.get('articleBody', None)
+
+        print(article_body)
         
         if article_body is None:
             return {'msg': _('Article body is required')}, 400

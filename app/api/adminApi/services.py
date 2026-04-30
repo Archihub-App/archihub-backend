@@ -1,5 +1,6 @@
 from app.utils import DatabaseHandler
 from flask_babel import _
+from flask import jsonify
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -65,3 +66,26 @@ def get_type(slug, user):
 def update_type(body, user):
     from app.api.types.services import update_by_slug
     return update_by_slug(body['slug'], body, user)
+
+
+def get_system_info(user):
+    try:
+        post_types = list(mongodb.get_all_records(
+            'post_types',
+            {},
+            [('name', 1)],
+            fields={'_id': 0, 'name': 1, 'slug': 1, 'description': 1}
+        ))
+        published_resources = mongodb.count('resources', {'status': 'published'})
+        records_count = mongodb.count('records', {'status': {'$ne': 'deleted'}})
+
+        return {
+            'user': user,
+            'post_types': post_types,
+            'metrics': {
+                'published_resources': published_resources,
+                'records_count': records_count,
+            }
+        }, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500

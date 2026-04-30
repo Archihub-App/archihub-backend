@@ -12,7 +12,7 @@ def get_info(username, isAdmin):
     if not isAdmin:
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
-    return ({'user': username},200)
+    return services.get_system_info(username)
 
 # Nuevo POST endpoint para crear nuevos recursos
 @bp.route('/create', methods=['POST'])

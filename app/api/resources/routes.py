@@ -663,6 +663,8 @@ def update_article_body(resource_id):
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     body = request.json
+
+    print(body)
     
     if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'admin'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401

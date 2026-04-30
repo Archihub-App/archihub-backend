@@ -2,6 +2,7 @@ from app.utils import DatabaseHandler
 from app.api.aiservices.models import Conversation, ConversationUpdate
 from bson.objectid import ObjectId
 import datetime
+import os
 from flask import Response, stream_with_context
 from .StreamingUtils import (
     ThinkingStepTracker,
@@ -10,6 +11,39 @@ from .StreamingUtils import (
     sse_data,
 )
 mongodb = DatabaseHandler.DatabaseHandler()
+WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
+
+
+def get_document_page_image_path(record_id, page):
+    record = mongodb.get_record('records', {'_id': ObjectId(record_id)}, fields={'processing.fileProcessing': 1})
+
+    if not record:
+        raise Exception('Record no existe')
+
+    if 'processing' not in record or 'fileProcessing' not in record['processing']:
+        raise Exception('Record no ha sido procesado')
+
+    file_processing = record['processing']['fileProcessing']
+    if file_processing.get('type') != 'document':
+        raise Exception('Record no es de tipo document')
+
+    path = file_processing.get('path')
+    if not path:
+        raise Exception('Record no ha sido procesado')
+
+    path_files = os.path.join(WEB_FILES_PATH, path, 'web/big/')
+    if not os.path.exists(path_files):
+        raise Exception('No existe la ruta del documento')
+
+    files = sorted(os.listdir(path_files))
+    if page < 1 or page > len(files):
+        raise Exception('Record no tiene tantas páginas')
+
+    image_path = os.path.join(path_files, files[page - 1])
+    if not os.path.exists(image_path):
+        raise Exception('No existe el archivo')
+
+    return image_path
 
 def order_and_filter_blocks(page_data):
     """
@@ -117,7 +151,15 @@ def create_document_conversation(body, provider, user):
     processing_slug = body['slug']
     conversation_id = body['conversation_id']
     opts = body.get('opts', {})
-    page = opts.get('page', 1)
+    opt = body.get('opt', 'document_ocr')
+    try:
+        page = int(opts.get('page', 1))
+    except (TypeError, ValueError):
+        page = 1
+
+    if opt not in ('document_ocr', 'image'):
+        opt = 'document_ocr'
+
     stream = resolve_stream_flag(body)
     
     from app.api.records.services import get_by_id
@@ -125,24 +167,30 @@ def create_document_conversation(body, provider, user):
     if status != 200:
         raise Exception('Error al obtener el record')
     
-    from app.utils.functions import cache_get_block_by_page_id
-    try:
-        processing, status = cache_get_block_by_page_id(record_id, page, processing_slug, 'blocks')
-    except Exception as e:
-        raise Exception('Error al obtener el procesamiento del record')
-    
-    ordered_data = order_and_filter_blocks(processing)
-    
-    clean_text = extract_clean_text(ordered_data)
-    
-    clean_text = """
-    ---
-    PAGE: {page}
-    ---
-    """.format(page=page) + clean_text
-    
-    tokens = provider.calculate_tokens(clean_text)
-    print(f"Tokens: {tokens}")
+    page_image_path = None
+    clean_text = None
+
+    if opt == 'image':
+        page_image_path = get_document_page_image_path(record_id, page)
+    else:
+        from app.utils.functions import cache_get_block_by_page_id
+        try:
+            processing, status = cache_get_block_by_page_id(record_id, page, processing_slug, 'blocks')
+        except Exception:
+            raise Exception('Error al obtener el procesamiento del record')
+
+        ordered_data = order_and_filter_blocks(processing)
+
+        clean_text = extract_clean_text(ordered_data)
+
+        clean_text = """
+        ---
+        PAGE: {page}
+        ---
+        """.format(page=page) + clean_text
+
+        tokens = provider.calculate_tokens(clean_text)
+        print(f"Tokens: {tokens}")
     
     from . import prompts
     
@@ -163,12 +211,28 @@ def create_document_conversation(body, provider, user):
                 'content': msg['content']
             })
             
-    # Combine document context and user question into a single user turn so that
-    # providers which reject consecutive same-role messages work correctly.
-    user_turn = {
-        'role': 'user',
-        'content': f"Document content:\n\n{clean_text}\n\n---\n\n{message}"
-    }
+    if opt == 'image':
+        user_turn = {
+            'role': 'user',
+            'content': [
+                {
+                    'type': 'image_path',
+                    'path': page_image_path
+                },
+                {
+                    'type': 'text',
+                    'text': f"Document page: {page}\n\n{message}"
+                }
+            ]
+        }
+    else:
+        # Combine document context and user question into a single user turn so that
+        # providers which reject consecutive same-role messages work correctly.
+        user_turn = {
+            'role': 'user',
+            'content': f"Document content:\n\n{clean_text}\n\n---\n\n{message}"
+        }
+
     messages.append(user_turn)
 
     resp = provider.call(messages, model=model, stream=stream)
