@@ -161,26 +161,74 @@ def set_conversation(data, user):
         return {'msg': str(e)}, 500
 
 def get_conversation_history(data, user):
-    type = data['type']
-    id = data['id']
+    conversation_type = data.get('type')
+    target_id = data.get('id')
+    processing_slug = data.get('processing_slug') or data.get('slug')
     try:
-        if type == 'record' or type == 'transcription':
+        fields = {
+            '_id': 1,
+            'created_at': 1,
+            'messages': 1,
+            'updated_at': 1,
+            'type': 1,
+            'processing_slug': 1,
+        }
+
+        if conversation_type == 'record' or conversation_type == 'transcription' or conversation_type == 'document':
             from app.api.records.services import get_by_id
-            resp_, status = get_by_id(id, user)
+            resp_, status = get_by_id(target_id, user)
             if status != 200:
                 raise Exception('Error al obtener el record')
-            
-            conversations = list(mongodb.get_all_records('conversations', {'record_id': id, 'user': user}, fields={'_id': 1, 'created_at': 1, 'messages': 1, 'updated_at': 1}, sort=[('updated_at', -1)]))
+
+            filters = {'record_id': target_id, 'user': user}
+            if conversation_type == 'transcription' or conversation_type == 'document':
+                filters['type'] = conversation_type
+                if processing_slug:
+                    filters['processing_slug'] = processing_slug
+
+            conversations = list(mongodb.get_all_records(
+                'conversations',
+                filters,
+                fields=fields,
+                sort=[('updated_at', -1)]
+            ))
             conversations = parse_result(conversations)
             for c in conversations:
-                c['messages'] = [c['messages'][0]]
+                if c.get('messages'):
+                    c['messages'] = [c['messages'][0]]
             return conversations, 200
-        elif type == 'image_gallery':
-            conversations = list(mongodb.get_all_records('conversations', {'resource_id': id, 'user': user}, fields={'_id': 1, 'created_at': 1, 'messages': 1, 'updated_at': 1}, sort=[('updated_at', -1)]))
+
+        elif conversation_type == 'image_gallery':
+            conversations = list(mongodb.get_all_records(
+                'conversations',
+                {'resource_id': target_id, 'user': user, 'type': 'image_gallery'},
+                fields=fields,
+                sort=[('updated_at', -1)]
+            ))
             conversations = parse_result(conversations)
             for c in conversations:
-                c['messages'] = [process_img_message_content(c['messages'][0])]
+                if c.get('messages'):
+                    c['messages'] = [process_img_message_content(c['messages'][0])]
             return conversations, 200
+
+        elif conversation_type == 'atlas':
+            filters = {'user': user, 'type': 'atlas'}
+            if processing_slug:
+                filters['processing_slug'] = processing_slug
+
+            conversations = list(mongodb.get_all_records(
+                'conversations',
+                filters,
+                fields=fields,
+                sort=[('updated_at', -1)]
+            ))
+            conversations = parse_result(conversations)
+            for c in conversations:
+                if c.get('messages'):
+                    c['messages'] = [c['messages'][0]]
+            return conversations, 200
+
+        return [], 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -224,8 +272,19 @@ def get_conversation(id, user):
     except Exception as e:
         return {'msg': str(e)}, 500
     
-def delete_conversation(id):
-    pass
+def delete_conversation(id, user):
+    try:
+        if not ObjectId.is_valid(id):
+            return {'msg': 'ID de conversación inválido'}, 400
+
+        conversation = mongodb.get_record('conversations', {'_id': ObjectId(id), 'user': user}, fields={'_id': 1})
+        if not conversation:
+            return {'msg': 'Conversación no encontrada'}, 404
+
+        mongodb.delete_record('conversations', {'_id': ObjectId(id), 'user': user})
+        return {'msg': 'Conversación eliminada'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
     
 def process_img_message_content(message):
     import base64

@@ -76,12 +76,19 @@ def get_system_info(user):
             [('name', 1)],
             fields={'_id': 0, 'name': 1, 'slug': 1, 'description': 1}
         ))
+        from app.api.system.services import get_system_settings
+        system_settings, status = get_system_settings()
+        if status != 200:
+            return system_settings, status
+
+        capabilities = system_settings.get('capabilities', [])
         published_resources = mongodb.count('resources', {'status': 'published'})
         records_count = mongodb.count('records', {'status': {'$ne': 'deleted'}})
 
         return {
             'user': user,
             'post_types': post_types,
+            'capabilities': capabilities,
             'metrics': {
                 'published_resources': published_resources,
                 'records_count': records_count,

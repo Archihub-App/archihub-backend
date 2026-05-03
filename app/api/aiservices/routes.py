@@ -121,7 +121,7 @@ def delete_conversation(id):
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
-    conversation = services.delete_conversation(id)
+    conversation = services.delete_conversation(id, current_user)
     return conversation
 
 @bp.route('/conversation/history', methods=['POST'])
