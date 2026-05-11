@@ -556,7 +556,8 @@ def get_by_id(id, current_user, fullFields=False):
             to_clean = []
             for p in record['parent']:
                 r_ = mongodb.get_record('resources', {'_id': ObjectId(p['id'])}, fields={
-                                        'metadata.firstLevel.title': 1, 'post_type': 1})
+                                        'metadata.firstLevel.title': 1, 'post_type': 1, 'status': 'published'})
+                
                 if r_:
                     p['name'] = r_['metadata']['firstLevel']['title']
                     p['icon'] = get_icon(r_['post_type'])

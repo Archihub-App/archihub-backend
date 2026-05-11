@@ -288,14 +288,15 @@ def celery_init_app(app: Flask) -> Celery:
         "worker_concurrency": 1 if worker_pool == "solo" else int(os.environ.get("CELERYD_CONCURRENCY", 1)),
         "worker_prefetch_multiplier": 1,
         "task_acks_late": True,
+        'broker_transport_options': {'visibility_timeout': 43200},
+        'task_time_limit': 43200,
+        'task_soft_time_limit': 43000,
     }
     if worker_pool:
         celery_config["worker_pool"] = worker_pool
 
     celery_app.conf.update(**celery_config)
-    celery_app.conf.beat_schedule = {
-        *scheduled_tasks
-    }
+    celery_app.conf.beat_schedule = scheduled_tasks
     celery_app.set_default()
     app.extensions["celery"] = celery_app
     return celery_app

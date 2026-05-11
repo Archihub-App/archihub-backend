@@ -4,7 +4,7 @@ from flask import jsonify
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
-def autoComplete(body):
+def autoComplete(body, update=False):
     if 'filesIds' not in body:
         body['filesIds'] = []
     if 'post_type' not in body:
@@ -21,20 +21,26 @@ def autoComplete(body):
         body['parents'] = []
     if 'updateCache' not in body:
         body['updateCache'] = False
+
+    if update and 'deletedFiles' not in body:
+        body['deletedFiles'] = []
         
     return body
 
 def create(body, user, files):
+    print(body)
     body = autoComplete(body)
     from app.api.resources.services import create as create_resource
     return create_resource(body, user, files, body['updateCache'])
 
 def update(id, body, user, files):
-    body = autoComplete(body)
+    body = autoComplete(body, True)
+    print(body)
     from app.api.resources.services import update_by_id as update_resource
     return update_resource(id, body, user, files, body['updateCache'])
 
 def get_id(body, user):
+    print(body)
     resource = None
     resource = mongodb.get_record('resources', body, {'_id': 1, 'post_type': 1, 'metadata': 1, 'filesObj': 1, 'parent': 1, 'parents': 1})
     if resource is None:
