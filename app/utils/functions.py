@@ -8,6 +8,7 @@ import os
 from dotenv import load_dotenv
 from PIL import Image
 from flask import Response, jsonify
+from flask_babel import gettext as _
 import datetime
 import base64
 import unicodedata
@@ -57,7 +58,7 @@ def get_roles_id():
         access_rights = mongodb.get_record('system', {'name': 'access_rights'})
         # Si el registro no existe, retornar error
         if not access_rights:
-            raise Exception('No existe el registro access_rights')
+            raise Exception(_('The access_rights record does not exist'))
 
         roles = access_rights['data'][1]['value']
 
@@ -95,7 +96,7 @@ def get_roles():
 
     except Exception as e:
         raise Exception(
-            'Error al obtener el registro access_rights: ' + str(e))
+            _('Error while getting the access_rights record: {error}', error=str(e)))
 
 
 @cacheHandler.cache.cache()
@@ -105,7 +106,7 @@ def get_access_rights_id():
         access_rights = mongodb.get_record('system', {'name': 'access_rights'})
         # Si el registro no existe, retornar error
         if not access_rights:
-            raise Exception('No existe el registro access_rights')
+            raise Exception(_('The access_rights record does not exist'))
 
         list_id = access_rights['data'][0]['value']
 
@@ -131,7 +132,7 @@ def get_access_rights():
         return list
 
     except Exception as e:
-        raise Exception('Error al obtener el registro access_rights')
+        raise Exception(_('Error while getting the access_rights record'))
 
 
 def verify_role_exists(compare):
@@ -140,7 +141,7 @@ def verify_role_exists(compare):
 
     for role in compare:
         if role['id'] not in [r['id'] for r in roles]:
-            raise Exception('El rol ' + role['id'] + ' no existe')
+            raise Exception(_('The role {role} does not exist', role=role['id']))
         temp.append(role['id'])
 
     return temp
@@ -152,8 +153,7 @@ def verify_accessright_exists(compare):
 
     for access_right in compare:
         if access_right['id'] not in [r['id'] for r in access_rights]:
-            raise Exception('El derecho de acceso ' +
-                            access_right['id'] + ' no existe')
+            raise Exception(_('The access right {access_right} does not exist', access_right=access_right['id']))
         temp.append(access_right['id'])
 
     return temp
@@ -168,7 +168,7 @@ def get_list_by_id(id):
             'name': lista['name'], 'description': lista['description'], 'options': lista['options']}
         # Si el listado no existe, retornar error
         if not lista:
-            return {'msg': 'Listado no existe'}
+            return {'msg': _('List does not exist')}
 
         opts = []
 
@@ -368,15 +368,15 @@ def cache_get_record_stream(id):
 
     # Si el record no existe, retornar error
     if not record:
-        raise Exception('Record no existe')
+        raise Exception(_('Record does not exist'))
     # si el record no se ha procesado, retornar error
     if 'processing' not in record:
         if 'fileProcessing' not in record['processing']:
-            raise Exception('Record no ha sido procesado')
+            raise Exception(_('Record has not been processed'))
 
     # si el record no es de tipo audio o video, retornar error
     if record['processing']['fileProcessing']['type'] != 'audio' and record['processing']['fileProcessing']['type'] != 'video' and record['processing']['fileProcessing']['type'] != 'image':
-        raise Exception('Record no es de tipo audio, video o imagen')
+        raise Exception(_('Record is not audio, video, or image'))
 
     # obtener el path del archivo
     path = record['processing']['fileProcessing']['path']
@@ -392,12 +392,12 @@ def cache_get_processing_result(id, slug):
 
     # Si el record no existe, retornar error
     if not record:
-        raise Exception('Record no existe')
+        raise Exception(_('Record does not exist'))
     # si el record no se ha procesado, retornar error
     if 'processing' not in record:
-        raise Exception('Record no ha sido procesado')
+        raise Exception(_('Record has not been processed'))
     if slug not in record['processing']:
-        raise Exception('Record no ha sido procesado con el slug ' + slug)
+        raise Exception(_('Record has not been processed with {slug}', slug=slug))
 
     result = record['processing'][slug]['result']
     # iterate each key in result and if the value is a datetime, convert it to string
@@ -419,14 +419,14 @@ def cache_get_processing_metadata(id, slug):
 
     # Si el record no existe, retornar error
     if not record:
-        raise Exception('Record no existe')
+        raise Exception(_('Record does not exist'))
     # si el record no se ha procesado, retornar error
     if 'processing' not in record:
-        raise Exception('Record no ha sido procesado')
+        raise Exception(_('Record has not been processed'))
     if slug not in record['processing']:
-        raise Exception('Record no ha sido procesado con el slug ' + slug)
+        raise Exception(_('Record has not been processed with {slug}', slug=slug))
     if 'metadata' not in record['processing'][slug]['result']:
-        raise Exception('Record no tiene metadata')
+        raise Exception(_('Record does not contain metadata'))
 
     return record['processing'][slug]['result']['metadata']
 
@@ -461,11 +461,11 @@ def _get_transcription_result_cached(id, slug):
         'records', {'_id': ObjectId(id)}, fields={'processing': 1})
 
     if not record:
-        raise Exception('Record no existe')
+        raise Exception(_('Record does not exist'))
 
     processing = record.get('processing')
     if not processing or slug not in processing:
-        raise Exception('Record no ha sido procesado')
+        raise Exception(_('Record has not been processed'))
 
     processing_entry = processing[slug]
 
@@ -473,7 +473,7 @@ def _get_transcription_result_cached(id, slug):
         return processing_entry.get('result', {})
     
     if processing_entry.get('type') != 'av_transcribe':
-        raise Exception('Record no ha sido procesado con el slug ' + slug)
+        raise Exception(_('Record has not been processed with {slug}', slug=slug))
 
     return processing_entry.get('result', {})
 
@@ -729,12 +729,12 @@ def cache_get_record_document_detail(id):
 
     # Si el record no existe, retornar error
     if not record:
-        raise Exception('Record no existe')
+        raise Exception(_('Record does not exist'))
     # si el record no se ha procesado, retornar error
     if 'processing' not in record:
-        raise Exception('Record no ha sido procesado')
+        raise Exception(_('Record has not been processed'))
     if 'fileProcessing' not in record['processing']:
-        raise Exception('Record no ha sido procesado')
+        raise Exception(_('Record has not been processed'))
     
 
     if record['processing']['fileProcessing']['type'] == 'document':
@@ -743,7 +743,7 @@ def cache_get_record_document_detail(id):
 
         files = sorted(os.listdir(path_small))
         if len(files) == 0:
-            raise Exception('Record no tiene archivos')
+            raise Exception(_('Record does not have files'))
         
         # get the first file in the directory and get the dimensions of the image
         file = files[0]
@@ -762,7 +762,7 @@ def cache_get_record_document_detail(id):
         path_small = path_small + '_small.jpg'
 
         if not os.path.exists(path_small):
-            raise Exception('Record no tiene archivos')
+            raise Exception(_('Record does not have files'))
         
         img = Image.open(path_small)
         width, height = img.size
@@ -794,9 +794,9 @@ def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
         
     # si el record no se ha procesado, retornar error
     if 'processing' not in record:
-        raise Exception('Record no ha sido procesado')
+        raise Exception(_('Record has not been processed'))
     if 'fileProcessing' not in record['processing']:
-        raise Exception('Record no ha sido procesado')
+        raise Exception(_('Record has not been processed'))
     
     # get path of the file and calculate aspect ratio
     if record['processing']['fileProcessing']['type'] == 'document':
@@ -807,13 +807,13 @@ def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
         files = sorted(os.listdir(path_files))
 
         if page > len(files):
-            raise Exception('Record no tiene tantas páginas')
+            raise Exception(_('Record does not have that many pages'))
         
         # verificar si el archivo existe
         file = files[page - 1]
         file = os.path.join(path_files, file)
         if not os.path.exists(file):
-            raise Exception('No existe el archivo')
+            raise Exception(_('File not found'))
 
         resp = record['processing'][slug]['result'][page - 1]
         labels = record['processing'][slug]['labels'] if 'labels' in record['processing'][slug] else []
@@ -835,7 +835,7 @@ def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
 
             resp = resp_
         else:
-            return {'msg': 'Record no tiene bloques o palabras'}, 400
+            return {'msg': _('Record does not have blocks or words')}, 400
     
         return resp, 200
     elif record['processing']['fileProcessing']['type'] == 'image':
@@ -845,9 +845,9 @@ def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
         if 'blocks' in resp:
             return resp['blocks'], 200
         else:
-            return {'msg': 'Record no tiene bloques'}, 400
+            return {'msg': _('Record does not have blocks')}, 400
     else:
-        return {'msg': 'Record no es de tipo document'}, 400    
+        return {'msg': _('Record is not a document')}, 400    
 
 @cacheHandler.cache.cache(limit=5000)
 def cache_get_imgs_gallery_by_id(id, pages, size):
@@ -881,7 +881,7 @@ def cache_get_imgs_gallery_by_id(id, pages, size):
         path_img = path_img + '_' + size + '.jpg'
 
         if not os.path.exists(path_img):
-            raise Exception('No existe el archivo')
+            raise Exception(_('File not found'))
         
         img_ = Image.open(path_img)
         width, height = img_.size
@@ -907,12 +907,12 @@ def cache_get_pages_by_id(id, pages, size):
 
     # Si el record no existe, retornar error
     if not record:
-        raise Exception('Record no existe')
+        raise Exception(_('Record does not exist'))
     # si el record no se ha procesado, retornar error
     if 'processing' not in record:
-        raise Exception('Record no ha sido procesado')
+        raise Exception(_('Record has not been processed'))
     if 'fileProcessing' not in record['processing']:
-        raise Exception('Record no ha sido procesado')
+        raise Exception(_('Record has not been processed'))
     
     
     if record['processing']['fileProcessing']['type'] == 'document':
@@ -925,13 +925,13 @@ def cache_get_pages_by_id(id, pages, size):
         response = []
         for x in pages:
             if x >= len(files):
-                raise Exception('Record no tiene tantas páginas')
+                raise Exception(_('Record does not have that many pages'))
             
             # verificar si el archivo existe
             file = files[x]
             file = os.path.join(path_files, file)
             if not os.path.exists(file):
-                raise Exception('No existe el archivo')
+                raise Exception(_('File not found'))
             
             with open(file, 'rb') as f:
                 data = f.read()
@@ -947,7 +947,7 @@ def cache_get_pages_by_id(id, pages, size):
         path_img = path_img + '_' + size + '.jpg'
 
         if not os.path.exists(path_img):
-            raise Exception('No existe el archivo')
+            raise Exception(_('File not found'))
         
         response = {}
         img = Image.open(path_img)
@@ -969,7 +969,7 @@ def cache_type_roles(slug):
 
         # Si el tipo de contenido no existe, retornar error
         if not type:
-            raise Exception('Tipo de contenido no existe')
+            raise Exception(_('Post type does not exist'))
         
         roles = {
             'editRoles': None,
@@ -987,14 +987,14 @@ def cache_type_roles(slug):
         return roles
     except Exception as e:
         raise Exception(
-            'Error al obtener el registro access_rights: ' + str(e))
+            _('Error while getting the access_rights record: {error}', error=str(e)))
     
 @cacheHandler.cache.cache()
 def has_right(username, right):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     # Si el usuario tiene el rol, retornar True
     if right in user['accessRights']:
         return True
@@ -1006,7 +1006,7 @@ def has_role(username, role):
     user = mongodb.get_record('users', {'username': username})
     # Si el usuario no existe, retornar error
     if not user:
-        return jsonify({'msg': 'Usuario no existe'}), 400
+        return jsonify({'msg': _('User does not exist')}), 400
     # Si el usuario tiene el rol, retornar True
     if role in user['roles']:
         return True

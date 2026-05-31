@@ -1,5 +1,5 @@
 import datetime
-from flask import jsonify, request
+from flask import jsonify, request, current_app
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from app.utils import VectorDatabaseHandler
@@ -432,6 +432,18 @@ def evaluate_plugin_info_node(node, context):
     if isinstance(node, ast.Constant):
         return node.value
 
+    if isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name):
+            raise ValueError(f'Unsupported call type: {type(node.func).__name__}')
+
+        if node.func.id not in {'_', 'gettext'}:
+            raise ValueError(f'Unsupported call name: {node.func.id}')
+
+        if len(node.args) != 1 or node.keywords:
+            raise ValueError('Translation calls must have a single positional argument')
+
+        return evaluate_plugin_info_node(node.args[0], context)
+
     if isinstance(node, ast.Name):
         if node.id not in context:
             raise ValueError(f'Unknown name: {node.id}')
@@ -512,7 +524,13 @@ def get_plugins():
         for plugin in plugins:
             plugin_init_path = f'{plugins_path}/{plugin}/__init__.py'
             if os.path.isfile(plugin_init_path):
-                plugin_instance = get_plugin_info_from_file(plugin_init_path)
+                try:
+                    plugin_instance = get_plugin_info_from_file(plugin_init_path)
+                except ValueError as exc:
+                    current_app.logger.warning(
+                        'Skipping plugin %s: %s', plugin, exc)
+                    continue
+
                 plugin_instance['slug'] = plugin
 
                 if plugin in active_plugins['data']:
@@ -568,7 +586,7 @@ def change_plugin_status(plugin, user):
         # Obtener todas las carpetas en la carpeta ../../plugins
         plugins = os.listdir(plugins_path)
         if plugin not in plugins:
-            return {'msg': 'Plugin no existe'}, 404
+            return {'msg': gettext('Plugin does not exist')}, 404
 
         if plugin in active_plugins['data']:
             active_plugins['data'].remove(plugin)
@@ -847,16 +865,16 @@ def index_resources(user):
             'system', {'name': 'index_management'})
         # Si el registro no existe, retornar error
         if not index_management:
-            return {'msg': 'No existe el registro index_management'}, 404
+            return {'msg': gettext('The index_management record does not exist')}, 404
 
         if not index_management['data'][0]['value']:
-            return {'msg': 'Indexación no está activada'}, 400
+            return {'msg': gettext('Indexing is not enabled')}, 400
 
         task = index_resources_task.delay()
         add_task(task.id, 'system.index_resources', user, 'msg')
 
         # Retornar el resultado
-        return {'msg': 'Se ha agregado la tarea de indexación de todo el contenido a la fila de procesos'}, 200
+        return {'msg': gettext('The full content indexing task was added to the processing queue')}, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -866,14 +884,14 @@ def regenerate_index_geometries(user):
     from app.api.geosystem.services import regenerate_index_shapes
     task = regenerate_index_shapes.delay()
     add_task(task.id, 'geosystem.regenerate_index_shapes', user, 'msg')
-    return {'msg': 'Regeneración de geometrías iniciada'}, 200
+    return {'msg': gettext('Geometry regeneration started')}, 200
 
 
 def index_geometries(user):
     from app.api.geosystem.services import index_shapes
     task = index_shapes.delay()
     add_task(task.id, 'geosystem.index_shapes', user, 'msg')
-    return {'msg': 'Indexación de geometrías iniciada'}, 200
+    return {'msg': gettext('Geometry indexing started')}, 200
 
 
 def set_system_setting():
@@ -1022,7 +1040,7 @@ def set_first_time(body):
     mongodb.update_record(
         'system', {'name': 'access_rights'}, update)
 
-    return {'msg': 'System configured successfully, you can now log in'}, 200
+    return {'msg': gettext('System configured successfully, you can now log in')}, 200
 
 @cacheHandler.cache.cache()
 def get_system_settings():

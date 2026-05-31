@@ -250,7 +250,7 @@ msgstr "Error: el campo {field} tiene dos tipos diferentes"
 
 #: api/forms/services.py:414
 msgid " (copy)"
-msgstr ""
+msgstr " (copia)"
 
 #: api/geosystem/services.py:93
 msgid "Shapes uploaded successfully"
@@ -284,7 +284,7 @@ msgstr "Lista eliminada con éxito"
 
 #: api/llms/utils/BaseLLMProvider.py:18 api/llms/utils/BaseLLMProvider.py:21
 msgid "This method should be overridden by subclasses."
-msgstr ""
+msgstr "Este método debe ser sobrescrito por las subclases."
 
 #: api/logs/services.py:32
 msgid "Log created successfully"
@@ -399,7 +399,7 @@ msgstr "El registro no tiene transcripción"
 #: api/records/services.py:872 api/records/services.py:919
 #: api/records/services.py:974
 msgid "Record has not been processed with {slug}"
-msgstr ""
+msgstr "El registro no ha sido procesado con {slug}"
 
 #: api/records/services.py:898
 msgid "Transcription segment deleted"
@@ -780,7 +780,161 @@ msgstr "No puedes cambiar el nombre de usuario"
 
 #: api/users/services.py:176
 msgid "You must have at least one system role"
-msgstr ""
+msgstr "Debes tener al menos un rol del sistema"
+
+#: utils/functions.py:50 utils/functions.py:100
+msgid "The access_rights record does not exist"
+msgstr "No existe el registro access_rights"
+
+#: utils/functions.py:88 utils/functions.py:987
+msgid "Error while getting the access_rights record: {error}"
+msgstr "Error al obtener el registro access_rights: {error}"
+
+#: utils/functions.py:136
+msgid "Error while getting the access_rights record"
+msgstr "Error al obtener el registro access_rights"
+
+#: utils/functions.py:145
+msgid "The role {role} does not exist"
+msgstr "El rol {role} no existe"
+
+#: utils/functions.py:157
+msgid "The access right {access_right} does not exist"
+msgstr "El derecho de acceso {access_right} no existe"
+
+#: utils/functions.py:171
+msgid "List does not exist"
+msgstr "Listado no existe"
+
+#: utils/functions.py:377 utils/functions.py:401 utils/functions.py:428
+#: utils/functions.py:470 utils/functions.py:738 utils/functions.py:740
+#: utils/functions.py:799 utils/functions.py:801 utils/functions.py:915
+#: utils/functions.py:917
+msgid "Record has not been processed"
+msgstr "El registro no ha sido procesado"
+
+#: utils/functions.py:381
+msgid "Record is not audio, video, or image"
+msgstr "El registro no es de tipo audio, video o imagen"
+
+#: utils/functions.py:432
+msgid "Record does not contain metadata"
+msgstr "El registro no tiene metadata"
+
+#: utils/functions.py:748 utils/functions.py:767
+msgid "Record does not have files"
+msgstr "El registro no tiene archivos"
+
+#: utils/functions.py:812 utils/functions.py:930
+msgid "Record does not have that many pages"
+msgstr "El registro no tiene tantas páginas"
+
+#: utils/functions.py:840
+msgid "Record does not have blocks or words"
+msgstr "El registro no tiene bloques o palabras"
+
+#: utils/functions.py:850
+msgid "Record does not have blocks"
+msgstr "El registro no tiene bloques"
+
+#: utils/functions.py:852
+msgid "Record is not a document"
+msgstr "El registro no es de tipo document"
+
+#: plugins/document-maker-from-metadata/__init__.py:55
+#: utils/PluginClass.py:102
+msgid "No content type was specified"
+msgstr "No se especificó el tipo de contenido"
+
+#: plugins/document-maker-from-metadata/__init__.py:58
+#: utils/PluginClass.py:118 utils/PluginClass.py:159 utils/PluginClass.py:176
+#: utils/PluginClass.py:195
+msgid "You do not have sufficient permissions"
+msgstr "No tiene permisos suficientes"
+
+#: plugins/document-maker-from-metadata/__init__.py:63
+#: utils/templates/Plugin.py:37
+msgid "The task was added to the processing queue"
+msgstr "La tarea fue agregada a la cola de procesamiento"
+
+#: plugins/document-maker-from-metadata/__init__.py:140
+msgid "You must select a content type and a template"
+msgstr "Debe seleccionar un tipo de contenido y una plantilla"
+
+#: plugins/document-maker-from-metadata/__init__.py:146
+#: utils/PluginClass.py:204
+msgid "Settings saved"
+msgstr "Configuración guardada"
+
+#: plugins/document-maker-from-metadata/__init__.py:154
+msgid "Generate documents from metadata"
+msgstr "Generar documentos a partir de metadatos"
+
+#: plugins/document-maker-from-metadata/__init__.py:155
+msgid "Plugin to generate documents from metadata using predefined templates."
+msgstr "Plugin para generar documentos a partir de metadatos usando plantillas predefinidas."
+
+#: plugins/document-maker-from-metadata/__init__.py:163
+#: plugins/document-maker-from-metadata/__init__.py:176
+msgid "Instructions"
+msgstr "Instrucciones"
+
+#: plugins/document-maker-from-metadata/__init__.py:164
+msgid "This plugin allows generating documents from metadata using predefined templates. To configure it, select the content type and the template to use. These documents will be generated when creating or updating a record with the selected content type in the document manager."
+msgstr "Este plugin permite generar documentos a partir de metadatos usando plantillas predefinidas. Para configurarlo, seleccione el tipo de contenido y la plantilla a usar. Estos documentos se generarán al crear o actualizar un registro con el tipo de contenido seleccionado en el gestor documental."
+
+#: plugins/document-maker-from-metadata/__init__.py:169
+msgid "Content types to generate"
+msgstr "Tipos de contenido a generar"
+
+#: utils/FernetAuth.py:20 utils/FernetAuth.py:84 utils/FernetAuth.py:140
+msgid "Authentication token was not provided"
+msgstr "No se ha enviado el token de autenticación"
+
+#: utils/FernetAuth.py:35 utils/FernetAuth.py:157
+msgid "The token has expired"
+msgstr "El token ha expirado"
+
+#: utils/FernetAuth.py:45 utils/FernetAuth.py:104
+msgid "The user does not exist"
+msgstr "El usuario no existe"
+
+#: utils/FernetAuth.py:50 utils/FernetAuth.py:60 utils/FernetAuth.py:109
+#: utils/FernetAuth.py:119 utils/FernetAuth.py:167
+msgid "The token is not valid"
+msgstr "El token no es válido"
+
+#: utils/FernetAuth.py:63 utils/FernetAuth.py:122 utils/FernetAuth.py:163
+msgid "You do not have permission to perform this action"
+msgstr "No tiene permisos para realizar esta acción"
+
+#: api/system/services.py:571
+msgid "Plugin does not exist"
+msgstr "El plugin no existe"
+
+#: api/system/services.py:850
+msgid "The index_management record does not exist"
+msgstr "No existe el registro index_management"
+
+#: api/system/services.py:853
+msgid "Indexing is not enabled"
+msgstr "La indexación no está activada"
+
+#: api/system/services.py:859
+msgid "The full content indexing task was added to the processing queue"
+msgstr "La tarea de indexación de todo el contenido fue agregada a la cola de procesamiento"
+
+#: api/system/services.py:869
+msgid "Geometry regeneration started"
+msgstr "Regeneración de geometrías iniciada"
+
+#: api/system/services.py:876
+msgid "Geometry indexing started"
+msgstr "Indexación de geometrías iniciada"
+
+#: api/system/services.py:1025
+msgid "System configured successfully, you can now log in"
+msgstr "Sistema configurado con éxito, ya puede iniciar sesión"
 
 #: api/users/services.py:190 api/users/services.py:223
 msgid "User updated successfully"

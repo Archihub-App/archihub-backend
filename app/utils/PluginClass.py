@@ -1,5 +1,6 @@
 from flask import Blueprint, send_file, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_babel import gettext as _
 from app.api.tasks.services import add_task, has_task
 from app.api.users.services import has_role
 from app.api.system.models import OptionUpdate
@@ -116,7 +117,7 @@ class PluginClass(Blueprint):
     
     def validate_fields(self, body, slug):
         if 'post_type' not in body and slug == 'bulk':
-            return {'msg': 'No se especificó el tipo de contenido'}, 400
+            return {'msg': _('No content type was specified')}, 400
         
         settings = self.settings['settings_' + slug]
         for setting in settings:
@@ -124,9 +125,9 @@ class PluginClass(Blueprint):
                 setting['required'] = False
             else:
                 if setting['required'] and setting['id'] not in body:
-                    return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
+                    return {'msg': _('The field {label} is required', label=setting['label'])}, 400
                 if setting['type'] == 'file' and setting['required'] and len(body[setting['id']]) == 0:
-                    return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
+                    return {'msg': _('The field {label} is required', label=setting['label'])}, 400
                 
     def validate_roles(self, user, roles):
         temp = []
@@ -135,7 +136,7 @@ class PluginClass(Blueprint):
                 temp.append(role)
         
         if len(temp) == 0:
-            return {'msg': 'No tiene permisos suficientes'}, 401
+            return {'msg': _('You do not have sufficient permissions')}, 401
         
     
     def get_plugin_settings(self):
@@ -175,7 +176,7 @@ class PluginClass(Blueprint):
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': 'No tiene permisos suficientes'}, 401
+                    return {'msg': _('You do not have sufficient permissions')}, 401
                 
                 path = os.path.dirname(os.path.abspath(self.filePath)) + '/static/image.png'
                 return send_file(path, mimetype='image/png')
@@ -190,7 +191,7 @@ class PluginClass(Blueprint):
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': 'No tiene permisos suficientes'}, 401
+                    return {'msg': _('You do not have sufficient permissions')}, 401
                 
                 if type == 'all':
                     return self.settings
@@ -208,7 +209,7 @@ class PluginClass(Blueprint):
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': 'No tiene permisos suficientes'}, 401
+                    return {'msg': _('You do not have sufficient permissions')}, 401
                 
                 body = request.form.to_dict()
                 data = body['data']
@@ -217,7 +218,7 @@ class PluginClass(Blueprint):
                 print(data)
 
                 self.set_plugin_settings(data)
-                return {'msg': 'Configuración guardada'}, 200
+                return {'msg': _('Settings saved')}, 200
             
             except Exception as e:
                 return {'msg': str(e)}, 500

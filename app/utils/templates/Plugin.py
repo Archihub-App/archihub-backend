@@ -1,5 +1,6 @@
 from app.utils.PluginClass import PluginClass
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_babel import gettext as _
 from app.utils import DatabaseHandler
 from flask import request
 from celery import shared_task
@@ -33,7 +34,7 @@ class ExtendedPluginClass(PluginClass):
             task = self.bulk.delay(body, current_user)
             self.add_task_to_user(task.id, 'FUNCNAME', current_user, 'msg')
             
-            return {'msg': 'Se agregó la tarea a la fila de procesamientos'}, 201
+            return {'msg': _('The task was added to the processing queue')}, 201
         
     @shared_task(ignore_result=False, name='FUNCNAME')
     def bulk(body, user):
