@@ -388,7 +388,7 @@ class AzureProvider(BaseLLMProvider):
                 "model": model,
                 "messages": processed_messages,
                 "max_tokens": kwargs.get("max_tokens", 2048),
-                "temperature": kwargs.get("temperature", 0.5),
+                "temperature": kwargs.get("temperature", 0.2),
                 "stream": stream,
             }
             if tools:
@@ -483,7 +483,7 @@ class GoogleProvider(BaseLLMProvider):
             create_kwargs = {
                 'model': model,
                 'messages': processed_messages,
-                'temperature': kwargs.get("temperature", 0.5),
+                'temperature': kwargs.get("temperature", 0.2),
                 'max_tokens': kwargs.get("max_tokens", 2048),
                 'stream': stream,
             }
@@ -569,7 +569,7 @@ class OpenAIProvider(BaseLLMProvider):
             else:
                 if max_tokens_value is not None:
                     create_kwargs["max_tokens"] = max_tokens_value
-                create_kwargs["temperature"] = kwargs.get("temperature", 0.5)
+                create_kwargs["temperature"] = kwargs.get("temperature", 0.2)
             if tools:
                 create_kwargs['tools'] = tools
                 if tool_choice:
@@ -740,7 +740,7 @@ class LlamaServerProvider(BaseLLMProvider):
             create_kwargs = {
                 'model': model,
                 'messages': processed_messages,
-                'temperature': kwargs.get("temperature", 0.5),
+                'temperature': kwargs.get("temperature", 0.2),
                 'max_tokens': max_tokens,
                 'stream': stream,
             }

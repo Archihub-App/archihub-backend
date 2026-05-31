@@ -22,6 +22,7 @@ from functools import reduce
 from app.utils import HookHandler
 from flask_babel import gettext
 from app.api.system.tasks.elasticTasks import index_resources_task, index_resources_delete_task, regenerate_index_task
+from app.runtime_restart import request_runtime_restart, schedule_local_restart
 import threading
 import time
 
@@ -546,9 +547,11 @@ def activate_plugin(body, current_user):
             'system', {'name': 'active_plugins'}, update_schema)
 
         get_plugins.invalidate_all()
+        request_runtime_restart('plugins_updated', mongodb)
+        schedule_local_restart()
 
         # Retornar el resultado
-        return {'msg': gettext('Plugins successfully updated, please restart the system')}, 200
+        return {'msg': gettext('Plugins successfully updated, restart requested')}, 200
     except Exception as e:
         raise Exception(
             gettext(u'Error while activating the plugins: {e}', e=str(e)))
@@ -578,9 +581,11 @@ def change_plugin_status(plugin, user):
             'system', {'name': 'active_plugins'}, update_schema)
 
         get_plugins.invalidate_all()
+        request_runtime_restart('plugin_status_updated', mongodb)
+        schedule_local_restart()
 
         # Retornar el resultado
-        return {'msg': gettext('Plugin successfully updated, please restart the system')}, 200
+        return {'msg': gettext('Plugin successfully updated, restart requested')}, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -893,12 +898,9 @@ def set_system_setting():
 
 
 def restart_system():
-    def shutdown():
-        time.sleep(1)
-        import signal
-        os.kill(1, signal.SIGTERM)
-    threading.Thread(target=shutdown).start()
-    return {'msg': gettext('System restarted successfully')}, 200
+    request_runtime_restart('manual_restart', mongodb)
+    schedule_local_restart()
+    return {'msg': gettext('System restart requested successfully')}, 200
 
 
 def set_first_time(body):
