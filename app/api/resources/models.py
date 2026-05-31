@@ -8,6 +8,7 @@ class Resource(BaseModel):
     id: str = Field(default_factory=uuid.uuid4, alias="_id")
     post_type: str
     metadata: dict
+    atlasWiki: Optional[dict] = None
     parents: Optional[list[dict]] = None
     parent: Optional[list[dict]] = None
     filesObj: list[dict] = []
@@ -43,6 +44,7 @@ class ResourceUpdate(BaseModel):
     post_type: Optional[str] = None
     ident: Optional[str] = None
     metadata: Optional[dict] = None
+    atlasWiki: Optional[dict] = None
     filesObj: Optional[list[dict]] = None
     parents: Optional[list[dict]] = None
     parent: Optional[list[dict]] = None

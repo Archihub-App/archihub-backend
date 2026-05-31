@@ -677,6 +677,57 @@ def update_article_body(resource_id):
     else:
         return resp 
 
+@bp.route('/<resource_id>/article/comments', methods=['POST'])
+@jwt_required()
+def add_article_block_comment(resource_id):
+    """
+    Guardar un comentario en un bloque del cuerpo del artículo
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Recursos
+    parameters:
+        - in: path
+            name: resource_id
+            schema:
+                type: string
+        - in: body
+            name: body
+            schema:
+                type: object
+                properties:
+                    blockIndex:
+                        type: integer
+                    blockId:
+                        type: string
+                    comment:
+                        type: string
+    responses:
+        200:
+            description: Comentario guardado exitosamente
+        400:
+            description: Solicitud inválida
+        401:
+            description: No tiene permisos para comentar el bloque
+        404:
+            description: Recurso o bloque no encontrado
+        500:
+            description: Error al guardar el comentario
+    """
+    current_user = get_jwt_identity()
+    body = request.json or {}
+
+    if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'admin'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    resp = services.add_article_block_comment(resource_id, body, current_user)
+
+    if isinstance(resp, list):
+        return tuple(resp)
+    else:
+        return resp
+
 @bp.route('/download_records', methods=['POST'])
 @jwt_required()
 def download_all_records():

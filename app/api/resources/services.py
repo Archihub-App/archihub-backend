@@ -74,11 +74,13 @@ WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 def change_value(body, route, value):
     route = route.split('.')
     temp = body
-    for i in range(len(route)):
+    for i, key in enumerate(route):
         if i == len(route) - 1:
-            temp[route[i]] = value
+            temp[key] = value
         else:
-            temp = temp[route[i]]
+            if key not in temp or not isinstance(temp[key], dict):
+                temp[key] = {}
+            temp = temp[key]
     return body
 
 # Funcion para parsear el resultado de una consulta a la base de datos
@@ -305,7 +307,8 @@ def get_all(body, user):
                 resource['files'] = len(resource['filesObj'])
                 resource.pop('filesObj')
 
-            resource['accessRights'] = get_option_by_id(resource['accessRights'])
+            access_rights = resource.get('accessRights')
+            resource['accessRights'] = get_option_by_id(access_rights) if access_rights else None
             if resource['accessRights'] and 'term' in resource['accessRights']:
                 resource['accessRights'] = resource['accessRights']['term']
             else:
@@ -1792,6 +1795,98 @@ def update_article_body(id, body, user):
         register_log(user, log_actions['resource_article_update'], {'resource': id, 'articleBody': article_body})
 
         return {'msg': _('Article body updated')}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def add_article_block_comment(id, body, user):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'post_type': 1, 'articleBody': 1})
+
+        if not resource:
+            return {'msg': _('Resource does not exist')}, 404
+
+        post_type_roles = cache_type_roles(resource['post_type'])
+        if post_type_roles['editRoles']:
+            canEdit = False
+            for role in post_type_roles['editRoles']:
+                if has_role(user, role) or has_role(user, 'admin'):
+                    canEdit = True
+                    break
+            if not canEdit:
+                return {'msg': _('You don\'t have the required authorization')}, 401
+
+        article_body = resource.get('articleBody') or []
+        if not isinstance(article_body, list):
+            return {'msg': _('Article body has an invalid format')}, 400
+
+        comment_text = body.get('comment')
+        block_index = body.get('blockIndex')
+        block_id = body.get('blockId')
+
+        if not isinstance(comment_text, str) or not comment_text.strip():
+            return {'msg': _('Comment is required')}, 400
+
+        if block_index is None and not block_id:
+            return {'msg': _('You must specify a block')}, 400
+
+        if block_index is not None:
+            if isinstance(block_index, bool) or not isinstance(block_index, numbers.Integral):
+                return {'msg': _('Block index must be an integer')}, 400
+            if block_index < 0 or block_index >= len(article_body):
+                return {'msg': _('Block does not exist')}, 404
+            target_index = int(block_index)
+        else:
+            target_index = next((index for index, block in enumerate(article_body) if isinstance(block, dict) and block.get('id') == block_id), None)
+            if target_index is None:
+                return {'msg': _('Block does not exist')}, 404
+
+        block = article_body[target_index]
+        if not isinstance(block, dict):
+            return {'msg': _('Block has an invalid format')}, 400
+
+        if block_id and block.get('id') and block.get('id') != block_id:
+            return {'msg': _('Block does not exist')}, 404
+
+        comments = block.get('comments')
+        if comments is None:
+            comments = []
+        elif not isinstance(comments, list):
+            return {'msg': _('Block comments have an invalid format')}, 400
+
+        created_at = datetime.utcnow()
+        new_comment = {
+            'comment': comment_text.strip(),
+            'user': user,
+            'createdAt': created_at
+        }
+
+        comments.append(new_comment)
+        block['comments'] = comments
+        article_body[target_index] = block
+
+        update = ResourceUpdate(articleBody=article_body, updatedAt=created_at, updatedBy=user)
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
+
+        get_article_body.invalidate(id, user)
+        get_resource.invalidate_all()
+
+        register_log(user, log_actions['resource_article_update'], {
+            'resource': id,
+            'blockIndex': target_index,
+            'blockId': block.get('id'),
+            'comment': new_comment['comment']
+        })
+
+        return {
+            'msg': _('Block comment added'),
+            'blockIndex': target_index,
+            'blockId': block.get('id'),
+            'comment': {
+                'comment': new_comment['comment'],
+                'user': new_comment['user'],
+                'createdAt': created_at.isoformat() + 'Z'
+            }
+        }, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 
