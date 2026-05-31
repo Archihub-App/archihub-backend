@@ -7,6 +7,7 @@ from app.api.system.models import OptionUpdate
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from app.utils import HookHandler
+from copy import deepcopy
 import uuid
 import os.path
 import requests
@@ -36,6 +37,46 @@ class PluginClass(Blueprint):
         self.actions = actions
         self.slug = path.replace('app.plugins.', '')
 
+    def _translate_display_node(self, value, parent_key=None):
+        translatable_keys = {'name', 'label', 'title', 'text', 'description', 'placeholder'}
+
+        if isinstance(value, dict):
+            translated = {}
+            for key, item in value.items():
+                translated[key] = self._translate_display_node(item, key)
+            return translated
+
+        if isinstance(value, list):
+            return [self._translate_display_node(item, parent_key) for item in value]
+
+        if isinstance(value, str) and parent_key in translatable_keys:
+            return _(value)
+
+        return value
+
+    def get_translated_settings(self):
+        if not self.settings:
+            return self.settings
+
+        return self._translate_display_node(deepcopy(self.settings))
+
+    def get_translated_actions(self):
+        if not self.actions:
+            return self.actions
+
+        return self._translate_display_node(deepcopy(self.actions))
+
+    def get_translated_info(self):
+        info = {
+            'name': self.name,
+            'description': self.description,
+            'version': self.version,
+            'author': self.author,
+            'type': self.type
+        }
+
+        return self._translate_display_node(info)
+
     def activate_settings(self):
         pass
     
@@ -43,16 +84,10 @@ class PluginClass(Blueprint):
         return self.capabilities
     
     def get_actions(self):
-        return self.actions
+        return self.get_translated_actions()
         
     def get_info(self):
-        return {
-            'name': self.name,
-            'description': self.description,
-            'version': self.version,
-            'author': self.author,
-            'type': self.type
-        }
+        return self.get_translated_info()
     
     def has_role(self, role, user):
         return has_role(user, role)
@@ -192,13 +227,15 @@ class PluginClass(Blueprint):
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
                     return {'msg': _('You do not have sufficient permissions')}, 401
+
+                translated_settings = self.get_translated_settings()
                 
                 if type == 'all':
-                    return self.settings
+                    return translated_settings
                 elif type == 'settings':
-                    return self.settings['settings']
+                    return translated_settings['settings']
                 else:
-                    return self.settings['settings_' + type]
+                    return translated_settings['settings_' + type]
             except Exception as e:
                 return {'msg': str(e)}, 500
             

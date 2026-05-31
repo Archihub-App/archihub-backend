@@ -31,6 +31,16 @@ mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 
 
+def translate_plugin_info_value(message):
+    if not isinstance(message, str):
+        return message
+
+    try:
+        return gettext(message)
+    except Exception:
+        return message
+
+
 def hookHandlerIndex():
     hookHandler.register('resource_create', index_resources_task, queue=101)
     hookHandler.register('resource_update', index_resources_task, queue=101)
@@ -442,7 +452,7 @@ def evaluate_plugin_info_node(node, context):
         if len(node.args) != 1 or node.keywords:
             raise ValueError('Translation calls must have a single positional argument')
 
-        return evaluate_plugin_info_node(node.args[0], context)
+        return translate_plugin_info_value(evaluate_plugin_info_node(node.args[0], context))
 
     if isinstance(node, ast.Name):
         if node.id not in context:

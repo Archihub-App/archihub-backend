@@ -31,6 +31,22 @@ load_dotenv()
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 
+
+def get_translation_directories():
+    app_root = os.path.abspath(os.path.dirname(__file__))
+    translation_directories = [os.path.join(app_root, 'translations')]
+    plugins_root = os.path.join(app_root, 'plugins')
+
+    if not os.path.isdir(plugins_root):
+        return ';'.join(translation_directories)
+
+    for plugin_name in sorted(os.listdir(plugins_root)):
+        plugin_translations_path = os.path.join(plugins_root, plugin_name, 'translations')
+        if os.path.isdir(plugin_translations_path):
+            translation_directories.append(plugin_translations_path)
+
+    return ';'.join(translation_directories)
+
 def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.system.services import set_system_setting
     set_system_setting()
@@ -52,7 +68,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     # Babel
     app.config['BABEL_DEFAULT_LOCALE'] = 'en'
     app.config['BABEL_SUPPORTED_LOCALES'] = ['es', 'en']
-    app.config['BABEL_TRANSLATION_DIRECTORIES'] = os.path.join(os.path.abspath(os.path.dirname(__file__)), "translations")
+    app.config['BABEL_TRANSLATION_DIRECTORIES'] = get_translation_directories()
     
     # agregar CORS
     frontend_url = os.environ.get('URL_FRONTEND')
