@@ -150,6 +150,8 @@ def create_document_conversation(body, provider, user):
     record_id = body['id']
     processing_slug = body['slug']
     conversation_id = body['conversation_id']
+    applied_skills = body.get('applied_skills', [])
+    skill_paths = body.get('skill_paths', [])
     opts = body.get('opts', {})
     opt = body.get('opt', 'document_ocr')
     try:
@@ -235,7 +237,14 @@ def create_document_conversation(body, provider, user):
 
     messages.append(user_turn)
 
-    resp = provider.call(messages, model=model, stream=stream)
+    resp = provider.call(
+        messages,
+        model=model,
+        stream=stream,
+        skill_paths=skill_paths,
+        skills=applied_skills,
+        skill_context_applied=False,
+    )
 
     if stream and not isinstance(resp, dict):
         def generate():
@@ -263,6 +272,7 @@ def create_document_conversation(body, provider, user):
 
                     payload = ConversationUpdate(
                         messages=updated_messages,
+                        applied_skills=applied_skills,
                         updated_at=datetime.datetime.now()
                     )
 
@@ -275,6 +285,7 @@ def create_document_conversation(body, provider, user):
                         'type': 'document',
                         'processing_slug': processing_slug,
                         'record_id': record_id,
+                        'applied_skills': applied_skills,
                         'created_at': datetime.datetime.now(),
                         'updated_at': datetime.datetime.now()
                     }
@@ -311,6 +322,7 @@ def create_document_conversation(body, provider, user):
         
         payload = ConversationUpdate(
             messages=messages,
+            applied_skills=applied_skills,
             updated_at=datetime.datetime.now()
         )
         
@@ -326,6 +338,7 @@ def create_document_conversation(body, provider, user):
             'type': 'document',
             'processing_slug': processing_slug,
             'record_id': record_id,
+            'applied_skills': applied_skills,
             'created_at': datetime.datetime.now(),
             'updated_at': datetime.datetime.now()
         }

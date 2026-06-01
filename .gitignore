@@ -18,5 +18,8 @@ requirements.txt.bak
 
 /app/utils/geo/*
 
+/skills/*
+!/skills/system
+
 # Avoid VSCode settings folder
 .vscode/

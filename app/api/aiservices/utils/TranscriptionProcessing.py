@@ -18,6 +18,8 @@ def create_transcription_conversation(body, provider, user):
     record_id = body['id']
     processing_slug = body['slug']
     conversation_id = body['conversation_id']
+    applied_skills = body.get('applied_skills', [])
+    skill_paths = body.get('skill_paths', [])
     stream = resolve_stream_flag(body)
     
     from app.api.records.services import get_by_id
@@ -66,7 +68,14 @@ def create_transcription_conversation(body, provider, user):
 
     messages.append({'role': 'user', 'content': message})
 
-    resp = provider.call(messages, model=model, stream=stream)
+    resp = provider.call(
+        messages,
+        model=model,
+        stream=stream,
+        skill_paths=skill_paths,
+        skills=applied_skills,
+        skill_context_applied=False,
+    )
 
     if stream and not isinstance(resp, dict):
         user_turn = {
@@ -101,6 +110,7 @@ def create_transcription_conversation(body, provider, user):
                     updated_messages = conversation['messages'] + [user_turn, assistant_turn]
                     payload = ConversationUpdate(
                         messages=updated_messages,
+                        applied_skills=applied_skills,
                         updated_at=datetime.datetime.now()
                     )
                     mongodb.update_record('conversations', {'_id': ObjectId(conversation_id)}, payload)
@@ -112,6 +122,7 @@ def create_transcription_conversation(body, provider, user):
                         'type': 'transcription',
                         'processing_slug': processing_slug,
                         'record_id': record_id,
+                        'applied_skills': applied_skills,
                         'created_at': datetime.datetime.now(),
                         'updated_at': datetime.datetime.now()
                     }
@@ -155,6 +166,7 @@ def create_transcription_conversation(body, provider, user):
         
         payload = ConversationUpdate(
             messages=messages,
+            applied_skills=applied_skills,
             updated_at=datetime.datetime.now()
         )
         
@@ -179,6 +191,7 @@ def create_transcription_conversation(body, provider, user):
             'type': 'transcription',
             'processing_slug': processing_slug,
             'record_id': record_id,
+            'applied_skills': applied_skills,
             'created_at': datetime.datetime.now(),
             'updated_at': datetime.datetime.now()
         }

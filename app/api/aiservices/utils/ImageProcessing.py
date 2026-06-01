@@ -22,6 +22,8 @@ def create_image_gallery_conversation(body, provider, user):
     model = body['model']['id']
     resource_id = body['id']
     conversation_id = body['conversation_id']
+    applied_skills = body.get('applied_skills', [])
+    skill_paths = body.get('skill_paths', [])
     opts = body.get('opts', {})
     page = opts.get('page', 0)
     stream = resolve_stream_flag(body)
@@ -95,7 +97,14 @@ def create_image_gallery_conversation(body, provider, user):
     })
     
     # Call the LLM provider
-    resp = provider.call(messages, model=model, stream=stream)
+    resp = provider.call(
+        messages,
+        model=model,
+        stream=stream,
+        skill_paths=skill_paths,
+        skills=applied_skills,
+        skill_context_applied=False,
+    )
     
     storage_user_message = {
         'role': 'user',
@@ -142,6 +151,7 @@ def create_image_gallery_conversation(body, provider, user):
                         messages=updated_messages,
                         resource_id=resource_id,
                         page=page,
+                        applied_skills=applied_skills,
                         updated_at=datetime.datetime.now()
                     )
 
@@ -154,6 +164,7 @@ def create_image_gallery_conversation(body, provider, user):
                         'type': 'image_gallery',
                         'resource_id': resource_id,
                         'page': page,
+                        'applied_skills': applied_skills,
                         'created_at': datetime.datetime.now(),
                         'updated_at': datetime.datetime.now()
                     }
@@ -197,6 +208,7 @@ def create_image_gallery_conversation(body, provider, user):
             messages=updated_messages,
             resource_id=resource_id,
             page=page,
+            applied_skills=applied_skills,
             updated_at=datetime.datetime.now()
         )
         
@@ -214,6 +226,7 @@ def create_image_gallery_conversation(body, provider, user):
             'type': 'image_gallery',
             'resource_id': resource_id,
             'page': page,
+            'applied_skills': applied_skills,
             'created_at': datetime.datetime.now(),
             'updated_at': datetime.datetime.now()
         }

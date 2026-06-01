@@ -23,6 +23,7 @@ from app.celery_schedule import build_plugin_beat_schedule
 from app.celery_scheduler import get_beat_refresh_interval
 from app.runtime_restart import start_runtime_restart_monitor
 from app.api.system.services import update_option, clear_cache
+from app.utils import SkillManager
 
 # leer variables de entorno desde el archivo .env
 from dotenv import load_dotenv
@@ -50,6 +51,7 @@ def get_translation_directories():
 def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.system.services import set_system_setting
     set_system_setting()
+    SkillManager.SkillManager().start()
     
     app = Flask(__name__)
 

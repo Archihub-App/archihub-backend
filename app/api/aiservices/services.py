@@ -1,4 +1,5 @@
 from app.utils import DatabaseHandler, CacheHandler
+from app.utils import SkillManager
 from cryptography.fernet import Fernet
 from config import config
 import os
@@ -20,6 +21,7 @@ PROVIDER_CLASSES = {
 fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+skillManager = SkillManager.SkillManager()
 fernet = Fernet(fernet_key)
 
 def parse_result(result):
@@ -28,6 +30,21 @@ def parse_result(result):
 def update_cache():
     get_llm_models.invalidate_all()
     get_llm_providers.invalidate_all()
+
+
+def _coerce_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+    return bool(value)
+
+
+def _normalize_skill_path_param(skill_path):
+    if not isinstance(skill_path, str):
+        return None
+    normalized = skill_path.strip().strip('/')
+    return normalized or None
 
 @cacheHandler.cache.cache()
 def get_llm_models():
@@ -64,6 +81,46 @@ def create_llm_model(model):
         mongodb.insert_record("llm_models", model)
         update_cache()
         return {'msg': 'Modelo creado exitosamente'}, 201
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+
+def list_skills(query=None, include_content=False, tree=False):
+    try:
+        skills = skillManager.list_skills(
+            query=query,
+            include_content=_coerce_bool(include_content),
+            tree=_coerce_bool(tree),
+        )
+        return skills, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+
+def get_skill(skill_path):
+    try:
+        normalized_path = _normalize_skill_path_param(skill_path)
+        skill = skillManager.get_skill(normalized_path, include_content=True)
+        if not skill:
+            return {'msg': 'Skill no encontrado'}, 404
+        return skill, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+
+def save_skill(skill_path, payload):
+    try:
+        requested_path = skill_path or payload.get('path') or payload.get('id')
+        skill = skillManager.save_skill(requested_path, payload.get('content'))
+        return skill, 200 if skill_path else 201
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+
+def sync_skills():
+    try:
+        skills = skillManager.sync_from_filesystem()
+        return {'skills': skills, 'count': len(skills)}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -127,6 +184,7 @@ def get_provider_models(id):
     
 def set_conversation(data, user):
     try:
+        data = skillManager.prepare_conversation_payload(data)
         from app.api.system.services import get_system_settings
         settings, status = get_system_settings()
         capabilities = settings['capabilities']

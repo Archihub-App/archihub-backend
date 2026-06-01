@@ -41,8 +41,8 @@ class DatabaseHandler:
         return self.mydb[collection].update_many(filters, {'$set': update_fields})
     
     # Esta función sirve para ejecutar un operador de mongodb en un registro de una colección
-    def update_record_operator(self, collection, filters, operator):
-        return self.mydb[collection].update_one(filters, operator)
+    def update_record_operator(self, collection, filters, operator, **kwargs):
+        return self.mydb[collection].update_one(filters, operator, **kwargs)
     
     # Esta función sirve para insertar un registro en una colección. El registro debe ser un pydantic model
     def insert_record(self, collection, record):

@@ -5,11 +5,13 @@ import base64
 import os
 import time
 import httpx
+from app.utils import SkillManager
 
 GOOGLE_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 _MODEL_CACHE: dict = {}
 _CACHE_TTL = 300  # seconds
+skillManager = SkillManager.SkillManager()
 
 
 def _get_cached(key: str, fetch_fn):
@@ -188,6 +190,18 @@ def _call_with_context_token_fallback(messages, call_fn):
 
         print("Context token overflow detected. Retrying with compressed middle messages.")
         return call_fn(compressed_messages)
+
+
+def _apply_skill_context(messages, kwargs):
+    enriched_messages, _ = skillManager.enrich_messages(
+        messages,
+        skill_ids=kwargs.get('skill_ids'),
+        skill_paths=kwargs.get('skill_paths'),
+        skill_names=kwargs.get('skill_names'),
+        skills=kwargs.get('skills'),
+        skill_context_applied=bool(kwargs.get('skill_context_applied')),
+    )
+    return enriched_messages
 
 
 def _preprocess_messages_openai_compat(messages, process_image_fn):
@@ -371,6 +385,7 @@ class AzureProvider(BaseLLMProvider):
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         tools = kwargs.get('tools')
         tool_choice = kwargs.get('tool_choice')
+        prepared_messages = _apply_skill_context(messages, kwargs)
         model_info = next((m for m in self.getModels() if m['id'] == model), None)
 
         url = self.endpoint if not (model_info and model_info.get("cognitive_services")) else self.endpointCognitive
@@ -426,7 +441,7 @@ class AzureProvider(BaseLLMProvider):
             except httpx.ConnectError as e:
                 raise ValueError(f"Connection to Azure API failed: {e}")
 
-        return _call_with_context_token_fallback(messages, _do_request)
+        return _call_with_context_token_fallback(prepared_messages, _do_request)
 
     def process_image(self, image_path):
         return _process_image_to_data_url(image_path)
@@ -473,6 +488,7 @@ class GoogleProvider(BaseLLMProvider):
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         tools = kwargs.get('tools')
         tool_choice = kwargs.get('tool_choice')
+        prepared_messages = _apply_skill_context(messages, kwargs)
         model_ids = [m['id'] for m in self.getModels()]
         if model not in model_ids:
             raise ValueError(f"Model {model} is not supported. Available: {model_ids}")
@@ -515,7 +531,7 @@ class GoogleProvider(BaseLLMProvider):
 
             return _aisuite_response_to_dict(response)
 
-        return _call_with_context_token_fallback(messages, _do_request)
+        return _call_with_context_token_fallback(prepared_messages, _do_request)
 
     def process_image(self, image_path):
         return _process_image_to_data_url(image_path)
@@ -557,6 +573,7 @@ class OpenAIProvider(BaseLLMProvider):
         tools = kwargs.get('tools')
         tool_choice = kwargs.get('tool_choice')
         uses_max_completion_tokens = model.startswith(("gpt-5", "o1", "o3", "o4"))
+        prepared_messages = _apply_skill_context(messages, kwargs)
 
         def _do_request(call_messages):
             processed_messages = _preprocess_messages_openai_compat(call_messages, self.process_image)
@@ -599,7 +616,7 @@ class OpenAIProvider(BaseLLMProvider):
                     raise ValueError(f"Request to OpenAI API failed: {e}")
             raise ValueError("Failed to get a response from OpenAI API after multiple retries.")
 
-        return _call_with_context_token_fallback(messages, _do_request)
+        return _call_with_context_token_fallback(prepared_messages, _do_request)
 
     def process_image(self, image_path):
         return _process_image_to_data_url(image_path)
@@ -642,6 +659,7 @@ class OllamaProvider(BaseLLMProvider):
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gpt-oss:20b")
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
+        prepared_messages = _apply_skill_context(messages, kwargs)
         models = self.getModels()
         model_ids = [m['id'] for m in models]
         if models and model not in model_ids:
@@ -667,7 +685,7 @@ class OllamaProvider(BaseLLMProvider):
 
             return _aisuite_response_to_dict(response)
 
-        return _call_with_context_token_fallback(messages, _do_request)
+        return _call_with_context_token_fallback(prepared_messages, _do_request)
 
     def process_image(self, image_path):
         return _process_image_to_base64(image_path)
@@ -717,6 +735,7 @@ class LlamaServerProvider(BaseLLMProvider):
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         tools = kwargs.get('tools')
         tool_choice = kwargs.get('tool_choice')
+        prepared_messages = _apply_skill_context(messages, kwargs)
         models = self.getModels()
         model_ids = [m['id'] for m in models]
 
@@ -772,7 +791,7 @@ class LlamaServerProvider(BaseLLMProvider):
 
             return _aisuite_response_to_dict(response)
 
-        return _call_with_context_token_fallback(messages, _do_request)
+        return _call_with_context_token_fallback(prepared_messages, _do_request)
 
     def process_image(self, image_path):
         return _process_image_to_data_url(image_path)
