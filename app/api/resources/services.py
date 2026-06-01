@@ -1782,8 +1782,6 @@ def update_article_body(id, body, user):
         article_body = _serialize_article_body_value(article_body)
         body['articleBody'] = article_body
 
-        print(article_body)
-        
         if article_body is None:
             return {'msg': _('Article body is required')}, 400
 
