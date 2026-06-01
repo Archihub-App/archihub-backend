@@ -90,6 +90,15 @@ def parse_result(result):
 def can_view_deleted(user):
     return has_role(user, 'admin')
 
+def _serialize_article_body_value(value):
+    if isinstance(value, datetime):
+        return value.isoformat() + 'Z'
+    if isinstance(value, list):
+        return [_serialize_article_body_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _serialize_article_body_value(item) for key, item in value.items()}
+    return value
+
 # Function to extract IDs from uploaded records content
 def extract_uploaded_records_ids(content):
     if not content:
@@ -446,6 +455,8 @@ def create(body, user, files, updateCache = True):
 
 def update_by_id(id, body, user, files, updateCache = True):
     try:
+        if '_id' not in body:
+            body['_id'] = id
         body = validate_parent(body, True)
         has_new_parent = has_changed_parent(id, body)
 
@@ -1694,6 +1705,7 @@ def get_article_body(id, user):
             return {'msg': _('Resource does not exist')}, 404
 
         body = resource['articleBody'] if 'articleBody' in resource else None
+        body = _serialize_article_body_value(body)
 
         return {'articleBody': body}, 200
     except Exception as e:
@@ -1767,6 +1779,8 @@ def update_article_body(id, body, user):
         post_type_roles = cache_type_roles(post_type)
         print(body)
         article_body = body.get('articleBody', None)
+        article_body = _serialize_article_body_value(article_body)
+        body['articleBody'] = article_body
 
         print(article_body)
         
@@ -1789,7 +1803,7 @@ def update_article_body(id, body, user):
 
         mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
         
-        get_article_body.invalidate(id, user)
+        get_article_body.invalidate_all()
         get_resource.invalidate_all()
 
         register_log(user, log_actions['resource_article_update'], {'resource': id, 'articleBody': article_body})
@@ -1854,10 +1868,11 @@ def add_article_block_comment(id, body, user):
             return {'msg': _('Block comments have an invalid format')}, 400
 
         created_at = datetime.utcnow()
+        created_at_iso = created_at.isoformat() + 'Z'
         new_comment = {
             'comment': comment_text.strip(),
             'user': user,
-            'createdAt': created_at
+            'createdAt': created_at_iso
         }
 
         comments.append(new_comment)
@@ -1867,7 +1882,7 @@ def add_article_block_comment(id, body, user):
         update = ResourceUpdate(articleBody=article_body, updatedAt=created_at, updatedBy=user)
         mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
 
-        get_article_body.invalidate(id, user)
+        get_article_body.invalidate_all()
         get_resource.invalidate_all()
 
         register_log(user, log_actions['resource_article_update'], {
@@ -1884,7 +1899,7 @@ def add_article_block_comment(id, body, user):
             'comment': {
                 'comment': new_comment['comment'],
                 'user': new_comment['user'],
-                'createdAt': created_at.isoformat() + 'Z'
+                'createdAt': created_at_iso
             }
         }, 200
     except Exception as e:

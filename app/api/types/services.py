@@ -103,7 +103,11 @@ def get_by_slug(slug):
         # Si el campo metadata es un string y es distinto a '', recuperar el formulario con ese slug
         if type(post_type['metadata']) == str and post_type['metadata'] != '':
             post_type['form'] = post_type['metadata']
-            post_type['metadata'] = get_form_by_slug(post_type['metadata'])
+            form_result = get_form_by_slug(post_type['metadata'])
+            if isinstance(form_result, tuple):
+                payload, status_code = form_result
+                raise Exception(payload.get('msg', _('Form not found')))
+            post_type['metadata'] = form_result
             # dejar solo los campos name y slug del formulario
             post_type['metadata'] = {'name': post_type['metadata']['name'],
                                      'fields': post_type['metadata']['fields'], 'slug': post_type['metadata']['slug']}
@@ -304,10 +308,14 @@ def get_metadata(post_type_slug):
     post_type = mongodb.get_record('post_types', {'slug': post_type_slug})
     # Si el tipo de post no existe, retornar error
     if not post_type:
-        return {'msg': _('Post type not found')}, 404
+        raise Exception(_('Post type not found'))
     # Si el campo metadata es un string y es distinto a '', recuperar el formulario con ese slug
     if type(post_type['metadata']) == str and post_type['metadata'] != '':
-        post_type['metadata'] = get_form_by_slug(post_type['metadata'])
+        form_result = get_form_by_slug(post_type['metadata'])
+        if isinstance(form_result, tuple):
+            payload, status_code = form_result
+            raise Exception(payload.get('msg', _('Form not found')))
+        post_type['metadata'] = form_result
     else:
         post_type['metadata'] = None
 
@@ -320,20 +328,27 @@ def get_form_by_slug(slug):
     try:
         # Buscar el formulario en la base de datos
         form = mongodb.get_record('forms', {'slug': slug})
+        if not form:
+            return {'msg': _('Form not found')}, 404
         
         from app.api.forms.services import get_all_fields_types
-        fields_types = get_all_fields_types()
-        fields_types = fields_types[0]
+        fields_types_result = get_all_fields_types()
+        fields_types = fields_types_result
+        fields_types_status = None
+
+        if isinstance(fields_types_result, tuple) and len(fields_types_result) == 2:
+            fields_types, fields_types_status = fields_types_result
+        elif isinstance(fields_types_result, list) and len(fields_types_result) == 2 and isinstance(fields_types_result[1], int):
+            fields_types, fields_types_status = fields_types_result
+
+        if fields_types_status not in (None, 200) or not isinstance(fields_types, list):
+            fields_types = []
         
         for field in form['fields']:
             for field_type in fields_types:
                 if field['type'] == field_type['id']:
                     if 'plugin' in field_type:
                         field['plugin'] = field_type['plugin']
-        
-        # Si el formulario no existe, retornar error
-        if not form:
-            return {'msg': _('Form not found')}, 404
 
         # Agregamos un nuevo campo al inicio del arreglo de fields, que es el campo de accessRights
         form['fields'].insert(0, {

@@ -95,7 +95,10 @@ def get_all_fields_types():
         fields = _get_all_fields_types()
         # Translate labels on every request
         for field in fields:
-            field['label'] = _(field['label'])
+            try:
+                field['label'] = _(field['label'])
+            except Exception:
+                field['label'] = field['label']
             
         # Retornar los tipos de campos
         return fields, 200
