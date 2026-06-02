@@ -147,6 +147,37 @@ class SkillManager:
 
         return self._sync_file_to_database(absolute_path, normalized_path)
 
+    def delete_skill(self, skill_path: str) -> bool:
+        self.start()
+        normalized_path = self._normalize_skill_path(skill_path)
+        if not normalized_path:
+            raise ValueError('Skill path is required')
+
+        record = self.mongodb.get_record(
+            SKILL_COLLECTION,
+            {'path': normalized_path, 'active': True},
+            fields={'path': 1},
+        )
+        absolute_path = os.path.join(self.skills_root, normalized_path)
+
+        file_removed = False
+        if os.path.exists(absolute_path):
+            os.remove(absolute_path)
+            file_removed = True
+
+        if not record and not file_removed:
+            return False
+
+        now = datetime.datetime.utcnow()
+        self.mongodb.update_record_operator(
+            SKILL_COLLECTION,
+            {'path': normalized_path},
+            {'$set': {'active': False, 'updated_at': now}},
+            upsert=False,
+        )
+        self._cleanup_empty_directories()
+        return True
+
     def prepare_conversation_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         prepared_payload = dict(payload or {})
         message = prepared_payload.get('message')

@@ -107,6 +107,17 @@ def update_skill(skill_path):
     data = request.get_json() or {}
     return services.save_skill(skill_path, data)
 
+
+@bp.route('/skills/<path:skill_path>', methods=['DELETE'])
+@jwt_required()
+def delete_skill(skill_path):
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    return services.delete_skill(skill_path)
+
 @bp.route('/<model_id>', methods=['PUT'])
 @jwt_required()
 def update_llm_model(model_id):

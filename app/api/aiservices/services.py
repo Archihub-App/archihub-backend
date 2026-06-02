@@ -117,6 +117,16 @@ def save_skill(skill_path, payload):
         return {'msg': str(e)}, 500
 
 
+def delete_skill(skill_path):
+    try:
+        deleted = skillManager.delete_skill(skill_path)
+        if not deleted:
+            return {'msg': 'Skill no encontrado'}, 404
+        return {'msg': 'Skill eliminado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+
 def sync_skills():
     try:
         skills = skillManager.sync_from_filesystem()
