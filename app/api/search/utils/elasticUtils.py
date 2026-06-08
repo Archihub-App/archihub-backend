@@ -12,6 +12,24 @@ hookHandler = HookHandler.HookHandler()
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
+
+def _get_record_types_filter(body):
+    record_types = body.get('record_types')
+    if record_types is None:
+        record_types = body.get('record_type')
+
+    if record_types is None:
+        return []
+
+    if isinstance(record_types, str):
+        record_types = [record_types]
+
+    if not isinstance(record_types, list):
+        return []
+
+    valid_record_types = {'image', 'document', 'video', 'audio'}
+    return [record_type for record_type in record_types if record_type in valid_record_types]
+
 def get_resources_by_filters(body, user):
     post_types = body['post_type']
     sort_direction = 1 if body.get('sortOrder', 'asc') == 'asc' else -1
@@ -174,6 +192,14 @@ def get_resources_by_filters(body, user):
                 }
             })
 
+    record_types = _get_record_types_filter(body)
+    if record_types:
+        query['query']['bool']['filter'].append({
+            'terms': {
+                'records.type.keyword': record_types
+            }
+        })
+
     if 'parents' in body:
         if body['parents']:
             query['query']['bool']['filter'].append({
@@ -250,7 +276,6 @@ def get_resources_by_filters(body, user):
                                 }
                             })
 
-    print(query)
     response = index_handler.search(ELASTIC_INDEX_PREFIX + '-resources', query)
     
     response = index_handler.clean_elastic_search_response(response)
