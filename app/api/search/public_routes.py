@@ -4,6 +4,24 @@ from flask import request, jsonify
 import os
 import json
 
+
+def _parse_record_types_arg(value):
+    if value is None:
+        return None
+
+    try:
+        parsed_value = json.loads(value)
+    except json.JSONDecodeError:
+        parsed_value = value
+
+    if isinstance(parsed_value, str):
+        return [item.strip() for item in parsed_value.split(',') if item.strip()]
+
+    if isinstance(parsed_value, list):
+        return parsed_value
+
+    return None
+
 @bp.route('/public', methods=['POST'])
 def get_all_public():
     """
@@ -117,6 +135,12 @@ def get_blog_rss_public():
 
         if request.args.get('files'):
             body['files'] = request.args.get('files') == 'true'
+
+        record_types = _parse_record_types_arg(request.args.get('record_types'))
+        if record_types is None:
+            record_types = _parse_record_types_arg(request.args.get('record_type'))
+        if record_types is not None:
+            body['record_types'] = record_types
 
         for json_key in ['input_filters', 'date_filters', 'location_filters', 'parents']:
             if request.args.get(json_key):

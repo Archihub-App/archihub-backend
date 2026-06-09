@@ -15,6 +15,7 @@ requirements.txt.bak
 !/app/plugins/inventoryMaker
 !/app/plugins/massiveUpdater
 !/app/plugins/liquidText
+!/app/plugins/scheduleSystemTasks
 
 /app/utils/geo/*
 
