@@ -1,6 +1,5 @@
-import ffprobe3
-import ffmpeg
 import os
+import ffmpeg
 
 
 def get_metadata(filepath):
@@ -26,6 +25,7 @@ def get_metadata(filepath):
     return metadata
 
 def main(filepath, output):
+    import ffprobe3
     try:
         if not os.path.exists(filepath):
             raise Exception('El archivo no existe')

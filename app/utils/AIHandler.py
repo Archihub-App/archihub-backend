@@ -2,7 +2,7 @@ import os
 from app.utils import DatabaseHandler
 from app.api.aiservices.services import get_llm_models as get_ai_models
 from app.api.aiservices.services import get_provider_models
-from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider, OllamaProvider
+from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider, OllamaProvider, LlamaServerProvider
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -13,13 +13,13 @@ class AIHandler:
         'OpenAI': OpenAIProvider,
         'Google': GoogleProvider,
         'Azure': AzureProvider,
-        'Ollama': OllamaProvider
+        'Ollama': OllamaProvider,
+        'LlamaServer': LlamaServerProvider
     }
     
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            
             cls._instance.start()
         return cls._instance
     
@@ -31,6 +31,7 @@ class AIHandler:
         for m in models:
             id = str(m['_id']['$oid'])
             provider_models, provider_status = get_provider_models(id)
+
             if provider_status == 200:
                 m['models'] = provider_models
             else:
@@ -41,7 +42,6 @@ class AIHandler:
     def get_models_with_capabilities(self, capabilities):
         if not self.models:
             return []
-        
         filtered_models = []
         for model in self.models:
             available_models = model.get('models', [])
@@ -63,6 +63,7 @@ class AIHandler:
         llm_provider.pop('_id')
         
         provider_class = self.PROVIDER_CLASSES.get(llm_provider['provider'])
+        print(llm_provider)
         if not provider_class:
             raise Exception('Proveedor no encontrado')
         llm_provider.pop('provider')
@@ -70,18 +71,26 @@ class AIHandler:
         
         return provider
     
-    def call_model(self, model, messages=[]):
+    def call_model(self, model, messages=None, stream=False):
         if not self.models:
             raise Exception('No AI models available')
-        
-        provider = self.get_provider_class({'name': model['provider']})
-        model = model['model']
-        
-        print("Calling model:", model)
+
+        if messages is None:
+            messages = []
+
+        model_payload = model if isinstance(model, dict) else {}
+        provider = self.get_provider_class({'name': model_payload['provider']})
+        model_name = model_payload['model']
         
         if not provider:
             raise Exception('Provider not found')
-        
-        provider_response = provider.call(messages, model=model)
+
+        call_kwargs = {
+            key: value
+            for key, value in model_payload.items()
+            if key not in {'provider', 'model', 'stream'}
+        }
+
+        provider_response = provider.call(messages, model=model_name, stream=stream, **call_kwargs)
         
         return provider_response

@@ -45,6 +45,79 @@ def create_llm_model():
     llm_model = services.create_llm_model(data)
     return llm_model
 
+
+@bp.route('/skills', methods=['GET'])
+@jwt_required()
+def list_skills():
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    skills = services.list_skills(
+        query=request.args.get('query') or request.args.get('q'),
+        include_content=request.args.get('include_content'),
+        tree=request.args.get('tree'),
+    )
+    return skills
+
+
+@bp.route('/skills/sync', methods=['POST'])
+@jwt_required()
+def sync_skills():
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    return services.sync_skills()
+
+
+@bp.route('/skills', methods=['POST'])
+@jwt_required()
+def create_skill():
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    data = request.get_json() or {}
+    return services.save_skill(None, data)
+
+
+@bp.route('/skills/<path:skill_path>', methods=['GET'])
+@jwt_required()
+def get_skill(skill_path):
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    return services.get_skill(skill_path)
+
+
+@bp.route('/skills/<path:skill_path>', methods=['PUT'])
+@jwt_required()
+def update_skill(skill_path):
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    data = request.get_json() or {}
+    return services.save_skill(skill_path, data)
+
+
+@bp.route('/skills/<path:skill_path>', methods=['DELETE'])
+@jwt_required()
+def delete_skill(skill_path):
+    current_user = get_jwt_identity()
+
+    if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing'):
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    return services.delete_skill(skill_path)
+
 @bp.route('/<model_id>', methods=['PUT'])
 @jwt_required()
 def update_llm_model(model_id):
@@ -121,7 +194,7 @@ def delete_conversation(id):
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'processing') and not user_services.has_role(current_user, 'llm'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
-    conversation = services.delete_conversation(id)
+    conversation = services.delete_conversation(id, current_user)
     return conversation
 
 @bp.route('/conversation/history', methods=['POST'])

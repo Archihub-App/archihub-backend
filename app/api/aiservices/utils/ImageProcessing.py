@@ -1,9 +1,16 @@
-from app.utils import DatabaseHandler, CacheHandler
+from app.utils import DatabaseHandler
 from app.api.aiservices.models import Conversation, ConversationUpdate
 from bson.objectid import ObjectId
 import datetime
 from dotenv import load_dotenv
 import os
+from flask import Response, stream_with_context
+from .StreamingUtils import (
+    ThinkingStepTracker,
+    extract_stream_chunk_parts,
+    resolve_stream_flag,
+    sse_data,
+)
 
 load_dotenv()
 mongodb = DatabaseHandler.DatabaseHandler()
@@ -15,8 +22,11 @@ def create_image_gallery_conversation(body, provider, user):
     model = body['model']['id']
     resource_id = body['id']
     conversation_id = body['conversation_id']
+    applied_skills = body.get('applied_skills', [])
+    skill_paths = body.get('skill_paths', [])
     opts = body.get('opts', {})
     page = opts.get('page', 0)
+    stream = resolve_stream_flag(body)
     
     from app.api.records.services import get_by_index_gallery
     image, status = get_by_index_gallery({
@@ -87,7 +97,14 @@ def create_image_gallery_conversation(body, provider, user):
     })
     
     # Call the LLM provider
-    resp = provider.call(messages, model=model)
+    resp = provider.call(
+        messages,
+        model=model,
+        stream=stream,
+        skill_paths=skill_paths,
+        skills=applied_skills,
+        skill_context_applied=False,
+    )
     
     storage_user_message = {
         'role': 'user',
@@ -102,7 +119,81 @@ def create_image_gallery_conversation(body, provider, user):
             }
         ]
     }
-    
+
+    if stream and not isinstance(resp, dict):
+        def generate():
+            response_parts = []
+            thinking_tracker = ThinkingStepTracker()
+            try:
+                for chunk in resp:
+                    chunk_parts = extract_stream_chunk_parts(chunk)
+
+                    thinking_delta = chunk_parts.get('thinking', '')
+                    if thinking_delta:
+                        for step_event in thinking_tracker.consume_thinking(thinking_delta):
+                            yield sse_data(step_event)
+
+                    response_delta = chunk_parts.get('response', '')
+                    if response_delta:
+                        response_parts.append(response_delta)
+                        yield sse_data({'type': 'response', 'delta': response_delta})
+
+                full_response = ''.join(response_parts)
+                streamed_assistant_message = {
+                    'role': 'assistant',
+                    'content': full_response
+                }
+
+                if conversation_id:
+                    updated_messages = conversation['messages'] + [storage_user_message, streamed_assistant_message]
+
+                    payload = ConversationUpdate(
+                        messages=updated_messages,
+                        resource_id=resource_id,
+                        page=page,
+                        applied_skills=applied_skills,
+                        updated_at=datetime.datetime.now()
+                    )
+
+                    mongodb.update_record('conversations', {'_id': ObjectId(conversation_id)}, payload)
+                    final_conversation_id = conversation_id
+                else:
+                    payload = {
+                        'user': user,
+                        'messages': [storage_user_message, streamed_assistant_message],
+                        'type': 'image_gallery',
+                        'resource_id': resource_id,
+                        'page': page,
+                        'applied_skills': applied_skills,
+                        'created_at': datetime.datetime.now(),
+                        'updated_at': datetime.datetime.now()
+                    }
+
+                    payload = Conversation(**payload)
+                    inserted_doc = mongodb.insert_record('conversations', payload)
+                    final_conversation_id = str(inserted_doc.inserted_id)
+
+                for step_event in thinking_tracker.finalize():
+                    yield sse_data(step_event)
+
+                yield sse_data({
+                    'type': 'done',
+                    'done': True,
+                    'conversation_id': final_conversation_id,
+                    'thinking_steps': thinking_tracker.summary(),
+                })
+            except Exception as e:
+                yield sse_data({'type': 'error', 'error': str(e), 'done': True})
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',
+            }
+        )
+
     assistant_message = {
         'role': 'assistant',
         'content': resp['choices'][0]['message']['content']
@@ -117,6 +208,7 @@ def create_image_gallery_conversation(body, provider, user):
             messages=updated_messages,
             resource_id=resource_id,
             page=page,
+            applied_skills=applied_skills,
             updated_at=datetime.datetime.now()
         )
         
@@ -134,6 +226,7 @@ def create_image_gallery_conversation(body, provider, user):
             'type': 'image_gallery',
             'resource_id': resource_id,
             'page': page,
+            'applied_skills': applied_skills,
             'created_at': datetime.datetime.now(),
             'updated_at': datetime.datetime.now()
         }

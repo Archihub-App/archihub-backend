@@ -268,7 +268,8 @@ def index_resources_task(body={}):
 def index_resources_delete_task(body={}):
     r = index_handler.delete_document(
         ELASTIC_INDEX_PREFIX + '-resources', body['_id'])
-    if r['result'] != 'deleted':
+    result = r.get('result')
+    if result not in ['deleted', 'not_found']:
         raise Exception('Error al indexar el recurso ' + str(body['_id']))
 
     resp = _('Resource %(id)s deleted from index', id=body['_id'])

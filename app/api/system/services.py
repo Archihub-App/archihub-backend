@@ -1,11 +1,12 @@
 import datetime
-from flask import jsonify, request
+from flask import jsonify, request, current_app
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from app.utils import VectorDatabaseHandler
 from bson import json_util
 import json
 import re
+import ast
 from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.system.models import Option
@@ -13,7 +14,6 @@ from app.api.system.models import OptionUpdate
 from app.api.lists.services import get_by_id
 from app.utils.functions import get_access_rights_id, get_roles_id, get_access_rights, get_roles
 import os
-import importlib
 from app.utils import IndexHandler
 from celery import shared_task
 from app.api.tasks.services import add_task
@@ -22,12 +22,23 @@ from functools import reduce
 from app.utils import HookHandler
 from flask_babel import gettext
 from app.api.system.tasks.elasticTasks import index_resources_task, index_resources_delete_task, regenerate_index_task
+from app.runtime_restart import request_runtime_restart, schedule_local_restart
 import threading
 import time
 
 hookHandler = HookHandler.HookHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+
+
+def translate_plugin_info_value(message):
+    if not isinstance(message, str):
+        return message
+
+    try:
+        return gettext(message)
+    except Exception:
+        return message
 
 
 def hookHandlerIndex():
@@ -107,6 +118,7 @@ def clear_system_cache():
 
 def update_settings(settings, current_user):
     try:
+
         update_option('post_types_settings', settings)
         update_option('access_rights', settings)
         update_option('api_activation', settings)
@@ -426,6 +438,87 @@ def validate_simple_date(value, field):
             gettext(u'Error while validating the field {label}', label=label))
 
 
+def evaluate_plugin_info_node(node, context):
+    if isinstance(node, ast.Constant):
+        return node.value
+
+    if isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name):
+            raise ValueError(f'Unsupported call type: {type(node.func).__name__}')
+
+        if node.func.id not in {'_', 'gettext'}:
+            raise ValueError(f'Unsupported call name: {node.func.id}')
+
+        if len(node.args) != 1 or node.keywords:
+            raise ValueError('Translation calls must have a single positional argument')
+
+        return translate_plugin_info_value(evaluate_plugin_info_node(node.args[0], context))
+
+    if isinstance(node, ast.Name):
+        if node.id not in context:
+            raise ValueError(f'Unknown name: {node.id}')
+        return context[node.id]
+
+    if isinstance(node, ast.List):
+        values = []
+        for element in node.elts:
+            if isinstance(element, ast.Starred):
+                values.extend(evaluate_plugin_info_node(element.value, context))
+            else:
+                values.append(evaluate_plugin_info_node(element, context))
+        return values
+
+    if isinstance(node, ast.Tuple):
+        values = []
+        for element in node.elts:
+            if isinstance(element, ast.Starred):
+                values.extend(evaluate_plugin_info_node(element.value, context))
+            else:
+                values.append(evaluate_plugin_info_node(element, context))
+        return tuple(values)
+
+    if isinstance(node, ast.Dict):
+        value = {}
+        for key_node, value_node in zip(node.keys, node.values):
+            if key_node is None:
+                value.update(evaluate_plugin_info_node(value_node, context))
+                continue
+            key = evaluate_plugin_info_node(key_node, context)
+            value[key] = evaluate_plugin_info_node(value_node, context)
+        return value
+
+    raise ValueError(f'Unsupported node type: {type(node).__name__}')
+
+
+def get_plugin_info_from_file(plugin_init_path):
+    with open(plugin_init_path, 'r', encoding='utf-8') as plugin_file:
+        tree = ast.parse(plugin_file.read(), filename=plugin_init_path)
+
+    context = {}
+
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+
+        try:
+            value = evaluate_plugin_info_node(node.value, context)
+        except (TypeError, ValueError):
+            continue
+
+        for target in node.targets:
+            if not isinstance(target, ast.Name):
+                continue
+
+            context[target.id] = value
+
+            if target.id == 'plugin_info':
+                if not isinstance(value, dict):
+                    raise ValueError('plugin_info must be a dictionary')
+                return value.copy()
+
+    raise ValueError('plugin_info not found')
+
+
 @cacheHandler.cache.cache()
 def get_plugins():
     try:
@@ -433,17 +526,21 @@ def get_plugins():
         active_plugins = mongodb.get_record(
             'system', {'name': 'active_plugins'})
         # Obtener la ruta de la carpeta plugins
-        plugins_path = os.path.join(os.path.dirname(
-            os.path.abspath(__file__)), '../../plugins')
+        plugins_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'plugins'))
         # Obtener todas las carpetas en la carpeta ../../plugins
         plugins = os.listdir(plugins_path)
 
         resp = []
         for plugin in plugins:
-            if os.path.isfile(f'{plugins_path}/{plugin}/__init__.py'):
-                plugin_module = importlib.import_module(
-                    f'app.plugins.{plugin}')
-                plugin_instance = plugin_module.plugin_info
+            plugin_init_path = f'{plugins_path}/{plugin}/__init__.py'
+            if os.path.isfile(plugin_init_path):
+                try:
+                    plugin_instance = get_plugin_info_from_file(plugin_init_path)
+                except ValueError as exc:
+                    current_app.logger.warning(
+                        'Skipping plugin %s: %s', plugin, exc)
+                    continue
+
                 plugin_instance['slug'] = plugin
 
                 if plugin in active_plugins['data']:
@@ -464,8 +561,7 @@ def get_plugins():
 def activate_plugin(body, current_user):
     try:
         # Obtener la ruta de la carpeta plugins
-        plugins_path = os.path.join(os.path.dirname(
-            os.path.abspath(__file__)), '../../plugins')
+        plugins_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'plugins'))
 
         temp = []
 
@@ -479,9 +575,11 @@ def activate_plugin(body, current_user):
             'system', {'name': 'active_plugins'}, update_schema)
 
         get_plugins.invalidate_all()
+        request_runtime_restart('plugins_updated', mongodb)
+        schedule_local_restart()
 
         # Retornar el resultado
-        return {'msg': gettext('Plugins successfully updated, please restart the system')}, 200
+        return {'msg': gettext('Plugins successfully updated, restart requested')}, 200
     except Exception as e:
         raise Exception(
             gettext(u'Error while activating the plugins: {e}', e=str(e)))
@@ -498,7 +596,7 @@ def change_plugin_status(plugin, user):
         # Obtener todas las carpetas en la carpeta ../../plugins
         plugins = os.listdir(plugins_path)
         if plugin not in plugins:
-            return {'msg': 'Plugin no existe'}, 404
+            return {'msg': gettext('Plugin does not exist')}, 404
 
         if plugin in active_plugins['data']:
             active_plugins['data'].remove(plugin)
@@ -511,9 +609,11 @@ def change_plugin_status(plugin, user):
             'system', {'name': 'active_plugins'}, update_schema)
 
         get_plugins.invalidate_all()
+        request_runtime_restart('plugin_status_updated', mongodb)
+        schedule_local_restart()
 
         # Retornar el resultado
-        return {'msg': gettext('Plugin successfully updated, please restart the system')}, 200
+        return {'msg': gettext('Plugin successfully updated, restart requested')}, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -775,16 +875,16 @@ def index_resources(user):
             'system', {'name': 'index_management'})
         # Si el registro no existe, retornar error
         if not index_management:
-            return {'msg': 'No existe el registro index_management'}, 404
+            return {'msg': gettext('The index_management record does not exist')}, 404
 
         if not index_management['data'][0]['value']:
-            return {'msg': 'Indexación no está activada'}, 400
+            return {'msg': gettext('Indexing is not enabled')}, 400
 
         task = index_resources_task.delay()
         add_task(task.id, 'system.index_resources', user, 'msg')
 
         # Retornar el resultado
-        return {'msg': 'Se ha agregado la tarea de indexación de todo el contenido a la fila de procesos'}, 200
+        return {'msg': gettext('The full content indexing task was added to the processing queue')}, 200
 
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -794,14 +894,14 @@ def regenerate_index_geometries(user):
     from app.api.geosystem.services import regenerate_index_shapes
     task = regenerate_index_shapes.delay()
     add_task(task.id, 'geosystem.regenerate_index_shapes', user, 'msg')
-    return {'msg': 'Regeneración de geometrías iniciada'}, 200
+    return {'msg': gettext('Geometry regeneration started')}, 200
 
 
 def index_geometries(user):
     from app.api.geosystem.services import index_shapes
     task = index_shapes.delay()
     add_task(task.id, 'geosystem.index_shapes', user, 'msg')
-    return {'msg': 'Indexación de geometrías iniciada'}, 200
+    return {'msg': gettext('Geometry indexing started')}, 200
 
 
 def set_system_setting():
@@ -826,12 +926,9 @@ def set_system_setting():
 
 
 def restart_system():
-    def shutdown():
-        time.sleep(1)
-        import signal
-        os.kill(1, signal.SIGTERM)
-    threading.Thread(target=shutdown).start()
-    return {'msg': gettext('System restarted successfully')}, 200
+    request_runtime_restart('manual_restart', mongodb)
+    schedule_local_restart()
+    return {'msg': gettext('System restart requested successfully')}, 200
 
 
 def set_first_time(body):
@@ -953,7 +1050,7 @@ def set_first_time(body):
     mongodb.update_record(
         'system', {'name': 'access_rights'}, update)
 
-    return {'msg': 'System configured successfully, you can now log in'}, 200
+    return {'msg': gettext('System configured successfully, you can now log in')}, 200
 
 @cacheHandler.cache.cache()
 def get_system_settings():
@@ -975,6 +1072,8 @@ def get_system_settings():
             'ExtendedPluginClass', 'plugin_info'])
 
         plugin_info = plugin_module.plugin_info.copy()
+
+        print(p, plugin_info)
 
         plugin_bp = plugin_module.ExtendedPluginClass(
             p, __name__, **plugin_info, isTask=True)

@@ -74,11 +74,13 @@ WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 def change_value(body, route, value):
     route = route.split('.')
     temp = body
-    for i in range(len(route)):
+    for i, key in enumerate(route):
         if i == len(route) - 1:
-            temp[route[i]] = value
+            temp[key] = value
         else:
-            temp = temp[route[i]]
+            if key not in temp or not isinstance(temp[key], dict):
+                temp[key] = {}
+            temp = temp[key]
     return body
 
 # Funcion para parsear el resultado de una consulta a la base de datos
@@ -87,6 +89,15 @@ def parse_result(result):
 
 def can_view_deleted(user):
     return has_role(user, 'admin')
+
+def _serialize_article_body_value(value):
+    if isinstance(value, datetime):
+        return value.isoformat() + 'Z'
+    if isinstance(value, list):
+        return [_serialize_article_body_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _serialize_article_body_value(item) for key, item in value.items()}
+    return value
 
 # Function to extract IDs from uploaded records content
 def extract_uploaded_records_ids(content):
@@ -305,7 +316,8 @@ def get_all(body, user):
                 resource['files'] = len(resource['filesObj'])
                 resource.pop('filesObj')
 
-            resource['accessRights'] = get_option_by_id(resource['accessRights'])
+            access_rights = resource.get('accessRights')
+            resource['accessRights'] = get_option_by_id(access_rights) if access_rights else None
             if resource['accessRights'] and 'term' in resource['accessRights']:
                 resource['accessRights'] = resource['accessRights']['term']
             else:
@@ -443,6 +455,8 @@ def create(body, user, files, updateCache = True):
 
 def update_by_id(id, body, user, files, updateCache = True):
     try:
+        if '_id' not in body:
+            body['_id'] = id
         body = validate_parent(body, True)
         has_new_parent = has_changed_parent(id, body)
 
@@ -561,7 +575,7 @@ def update_by_id(id, body, user, files, updateCache = True):
     except Exception as e:
         return {'msg': str(e)}, 500
 
-def update_granular_by_id(id, metadata_path, value, user, concat = False, updateCache = True):
+def update_granular_by_id(id, metadata_path, value, user, concat=False, updateCache=True):
     try:
         if not metadata_path or not isinstance(metadata_path, str):
             return {'msg': _('Metadata path is required')}, 400
@@ -579,85 +593,34 @@ def update_granular_by_id(id, metadata_path, value, user, concat = False, update
 
         updated_resources = []
 
+        # === DELEGAMOS EL TRABAJO PESADO A LA NUEVA FUNCIÓN ===
         for parent in parents:
             if not isinstance(parent, dict) or 'id' not in parent:
                 continue
 
-            resource = mongodb.get_record('resources', {'_id': ObjectId(parent['id'])}, fields={'metadata': 1, 'post_type': 1, 'createdBy': 1, 'status': 1})
-            if not resource:
-                continue
+            # Llamamos a la nueva función (Apagamos caché y logs individuales)
+            response, status_code = update_resource_granular(
+                resource_id=parent['id'], 
+                metadata_path=metadata_path, 
+                value=value, 
+                user=user, 
+                concat=concat, 
+                updateCache=False,  # <-- Importante: no actualizamos cache por cada iteración
+                log_action=False    # <-- Importante: evitamos spam en los logs
+            )
 
-            if resource['createdBy'] != user and not has_role(user, 'admin') and not has_role(user, 'super_editor'):
-                return {'msg': _('You don\'t have the required authorization')}, 401
+            # Si la actualización fue exitosa (200), lo agregamos a la lista
+            if status_code == 200:
+                updated_resources.append({
+                    'id': response.get('id'),
+                    'post_type': response.get('post_type')
+                })
 
-            post_type_roles = cache_type_roles(resource['post_type'])
-            if post_type_roles['editRoles']:
-                canEdit = False
-                for r in post_type_roles['editRoles']:
-                    if has_role(user, r) or has_role(user, 'admin'):
-                        canEdit = True
-                        break
-                if not canEdit:
-                    return {'msg': _('You don\'t have the required authorization')}, 401
-
-            if resource.get('status') == 'published' and user:
-                if not has_role(user, 'publisher') and not has_role(user, 'admin'):
-                    return {'msg': _('You don\'t have the required authorization')}, 401
-
-            metadata = get_metadata(resource['post_type'])
-            allowed_field = next((f for f in metadata['fields'] if f.get('destiny') == metadata_path), None)
-
-            # Only update resources whose post_type form contains this destiny as text/text-area
-            if not allowed_field or allowed_field.get('type') not in ['text', 'text-area']:
-                continue
-
-            body = {
-                '_id': str(parent['id']),
-                'post_type': resource['post_type'],
-                'metadata': resource.get('metadata', {}),
-                'status': resource.get('status', 'draft')
-            }
-
-            current_value = get_value_by_path(body, metadata_path)
-            new_value = value
-
-            if concat:
-                current_text = current_value.strip() if isinstance(current_value, str) else ''
-                incoming_text = value.strip()
-                if current_text and incoming_text:
-                    new_value = current_text + ' ' + incoming_text
-                else:
-                    new_value = current_text or incoming_text
-
-            set_value_in_dict(body, metadata_path, new_value)
-
-            body_tmp = hookHandler.call('resource_pre_update', body)
-            if body_tmp:
-                body = body_tmp
-
-            value_to_validate = get_value_by_path(body, metadata_path)
-            validate_text(value_to_validate, allowed_field)
-
-            update = {
-                '_id': str(parent['id']),
-                'post_type': body['post_type'],
-                'metadata': body['metadata'],
-                'updatedAt': datetime.now(),
-                'updatedBy': user if user else 'system'
-            }
-
-            update_ = ResourceUpdate(**update)
-            mongodb.update_record('resources', {'_id': ObjectId(parent['id'])}, update_)
-
-            hookHandler.call('resource_update', update)
-            updated_resources.append({
-                'id': str(parent['id']),
-                'post_type': resource['post_type']
-            })
-
+        # === POST-PROCESAMIENTO ===
         if not updated_resources:
-            return {'msg': _('No parent resource contains the requested text field')}, 400
+            return {'msg': _('No parent resource could be updated (authorization, schema, or not found)')}, 400
 
+        # Registramos un solo log masivo vinculando el Record
         register_log(user, log_actions['resource_granular_update'], {
             'record': id,
             'metadataPath': metadata_path,
@@ -665,6 +628,7 @@ def update_granular_by_id(id, metadata_path, value, user, concat = False, update
             'updatedResources': updated_resources
         })
 
+        # Actualizamos caché una sola vez al final
         if updateCache:
             update_cache()
 
@@ -673,9 +637,108 @@ def update_granular_by_id(id, metadata_path, value, user, concat = False, update
             'updated': len(updated_resources),
             'resources': updated_resources
         }, 200
+
     except Exception as e:
         return {'msg': str(e)}, 500
+    
+def update_resource_granular(resource_id, metadata_path, value, user, concat=False, updateCache=True, log_action=True):
+    try:
+        if not metadata_path or not isinstance(metadata_path, str):
+            return {'msg': _('Metadata path is required')}, 400
 
+        if not isinstance(value, str):
+            return {'msg': _('Value must be a string')}, 400
+
+        # Buscamos el recurso directamente
+        resource = mongodb.get_record('resources', {'_id': ObjectId(resource_id)}, fields={'metadata': 1, 'post_type': 1, 'createdBy': 1, 'status': 1})
+        if not resource:
+            return {'msg': _('Resource does not exist')}, 404
+
+        # === VALIDACIÓN DE PERMISOS ===
+        if resource['createdBy'] != user and not has_role(user, 'admin') and not has_role(user, 'super_editor'):
+            return {'msg': _('You don\'t have the required authorization')}, 401
+
+        post_type_roles = cache_type_roles(resource['post_type'])
+        if post_type_roles['editRoles']:
+            canEdit = False
+            for r in post_type_roles['editRoles']:
+                if has_role(user, r) or has_role(user, 'admin'):
+                    canEdit = True
+                    break
+            if not canEdit:
+                return {'msg': _('You don\'t have the required authorization')}, 401
+
+        if resource.get('status') == 'published' and user:
+            if not has_role(user, 'publisher') and not has_role(user, 'admin'):
+                return {'msg': _('You don\'t have the required authorization')}, 401
+
+        # === VALIDACIÓN DE ESQUEMA ===
+        metadata = get_metadata(resource['post_type'])
+        allowed_field = next((f for f in metadata['fields'] if f.get('destiny') == metadata_path), None)
+
+        if not allowed_field or allowed_field.get('type') not in ['text', 'text-area']:
+            return {'msg': _('Field is not text/text-area or not found in schema')}, 400
+
+        # === LÓGICA DE ACTUALIZACIÓN ===
+        body = {
+            '_id': str(resource_id),
+            'post_type': resource['post_type'],
+            'metadata': resource.get('metadata', {}),
+            'status': resource.get('status', 'draft')
+        }
+
+        current_value = get_value_by_path(body, metadata_path)
+        new_value = value
+
+        if concat:
+            current_text = current_value.strip() if isinstance(current_value, str) else ''
+            incoming_text = value.strip()
+            if current_text and incoming_text:
+                new_value = current_text + ' ' + incoming_text
+            else:
+                new_value = current_text or incoming_text
+
+        set_value_in_dict(body, metadata_path, new_value)
+
+        body_tmp = hookHandler.call('resource_pre_update', body)
+        if body_tmp:
+            body = body_tmp
+
+        value_to_validate = get_value_by_path(body, metadata_path)
+        validate_text(value_to_validate, allowed_field)
+
+        update = {
+            '_id': str(resource_id),
+            'post_type': body['post_type'],
+            'metadata': body['metadata'],
+            'updatedAt': datetime.now(),
+            'updatedBy': user if user else 'system'
+        }
+
+        update_ = ResourceUpdate(**update)
+        mongodb.update_record('resources', {'_id': ObjectId(resource_id)}, update_)
+
+        hookHandler.call('resource_update', update)
+
+        # === LOGS Y CACHÉ ===
+        if log_action:
+            register_log(user, log_actions['resource_granular_update'], {
+                'resource': str(resource_id),
+                'metadataPath': metadata_path,
+                'concat': concat
+            })
+
+        if updateCache:
+            update_cache()
+
+        return {
+            'msg': _('Resource updated successfully'),
+            'id': str(resource_id),
+            'post_type': resource['post_type']
+        }, 200
+
+    except Exception as e:
+        return {'msg': str(e)}, 500
 
 # Funcion para actualizar los recursos relacionados si el post_type es igual al del padre
 def update_relations_children(body, metadata, new = False):
@@ -1213,75 +1276,11 @@ def get_accessRights(id):
         
     return None
 
-@cacheHandler.cache.cache(limit=5000)
-def get_resource(id, user, postQuery = False):
-    # Buscar el recurso en la base de datos
-    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0, 'articleBody': 0})
-    # Si el recurso no existe, retornar error
-    if not resource:
-        raise Exception(_('Resource does not exist'))
 
-    if resource.get('status') == 'deleted' and not can_view_deleted(user):
-        raise Exception(_('You don\'t have the required authorization'))
-    
-    post_type = resource['post_type']
-    post_type = get_by_slug(post_type)
-    isArticle = post_type and 'isArticle' in post_type and post_type['isArticle']
-    
-    status = resource['status']
-    if status == 'draft':
-        if not has_role(user, 'publisher') or not has_role(user, 'admin'):
-            if resource['createdBy'] != user and not has_role(user, 'editor'):
-                raise Exception(_('You don\'t have the required authorization'))
-        
-    resource['_id'] = str(resource['_id'])
-    
-    if 'parents' in resource:
-        if resource['parents']:
-            for r in resource['parents']:
-                r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
-                r['name'] = r_['metadata']['firstLevel']['title']
-                r['icon'] = get_icon(r_['post_type'])
-
-    resource['icon'] = get_icon(resource['post_type'])
-
-    default_visible_type = get_default_visible_type()
-    resource['children'] = mongodb.distinct('resources', 'post_type', {
-                                            'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
-
-    children = []
-
-    for c in resource['children']:
-        c_ = mongodb.get_record('post_types', {'slug': c})
-        obj = {
-            'post_type': c,
-            'name': c_['name'],
-            'icon': c_['icon'],
-            'slug': c_['slug'],
-        }
-        children.append(obj)
-
-    resource['children'] = children
-
-    if 'filesObj' in resource:
-        if len(resource['filesObj']) > 0:
-            resource['children'] = [{
-                'post_type': 'files',
-                'name': _('Asociated files'),
-                'icon': 'archivo',
-                'slug': 'files',
-            }, *resource['children']]
-
-            resource['files'] = len(resource['filesObj'])
-        else:
-            resource['files'] = None
-
-    resource['fields'] = get_metadata(resource['post_type'])['fields']
-
-    temp = []
+def _build_resource_fields(temp, resource, user):
     for f in resource['fields']:
         if f['type'] != 'file' and f['type'] != 'separator':
-            
+
             accesRights = None
             if 'accessRights' in f:
                 accesRights = f['accessRights']
@@ -1291,7 +1290,7 @@ def get_resource(id, user, postQuery = False):
                 for a in accesRights:
                     if not has_right(user, a) and not has_role(user, 'admin'):
                         canView = False
-            
+
             if not canView:
                 set_value_in_dict(resource, f['destiny'], _('You don\'t have the required authorization'))
                 temp.append({
@@ -1300,7 +1299,7 @@ def get_resource(id, user, postQuery = False):
                     'type': 'text'
                 })
                 continue
-            
+
             tempTmp = hookHandler.call('resource_field', resource, f, temp)
             if tempTmp:
                 temp = tempTmp
@@ -1447,7 +1446,76 @@ def get_resource(id, user, postQuery = False):
                         'value': temp_,
                         'type': 'repeater'
                     })
-            
+
+    return temp
+
+@cacheHandler.cache.cache(limit=5000)
+def get_resource(id, user, postQuery = False):
+    # Buscar el recurso en la base de datos
+    resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'updatedAt': 0, 'updatedBy': 0, 'articleBody': 0})
+    # Si el recurso no existe, retornar error
+    if not resource:
+        raise Exception(_('Resource does not exist'))
+
+    if resource.get('status') == 'deleted' and not can_view_deleted(user):
+        raise Exception(_('You don\'t have the required authorization'))
+    
+    post_type = resource['post_type']
+    post_type = get_by_slug(post_type)
+    isArticle = post_type and 'isArticle' in post_type and post_type['isArticle']
+    
+    status = resource['status']
+    if status == 'draft':
+        if not has_role(user, 'publisher') or not has_role(user, 'admin'):
+            if resource['createdBy'] != user and not has_role(user, 'editor'):
+                raise Exception(_('You don\'t have the required authorization'))
+        
+    resource['_id'] = str(resource['_id'])
+    
+    if 'parents' in resource:
+        if resource['parents']:
+            for r in resource['parents']:
+                r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
+                r['name'] = r_['metadata']['firstLevel']['title']
+                r['icon'] = get_icon(r_['post_type'])
+
+    resource['icon'] = get_icon(resource['post_type'])
+
+    default_visible_type = get_default_visible_type()
+    resource['children'] = mongodb.distinct('resources', 'post_type', {
+                                            'parents.id': id, 'post_type': {'$in': default_visible_type['value']}})
+
+    children = []
+
+    for c in resource['children']:
+        c_ = mongodb.get_record('post_types', {'slug': c})
+        obj = {
+            'post_type': c,
+            'name': c_['name'],
+            'icon': c_['icon'],
+            'slug': c_['slug'],
+        }
+        children.append(obj)
+
+    resource['children'] = children
+
+    if 'filesObj' in resource:
+        if len(resource['filesObj']) > 0:
+            resource['children'] = [{
+                'post_type': 'files',
+                'name': _('Asociated files'),
+                'icon': 'archivo',
+                'slug': 'files',
+            }, *resource['children']]
+
+            resource['files'] = len(resource['filesObj'])
+        else:
+            resource['files'] = None
+
+    resource['fields'] = get_metadata(resource['post_type'])['fields']
+
+    temp = []
+    temp = _build_resource_fields(temp, resource, user)
 
     resource['fields'] = temp
 
@@ -1637,6 +1705,7 @@ def get_article_body(id, user):
             return {'msg': _('Resource does not exist')}, 404
 
         body = resource['articleBody'] if 'articleBody' in resource else None
+        body = _serialize_article_body_value(body)
 
         return {'articleBody': body}, 200
     except Exception as e:
@@ -1708,8 +1777,11 @@ def update_article_body(id, body, user):
         # check if the user has access to edit the resource
         post_type = resource['post_type']
         post_type_roles = cache_type_roles(post_type)
+        print(body)
         article_body = body.get('articleBody', None)
-        
+        article_body = _serialize_article_body_value(article_body)
+        body['articleBody'] = article_body
+
         if article_body is None:
             return {'msg': _('Article body is required')}, 400
 
@@ -1729,12 +1801,105 @@ def update_article_body(id, body, user):
 
         mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
         
-        get_article_body.invalidate(id, user)
+        get_article_body.invalidate_all()
         get_resource.invalidate_all()
 
         register_log(user, log_actions['resource_article_update'], {'resource': id, 'articleBody': article_body})
 
         return {'msg': _('Article body updated')}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+def add_article_block_comment(id, body, user):
+    try:
+        resource = mongodb.get_record('resources', {'_id': ObjectId(id)}, fields={'post_type': 1, 'articleBody': 1})
+
+        if not resource:
+            return {'msg': _('Resource does not exist')}, 404
+
+        post_type_roles = cache_type_roles(resource['post_type'])
+        if post_type_roles['editRoles']:
+            canEdit = False
+            for role in post_type_roles['editRoles']:
+                if has_role(user, role) or has_role(user, 'admin'):
+                    canEdit = True
+                    break
+            if not canEdit:
+                return {'msg': _('You don\'t have the required authorization')}, 401
+
+        article_body = resource.get('articleBody') or []
+        if not isinstance(article_body, list):
+            return {'msg': _('Article body has an invalid format')}, 400
+
+        comment_text = body.get('comment')
+        block_index = body.get('blockIndex')
+        block_id = body.get('blockId')
+
+        if not isinstance(comment_text, str) or not comment_text.strip():
+            return {'msg': _('Comment is required')}, 400
+
+        if block_index is None and not block_id:
+            return {'msg': _('You must specify a block')}, 400
+
+        if block_index is not None:
+            if isinstance(block_index, bool) or not isinstance(block_index, numbers.Integral):
+                return {'msg': _('Block index must be an integer')}, 400
+            if block_index < 0 or block_index >= len(article_body):
+                return {'msg': _('Block does not exist')}, 404
+            target_index = int(block_index)
+        else:
+            target_index = next((index for index, block in enumerate(article_body) if isinstance(block, dict) and block.get('id') == block_id), None)
+            if target_index is None:
+                return {'msg': _('Block does not exist')}, 404
+
+        block = article_body[target_index]
+        if not isinstance(block, dict):
+            return {'msg': _('Block has an invalid format')}, 400
+
+        if block_id and block.get('id') and block.get('id') != block_id:
+            return {'msg': _('Block does not exist')}, 404
+
+        comments = block.get('comments')
+        if comments is None:
+            comments = []
+        elif not isinstance(comments, list):
+            return {'msg': _('Block comments have an invalid format')}, 400
+
+        created_at = datetime.utcnow()
+        created_at_iso = created_at.isoformat() + 'Z'
+        new_comment = {
+            'comment': comment_text.strip(),
+            'user': user,
+            'createdAt': created_at_iso
+        }
+
+        comments.append(new_comment)
+        block['comments'] = comments
+        article_body[target_index] = block
+
+        update = ResourceUpdate(articleBody=article_body, updatedAt=created_at, updatedBy=user)
+        mongodb.update_record('resources', {'_id': ObjectId(id)}, update)
+
+        get_article_body.invalidate_all()
+        get_resource.invalidate_all()
+
+        register_log(user, log_actions['resource_article_update'], {
+            'resource': id,
+            'blockIndex': target_index,
+            'blockId': block.get('id'),
+            'comment': new_comment['comment']
+        })
+
+        return {
+            'msg': _('Block comment added'),
+            'blockIndex': target_index,
+            'blockId': block.get('id'),
+            'comment': {
+                'comment': new_comment['comment'],
+                'user': new_comment['user'],
+                'createdAt': created_at_iso
+            }
+        }, 200
     except Exception as e:
         return {'msg': str(e)}, 500
 

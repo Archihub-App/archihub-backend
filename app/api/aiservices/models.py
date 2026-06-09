@@ -36,6 +36,8 @@ class Conversation(BaseModel):
     processing_slug: str = None
     record_id: str = None
     resource_id: str = None
+    page: Optional[int] = None
+    applied_skills: List[Any] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
@@ -44,6 +46,11 @@ class Conversation(BaseModel):
         
 class ConversationUpdate(BaseModel):
     messages: Optional[List[Message]] = None
+    processing_slug: Optional[str] = None
+    record_id: Optional[str] = None
+    resource_id: Optional[str] = None
+    page: Optional[int] = None
+    applied_skills: Optional[List[Any]] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
     class Config:

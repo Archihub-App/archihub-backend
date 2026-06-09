@@ -1,23 +1,27 @@
 from app.utils import DatabaseHandler, CacheHandler
+from app.utils import SkillManager
 from cryptography.fernet import Fernet
 from config import config
 import os
 import json
+from flask import Response
 from bson import json_util
 from bson.objectid import ObjectId
 from app.api.aiservices.models import LlmProvider, LlmProviderUpdate
-from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider, OllamaProvider
+from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider, OllamaProvider, LlamaServerProvider
 
 PROVIDER_CLASSES = {
     'OpenAI': OpenAIProvider,
     'Google': GoogleProvider,
     'Azure': AzureProvider,
-    'Ollama': OllamaProvider
+    'Ollama': OllamaProvider,
+    'LlamaServer': LlamaServerProvider
 }
 
 fernet_key = config[os.environ['FLASK_ENV']].FERNET_KEY
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
+skillManager = SkillManager.SkillManager()
 fernet = Fernet(fernet_key)
 
 def parse_result(result):
@@ -26,6 +30,21 @@ def parse_result(result):
 def update_cache():
     get_llm_models.invalidate_all()
     get_llm_providers.invalidate_all()
+
+
+def _coerce_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+    return bool(value)
+
+
+def _normalize_skill_path_param(skill_path):
+    if not isinstance(skill_path, str):
+        return None
+    normalized = skill_path.strip().strip('/')
+    return normalized or None
 
 @cacheHandler.cache.cache()
 def get_llm_models():
@@ -62,6 +81,56 @@ def create_llm_model(model):
         mongodb.insert_record("llm_models", model)
         update_cache()
         return {'msg': 'Modelo creado exitosamente'}, 201
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+
+def list_skills(query=None, include_content=False, tree=False):
+    try:
+        skills = skillManager.list_skills(
+            query=query,
+            include_content=_coerce_bool(include_content),
+            tree=_coerce_bool(tree),
+        )
+        return skills, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+
+def get_skill(skill_path):
+    try:
+        normalized_path = _normalize_skill_path_param(skill_path)
+        skill = skillManager.get_skill(normalized_path, include_content=True)
+        if not skill:
+            return {'msg': 'Skill no encontrado'}, 404
+        return skill, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+
+def save_skill(skill_path, payload):
+    try:
+        requested_path = skill_path or payload.get('path') or payload.get('id')
+        skill = skillManager.save_skill(requested_path, payload.get('content'))
+        return skill, 200 if skill_path else 201
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+
+def delete_skill(skill_path):
+    try:
+        deleted = skillManager.delete_skill(skill_path)
+        if not deleted:
+            return {'msg': 'Skill no encontrado'}, 404
+        return {'msg': 'Skill eliminado exitosamente'}, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+
+
+def sync_skills():
+    try:
+        skills = skillManager.sync_from_filesystem()
+        return {'skills': skills, 'count': len(skills)}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -125,45 +194,109 @@ def get_provider_models(id):
     
 def set_conversation(data, user):
     try:
+        data = skillManager.prepare_conversation_payload(data)
+        from app.api.system.services import get_system_settings
+        settings, status = get_system_settings()
+        capabilities = settings['capabilities']
         provider = get_provider_class(data['provider']['id'])
         if data['type'] == 'transcription':
             from .utils.TranscriptionProcessing import create_transcription_conversation
             response = create_transcription_conversation(data, provider, user)
+            if isinstance(response, Response):
+                return response
             return response, 200
         elif data['type'] == 'document':
             from .utils.DocumentProcessing import create_document_conversation
             response = create_document_conversation(data, provider, user)
+            if isinstance(response, Response):
+                return response
             return response, 200
         elif data['type'] == 'image_gallery':
             from .utils.ImageProcessing import create_image_gallery_conversation
             response = create_image_gallery_conversation(data, provider, user)
+            if isinstance(response, Response):
+                return response
             return response, 200
+        elif data['type'] == 'atlas' and 'atlas' in capabilities:
+            from app.plugins.atlas.services import create_atlas_conversation
+            response = create_atlas_conversation(data, provider, user)
+            if isinstance(response, Response):
+                return response
+            return response, 200
+
     except Exception as e:
         print(str(e))
         return {'msg': str(e)}, 500
 
 def get_conversation_history(data, user):
-    type = data['type']
-    id = data['id']
-    print(type, id)
+    conversation_type = data.get('type')
+    target_id = data.get('id')
+    processing_slug = data.get('processing_slug') or data.get('slug')
     try:
-        if type == 'record' or type == 'transcription':
+        fields = {
+            '_id': 1,
+            'created_at': 1,
+            'messages': 1,
+            'updated_at': 1,
+            'type': 1,
+            'processing_slug': 1,
+        }
+
+        if conversation_type == 'record' or conversation_type == 'transcription' or conversation_type == 'document':
             from app.api.records.services import get_by_id
-            resp_, status = get_by_id(id, user)
+            resp_, status = get_by_id(target_id, user)
             if status != 200:
                 raise Exception('Error al obtener el record')
-            
-            conversations = list(mongodb.get_all_records('conversations', {'record_id': id, 'user': user}, fields={'_id': 1, 'created_at': 1, 'messages': 1, 'updated_at': 1}, sort=[('updated_at', -1)]))
+
+            filters = {'record_id': target_id, 'user': user}
+            if conversation_type == 'transcription' or conversation_type == 'document':
+                filters['type'] = conversation_type
+                if processing_slug:
+                    filters['processing_slug'] = processing_slug
+
+            conversations = list(mongodb.get_all_records(
+                'conversations',
+                filters,
+                fields=fields,
+                sort=[('updated_at', -1)]
+            ))
             conversations = parse_result(conversations)
             for c in conversations:
-                c['messages'] = [c['messages'][0]]
+                if c.get('messages'):
+                    c['messages'] = [c['messages'][0]]
             return conversations, 200
-        elif type == 'image_gallery':
-            conversations = list(mongodb.get_all_records('conversations', {'resource_id': id, 'user': user}, fields={'_id': 1, 'created_at': 1, 'messages': 1, 'updated_at': 1}, sort=[('updated_at', -1)]))
+
+        elif conversation_type == 'image_gallery':
+            conversations = list(mongodb.get_all_records(
+                'conversations',
+                {'resource_id': target_id, 'user': user, 'type': 'image_gallery'},
+                fields=fields,
+                sort=[('updated_at', -1)]
+            ))
             conversations = parse_result(conversations)
             for c in conversations:
-                c['messages'] = [process_img_message_content(c['messages'][0])]
+                if c.get('messages'):
+                    c['messages'] = [process_img_message_content(c['messages'][0])]
             return conversations, 200
+
+        elif conversation_type == 'atlas':
+            filters = {'user': user, 'type': 'atlas'}
+            if processing_slug:
+                filters['processing_slug'] = processing_slug
+
+            conversations = list(mongodb.get_all_records(
+                'conversations',
+                filters,
+                fields=fields,
+                sort=[('updated_at', -1)]
+            ))
+            conversations = parse_result(conversations)
+            for c in conversations:
+                if c.get('messages'):
+                    c['messages'] = [c['messages'][0]]
+            return conversations, 200
+
+        return [], 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -204,6 +337,20 @@ def get_conversation(id, user):
             conversations['messages'][i] = process_img_message_content(message)
         
         return conversations, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500
+    
+def delete_conversation(id, user):
+    try:
+        if not ObjectId.is_valid(id):
+            return {'msg': 'ID de conversación inválido'}, 400
+
+        conversation = mongodb.get_record('conversations', {'_id': ObjectId(id), 'user': user}, fields={'_id': 1})
+        if not conversation:
+            return {'msg': 'Conversación no encontrada'}, 404
+
+        mongodb.delete_record('conversations', {'_id': ObjectId(id), 'user': user})
+        return {'msg': 'Conversación eliminada'}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     

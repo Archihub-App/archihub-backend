@@ -176,8 +176,6 @@ def update_record_by_id(id, current_user, body):
         body['updatedBy'] = current_user if current_user else 'system'
         body['updatedAt'] = datetime.datetime.now()
 
-        print(body)
-        # Si el record existe, actualizarlo
         update = FileRecordUpdate(**body)
 
         mongodb.update_record('records', {'_id': ObjectId(id)}, update)
@@ -558,7 +556,8 @@ def get_by_id(id, current_user, fullFields=False):
             to_clean = []
             for p in record['parent']:
                 r_ = mongodb.get_record('resources', {'_id': ObjectId(p['id'])}, fields={
-                                        'metadata.firstLevel.title': 1, 'post_type': 1})
+                                        'metadata.firstLevel.title': 1, 'post_type': 1, 'status': 'published'})
+                
                 if r_:
                     p['name'] = r_['metadata']['firstLevel']['title']
                     p['icon'] = get_icon(r_['post_type'])
@@ -857,9 +856,16 @@ def get_document_block_by_page(current_user, id, page, slug, block=None):
     try:
         resp_, status = get_by_id(id, current_user)
         if status != 200:
-            return {'msg': resp_['msg']}, 500
+            record, status = get_by_index_gallery({
+                'id': id,
+                'index': page
+            }, current_user)
 
-        print(id, page, slug, block)
+            if status != 200:
+                return {'msg': str(e)}, 500
+            
+            id = record['_id']['$oid']
+
         return cache_get_block_by_page_id(id, page, slug, block, current_user)
     except Exception as e:
         return {'msg': str(e)}, 500
@@ -1044,6 +1050,8 @@ def generate_text_transcription(segments):
 
 
 def is_transcriber_can_edit(recordId, user):
+    if has_role(user, 'admin') or has_role(user, 'team_lead'):
+        return True
     if has_role(user, 'transcriber'):
         task = mongodb.get_record('usertasks', {'recordId': recordId, 'user': user, 'status': {
                                   '$in': ['review', 'pending', 'rejected']}}, fields={'_id': 1})
@@ -1168,6 +1176,7 @@ def edit_transcription(id, body, user):
         return {'msg': resp_['msg']}, 500
 
     can_edit = is_transcriber_can_edit(id, user)
+    print(can_edit)
     if can_edit is False:
         return {'msg': _('You do not have permission to edit this transcription')}, 401
 

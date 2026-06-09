@@ -289,7 +289,7 @@ class ExtendedPluginClass(PluginClass):
 
                 current = self.get_plugin_settings()
 
-                resp = {**self.settings}
+                resp = self.get_translated_settings()
 
                 resp['settings'][1]['fields'] = [
                     {

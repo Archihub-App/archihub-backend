@@ -1,9 +1,10 @@
 from app.utils import DatabaseHandler
 from flask_babel import _
+from flask import jsonify
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
-def autoComplete(body):
+def autoComplete(body, update=False):
     if 'filesIds' not in body:
         body['filesIds'] = []
     if 'post_type' not in body:
@@ -20,21 +21,27 @@ def autoComplete(body):
         body['parents'] = []
     if 'updateCache' not in body:
         body['updateCache'] = False
+
+    if update and 'deletedFiles' not in body:
+        body['deletedFiles'] = []
         
     return body
 
 def create(body, user, files):
+    print(body)
     body = autoComplete(body)
     from app.api.resources.services import create as create_resource
     return create_resource(body, user, files, body['updateCache'])
 
 def update(id, body, user, files):
-    body = autoComplete(body)
+    body = autoComplete(body, True)
+    print(body)
     from app.api.resources.services import update_by_id as update_resource
     return update_resource(id, body, user, files, body['updateCache'])
 
 def get_id(body, user):
     resource = None
+    body['status'] = 'published'
     resource = mongodb.get_record('resources', body, {'_id': 1, 'post_type': 1, 'metadata': 1, 'filesObj': 1, 'parent': 1, 'parents': 1})
     if resource is None:
         return {'msg': _('Resource not found')}, 404
@@ -65,3 +72,33 @@ def get_type(slug, user):
 def update_type(body, user):
     from app.api.types.services import update_by_slug
     return update_by_slug(body['slug'], body, user)
+
+
+def get_system_info(user):
+    try:
+        post_types = list(mongodb.get_all_records(
+            'post_types',
+            {},
+            [('name', 1)],
+            fields={'_id': 0, 'name': 1, 'slug': 1, 'description': 1}
+        ))
+        from app.api.system.services import get_system_settings
+        system_settings, status = get_system_settings()
+        if status != 200:
+            return system_settings, status
+
+        capabilities = system_settings.get('capabilities', [])
+        published_resources = mongodb.count('resources', {'status': 'published'})
+        records_count = mongodb.count('records', {'status': {'$ne': 'deleted'}})
+
+        return {
+            'user': user,
+            'post_types': post_types,
+            'capabilities': capabilities,
+            'metrics': {
+                'published_resources': published_resources,
+                'records_count': records_count,
+            }
+        }, 200
+    except Exception as e:
+        return {'msg': str(e)}, 500

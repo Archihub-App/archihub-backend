@@ -1,11 +1,13 @@
 from flask import Blueprint, send_file, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_babel import gettext as _
 from app.api.tasks.services import add_task, has_task
 from app.api.users.services import has_role
 from app.api.system.models import OptionUpdate
 from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from app.utils import HookHandler
+from copy import deepcopy
 import uuid
 import os.path
 import requests
@@ -35,6 +37,46 @@ class PluginClass(Blueprint):
         self.actions = actions
         self.slug = path.replace('app.plugins.', '')
 
+    def _translate_display_node(self, value, parent_key=None):
+        translatable_keys = {'name', 'label', 'title', 'text', 'description', 'placeholder'}
+
+        if isinstance(value, dict):
+            translated = {}
+            for key, item in value.items():
+                translated[key] = self._translate_display_node(item, key)
+            return translated
+
+        if isinstance(value, list):
+            return [self._translate_display_node(item, parent_key) for item in value]
+
+        if isinstance(value, str) and parent_key in translatable_keys:
+            return _(value)
+
+        return value
+
+    def get_translated_settings(self):
+        if not self.settings:
+            return self.settings
+
+        return self._translate_display_node(deepcopy(self.settings))
+
+    def get_translated_actions(self):
+        if not self.actions:
+            return self.actions
+
+        return self._translate_display_node(deepcopy(self.actions))
+
+    def get_translated_info(self):
+        info = {
+            'name': self.name,
+            'description': self.description,
+            'version': self.version,
+            'author': self.author,
+            'type': self.type
+        }
+
+        return self._translate_display_node(info)
+
     def activate_settings(self):
         pass
     
@@ -42,16 +84,10 @@ class PluginClass(Blueprint):
         return self.capabilities
     
     def get_actions(self):
-        return self.actions
+        return self.get_translated_actions()
         
     def get_info(self):
-        return {
-            'name': self.name,
-            'description': self.description,
-            'version': self.version,
-            'author': self.author,
-            'type': self.type
-        }
+        return self.get_translated_info()
     
     def has_role(self, role, user):
         return has_role(user, role)
@@ -66,7 +102,8 @@ class PluginClass(Blueprint):
         return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in allowed_extensions
            
-    def update_data(self, collection, id, update):
+    @classmethod
+    def update_data(cls, collection, id, update):
         try:
             if collection == 'records':
                 from app.api.records.services import update_record_by_id
@@ -92,7 +129,7 @@ class PluginClass(Blueprint):
                 
                 resp = mongodb.update_record(collection, {'_id': ObjectId(id)}, update)
                 
-            self.clear_cache()
+            cls.clear_cache()
             return resp
         except Exception as e:
             raise Exception(str(e))
@@ -115,7 +152,7 @@ class PluginClass(Blueprint):
     
     def validate_fields(self, body, slug):
         if 'post_type' not in body and slug == 'bulk':
-            return {'msg': 'No se especificó el tipo de contenido'}, 400
+            return {'msg': _('No content type was specified')}, 400
         
         settings = self.settings['settings_' + slug]
         for setting in settings:
@@ -123,9 +160,9 @@ class PluginClass(Blueprint):
                 setting['required'] = False
             else:
                 if setting['required'] and setting['id'] not in body:
-                    return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
+                    return {'msg': _('The field {label} is required', label=setting['label'])}, 400
                 if setting['type'] == 'file' and setting['required'] and len(body[setting['id']]) == 0:
-                    return {'msg': 'El campo ' + setting['label'] + ' es requerido'}, 400
+                    return {'msg': _('The field {label} is required', label=setting['label'])}, 400
                 
     def validate_roles(self, user, roles):
         temp = []
@@ -134,7 +171,7 @@ class PluginClass(Blueprint):
                 temp.append(role)
         
         if len(temp) == 0:
-            return {'msg': 'No tiene permisos suficientes'}, 401
+            return {'msg': _('You do not have sufficient permissions')}, 401
         
     
     def get_plugin_settings(self):
@@ -156,6 +193,7 @@ class PluginClass(Blueprint):
         update = OptionUpdate(**settings_old)
         mongodb.update_record('system', {'name': 'active_plugins'}, update)
     
+    @classmethod
     def clear_cache(self):
         try:
             headers = {
@@ -173,7 +211,7 @@ class PluginClass(Blueprint):
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': 'No tiene permisos suficientes'}, 401
+                    return {'msg': _('You do not have sufficient permissions')}, 401
                 
                 path = os.path.dirname(os.path.abspath(self.filePath)) + '/static/image.png'
                 return send_file(path, mimetype='image/png')
@@ -188,14 +226,16 @@ class PluginClass(Blueprint):
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': 'No tiene permisos suficientes'}, 401
+                    return {'msg': _('You do not have sufficient permissions')}, 401
+
+                translated_settings = self.get_translated_settings()
                 
                 if type == 'all':
-                    return self.settings
+                    return translated_settings
                 elif type == 'settings':
-                    return self.settings['settings']
+                    return translated_settings['settings']
                 else:
-                    return self.settings['settings_' + type]
+                    return translated_settings['settings_' + type]
             except Exception as e:
                 return {'msg': str(e)}, 500
             
@@ -206,7 +246,7 @@ class PluginClass(Blueprint):
                 current_user = get_jwt_identity()
 
                 if not has_role(current_user, 'admin') and not has_role(current_user, 'processing'):
-                    return {'msg': 'No tiene permisos suficientes'}, 401
+                    return {'msg': _('You do not have sufficient permissions')}, 401
                 
                 body = request.form.to_dict()
                 data = body['data']
@@ -215,7 +255,7 @@ class PluginClass(Blueprint):
                 print(data)
 
                 self.set_plugin_settings(data)
-                return {'msg': 'Configuración guardada'}, 200
+                return {'msg': _('Settings saved')}, 200
             
             except Exception as e:
                 return {'msg': str(e)}, 500
