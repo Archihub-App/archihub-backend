@@ -8,6 +8,7 @@ import httpx
 from app.utils import SkillManager
 
 GOOGLE_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 _MODEL_CACHE: dict = {}
 _CACHE_TTL = 300  # seconds
@@ -44,11 +45,27 @@ _OPENAI_META: dict = {
 }
 
 _GOOGLE_META: dict = {
+    # Gemini 3 Frontier Series
+    "gemini-3.5-flash":      {"max_tokens": 65536, "capabilities": ["chat", "image", "audio"]},
+    "gemini-3.1-pro":        {"max_tokens": 65536, "capabilities": ["chat", "image", "audio"]},
+    "gemini-3-flash":        {"max_tokens": 65536, "capabilities": ["chat", "image", "audio"]},
+    "gemini-3.1-flash-lite": {"max_tokens": 65536, "capabilities": ["chat", "image", "audio"]},
+
+    # Gemini 2.5 Reasoning Series
+    "gemini-2.5-pro":        {"max_tokens": 65536, "capabilities": ["chat", "image"]},
+    "gemini-2.5-flash":      {"max_tokens": 65536, "capabilities": ["chat", "image"]},
+    "gemini-2.5-flash-lite": {"max_tokens": 65536, "capabilities": ["chat", "image"]},
+
+    # Gemini 2.0 Legacy Series
     "gemini-2.0-flash":      {"max_tokens": 8192,  "capabilities": ["chat", "image"]},
     "gemini-2.0-flash-lite": {"max_tokens": 8192,  "capabilities": ["chat", "image"]},
-    "gemini-2.5-flash-lite": {"max_tokens": 65536, "capabilities": ["chat", "image"]},
-    "gemini-2.5-flash":      {"max_tokens": 65536, "capabilities": ["chat", "image"]},
-    "gemini-2.5-pro":        {"max_tokens": 65536, "capabilities": ["chat", "image"]},
+
+    # Gemma 4 Open Weight Models
+    "gemma-4-12b-it":        {"max_tokens": 65536, "capabilities": ["chat", "image", "audio"]},
+    "gemma-4-26b-a4b-it":    {"max_tokens": 65536, "capabilities": ["chat", "image"]},
+    "gemma-4-31b-it":        {"max_tokens": 65536, "capabilities": ["chat", "image"]},
+    "gemma-4-e4b-it":        {"max_tokens": 65536, "capabilities": ["chat", "image", "audio"]},
+    "gemma-4-e2b-it":        {"max_tokens": 65536, "capabilities": ["chat", "image", "audio"]},
 }
 
 # Families / substrings that imply vision support in Ollama model names
@@ -66,6 +83,7 @@ _OLLAMA_EMBED_FAMILIES = (
 llm_providers = [
     "OpenAI",
     "Google",
+    "OpenRouter",
     "Azure",
     "Ollama",
     "LlamaServer"
@@ -224,6 +242,45 @@ def _preprocess_messages_openai_compat(messages, process_image_fn):
         else:
             processed.append(msg)
     return processed
+
+
+def _convert_openai_to_gemini_rest(messages):
+    contents = []
+    system_instruction = None
+
+    for msg in messages:
+        role = msg.get('role', '')
+        content = msg.get('content', '')
+
+        if role == 'system':
+            system_instruction = {"parts": [{"text": content}]}
+            continue
+
+        gemini_role = 'user' if role == 'user' else 'model'
+        parts = []
+
+        if isinstance(content, str):
+            parts.append({"text": content})
+        elif isinstance(content, list):
+            for item in content:
+                if item.get('type') == 'text':
+                    parts.append({"text": item['text']})
+                elif item.get('type') == 'image_url':
+                    url = item.get('image_url', {}).get('url', '')
+                    if url.startswith("data:"):
+                        mime = url.split(";")[0][5:]
+                        b64_data = url.split(",")[1]
+                        parts.append({
+                            "inline_data": {
+                                "mime_type": mime,
+                                "data": b64_data
+                            }
+                        })
+
+        if parts:
+            contents.append({"role": gemini_role, "parts": parts})
+
+    return contents, system_instruction
 
 
 def _preprocess_messages_ollama(messages, process_image_fn):
@@ -449,11 +506,6 @@ class AzureProvider(BaseLLMProvider):
 
 class GoogleProvider(BaseLLMProvider):
     def getModels(self):
-        """
-        Fetch available Gemini models dynamically from Google's OpenAI-compatible
-        endpoint, overlaying known capability metadata. Falls back to hardcoded
-        defaults if the API is unreachable.
-        """
         cache_key = "google:models"
 
         def fetch():
@@ -465,9 +517,10 @@ class GoogleProvider(BaseLLMProvider):
                 )
                 page = client.models.list()
                 result = []
+
+                fetched_ids = set()
                 for m in page.data:
                     mid = m.id
-                    # Only chat models (skip embedding, AQA, etc.)
                     if not mid.startswith("gemini") or "embedding" in mid or "aqa" in mid:
                         continue
                     meta = _GOOGLE_META.get(mid, {"max_tokens": 65536, "capabilities": ["chat", "image"]})
@@ -477,11 +530,28 @@ class GoogleProvider(BaseLLMProvider):
                         "type": "chat",
                         **meta,
                     })
+                    fetched_ids.add(mid)
+
+                for mid, meta in _GOOGLE_META.items():
+                    if not mid.startswith(("gemini", "gemma")) or mid in fetched_ids:
+                        continue
+
+                    result.append({
+                        "id": mid,
+                        "name": mid,
+                        "type": "chat",
+                        **meta,
+                    })
+
                 return sorted(result, key=lambda x: x["id"]) if result else _google_fallback()
             except Exception:
                 return _google_fallback()
 
-        return _get_cached(cache_key, fetch)
+        models = _get_cached(cache_key, fetch)
+        return [
+            model for model in models
+            if str(model.get('id', '')).startswith(("gemini", "gemma"))
+        ]
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gemini-2.0-flash")
@@ -489,9 +559,12 @@ class GoogleProvider(BaseLLMProvider):
         tools = kwargs.get('tools')
         tool_choice = kwargs.get('tool_choice')
         prepared_messages = _apply_skill_context(messages, kwargs)
+
         model_ids = [m['id'] for m in self.getModels()]
         if model not in model_ids:
             raise ValueError(f"Model {model} is not supported. Available: {model_ids}")
+
+        is_gemma = model.startswith("gemma")
 
         def _do_request(call_messages):
             processed_messages = _preprocess_messages_openai_compat(call_messages, self.process_image)
@@ -508,23 +581,88 @@ class GoogleProvider(BaseLLMProvider):
                 if tool_choice:
                     create_kwargs['tool_choice'] = tool_choice
 
-            if tools:
-                import openai as _openai
-                client = _openai.OpenAI(
-                    api_key=self.key,
-                    base_url=GOOGLE_OPENAI_BASE_URL,
-                )
-                response = client.chat.completions.create(**create_kwargs)
-            else:
-                client = ai.Client({
-                    "openai": {
-                        "api_key": self.key,
-                        "base_url": GOOGLE_OPENAI_BASE_URL,
+            if is_gemma:
+                gemini_contents, sys_inst = _convert_openai_to_gemini_rest(processed_messages)
+
+                payload = {
+                    "contents": gemini_contents,
+                    "generationConfig": {
+                        "temperature": kwargs.get("temperature", 0.2),
+                        "maxOutputTokens": kwargs.get("max_tokens", 2048)
                     }
-                })
-                aisuite_kwargs = create_kwargs.copy()
-                aisuite_kwargs['model'] = f"openai:{model}"
-                response = client.chat.completions.create(**aisuite_kwargs)
+                }
+                if sys_inst:
+                    payload["systemInstruction"] = sys_inst
+
+                if stream:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?key={self.key}&alt=sse"
+
+                    def gemma_stream():
+                        import json
+
+                        with httpx.stream("POST", url, json=payload, timeout=60) as resp:
+                            resp.raise_for_status()
+                            for line in resp.iter_lines():
+                                if line.startswith("data: "):
+                                    try:
+                                        chunk = json.loads(line[6:])
+                                        candidates = chunk.get("candidates", [])
+                                        if candidates:
+                                            parts = candidates[0].get("content", {}).get("parts", [])
+                                            if parts and "text" in parts[0]:
+                                                class StreamMessage:
+                                                    content = parts[0]["text"]
+
+                                                class StreamChoice:
+                                                    delta = StreamMessage()
+
+                                                class StreamResponse:
+                                                    choices = [StreamChoice()]
+
+                                                yield StreamResponse()
+                                    except Exception:
+                                        pass
+
+                    return gemma_stream()
+
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.key}"
+                resp = httpx.post(url, json=payload, timeout=60)
+                resp.raise_for_status()
+                data = resp.json()
+
+                response_text = ""
+                candidates = data.get("candidates", [])
+                if candidates:
+                    parts = candidates[0].get("content", {}).get("parts", [])
+                    if parts and "text" in parts[0]:
+                        response_text = parts[0]["text"]
+
+                return {
+                    'choices': [{
+                        'message': {
+                            'role': 'assistant',
+                            'content': response_text
+                        }
+                    }]
+                }
+            else:
+                if tools:
+                    import openai as _openai
+                    client = _openai.OpenAI(
+                        api_key=self.key,
+                        base_url=GOOGLE_OPENAI_BASE_URL,
+                    )
+                    response = client.chat.completions.create(**create_kwargs)
+                else:
+                    client = ai.Client({
+                        "openai": {
+                            "api_key": self.key,
+                            "base_url": GOOGLE_OPENAI_BASE_URL,
+                        }
+                    })
+                    aisuite_kwargs = create_kwargs.copy()
+                    aisuite_kwargs['model'] = f"openai:{model}"
+                    response = client.chat.completions.create(**aisuite_kwargs)
 
             if stream:
                 return response
@@ -615,6 +753,114 @@ class OpenAIProvider(BaseLLMProvider):
                         continue
                     raise ValueError(f"Request to OpenAI API failed: {e}")
             raise ValueError("Failed to get a response from OpenAI API after multiple retries.")
+
+        return _call_with_context_token_fallback(prepared_messages, _do_request)
+
+    def process_image(self, image_path):
+        return _process_image_to_data_url(image_path)
+
+
+class OpenRouterProvider(BaseLLMProvider):
+    def _get_base_url(self):
+        return (self.endpoint or OPENROUTER_BASE_URL).rstrip('/')
+
+    def getModels(self):
+        base_url = self._get_base_url()
+        cache_key = f"openrouter:models:{base_url}"
+
+        def fetch():
+            try:
+                import openai as _openai
+
+                client = _openai.OpenAI(
+                    api_key=self.key,
+                    base_url=base_url,
+                )
+                page = client.models.list()
+                result = []
+                for m in page.data:
+                    mid = m.id
+                    model_name = getattr(m, 'name', None) or mid
+                    model_caps = ["chat"]
+                    lower_blob = f"{mid} {model_name}".lower()
+                    if any(token in lower_blob for token in ("vision", "vl", "image", "multimodal")):
+                        model_caps.append("image")
+                    result.append({
+                        "id": mid,
+                        "name": model_name,
+                        "type": "chat",
+                        "max_tokens": getattr(m, 'context_length', None) or 65536,
+                        "capabilities": model_caps,
+                    })
+                return sorted(result, key=lambda x: x["id"])
+            except Exception:
+                return []
+
+        return _get_cached(cache_key, fetch)
+
+    def call(self, messages, **kwargs):
+        model = kwargs.get("model", "")
+        stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
+        tools = kwargs.get('tools')
+        tool_choice = kwargs.get('tool_choice')
+        prepared_messages = _apply_skill_context(messages, kwargs)
+        models = self.getModels()
+        model_ids = [m['id'] for m in models]
+
+        if not model and len(models) == 1:
+            model = models[0]['id']
+        if models and model not in model_ids:
+            raise ValueError(f"Model {model} is not supported by OpenRouter. Available: {model_ids}")
+
+        def _do_request(call_messages):
+            processed_messages = _preprocess_messages_openai_compat(call_messages, self.process_image)
+
+            create_kwargs: dict = {
+                "model": model,
+                "messages": processed_messages,
+                "stream": stream,
+            }
+            max_tokens_value = _to_positive_int(kwargs.get("max_tokens"))
+            if max_tokens_value is not None:
+                create_kwargs["max_tokens"] = max_tokens_value
+            create_kwargs["temperature"] = kwargs.get("temperature", 0.2)
+            if tools:
+                create_kwargs['tools'] = tools
+                if tool_choice:
+                    create_kwargs['tool_choice'] = tool_choice
+
+            max_retries, backoff_factor = 5, 1
+            for attempt in range(max_retries):
+                try:
+                    if tools:
+                        import openai as _openai
+
+                        client = _openai.OpenAI(
+                            api_key=self.key,
+                            base_url=self._get_base_url(),
+                        )
+                        response = client.chat.completions.create(**create_kwargs)
+                    else:
+                        client = ai.Client({
+                            "openai": {
+                                "api_key": self.key,
+                                "base_url": self._get_base_url(),
+                            }
+                        })
+                        aisuite_kwargs = create_kwargs.copy()
+                        aisuite_kwargs["model"] = f"openai:{model}"
+                        response = client.chat.completions.create(**aisuite_kwargs)
+                    if stream:
+                        return response
+                    return _aisuite_response_to_dict(response)
+                except Exception as e:
+                    if "429" in str(e) and attempt < max_retries - 1:
+                        sleep_time = backoff_factor * (2 ** attempt)
+                        print(f"Rate limit exceeded. Retrying in {sleep_time} seconds...")
+                        time.sleep(sleep_time)
+                        continue
+                    raise ValueError(f"Request to OpenRouter API failed: {e}")
+            raise ValueError("Failed to get a response from OpenRouter API after multiple retries.")
 
         return _call_with_context_token_fallback(prepared_messages, _do_request)
 
@@ -810,4 +1056,5 @@ def _google_fallback():
     return [
         {"id": mid, "name": mid, "type": "chat", **meta}
         for mid, meta in _GOOGLE_META.items()
+        if mid.startswith("gemini") or mid.startswith("gemma")
     ]

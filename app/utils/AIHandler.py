@@ -2,7 +2,7 @@ import os
 from app.utils import DatabaseHandler
 from app.api.aiservices.services import get_llm_models as get_ai_models
 from app.api.aiservices.services import get_provider_models
-from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider, OllamaProvider, LlamaServerProvider
+from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, OpenRouterProvider, AzureProvider, OllamaProvider, LlamaServerProvider
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -12,6 +12,7 @@ class AIHandler:
     PROVIDER_CLASSES = {
         'OpenAI': OpenAIProvider,
         'Google': GoogleProvider,
+        'OpenRouter': OpenRouterProvider,
         'Azure': AzureProvider,
         'Ollama': OllamaProvider,
         'LlamaServer': LlamaServerProvider

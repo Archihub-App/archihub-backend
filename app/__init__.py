@@ -1,3 +1,10 @@
+import torch
+
+# THE FIX: Bypass transformers 4.57.1 bug for PyTorch < 2.7
+if not hasattr(torch, 'float8_e8m0fnu'):
+    # Alias the missing dtype to an existing fp8 type to prevent import crashes
+    torch.float8_e8m0fnu = getattr(torch, 'float8_e4m3fn', None)
+
 from app.version import __version__
 '''
 ARCHIHUB: A comprehensive tool for organizing and connecting information
