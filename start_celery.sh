@@ -48,7 +48,7 @@ echo "Elasticsearch is up!"
 
 CELERY_RUN_MODE="${CELERY_RUN_MODE:-worker}"
 CELERY_LOGLEVEL="${CELERY_LOGLEVEL:-INFO}"
-CELERY_QUEUES="${CELERY_QUEUES:-high,medium,low}"
+CELERY_QUEUES="${CELERY_QUEUES:-}"
 CELERY_APP="${CELERY_APP:-app.celery_app}"
 CELERY_BEAT_SCHEDULE_FILE="${CELERY_BEAT_SCHEDULE_FILE:-/tmp/celerybeat-schedule}"
 CELERY_EXTRA_ARGS="${CELERY_EXTRA_ARGS:-}"
@@ -57,7 +57,11 @@ build_celery_command() {
   if [[ "$CELERY_RUN_MODE" == "beat" ]]; then
     echo "CELERY_WORKER=1 celery --app ${CELERY_APP} beat --loglevel ${CELERY_LOGLEVEL} --schedule ${CELERY_BEAT_SCHEDULE_FILE} ${CELERY_EXTRA_ARGS}"
   else
-    echo "CELERY_WORKER=1 celery --app ${CELERY_APP} worker -Q ${CELERY_QUEUES} --loglevel ${CELERY_LOGLEVEL} ${CELERY_EXTRA_ARGS}"
+    if [[ -z "$CELERY_QUEUES" ]]; then
+      echo "CELERY_WORKER=1 celery --app ${CELERY_APP} worker --loglevel ${CELERY_LOGLEVEL} ${CELERY_EXTRA_ARGS}"
+    else
+      echo "CELERY_WORKER=1 celery --app ${CELERY_APP} worker -Q ${CELERY_QUEUES} --loglevel ${CELERY_LOGLEVEL} ${CELERY_EXTRA_ARGS}"
+    fi
   fi
 }
 
