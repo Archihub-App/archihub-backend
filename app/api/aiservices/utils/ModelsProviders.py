@@ -853,7 +853,7 @@ class OpenRouterProvider(BaseLLMProvider):
                         import time
                         time.sleep(sleep_time)
                         continue
-                    raise ValueError(f"Request to OpenRouter API failed: {e}")
+                    raise ValueError(f"Request to OpenRouter API failed (Key starts with: '{self.key[:15] if self.key else 'None'}'): {e}")
             raise ValueError("Failed to get a response from OpenRouter API after multiple retries.")
 
         return _call_with_context_token_fallback(prepared_messages, _do_request)
