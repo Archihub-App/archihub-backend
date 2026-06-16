@@ -276,7 +276,8 @@ def celery_init_app(app: Flask) -> Celery:
 
     celery_app = Celery(app.name, task_cls=FlaskTask)
     celery_app.config_from_object(app.config["CELERY"])
-    celery_app.conf.timezone = 'UTC'
+    celery_app.conf.enable_utc = False
+    celery_app.conf.timezone = 'America/Bogota'
     worker_pool = os.environ.get("CELERY_WORKER_POOL")
     if not worker_pool and sys.platform == "darwin":
         worker_pool = "solo"
