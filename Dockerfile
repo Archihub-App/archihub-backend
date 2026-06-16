@@ -5,16 +5,22 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y ffmpeg && apt-get install -y poppler-utils && apt-get install -y libreoffice
 
 RUN cd /tmp && \
-    latest_filename=$(curl -s https://exiftool.org/ | grep -E -o 'Image-ExifTool-[0-9]+.[0-9]+.tar.gz' | head -1) && \
-    curl -O "https://exiftool.org/$latest_filename" && \
-    tar -xzf "$latest_filename" && \
-    dir_name=$(echo "$latest_filename" | sed 's/.tar.gz$//') && \
-    cd "$dir_name" && \
-    perl Makefile.PL && \
-    make && \
-    make install && \
-    cd / && \
-    rm -rf /tmp/Image-ExifTool-*
+    if curl --output /dev/null --silent --head --fail https://exiftool.org/; then \
+        latest_filename=$(curl -s https://exiftool.org/ | grep -E -o 'Image-ExifTool-[0-9]+.[0-9]+.tar.gz' | head -1) && \
+        if [ -n "$latest_filename" ]; then \
+            curl -O "https://exiftool.org/$latest_filename" && \
+            tar -xzf "$latest_filename" && \
+            dir_name=$(echo "$latest_filename" | sed 's/\.tar\.gz$//') && \
+            cd "$dir_name" && \
+            perl Makefile.PL && \
+            make && \
+            make install && \
+            cd / && \
+            rm -rf /tmp/Image-ExifTool-*; \
+        fi; \
+    else \
+        echo "exiftool.org is not available, skipping installation"; \
+    fi
 
 RUN pip install --upgrade pip
 
