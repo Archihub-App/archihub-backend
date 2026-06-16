@@ -832,24 +832,13 @@ class OpenRouterProvider(BaseLLMProvider):
             max_retries, backoff_factor = 5, 1
             for attempt in range(max_retries):
                 try:
-                    if tools:
-                        import openai as _openai
+                    import openai as _openai
 
-                        client = _openai.OpenAI(
-                            api_key=self.key,
-                            base_url=self._get_base_url(),
-                        )
-                        response = client.chat.completions.create(**create_kwargs)
-                    else:
-                        client = ai.Client({
-                            "openai": {
-                                "api_key": self.key,
-                                "base_url": self._get_base_url(),
-                            }
-                        })
-                        aisuite_kwargs = create_kwargs.copy()
-                        aisuite_kwargs["model"] = f"openai:{model}"
-                        response = client.chat.completions.create(**aisuite_kwargs)
+                    client = _openai.OpenAI(
+                        api_key=self.key,
+                        base_url=self._get_base_url(),
+                    )
+                    response = client.chat.completions.create(**create_kwargs)
                     if stream:
                         return response
                     return _aisuite_response_to_dict(response)
