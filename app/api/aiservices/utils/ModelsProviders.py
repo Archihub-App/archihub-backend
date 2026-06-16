@@ -834,25 +834,23 @@ class OpenRouterProvider(BaseLLMProvider):
                 try:
                     import openai as _openai
 
-                    print(f"[DEBUG OpenRouter] API Key length: {len(self.key) if self.key else 'None'}, starts with: {self.key[:5] if self.key else 'None'}")
-
+                    # Note: The openai library automatically appends '/chat/completions' to the base_url
                     client = _openai.OpenAI(
                         api_key=self.key,
-                        base_url=self._get_base_url(),
-                        default_headers={
-                            "Authorization": f"Bearer {self.key}",
-                            "HTTP-Referer": os.getenv('APP_URL', 'https://archihub.bit-sol.com.co'),
-                            "X-Title": os.getenv('APP_TITLE', 'ArchiHUB')
-                        }
+                        base_url="https://openrouter.ai/api/v1",
                     )
+                    
                     response = client.chat.completions.create(**create_kwargs)
+                    
                     if stream:
                         return response
                     return _aisuite_response_to_dict(response)
+                    
                 except Exception as e:
                     if "429" in str(e) and attempt < max_retries - 1:
                         sleep_time = backoff_factor * (2 ** attempt)
                         print(f"Rate limit exceeded. Retrying in {sleep_time} seconds...")
+                        import time
                         time.sleep(sleep_time)
                         continue
                     raise ValueError(f"Request to OpenRouter API failed: {e}")
