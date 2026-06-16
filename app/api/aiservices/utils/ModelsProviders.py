@@ -834,9 +834,16 @@ class OpenRouterProvider(BaseLLMProvider):
                 try:
                     import openai as _openai
 
+                    print(f"[DEBUG OpenRouter] API Key length: {len(self.key) if self.key else 'None'}, starts with: {self.key[:5] if self.key else 'None'}")
+
                     client = _openai.OpenAI(
                         api_key=self.key,
                         base_url=self._get_base_url(),
+                        default_headers={
+                            "Authorization": f"Bearer {self.key}",
+                            "HTTP-Referer": os.getenv('APP_URL', 'https://archihub.bit-sol.com.co'),
+                            "X-Title": os.getenv('APP_TITLE', 'ArchiHUB')
+                        }
                     )
                     response = client.chat.completions.create(**create_kwargs)
                     if stream:
