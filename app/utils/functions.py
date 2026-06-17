@@ -359,6 +359,31 @@ def get_resource_records_public(ids, page=0, limit=10, groupImages=False):
     except Exception as e:
         raise Exception(str(e))
 
+def _load_chunked_result(record_id, storage):
+    if storage.get('type') != 'chunked':
+        return []
+    collection = storage.get('collection')
+    batch_id = storage.get('batchId')
+    if not collection:
+        return []
+
+    chunk_filters = {'recordId': ObjectId(record_id)}
+    if batch_id:
+        chunk_filters['batchId'] = batch_id
+
+    chunk_docs = list(mongodb.get_all_records(
+        collection,
+        chunk_filters,
+        sort=[('chunkIndex', 1)],
+        fields={'_id': 0, 'pages': 1},
+    ))
+
+    pages = []
+    for chunk_doc in chunk_docs:
+        pages.extend(chunk_doc.get('pages', []))
+    
+    return pages
+
 
 @cacheHandler.cache.cache(limit=1000)
 def cache_get_record_stream(id):
@@ -399,15 +424,23 @@ def cache_get_processing_result(id, slug):
     if slug not in record['processing']:
         raise Exception(_('Record has not been processed with {slug}', slug=slug))
 
-    result = record['processing'][slug]['result']
-    # iterate each key in result and if the value is a datetime, convert it to string
-    for key in result:
-        if isinstance(result[key], datetime.datetime):
-            result[key] = result[key].strftime('%Y-%m-%d %H:%M:%S')
-        elif isinstance(result[key], list):
-            for i in range(len(result[key])):
-                if isinstance(result[key][i], datetime.datetime):
-                    result[key][i] = result[key][i].strftime('%Y-%m-%d %H:%M:%S')
+    processing_data = record['processing'][slug]
+    storage = processing_data.get('result_storage', {})
+    
+    if storage.get('type') == 'chunked':
+        result = _load_chunked_result(id, storage)
+    else:
+        result = processing_data.get('result', [])
+
+    if isinstance(result, dict):
+        # iterate each key in result and if the value is a datetime, convert it to string
+        for key in result:
+            if isinstance(result[key], datetime.datetime):
+                result[key] = result[key].strftime('%Y-%m-%d %H:%M:%S')
+            elif isinstance(result[key], list):
+                for i in range(len(result[key])):
+                    if isinstance(result[key][i], datetime.datetime):
+                        result[key][i] = result[key][i].strftime('%Y-%m-%d %H:%M:%S')
 
     return result
 
@@ -815,7 +848,15 @@ def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
         if not os.path.exists(file):
             raise Exception(_('File not found'))
 
-        resp = record['processing'][slug]['result'][page - 1]
+        processing_data = record['processing'][slug]
+        storage = processing_data.get('result_storage', {})
+        if storage.get('type') == 'chunked':
+            full_result = _load_chunked_result(id, storage)
+            resp = full_result[page - 1] if page - 1 < len(full_result) else {}
+        else:
+            full_result = processing_data.get('result', [])
+            resp = full_result[page - 1] if page - 1 < len(full_result) else {}
+
         labels = record['processing'][slug]['labels'] if 'labels' in record['processing'][slug] else []
 
         if block == 'blocks':
