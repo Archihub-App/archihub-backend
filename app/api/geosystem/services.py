@@ -264,6 +264,8 @@ def get_level_info(body):
             filters['properties.ident'] = body['ident']
             
         shape = mongodb.get_record('shapes', filters, fields={'properties.name': 1, 'properties.ident': 1})
+        if not shape:
+            return {'msg': _('Forma no encontrada')}, 404
         shape.pop('_id')
 
         return shape, 200
@@ -273,6 +275,9 @@ def get_level_info(body):
 @cacheHandler.cache.cache(limit=5000)
 def get_shape_centroid(ident, parent, level):
     try:
+        if not ident:
+            return None
+            
         filters = {
             'properties.admin_level': level,
             'properties.ident': ident
@@ -281,6 +286,9 @@ def get_shape_centroid(ident, parent, level):
             filters['properties.parent'] = parent
             
         record = mongodb.get_record('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1})
+        if not record:
+            return None
+            
         shape_ = shape(record['geometry'])
         
         if record['geometry']['type'] == 'MultiPolygon':
@@ -304,14 +312,24 @@ def get_shape_centroid(ident, parent, level):
 def get_shape_by_ident(ident, parent, level):
     try:
         filters = {
-            'properties.admin_level': level,
-            'properties.ident': ident
+            'properties.admin_level': level
         }
+        if ident:
+            filters['properties.ident'] = ident
         if parent:
             filters['properties.parent'] = parent
             
-        record = mongodb.get_record('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1, 'type': 1})
-        record.pop('_id')
-        return record, 200
+        if not ident:
+            records = list(mongodb.get_all_records('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1, 'type': 1}))
+            for r in records:
+                r.pop('_id', None)
+            return records, 200
+        else:
+            record = mongodb.get_record('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1, 'type': 1})
+            if not record:
+                return {'msg': _('Forma no encontrada')}, 404
+                
+            record.pop('_id', None)
+            return record, 200
     except Exception as e:
-        raise Exception(f'Error al obtener la forma {ident}')
+        return {'msg': str(e)}, 500
