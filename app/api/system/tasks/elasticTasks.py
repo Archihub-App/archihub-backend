@@ -1,6 +1,7 @@
 from celery import shared_task
 from app.utils import DatabaseHandler
 from app.utils import IndexHandler
+from app.utils import HookHandler
 import os
 from bson.objectid import ObjectId
 from app.utils.index.spanish_settings import settings as spanish_settings
@@ -12,6 +13,7 @@ from datetime import datetime, timezone
 
 index_handler = IndexHandler.IndexHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
+hookHandler = HookHandler.HookHandler()
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
 class _HTMLStripper(HTMLParser):
@@ -240,6 +242,10 @@ def index_resources_task(body={}):
                     if 'processing' in record and 'fileProcessing' in record['processing']
                 ]
                 document['records'] = records
+
+                document_tmp = hookHandler.call('resource_index', document, resource)
+                if document_tmp:
+                    document = document_tmp
 
                 if 'accessRights' in resource:
                     if resource['accessRights']:
