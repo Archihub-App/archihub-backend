@@ -33,59 +33,79 @@ def upload_shapes():
                 # open json file
                 with open(os.path.join(admin_folder_path, shape_)) as json_file:
                     data = json.load(json_file)
-                    features = data['features']
-
-                    features = data['features']
+                    
+                    import geopandas as gpd
+                    
+                    gdf_features = gpd.GeoDataFrame.from_features(data)
+                    
+                    if 'ident' not in gdf_features.columns:
+                        raise Exception('Ident not found in properties')
+                    if 'name' not in gdf_features.columns:
+                        raise Exception('Name not found in properties')
+                        
+                    gdf_features['admin_level'] = level
+                    gdf_features['name'] = gdf_features['name'].str.capitalize()
+                    
+                    # Ensure CRS is set so sjoin doesn't complain
+                    if gdf_features.crs is None:
+                        gdf_features.crs = "EPSG:4326"
 
                     mongodb.delete_records('shapes', {'properties.admin_level': level})
                     
-                    parent_shapes = {}
                     if level > 0:
                         parent_records = list(mongodb.get_all_records('shapes',
                                                 {'properties.admin_level': level - 1},
                                                 fields={'_id': 1, 'geometry': 1, 'properties.ident': 1, 'properties.name': 1}
                                             ))
-                        for parent in parent_records:
-                            parent_shapes[parent['properties']['ident']] = {
-                                'geometry': shape(parent['geometry']),
-                                'ident': parent['properties']['ident'],
-                                'name': parent['properties']['name']
-                            }
-                    
-                    for feature in features:
-                        feature['properties']['admin_level'] = level
-
-                        if 'ident' not in feature['properties']:
-                            raise Exception('Ident not found in properties')
-                        if 'name' not in feature['properties']:	
-                            raise Exception('Name not found in properties')
                         
-                        feature['properties']['name'] = feature['properties']['name'].capitalize()
-
-                        if level > 0:
-                            feature_shape = shape(feature['geometry'])
-                            centroid = feature_shape.centroid
+                        parent_features = []
+                        for parent in parent_records:
+                            parent_features.append({
+                                'type': 'Feature',
+                                'geometry': parent['geometry'],
+                                'properties': {
+                                    'parent_ident': parent['properties']['ident'],
+                                    'parent_name': parent['properties']['name']
+                                }
+                            })
                             
-                            parent_found = False
-                            for parent_ident, parent_data in parent_shapes.items():
-                                if parent_data['geometry'].contains(centroid):
-                                    feature['properties']['parent'] = parent_ident
-                                    feature['properties']['parent_name'] = parent_data['name']
-                                    mongodb.insert_record('shapes', Polygon(**feature))
-                                    parent_found = True
-                                    break
+                        gdf_parents = gpd.GeoDataFrame.from_features(parent_features)
+                        if gdf_parents.crs is None:
+                            gdf_parents.crs = "EPSG:4326"
                             
-                            if not parent_found and feature['geometry']['type'] == 'MultiPolygon':
-                                for parent_ident, parent_data in parent_shapes.items():
-                                    if parent_data['geometry'].intersects(feature_shape):
-                                        feature['properties']['parent'] = parent_ident
-                                        feature['properties']['parent_name'] = parent_data['name']
-                                        mongodb.insert_record('shapes', Polygon(**feature))
-                                        break
-                        elif level == 0:
-                            mongodb.insert_record('shapes', Polygon(**feature))
+                        # Use centroids to match parents
+                        gdf_features_centroids = gdf_features.copy()
+                        gdf_features_centroids.geometry = gdf_features_centroids.centroid
+                        
+                        joined = gpd.sjoin(gdf_features_centroids, gdf_parents, how='left', predicate='within')
+                        
+                        # Fallback for shapes not matched by centroid
+                        missing_mask = joined['parent_ident'].isna()
+                        if missing_mask.any():
+                            missing_features = gdf_features[missing_mask]
+                            joined_missing = gpd.sjoin(missing_features, gdf_parents, how='inner', predicate='intersects')
+                            joined_missing = joined_missing[~joined_missing.index.duplicated(keep='first')]
+                            
+                            joined.loc[joined_missing.index, 'parent_ident'] = joined_missing['parent_ident']
+                            joined.loc[joined_missing.index, 'parent_name'] = joined_missing['parent_name']
+                            
+                        gdf_features['parent'] = joined['parent_ident']
+                        gdf_features['parent_name'] = joined['parent_name']
+                        
+                        # Drop nulls so we don't insert NaN values in MongoDB
+                        # Some polygons might not intersect any parent depending on simplified borders
+                        gdf_features['parent'] = gdf_features['parent'].where(gdf_features['parent'].notna(), None)
+                        gdf_features['parent_name'] = gdf_features['parent_name'].where(gdf_features['parent_name'].notna(), None)
 
-                        get_level.invalidate_all()
+                    # Export to dictionary
+                    features_dict = json.loads(gdf_features.to_json())['features']
+                    
+                    for feature in features_dict:
+                        # Clean up NaN/null values from properties if they were inserted
+                        feature['properties'] = {k: v for k, v in feature['properties'].items() if v is not None}
+                        mongodb.insert_record('shapes', Polygon(**feature))
+
+                    get_level.invalidate_all()
                         
 
         return {'msg': _('Shapes uploaded successfully')}, 200
@@ -305,7 +325,7 @@ def get_shape_centroid(ident, parent, level):
         raise Exception(f'Error al obtener el centroide de la forma {ident}')
     
 @cacheHandler.cache.cache(limit=5000)
-def get_shape_by_ident(ident, parent, level):
+def get_shape_by_ident(ident, parent, level, retention=0.10):
     try:
         filters = {
             'properties.admin_level': level
@@ -319,6 +339,12 @@ def get_shape_by_ident(ident, parent, level):
             records = list(mongodb.get_all_records('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1, 'type': 1}))
             for r in records:
                 r.pop('_id', None)
+                
+            if records:
+                fc = {'type': 'FeatureCollection', 'features': records}
+                simplified = simplify_geojson(fc, retention)
+                records = simplified.get('features', [])
+                
             return records, 200
         else:
             record = mongodb.get_record('shapes', filters, fields={'geometry': 1, 'properties.name': 1, 'properties.ident': 1, 'type': 1})
@@ -326,6 +352,13 @@ def get_shape_by_ident(ident, parent, level):
                 return {'msg': _('Forma no encontrada')}, 404
                 
             record.pop('_id', None)
+            
+            fc = {'type': 'FeatureCollection', 'features': [record]}
+            simplified = simplify_geojson(fc, retention)
+            features = simplified.get('features', [])
+            if features:
+                record = features[0]
+                
             return record, 200
     except Exception as e:
         return {'msg': str(e)}, 500

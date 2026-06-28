@@ -1,6 +1,7 @@
 import geopandas as gpd
 import topojson as tp
 from flask_babel import gettext as _
+import json
 
 def count_vertices(gdf):
     """Counts the total valid coordinates in a GeoDataFrame."""
@@ -25,7 +26,7 @@ def count_vertices(gdf):
                     total += len(part.coords)
     return total
 
-def simplify_geojson(input_path, output_path, retention_percentage=0.20):
+def simplify_geojson(geojson_dict, retention_percentage=0.20):
     """
     Simplifies a GeoJSON mimicking Mapshaper's behavior:
     - Algorithm: Visvalingam-Whyatt
@@ -34,7 +35,11 @@ def simplify_geojson(input_path, output_path, retention_percentage=0.20):
     - Exact control by retention percentage (0.0 to 1.0)
     """
     print(_("Loading GeoJSON..."))
-    gdf = gpd.read_file(input_path)
+    gdf = gpd.GeoDataFrame.from_features(geojson_dict)
+    
+    if "crs" in geojson_dict:
+        gdf.crs = geojson_dict["crs"]
+        
     original_vertices = count_vertices(gdf)
     target_vertices = original_vertices * retention_percentage
     
@@ -69,5 +74,5 @@ def simplify_geojson(input_path, output_path, retention_percentage=0.20):
             best_gdf = gdf_temp
             
     print(_("Exporting result..."))
-    best_gdf.to_file(output_path, driver="GeoJSON")
     print(_("Completed!"))
+    return json.loads(best_gdf.to_json())

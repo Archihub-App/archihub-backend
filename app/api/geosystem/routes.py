@@ -10,8 +10,9 @@ def get_polygon():
     ident = data.get('ident')
     parent = data.get('parent')
     level = data.get('level')
+    retention = data.get('retention', 0.1)
     
-    resp = services.get_shape_by_ident(ident, parent, level)
+    resp = services.get_shape_by_ident(ident, parent, level, retention)
     if isinstance(resp, list):
         return tuple(resp)
     else:
