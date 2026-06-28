@@ -327,9 +327,16 @@ def get_shape_centroid(ident, parent, level):
 @cacheHandler.cache.cache(limit=5000)
 def get_shape_by_ident(ident, parent, level, type=None, retention=0.10):
     try:
+        if type == 'administrative':
+            type = None
+            level = 1
+            if ident and not parent:
+                parent = ident
+            ident = None
+            
         filters = {
             'properties.admin_level': level,
-            'properties.type': type if type else {'$exists': False}
+            'properties.shape_type': type if type else {'$exists': False}
         }
         if ident:
             filters['properties.ident'] = ident

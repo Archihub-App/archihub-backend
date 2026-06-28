@@ -2,6 +2,8 @@ import geopandas as gpd
 import topojson as tp
 from flask_babel import gettext as _
 import json
+import hashlib
+import os
 
 def count_vertices(gdf):
     """Counts the total valid coordinates in a GeoDataFrame."""
@@ -34,6 +36,20 @@ def simplify_geojson(geojson_dict, retention_percentage=0.20):
     - Maintains topology (shared borders intact)
     - Exact control by retention percentage (0.0 to 1.0)
     """
+    TEMPORAL_FILES_PATH = os.environ.get('TEMPORAL_FILES_PATH', 'temporal')
+    cache_dir = os.path.join(TEMPORAL_FILES_PATH, 'geojson')
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    geojson_str = json.dumps(geojson_dict, sort_keys=True)
+    hash_obj = hashlib.md5((geojson_str + str(retention_percentage)).encode('utf-8'))
+    cache_filename = f"{hash_obj.hexdigest()}.geojson"
+    cache_filepath = os.path.join(cache_dir, cache_filename)
+    
+    if os.path.exists(cache_filepath):
+        print(_("Loading from cache..."))
+        with open(cache_filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
+            
     print(_("Loading GeoJSON..."))
     gdf = gpd.GeoDataFrame.from_features(geojson_dict)
     
@@ -75,4 +91,9 @@ def simplify_geojson(geojson_dict, retention_percentage=0.20):
             
     print(_("Exporting result..."))
     print(_("Completed!"))
-    return json.loads(best_gdf.to_json())
+    result = json.loads(best_gdf.to_json())
+    
+    with open(cache_filepath, 'w', encoding='utf-8') as f:
+        json.dump(result, f, ensure_ascii=False)
+        
+    return result
