@@ -1475,6 +1475,7 @@ def get_resource(id, user, postQuery = False):
     if 'parents' in resource:
         if resource['parents']:
             for r in resource['parents']:
+                print(r)
                 r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
                 r['name'] = r_['metadata']['firstLevel']['title']
                 r['icon'] = get_icon(r_['post_type'])

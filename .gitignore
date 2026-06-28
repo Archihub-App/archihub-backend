@@ -2,6 +2,7 @@
 .env
 fix.py
 /uploads
+/original
 /webfiles
 /userfiles
 /temporal

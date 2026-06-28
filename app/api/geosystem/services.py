@@ -1,16 +1,12 @@
 from app.utils import CacheHandler
 from app.utils import DatabaseHandler, IndexHandler
 from app.api.geosystem.models import Polygon
-from app.api.geosystem.models import PolygonUpdate
 import os
 import json
 from shapely.geometry import shape, mapping, MultiPolygon
 from flask_babel import _
 from celery import shared_task
-from bson.objectid import ObjectId
-from shapely.validation import make_valid
-from shapely.ops import orient
-from flask import jsonify
+from .utils import simplify_geojson
 
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()

@@ -266,7 +266,6 @@ def index_resources_task(body={}):
         skip += 1000
         resources = list(mongodb.get_all_records(
             'resources', {}, limit=1000, skip=skip))
-
     resp = _("Indexing finished for %(count)s resources", count=resouces_count)
     return resp
 
