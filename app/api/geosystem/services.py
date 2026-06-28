@@ -325,10 +325,11 @@ def get_shape_centroid(ident, parent, level):
         raise Exception(f'Error al obtener el centroide de la forma {ident}')
     
 @cacheHandler.cache.cache(limit=5000)
-def get_shape_by_ident(ident, parent, level, retention=0.10):
+def get_shape_by_ident(ident, parent, level, type=None, retention=0.10):
     try:
         filters = {
-            'properties.admin_level': level
+            'properties.admin_level': level,
+            'properties.type': type if type else {'$exists': False}
         }
         if ident:
             filters['properties.ident'] = ident
