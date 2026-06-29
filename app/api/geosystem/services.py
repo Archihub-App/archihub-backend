@@ -3,7 +3,8 @@ from app.utils import DatabaseHandler, IndexHandler
 from app.api.geosystem.models import Polygon
 import os
 import json
-from shapely.geometry import shape, mapping, MultiPolygon
+from shapely.geometry import shape, mapping, MultiPolygon, MultiLineString as ShapelyMultiLineString
+from shapely.ops import polygonize, linemerge, unary_union
 from flask_babel import _
 from celery import shared_task
 from .utils import simplify_geojson
@@ -12,6 +13,63 @@ mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 index_handler = IndexHandler.IndexHandler()
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
+
+def ensure_polygon_feature(feature):
+    geom_dict = feature.get('geometry')
+    if not geom_dict:
+        return feature
+    geom = shape(geom_dict)
+    if geom.geom_type in ['Polygon', 'MultiPolygon']:
+        # Use buffer(0) to fix any self-intersections caused by simplification
+        valid_geom = geom.buffer(0)
+        feature['geometry'] = mapping(valid_geom)
+        return feature
+    elif geom.geom_type in ['LineString', 'MultiLineString']:
+        # Step 1: Merge disordered/fragmented line segments into continuous lines
+        merged = linemerge(geom)
+        
+        # Step 2: Try to polygonize the merged lines
+        polygons = list(polygonize(merged))
+        
+        # Step 3: If polygonize failed, try snapping endpoints to close small gaps
+        if not polygons:
+            # Get all individual lines
+            if merged.geom_type == 'LineString':
+                lines = [merged]
+            else:
+                lines = list(merged.geoms)
+            
+            # Try closing each line individually (snap start to end)
+            closed_lines = []
+            for line in lines:
+                coords = list(line.coords)
+                if len(coords) >= 3:
+                    # Close the ring by appending the first point
+                    if coords[0] != coords[-1]:
+                        coords.append(coords[0])
+                    from shapely.geometry import LinearRing, Polygon as ShapelyPolygon
+                    try:
+                        ring = LinearRing(coords)
+                        poly = ShapelyPolygon(ring)
+                        if poly.is_valid and poly.area > 0:
+                            closed_lines.append(poly)
+                    except Exception:
+                        pass
+            
+            if closed_lines:
+                polygons = closed_lines
+        
+        if polygons:
+            if len(polygons) == 1:
+                feature['geometry'] = mapping(polygons[0])
+            else:
+                feature['geometry'] = mapping(MultiPolygon(polygons))
+        else:
+            # Last resort: buffer the line to create a thin polygon
+            feature['geometry'] = mapping(geom.buffer(0.001))
+    else:
+        feature['geometry'] = mapping(geom.buffer(0.001))
+    return feature
 
 def update_cache():
     get_level.invalidate_all()
@@ -349,9 +407,22 @@ def get_shape_by_ident(ident, parent, level, type=None, retention=0.10):
                 r.pop('_id', None)
                 
             if records:
+                # Convert LineStrings to Polygons BEFORE simplification
+                # (simplification can break open rings, making polygonize fail)
+                records = [ensure_polygon_feature(r) for r in records]
                 fc = {'type': 'FeatureCollection', 'features': records}
                 simplified = simplify_geojson(fc, retention)
-                records = simplified.get('features', [])
+                # After simplification, fix any self-intersections with buffer(0)
+                fixed_records = []
+                for f in simplified.get('features', []):
+                    geom_dict = f.get('geometry')
+                    if geom_dict:
+                        geom = shape(geom_dict)
+                        if not geom.is_valid:
+                            geom = geom.buffer(0)
+                        f['geometry'] = mapping(geom)
+                    fixed_records.append(f)
+                records = fixed_records
                 
             return records, 200
         else:
@@ -361,10 +432,18 @@ def get_shape_by_ident(ident, parent, level, type=None, retention=0.10):
                 
             record.pop('_id', None)
             
+            # Convert to polygon BEFORE simplification
+            record = ensure_polygon_feature(record)
             fc = {'type': 'FeatureCollection', 'features': [record]}
             simplified = simplify_geojson(fc, retention)
             features = simplified.get('features', [])
             if features:
+                geom_dict = features[0].get('geometry')
+                if geom_dict:
+                    geom = shape(geom_dict)
+                    if not geom.is_valid:
+                        geom = geom.buffer(0)
+                    features[0]['geometry'] = mapping(geom)
                 record = features[0]
                 
             return record, 200

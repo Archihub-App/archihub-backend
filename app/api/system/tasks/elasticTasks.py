@@ -220,8 +220,15 @@ def index_resources_task(body={}):
                 records_ids = []
                 records_labels_map = {}
                 if 'filesObj' in resource:
-                    records_ids = [r['id'] for r in resource['filesObj']]
-                    records_labels_map = {r['id']: r.get('tag') for r in resource['filesObj'] if 'id' in r}
+                    def _get_order(file_obj):
+                        try:
+                            return int(file_obj.get('order', 0))
+                        except (TypeError, ValueError):
+                            return 0
+                            
+                    sorted_files = sorted(resource['filesObj'], key=_get_order)
+                    records_ids = [r['id'] for r in sorted_files if 'id' in r]
+                    records_labels_map = {r['id']: r.get('tag') for r in sorted_files if 'id' in r}
                 document['records'] = []
                 records_ids = [ObjectId(r) for r in records_ids]
                 if records_ids:
