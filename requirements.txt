@@ -40,4 +40,3 @@ pytesseract
 ldap3
 geopandas
 topojson
-simplification
