@@ -2369,6 +2369,8 @@ def has_parent_postType(post_type, compare):
         # Si el tipo de post no existe, retornar error
         if not post_type:
             return {'msg': _('Post type does not exist')}, 404
+        if 'parentType' not in post_type:
+            raise Exception('Post type does not have parents. Check if it is the correct post type.')
         # Si el tipo de post tiene padre, retornar True
         if len(post_type['parentType']) > 0:
             for p in post_type['parentType']:
