@@ -41,6 +41,7 @@ class AIHandler:
         self.models = models if isinstance(models, list) else []
         
     def get_models_with_capabilities(self, capabilities):
+        self.start()
         if not self.models:
             return []
         filtered_models = []
@@ -73,6 +74,7 @@ class AIHandler:
         return provider
     
     def call_model(self, model, messages=None, stream=False):
+        self.start()
         if not self.models:
             raise Exception('No AI models available')
 
