@@ -191,6 +191,7 @@ def get_provider_models(id):
         response = provider.getModels()
         return response, 200
     except Exception as e:
+        print(f"FATAL ERROR IN get_provider_models: {e}")
         return {'msg': str(e)}, 500
     
 def set_conversation(data, user):

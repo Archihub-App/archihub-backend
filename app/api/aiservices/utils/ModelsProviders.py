@@ -439,6 +439,7 @@ class AzureProvider(BaseLLMProvider):
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gpt-4.1")
+        timeout = kwargs.get("timeout", 30.0)
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         tools = kwargs.get('tools')
         tool_choice = kwargs.get('tool_choice')
@@ -471,7 +472,7 @@ class AzureProvider(BaseLLMProvider):
             if stream:
                 def iter_stream_lines():
                     try:
-                        with httpx.stream("POST", url, headers=headers, json=data, timeout=60) as resp:
+                        with httpx.stream("POST", url, headers=headers, json=data, timeout=timeout) as resp:
                             resp.raise_for_status()
                             for line in resp.iter_lines():
                                 if line:
@@ -485,7 +486,7 @@ class AzureProvider(BaseLLMProvider):
                 return iter_stream_lines()
 
             try:
-                resp = httpx.post(url, headers=headers, json=data, timeout=30)
+                resp = httpx.post(url, headers=headers, json=data, timeout=timeout)
                 resp.raise_for_status()
                 resp_json = resp.json()
                 if resp_json.get("error"):
@@ -555,6 +556,7 @@ class GoogleProvider(BaseLLMProvider):
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gemini-2.0-flash")
+        timeout = kwargs.get("timeout", 30.0)
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         tools = kwargs.get('tools')
         tool_choice = kwargs.get('tool_choice')
@@ -600,7 +602,7 @@ class GoogleProvider(BaseLLMProvider):
                     def gemma_stream():
                         import json
 
-                        with httpx.stream("POST", url, json=payload, timeout=60) as resp:
+                        with httpx.stream("POST", url, json=payload, timeout=timeout) as resp:
                             resp.raise_for_status()
                             for line in resp.iter_lines():
                                 if line.startswith("data: "):
@@ -626,7 +628,7 @@ class GoogleProvider(BaseLLMProvider):
                     return gemma_stream()
 
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.key}"
-                resp = httpx.post(url, json=payload, timeout=60)
+                resp = httpx.post(url, json=payload, timeout=timeout)
                 resp.raise_for_status()
                 data = resp.json()
 
@@ -651,6 +653,7 @@ class GoogleProvider(BaseLLMProvider):
                     client = _openai.OpenAI(
                         api_key=self.key,
                         base_url=GOOGLE_OPENAI_BASE_URL,
+                        timeout=timeout,
                     )
                     response = client.chat.completions.create(**create_kwargs)
                 else:
@@ -658,6 +661,7 @@ class GoogleProvider(BaseLLMProvider):
                         "openai": {
                             "api_key": self.key,
                             "base_url": GOOGLE_OPENAI_BASE_URL,
+                            "timeout": timeout,
                         }
                     })
                     aisuite_kwargs = create_kwargs.copy()
@@ -707,6 +711,7 @@ class OpenAIProvider(BaseLLMProvider):
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gpt-3.5-turbo")
+        timeout = kwargs.get("timeout", 30.0)
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         tools = kwargs.get('tools')
         tool_choice = kwargs.get('tool_choice')
@@ -735,10 +740,10 @@ class OpenAIProvider(BaseLLMProvider):
                 try:
                     if tools:
                         import openai as _openai
-                        client = _openai.OpenAI(api_key=self.key)
+                        client = _openai.OpenAI(api_key=self.key, timeout=timeout)
                         response = client.chat.completions.create(**create_kwargs)
                     else:
-                        client = ai.Client({"openai": {"api_key": self.key}})
+                        client = ai.Client({"openai": {"api_key": self.key, "timeout": timeout}})
                         aisuite_kwargs = create_kwargs.copy()
                         aisuite_kwargs["model"] = f"openai:{model}"
                         response = client.chat.completions.create(**aisuite_kwargs)
@@ -781,7 +786,7 @@ class OpenRouterProvider(BaseLLMProvider):
                 for m in page.data:
                     mid = m.id
                     model_name = getattr(m, 'name', None) or mid
-                    model_caps = ["chat"]
+                    model_caps = ["chat", "completion"]
                     lower_blob = f"{mid} {model_name}".lower()
                     if any(token in lower_blob for token in ("vision", "vl", "image", "multimodal")):
                         model_caps.append("image")
@@ -793,13 +798,15 @@ class OpenRouterProvider(BaseLLMProvider):
                         "capabilities": model_caps,
                     })
                 return sorted(result, key=lambda x: x["id"])
-            except Exception:
+            except Exception as e:
+                print(f"Error fetching OpenRouter models: {e}")
                 return []
 
         return _get_cached(cache_key, fetch)
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "")
+        timeout = kwargs.get("timeout", 30.0)
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         tools = kwargs.get('tools')
         tool_choice = kwargs.get('tool_choice')
@@ -838,6 +845,7 @@ class OpenRouterProvider(BaseLLMProvider):
                     client = _openai.OpenAI(
                         api_key=self.key,
                         base_url="https://openrouter.ai/api/v1",
+                        timeout=timeout,
                     )
                     
                     response = client.chat.completions.create(**create_kwargs)
@@ -898,6 +906,7 @@ class OllamaProvider(BaseLLMProvider):
 
     def call(self, messages, **kwargs):
         model = kwargs.get("model", "gpt-oss:20b")
+        timeout = kwargs.get("timeout", 30.0)
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         prepared_messages = _apply_skill_context(messages, kwargs)
         models = self.getModels()
@@ -911,7 +920,7 @@ class OllamaProvider(BaseLLMProvider):
         def _do_request(call_messages):
             processed_messages = _preprocess_messages_ollama(call_messages, self.process_image)
 
-            client = ai.Client({"ollama": {"api_url": self._get_api_url(), "timeout": 300}})
+            client = ai.Client({"ollama": {"api_url": self._get_api_url(), "timeout": timeout}})
 
             response = client.chat.completions.create(
                 model=f"ollama:{model}",
@@ -972,6 +981,7 @@ class LlamaServerProvider(BaseLLMProvider):
 
     def call(self, messages, **kwargs):
         base_url = self._get_base_url()
+        timeout = kwargs.get("timeout", 30.0)
         stream = bool(kwargs.get("stream", kwargs.get("strem", kwargs.get("sstream", False))))
         tools = kwargs.get('tools')
         tool_choice = kwargs.get('tool_choice')
@@ -1013,6 +1023,7 @@ class LlamaServerProvider(BaseLLMProvider):
                 client = _openai.OpenAI(
                     api_key=self.key or "not-needed",
                     base_url=f"{base_url}/v1/",
+                    timeout=timeout,
                 )
                 response = client.chat.completions.create(**create_kwargs)
             else:
@@ -1020,6 +1031,7 @@ class LlamaServerProvider(BaseLLMProvider):
                     "openai": {
                         "api_key": self.key or "not-needed",
                         "base_url": f"{base_url}/v1/",
+                        "timeout": timeout,
                     }
                 })
                 aisuite_kwargs = create_kwargs.copy()

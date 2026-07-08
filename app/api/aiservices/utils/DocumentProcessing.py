@@ -14,7 +14,7 @@ mongodb = DatabaseHandler.DatabaseHandler()
 WEB_FILES_PATH = os.environ.get('WEB_FILES_PATH', '')
 
 
-def get_document_page_image_path(record_id, page):
+def get_document_page_image_path(record_id, page, size='big'):
     record = mongodb.get_record('records', {'_id': ObjectId(record_id)}, fields={'processing.fileProcessing': 1})
 
     if not record:
@@ -31,7 +31,7 @@ def get_document_page_image_path(record_id, page):
     if not path:
         raise Exception('Record no ha sido procesado')
 
-    path_files = os.path.join(WEB_FILES_PATH, path, 'web/big/')
+    path_files = os.path.join(WEB_FILES_PATH, path, f'web/{size}/')
     if not os.path.exists(path_files):
         raise Exception('No existe la ruta del documento')
 
