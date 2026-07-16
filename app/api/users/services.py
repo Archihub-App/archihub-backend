@@ -442,14 +442,28 @@ def accept_compromise(username):
     # Retornar mensaje de éxito
     return jsonify({'msg': _('Compromise accepted successfully')}), 200
 
+def _is_valid_system_user(username):
+    if username.startswith('system_scheduler_'):
+        taskname = username.replace('system_scheduler_', '')
+        settings = mongodb.get_record('system', {'name': 'active_plugins'})
+        if settings and 'plugins_settings' in settings and 'scheduleSystemTasks' in settings['plugins_settings']:
+            tasks = settings['plugins_settings']['scheduleSystemTasks'].get('schedule_tasks', [])
+            for t in tasks:
+                if t.get('task') == taskname:
+                    return True
+    return False
+
 # Nuevo servicio para verificar si el usuario tiene un rol específico
 @cacheHandler.cache.cache()
 def has_role(username, role):
+    if _is_valid_system_user(username):
+        return True
+
     user = mongodb.get_record('users', {'username': username})
     
-    # Si el usuario no existe, retornar error
+    # Si el usuario no existe, retornar False
     if not user:
-        return jsonify({'msg': _('User does not exist')}), 400
+        return False
     # Si el usuario tiene el rol, retornar True
     if role in user['roles']:
         return True
@@ -458,10 +472,13 @@ def has_role(username, role):
 
 @cacheHandler.cache.cache()
 def has_right(username, right):
+    if _is_valid_system_user(username):
+        return True
+
     user = mongodb.get_record('users', {'username': username})
-    # Si el usuario no existe, retornar error
+    # Si el usuario no existe, retornar False
     if not user:
-        return jsonify({'msg': _('User does not exist')}), 400
+        return False
     # Si el usuario tiene el rol, retornar True
     if right in user['accessRights']:
         return True
