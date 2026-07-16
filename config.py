@@ -7,6 +7,8 @@ class Config:
     FERNET_KEY = os.environ.get('FERNET_KEY') or 'jE+bVWCJwdV/1wW6bhHC8CTt/I3xnN7pMpHuK1RRoVQ='
     CORS_HEADERS = 'Content-Type'
     JWT_ACCESS_TOKEN_EXPIRES = 18000
+    # Solo se usa cuando ARCHIHUB_TEST_MODE=true; protege el blueprint /test-control
+    TEST_SECRET_HEADER_KEY = os.environ.get('TEST_SECRET_HEADER_KEY') or 'CHANGE-ME-ONLY-FOR-DISPOSABLE-TEST-INSTANCES'
 
 class DevelopmentConfig(Config):
     pass

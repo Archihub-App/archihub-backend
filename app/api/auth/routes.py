@@ -26,11 +26,15 @@ def login():
                 - password
     responses:
         200:
-            description: Login exitoso
+            description: Login exitoso, retorna access_token. Si LDAP_HOST está configurado se intenta primero contra LDAP (y de no existir localmente, se registra automáticamente); si falla o no está configurado, se valida contra la base de datos local con bcrypt
         401:
-            description: Usuario o contraseña inválidos
+            description: Contraseña incorrecta
+        404:
+            description: El usuario no existe
+        429:
+            description: Demasiados intentos fallidos de login para este usuario (5 en los últimos 10 minutos); intentar de nuevo más tarde
         500:
-            description: Error en el servidor
+            description: Error en el servidor (excepción no controlada)
     """
     try:
         # Obtener username y password del request
