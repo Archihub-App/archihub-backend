@@ -51,7 +51,7 @@ def get_by_id(id):
 @jwt_required()
 def register():
     """
-    Registrar un nuevo usuario
+    Registrar un nuevo usuario (requiere rol admin)
     ---
     security:
         - JWT: []
@@ -63,18 +63,46 @@ def register():
           schema:
             type: object
             properties:
+                name:
+                    type: string
                 username:
                     type: string
+                    description: Debe tener formato de email
                 password:
                     type: string
+                confirmPassword:
+                    type: string
+                    description: Debe coincidir con password
+                roles:
+                    type: array
+                    items:
+                        type: object
+                        properties:
+                            id:
+                                type: string
+                    description: Cada id debe existir en el listado de roles del sistema
+                accessRights:
+                    type: array
+                    items:
+                        type: object
+                        properties:
+                            id:
+                                type: string
+                    description: Cada id debe existir en el listado de niveles de acceso del sistema
             required:
+                - name
                 - username
                 - password
+                - confirmPassword
+                - roles
+                - accessRights
     responses:
         201:
             description: Usuario registrado exitosamente
         400:
-            description: Usuario ya existe
+            description: El usuario ya existe, un rol/accessRight no existe, o error de validación de campos (ver errors en el body de la respuesta)
+        401:
+            description: No tienes permisos para realizar esta acción (se requiere rol admin)
         500:
             description: Error registrando el usuario
     """
@@ -83,7 +111,7 @@ def register():
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
-    
+
     body = request.json
 
     # Llamar al servicio para registrar el usuario
@@ -92,10 +120,10 @@ def register():
 @bp.route('/register-me', methods=['POST'])
 def registerme():
     """
-    Registrar un nuevo usuario
+    Auto-registro público de un nuevo usuario (rol 'user' fijo, sin accessRights). Requiere que el ajuste
+    'user_management' del sistema tenga habilitado el registro público, y envía un correo de verificación
+    de cuenta con un token de un día de validez
     ---
-    security:
-        - JWT: []
     tags:
         - Usuarios
     parameters:
@@ -104,18 +132,28 @@ def registerme():
           schema:
             type: object
             properties:
+                name:
+                    type: string
                 username:
                     type: string
+                    description: Debe tener formato de email
                 password:
                     type: string
+                confirmPassword:
+                    type: string
+                    description: Debe coincidir con password
             required:
+                - name
                 - username
                 - password
+                - confirmPassword
     responses:
         201:
-            description: Usuario registrado exitosamente
+            description: Usuario registrado exitosamente, pendiente de verificación por correo
         400:
-            description: Usuario ya existe
+            description: El auto-registro está deshabilitado, el usuario ya existe, o error de validación de campos (ver errors en el body de la respuesta)
+        500:
+            description: Error registrando el usuario
     """
     # Obtener el usuario actual
     body = request.json
@@ -126,10 +164,9 @@ def registerme():
 @bp.route('/forgot-password', methods=['POST'])
 def forgot_password():
     """
-    Olvidé mi contraseña
+    Solicitar recuperación de contraseña por correo. Requiere que el ajuste 'user_management' del sistema
+    tenga habilitada la recuperación de contraseña; envía un enlace de restablecimiento válido por un día
     ---
-    security:
-        - JWT: []
     tags:
         - Usuarios
     parameters:
@@ -144,9 +181,13 @@ def forgot_password():
                 - username
     responses:
         200:
-            description: Correo enviado exitosamente
+            description: Correo de recuperación enviado exitosamente
         400:
-            description: Usuario no existe
+            description: La recuperación de contraseña está deshabilitada
+        404:
+            description: El usuario no existe
+        500:
+            description: Error en el servidor
     """
     body = request.json
 
@@ -158,7 +199,8 @@ def forgot_password():
 @jwt_required()
 def update():
     """
-    Actualizar un usuario
+    Actualizar un usuario existente (requiere rol admin). El username no se puede cambiar; cualquier otro
+    campo de UserUpdate (name, password, photo, roles, accessRights, etc.) puede incluirse en el body
     ---
     security:
         - JWT: []
@@ -170,24 +212,49 @@ def update():
           schema:
             type: object
             properties:
-                id:
+                _id:
                     type: string
+                    description: id del usuario a actualizar
+                username:
+                    type: string
+                    description: Debe coincidir con el username actual del usuario; no se puede modificar
+                roles:
+                    type: array
+                    items:
+                        type: object
+                        properties:
+                            id:
+                                type: string
+                    description: Cada id debe existir en el listado de roles del sistema; debe incluir al menos uno de user/editor/admin
+                accessRights:
+                    type: array
+                    items:
+                        type: object
+                        properties:
+                            id:
+                                type: string
+                    description: Cada id debe existir en el listado de niveles de acceso del sistema
             required:
-                - id
+                - _id
+                - username
+                - roles
+                - accessRights
     responses:
         200:
             description: Usuario actualizado exitosamente
         400:
-            description: Usuario no existe
+            description: El usuario no existe, se intentó cambiar el username, no se incluyó ningún rol de sistema (user/editor/admin), o un rol/accessRight no existe
         401:
-            description: No tienes permisos para realizar esta acción
+            description: No tienes permisos para realizar esta acción (se requiere rol admin)
+        500:
+            description: Error en el servidor
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
-    
+
     body = request.json
 
     # Llamar al servicio para actualizar el usuario
@@ -197,7 +264,7 @@ def update():
 @jwt_required()
 def delete():
     """
-    Eliminar un usuario
+    Eliminar un usuario por su username (requiere rol admin). Un usuario no se puede eliminar a sí mismo
     ---
     security:
         - JWT: []
@@ -209,24 +276,28 @@ def delete():
           schema:
             type: object
             properties:
-                id:
+                username:
                     type: string
             required:
-                - id
+                - username
     responses:
         200:
             description: Usuario eliminado exitosamente
         400:
-            description: Usuario no existe
+            description: Intentaste eliminar tu propio usuario
         401:
-            description: No tienes permisos para realizar esta acción
+            description: No tienes permisos para realizar esta acción (se requiere rol admin)
+        404:
+            description: El usuario no existe
+        500:
+            description: Error en el servidor
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
     # Verificar si el usuario tiene el rol de administrador
     if not services.has_role(current_user, 'admin'):
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
-    
+
     body = request.json
 
     # Llamar al servicio para eliminar el usuario
@@ -236,7 +307,8 @@ def delete():
 @jwt_required()
 def updateme():
     """
-    Actualizar un usuario
+    Actualizar el propio perfil (nombre y/o contraseña) del usuario autenticado. Requiere confirmar la
+    contraseña actual; para no cambiar la contraseña, envía new_password y new_password_confirmation vacíos
     ---
     security:
         - JWT: []
@@ -248,17 +320,31 @@ def updateme():
           schema:
             type: object
             properties:
-                id:
+                password:
                     type: string
+                    description: Contraseña actual, para confirmar la identidad del usuario
+                name:
+                    type: string
+                new_password:
+                    type: string
+                    description: Nueva contraseña; usar cadena vacía para no cambiarla
+                new_password_confirmation:
+                    type: string
+                    description: Debe coincidir con new_password; usar cadena vacía para no cambiarla
             required:
-                - id
+                - password
+                - name
+                - new_password
+                - new_password_confirmation
     responses:
         200:
             description: Usuario actualizado exitosamente
         400:
-            description: Usuario no existe
-        401:
-            description: No tienes permisos para realizar esta acción
+            description: Contraseña actual incorrecta, las nuevas contraseñas no coinciden, o no se modificó ningún campo
+        404:
+            description: El usuario no existe
+        500:
+            description: Error en el servidor
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -271,22 +357,19 @@ def updateme():
 @jwt_required()
 def get_compromise():
     """
-    Obtener el compromise de un usuario. Este es el mensaje que acepta el usuario al iniciar sesión.
+    Obtener los datos completos del usuario autenticado (identificado por el JWT), incluyendo si ya aceptó
+    el compromiso que se muestra al iniciar sesión. Nota: a diferencia de /me, este endpoint no elimina el
+    campo password (hash bcrypt) del objeto devuelto
     ---
     security:
         - JWT: []
     tags:
         - Usuarios
-    parameters:
-        - in: path
-          name: Usuario actual
-          type: string
-          required: true
     responses:
         200:
-            description: Compromise obtenido exitosamente
+            description: Usuario obtenido exitosamente
         400:
-            description: Usuario no existe
+            description: El usuario no existe o no está verificado
     """
     current_user = get_jwt_identity()
     # Llamar al servicio para obtener el compromise del usuario
@@ -301,22 +384,17 @@ def get_compromise():
 @jwt_required()
 def accept_compromise():
     """
-    Aceptar el compromise de un usuario
+    Aceptar, para el usuario autenticado, el compromiso que se muestra al iniciar sesión
     ---
     security:
         - JWT: []
     tags:
         - Usuarios
-    parameters:
-        - in: path
-          name: Usuario actual
-          type: string
-          required: true
     responses:
         200:
-            description: Compromise aceptado exitosamente
+            description: Compromiso aceptado exitosamente
         400:
-            description: Usuario no existe
+            description: El usuario no existe o no está verificado
     """
     current_user = get_jwt_identity()
     # Llamar al servicio para obtener el compromise del usuario
@@ -332,22 +410,17 @@ def accept_compromise():
 @jwt_required()
 def get_user():
     """
-    Obtener un usuario por su header de autorización
+    Obtener los datos del usuario autenticado (identificado por el JWT), sin el campo password
     ---
     security:
         - JWT: []
     tags:
         - Usuarios
-    parameters:
-        - in: path
-          name: Usuario actual
-          type: string
-          required: true
     responses:
         200:
             description: Usuario obtenido exitosamente
-        400:
-            description: Usuario no existe
+        500:
+            description: Error en el servidor. Nota- si el usuario no existe o no está verificado, el código actual intenta hacer user.pop('password') sobre None antes de comprobar si el usuario existe, lo que produce un error 500 en vez del 400 documentado originalmente
     """
     current_user = get_jwt_identity()
     # Llamar al servicio para obtener el usuario
@@ -363,7 +436,8 @@ def get_user():
 @jwt_required()
 def generate_token():
     """
-    Generar un token de acceso a la API pública para un usuario
+    Generar (y persistir, cifrado con Fernet, en el campo token del usuario) un token de acceso sin
+    expiración para el usuario autenticado, usado por la API pública
     ---
     security:
         - JWT: []
@@ -381,9 +455,11 @@ def generate_token():
                 - password
     responses:
         200:
-            description: Token generado exitosamente
+            description: Token generado exitosamente (access_token en la respuesta)
         400:
             description: Usuario no existe o contraseña incorrecta
+        500:
+            description: Error en el servidor (p. ej. si no se envía password en el body)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -399,7 +475,8 @@ def generate_token():
 @jwt_required()
 def generate_admin_token():
     """
-    Generar un token de acceso a la API para un usuario admin
+    Generar (y persistir, cifrado con Fernet, en el campo adminToken del usuario) un token de acceso a la
+    API para el usuario admin autenticado, con expiración configurable (requiere rol admin)
     ---
     security:
         - JWT: []
@@ -413,15 +490,18 @@ def generate_admin_token():
             properties:
                 password:
                     type: string
+                duration:
+                    description: Días de validez del token. false para que no expire. Por defecto 2
+                    type: integer
             required:
                 - password
     responses:
         200:
-            description: Token generado exitosamente
+            description: Token generado exitosamente (access_token en la respuesta)
         400:
-            description: Usuario no existe o contraseña incorrecta
+            description: No se envió password, duration no es un entero ni false, o la contraseña es incorrecta
         401:
-            description: No tienes permisos para realizar esta acción
+            description: No tienes permisos para realizar esta acción (se requiere rol admin)
     """
     # Obtener el body del request
     body = request.json
@@ -436,7 +516,7 @@ def generate_admin_token():
         body['duration'] = 2
     if not isinstance(body['duration'], int) and body['duration'] != False:
         return jsonify({'msg': _('Duration must be an integer or false')}), 400
-    
+
     # Llamar al servicio para generar el token
     return services.generate_token(current_user, body['password'], True, body['duration'])
 
@@ -445,7 +525,8 @@ def generate_admin_token():
 def generate_node_token():
     
     """
-    Generar un token de acceso a la API para los nodos de procesamiento
+    Generar (y persistir, cifrado con Fernet, en el campo nodeToken del usuario) un token de acceso sin
+    expiración para los nodos de procesamiento, para el usuario admin autenticado (requiere rol admin)
     ---
     security:
         - JWT: []
@@ -463,11 +544,13 @@ def generate_node_token():
                 - password
     responses:
         200:
-            description: Token generado exitosamente
+            description: Token generado exitosamente (access_token en la respuesta)
         400:
             description: Usuario no existe o contraseña incorrecta
         401:
-            description: No tienes permisos para realizar esta acción
+            description: No tienes permisos para realizar esta acción (se requiere rol admin)
+        500:
+            description: Error en el servidor (p. ej. si no se envía password en el body)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -485,7 +568,8 @@ def generate_node_token():
 @jwt_required()
 def generate_viz_token():
     """
-    Generar un token de acceso a la API para los nodos de procesamiento
+    Generar (y persistir, cifrado con Fernet, en el campo vizToken del usuario) un token de acceso sin
+    expiración para el visualizador/dashboard, para el usuario autenticado (requiere rol visualizer)
     ---
     security:
         - JWT: []
@@ -503,11 +587,13 @@ def generate_viz_token():
                 - password
     responses:
         200:
-            description: Token generado exitosamente
+            description: Token generado exitosamente (access_token en la respuesta)
         400:
             description: Usuario no existe o contraseña incorrecta
         401:
-            description: No tienes permisos para realizar esta acción
+            description: No tienes permisos para realizar esta acción (se requiere rol visualizer)
+        500:
+            description: Error en el servidor (p. ej. si no se envía password en el body)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -526,7 +612,9 @@ def generate_viz_token():
 @jwt_required()
 def get_all():
     """
-    Obtener todos los usuarios usando filtros
+    Obtener usuarios paginados (20 por página, ordenados por nombre) usando filtros, sin exponer campos
+    sensibles (password, status, photo, compromise, token, adminToken, nodeToken). Requiere rol admin o
+    editor
     ---
     security:
         - JWT: []
@@ -540,17 +628,17 @@ def get_all():
             properties:
                 filters:
                     type: object
-                sort:
-                    type: string
-                limit:
+                    description: Filtro Mongo aplicado a la colección users. Por defecto {}
+                page:
                     type: integer
-                skip:
-                    type: integer
+                    description: Página de resultados (20 por página). Por defecto 0
     responses:
         200:
-            description: Usuarios obtenidos exitosamente
+            description: Usuarios obtenidos exitosamente (incluye el total en cada resultado)
         401:
-            description: No tienes permisos para realizar esta acción
+            description: No tienes permisos para realizar esta acción (se requiere rol admin o editor)
+        500:
+            description: Error en el servidor
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -569,22 +657,20 @@ def get_all():
 @jwt_required()
 def get_requests():
     """
-    Obtener la cantidad de requests por usuario y el lastRequest
+    Obtener la cantidad de requests de la semana actual y el lastRequest del usuario autenticado. Si la
+    última request registrada no es de la semana en curso, el contador se reinicia a 0 antes de devolverlo
     ---
     security:
         - JWT: []
     tags:
         - Usuarios
-    parameters:
-        - in: path
-          name: Usuario actual
-          type: string
-          required: true
     responses:
         200:
             description: Requests obtenidos exitosamente
-        401:
-            description: No tienes permisos para realizar esta acción
+        404:
+            description: El usuario no existe
+        500:
+            description: Error en el servidor
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -597,17 +683,15 @@ def get_requests():
 @jwt_required()
 def set_favorite():
     """
-    Agregar un favorito a un usuario
+    Agregar un favorito para el usuario autenticado. type es el nombre literal de la colección de Mongo
+    donde vive el elemento (p. ej. 'resources', 'records'), no un slug de content-type. Si type es
+    'resources', el recurso debe estar publicado
     ---
     security:
         - JWT: []
     tags:
         - Usuarios
     parameters:
-        - in: path
-          name: Usuario actual
-          type: string
-          required: true
         - in: body
           name: body
           type: object
@@ -617,13 +701,18 @@ def set_favorite():
                     type: string
                 type:
                     type: string
+                    description: Nombre de la colección Mongo del elemento (p. ej. 'resources', 'records')
                 view:
                     type: string
     responses:
         200:
-            description: Requests obtenidos exitosamente
-        401:
-            description: No tienes permisos para realizar esta acción
+            description: Favorito agregado exitosamente
+        400:
+            description: El recurso existe pero no está publicado (solo aplica cuando type es 'resources')
+        404:
+            description: El elemento referenciado por id/type no existe
+        500:
+            description: Error en el servidor
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -637,17 +726,14 @@ def set_favorite():
 @jwt_required()
 def delete_favorite():
     """
-    Eliminar un favorito de un usuario
+    Eliminar un favorito del usuario autenticado. No valida que el favorito exista previamente: siempre
+    responde 200, incluso si el par id/type no estaba en la lista de favoritos
     ---
     security:
         - JWT: []
     tags:
         - Usuarios
     parameters:
-        - in: path
-          name: Usuario actual
-          type: string
-          required: true
         - in: body
           name: body
           type: object
@@ -657,11 +743,12 @@ def delete_favorite():
                     type: string
                 type:
                     type: string
+                    description: Nombre de la colección Mongo del elemento (p. ej. 'resources', 'records')
     responses:
         200:
-            description: Requests obtenidos exitosamente
-        401:
-            description: No tienes permisos para realizar esta acción
+            description: Favorito eliminado exitosamente
+        500:
+            description: Error en el servidor
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -676,17 +763,14 @@ def delete_favorite():
 @jwt_required()
 def get_favorites():
     """
-    Obtener los favoritos de un usuario paginados
+    Obtener, paginados (20 por página), los favoritos del usuario autenticado de un type (colección Mongo)
+    dado. Si type es 'resources' solo se devuelven los que siguen publicados
     ---
     security:
         - JWT: []
     tags:
         - Usuarios
     parameters:
-        - in: path
-          name: Usuario actual
-          type: string
-          required: true
         - in: body
           name: body
           type: object
@@ -694,13 +778,15 @@ def get_favorites():
           properties:
                 type:
                     type: string
+                    description: Nombre de la colección Mongo a filtrar (p. ej. 'resources', 'records'). Obligatorio
                 page:
                     type: integer
+                    description: Página de resultados (20 por página). Obligatorio
     responses:
         200:
-            description: Favoritos obtenidos exitosamente
-        401:
-            description: No tienes permisos para realizar esta acción
+            description: Favoritos obtenidos exitosamente (total y results)
+        500:
+            description: Error en el servidor (p. ej. si falta type o page en el body)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -713,17 +799,13 @@ def get_favorites():
 @jwt_required()
 def get_snaps():
     """
-    Obtener los snaps de un usuario
+    Obtener los snaps del usuario autenticado de un type dado, paginados
     ---
     security:
         - JWT: []
     tags:
         - Usuarios
     parameters:
-        - in: path
-          name: Usuario actual
-          type: string
-          required: true
         - in: body
           name: body
           type: object
@@ -731,13 +813,15 @@ def get_snaps():
           properties:
                 type:
                     type: string
+                    description: Obligatorio
                 page:
                     type: integer
+                    description: Obligatorio
     responses:
         200:
             description: Snaps obtenidos exitosamente
-        401:
-            description: No tienes permisos para realizar esta acción
+        400:
+            description: Falta el campo type o page en el body
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()

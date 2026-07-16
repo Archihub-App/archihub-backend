@@ -14,7 +14,7 @@ from app.utils.FernetAuth import fernetAuthenticate
 @jwt_required()
 def get_log_actions():
     """
-    Obtener las acciones de log disponibles
+    Obtener el catálogo de acciones de log disponibles (LogActions.log_actions)
     ---
     security:
         - JWT: []
@@ -22,11 +22,9 @@ def get_log_actions():
         - Logs del sistema
     responses:
         200:
-            description: Acciones de log obtenidas exitosamente
-        403:
-            description: No tienes permisos para realizar esta acción
-        500:
-            description: Error obteniendo acciones de log
+            description: Diccionario de acciones de log disponibles (siempre 200, no depende de la base de datos)
+        401:
+            description: No tienes permisos para realizar esta acción (el usuario autenticado no tiene el rol admin)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -41,7 +39,7 @@ def get_log_actions():
 @jwt_required()
 def filter():
     """
-    Obtener los logs de acuerdo a un filtro
+    Obtener los logs de acuerdo a un filtro (paginado)
     ---
     security:
         - JWT: []
@@ -53,19 +51,26 @@ def filter():
           schema:
             type: object
             properties:
-              username:
-                type: string
-              action:
-                type: string
+              filters:
+                type: object
+                description: 'Filtro de Mongo aplicado directamente sobre la colección "logs" (p. ej. username, action).'
+              page:
+                type: integer
+                description: Página de resultados (20 por página, skip = page * 20).
+            required:
+              - filters
+              - page
     responses:
         200:
-            description: Logs obtenidos exitosamente
-        400:
-            description: No se encontraron logs
-        403:
-            description: No tienes permisos para realizar esta acción
+            description: >
+                Arreglo de logs (con "details" derivado de metadata y "total" agregado en cada elemento).
+                Nota: por un bug conocido en el servicio (filter() evalúa "if not logs" sobre un cursor de
+                pymongo, que siempre es verdadero), la ausencia de resultados NUNCA produce 404: siempre
+                responde 200, con un arreglo vacío si no hay coincidencias.
+        401:
+            description: No tienes permisos para realizar esta acción (el usuario autenticado no tiene el rol admin)
         500:
-            description: Error obteniendo logs
+            description: Error obteniendo logs (incluye el caso en que "filters" o "page" no vienen en el body)
     """
     # Obtener el body del request
     body = request.json
@@ -82,8 +87,10 @@ def filter():
 @jwt_required()
 def get_logs(resource_id):
     """
-    Obtener todos los logs de un recurso
+    Obtener el historial de cambios (diffs) de un recurso, a partir de sus logs RESOURCE_CREATE/RESOURCE_UPDATE
     ---
+    security:
+        - JWT: []
     tags:
         - Logs del sistema
     parameters:
@@ -91,19 +98,25 @@ def get_logs(resource_id):
           name: resource_id
           required: true
           type: string
-          description: ID del recurso
+          description: ID del recurso (metadata.resource._id en los logs)
         - in: body
           name: body
           schema:
                 type: object
                 properties:
                     page:
-                        type: number
+                        type: integer
+                        description: Página de resultados (20 por página, skip = page * 20). Opcional, por defecto skip=0.
     responses:
         200:
-            description: Logs obtenidos exitosamente
-        404:
-            description: No se encontraron logs
+            description: >
+                Arreglo de cambios detectados (path/date/old/new) comparando pares consecutivos de logs
+                RESOURCE_CREATE/RESOURCE_UPDATE del recurso. Vacío si hay menos de dos logs para comparar.
+                Nota: por el mismo bug de "if not logs" sobre un cursor de pymongo descrito en POST /logs,
+                la ausencia de logs para el recurso NUNCA produce 404: siempre responde 200 (con [] si no hay
+                logs, o si no alcanza a haber al menos dos para comparar cambios).
+        401:
+            description: No tienes permisos para realizar esta acción (el usuario autenticado no tiene el rol admin)
         500:
             description: Error obteniendo logs
     """

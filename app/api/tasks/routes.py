@@ -17,8 +17,10 @@ from flask import current_app as app
 @jwt_required()
 def get_tasks(user):
     """
-    Obtener las tasks de un usuario
+    Obtener las tasks de un usuario (paginado, 10 por página)
     ---
+    security:
+        - JWT: []
     tags:
         - Tareas de procesamiento
     parameters:
@@ -26,15 +28,27 @@ def get_tasks(user):
           name: user
           required: true
           type: string
-          description: Nombre de usuario
+          description: >-
+              Nombre de usuario, o el literal "automatic" para tareas
+              generadas por el sistema (requiere rol admin, salvo que el
+              usuario autenticado sea el mismo "automatic")
         - in: body
           name: body
           required: true
+          description: >-
+              Cuerpo JSON requerido (puede ir vacío, `{}`); todas sus claves
+              son opcionales.
           schema:
+            type: object
             properties:
                 page:
                     type: integer
-                    description: Página de resultados
+                    description: 'Página de resultados, 0-indexada (10 tasks por página); si se omite, 0'
+                automatic:
+                    description: >-
+                        Si esta clave está presente (cualquier valor), se
+                        listan las tareas del usuario "automatic" en lugar
+                        de las del path param `user`
     responses:
         200:
             description: Lista de tasks
@@ -59,6 +73,8 @@ def get_tasks_total(user):
     """
     Obtener el total de tasks de un usuario
     ---
+    security:
+        - JWT: []
     tags:
         - Tareas de procesamiento
     parameters:
@@ -91,6 +107,8 @@ def test_celery_result_all():
     """
     Devuelve las tasks actualmente en ejecución
     ---
+    security:
+        - JWT: []
     tags:
         - Tareas de procesamiento
     responses:
@@ -121,6 +139,8 @@ def delete_task(taskId):
     """
     Elimina una task
     ---
+    security:
+        - JWT: []
     tags:
         - Tareas de procesamiento
     parameters:

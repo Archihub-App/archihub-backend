@@ -7,10 +7,11 @@ from app.api.views import services
 @bp.route('', methods=['GET'])
 def get_views():
     """
-    Obtener todas las vistas de consulta
+    Obtener el listado público de todas las vistas de consulta (nombre, slug, descripción, thumbnail)
     ---
     tags:
         - Vistas
+    description: Ruta pública, no requiere autenticación.
     responses:
         200:
             description: Retorna todas las vistas de consulta
@@ -27,10 +28,12 @@ def get_views():
 @bp.route('/info/<view_slug>', methods=['GET'])
 def get_view_info(view_slug):
     """
-    Obtener información de una vista de consulta
+    Obtener información extendida de una vista de consulta por su slug (formularios, tipos,
+    conteo de archivos por tipo, etc.), usada para renderizar la vista pública
     ---
     tags:
         - Vistas
+    description: Ruta pública, no requiere autenticación.
     parameters:
         - in: path
           name: view_slug
@@ -39,10 +42,12 @@ def get_view_info(view_slug):
     responses:
         200:
             description: Información de la vista de consulta
-        404:
-            description: Vista de consulta no encontrada
         500:
-            description: Error al obtener la información de la vista de consulta
+            description: >
+                Error interno no manejado. Nota: el código intenta iterar view['visible']
+                antes de comprobar si la vista existe, por lo que un slug inexistente produce
+                una excepción sin capturar (TypeError, página de error 500 genérica de Flask),
+                no la respuesta 404 documentada en versiones anteriores de este endpoint.
     """
     # Llamar al servicio para obtener la información de una vista de consulta
     resp = services.get_view_info(view_slug)

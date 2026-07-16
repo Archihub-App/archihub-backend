@@ -18,11 +18,12 @@ def get_all():
         - JWT: []
     tags:
         - Listados
+    description: Requiere el rol admin o editor. Devuelve únicamente los campos name e id de cada listado.
     responses:
         200:
-            description: Lista de listados obtenida exitosamente
+            description: Lista de listados obtenida exitosamente (solo name e id)
         401:
-            description: No tienes permisos para realizar esta acción
+            description: No tienes permisos para realizar esta acción (no eres admin ni editor)
         500:
             description: Error al obtener los listados
     """
@@ -50,6 +51,7 @@ def create():
         - JWT: []
     tags:
         - Listados
+    description: Requiere el rol admin o editor. Cada elemento de options se inserta como un documento independiente en la colección options; el listado guarda solo sus ids.
     parameters:
         - in: body
           name: body
@@ -60,24 +62,26 @@ def create():
                     type: string
                 description:
                     type: string
-                slug:
-                    type: string
-                fields:
+                options:
                     type: array
                     items:
                         type: object
+                        properties:
+                            term:
+                                type: string
+                        required:
+                            - term
             required:
                 - name
                 - description
+                - options
     responses:
         201:
             description: Listado creado exitosamente
-        400:
-            description: Error al crear el listado
         401:
-            description: No tienes permisos para realizar esta acción
+            description: No tienes permisos para realizar esta acción (no eres admin ni editor)
         500:
-            description: Error al crear el listado
+            description: Error al crear el listado (incluye body malformado, p. ej. sin options)
     """
     # Obtener el body de la request
     body = request.json
@@ -96,12 +100,13 @@ def create():
 @jwt_required()
 def get_by_id(id):
     """
-    Obtener un estándar por su id
+    Obtener un listado por su id
     ---
     security:
         - JWT: []
     tags:
         - Listados
+    description: Requiere el rol admin o editor. Devuelve name, description y options (cada option resuelta a {id, term}).
     parameters:
         - in: path
           name: id
@@ -109,13 +114,13 @@ def get_by_id(id):
           required: true
     responses:
         200:
-            description: Listado obtenido exitosamente
+            description: >
+              Listado obtenido exitosamente. Nota - si el id no existe o es inválido,
+              esta ruta también responde 200 con un mensaje de error en el cuerpo en
+              lugar de 404, debido a un manejo de excepciones que no propaga el
+              código de estado.
         401:
-            description: No tienes permisos para realizar esta acción
-        404:
-            description: Listado no encontrado
-        500:
-            description: Error al obtener el listado
+            description: No tienes permisos para realizar esta acción (no eres admin ni editor)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -143,9 +148,15 @@ def update_by_id(id):
         - JWT: []
     tags:
         - Listados
+    description: >
+      Requiere el rol admin o editor. El body debe incluir options; cada elemento
+      existente (con id) se actualiza, cada elemento nuevo se inserta, y los
+      marcados con deleted=true se excluyen del listado resultante. Si options se
+      omite del body, la ruta no realiza ningún cambio ni devuelve respuesta
+      (falla con error 500 de Flask).
     parameters:
         - in: path
-          name: slug
+          name: id
           schema:
             type: string
           required: true
@@ -162,20 +173,28 @@ def update_by_id(id):
                     type: array
                     items:
                         type: object
-
+                        properties:
+                            id:
+                                type: string
+                                description: Presente para actualizar una opción existente; ausente para crear una nueva.
+                            term:
+                                type: string
+                            deleted:
+                                type: boolean
+                                description: Si es true, la opción se elimina del listado.
             required:
-                - name
+                - options
     responses:
         200:
             description: Listado actualizado exitosamente
         400:
-            description: Error al actualizar el listado
+            description: El body no es un JSON válido
         401:
-            description: No tienes permisos para realizar esta acción
+            description: No tienes permisos para realizar esta acción (no eres admin ni editor)
         404:
             description: Listado no encontrado
         500:
-            description: Error al actualizar el listado
+            description: Error al actualizar el listado (incluye el caso de un body sin la clave options)
     """
     
     # Obtener el usuario actual
@@ -197,15 +216,16 @@ def update_by_id(id):
 @jwt_required()
 def delete_by_id(id):
     """
-    Eliminar un listado por su slug
+    Eliminar un listado por su id
     ---
     security:
         - JWT: []
     tags:
         - Listados
+    description: Requiere el rol admin o editor. No se valida si el listado está en uso por algún formulario o campo antes de eliminarlo.
     parameters:
         - in: path
-          name: slug
+          name: id
           schema:
             type: string
           required: true
@@ -213,7 +233,7 @@ def delete_by_id(id):
         200:
             description: Listado eliminado exitosamente
         401:
-            description: No tienes permisos para realizar esta acción
+            description: No tienes permisos para realizar esta acción (no eres admin ni editor)
         404:
             description: Listado no encontrado
         500:

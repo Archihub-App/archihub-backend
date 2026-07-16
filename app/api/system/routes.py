@@ -54,6 +54,32 @@ def update():
         - JWT: []
     tags:
         - Ajustes del sistema
+    parameters:
+        - in: body
+          name: body
+          required: true
+          description: >-
+              Objeto con cualquier combinación de las siguientes claves de
+              nivel superior (todas opcionales, se actualizan solo las
+              presentes); cada valor es a su vez el objeto `data` completo
+              de ese ajuste (lista de {id, value}); actualiza post_types_settings,
+              access_rights, api_activation, index_management, user_management
+              y/o files_management en la colección `system`.
+          schema:
+            type: object
+            properties:
+                post_types_settings:
+                    type: object
+                access_rights:
+                    type: object
+                api_activation:
+                    type: object
+                index_management:
+                    type: object
+                user_management:
+                    type: object
+                files_management:
+                    type: object
     responses:
         200:
             description: Ajustes del sistema actualizados exitosamente
@@ -135,15 +161,30 @@ def get_plugins():
 @jwt_required()
 def activate_plugin():
     """
-    Activar plugins
+    Reemplazar el listado de plugins activos
     ---
     security:
         - JWT: []
     tags:
         - Ajustes del sistema
+    parameters:
+        - in: body
+          name: body
+          required: true
+          description: >-
+              Arreglo (no un objeto) con los nombres de las carpetas de
+              plugin (bajo app/plugins/) a activar; cualquier nombre que no
+              corresponda a una carpeta de plugin válida (con __init__.py)
+              se ignora en silencio. Reemplaza por completo el registro
+              `active_plugins`, solicita un reinicio en caliente (SIGHUP)
+              del proceso.
+          schema:
+            type: array
+            items:
+                type: string
     responses:
         200:
-            description: Plugins activados exitosamente
+            description: Plugins activados exitosamente, se solicitó reinicio
         401:
             description: No tiene permisos para activar los plugins
         500:
@@ -260,9 +301,13 @@ def regenerate_index():
         - Ajustes del sistema
     responses:
         200:
-            description: Regeneración del index iniciada exitosamente
+            description: Regeneración del index iniciada exitosamente (encolada en Celery)
+        400:
+            description: La indexación está desactivada en index_management
         401:
             description: No tiene permisos para iniciar la regeneración del index
+        404:
+            description: No existe el registro index_management en la colección system
         500:
             description: Error al iniciar la regeneración del index
     """
@@ -278,7 +323,7 @@ def regenerate_index():
 @jwt_required()
 def index_resources():
     """
-    Iniciar la indexación de recursos
+    Iniciar la indexación completa de recursos
     ---
     security:
         - JWT: []
@@ -286,9 +331,13 @@ def index_resources():
        - Ajustes del sistema
     responses:
         200:
-            description: Indexación de recursos iniciada exitosamente
+            description: Indexación de recursos iniciada exitosamente (encolada en Celery)
+        400:
+            description: La indexación no está habilitada en index_management
         401:
             description: No tiene permisos para iniciar la indexación de recursos
+        404:
+            description: No existe el registro index_management en la colección system
         500:
             description: Error al iniciar la indexación de recursos
     """
@@ -312,11 +361,11 @@ def index_geometries():
        - Ajustes del sistema
     responses:
         200:
-            description: Indexación de recursos iniciada exitosamente
+            description: Indexación de geometrías iniciada exitosamente (encolada en Celery)
         401:
-            description: No tiene permisos para iniciar la indexación de recursos
+            description: No tiene permisos para iniciar la indexación de geometrías
         500:
-            description: Error al iniciar la indexación de recursos
+            description: Error al iniciar la indexación de geometrías
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -338,11 +387,11 @@ def regenerate_index_geometries():
        - Ajustes del sistema
     responses:
         200:
-            description: Indexación de recursos iniciada exitosamente
+            description: Regeneración del index de geometrías iniciada exitosamente (encolada en Celery)
         401:
-            description: No tiene permisos para iniciar la indexación de recursos
+            description: No tiene permisos para iniciar la regeneración del index de geometrías
         500:
-            description: Error al iniciar la indexación de recursos
+            description: Error al iniciar la regeneración del index de geometrías
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -382,17 +431,23 @@ def clear_cache():
 @nodeFernetAuthenticate
 def node_clear_cache(user):
     """
-    Limpiar la cache desde los nodos de procesamiento
+    Limpiar la cache desde los nodos de procesamiento (autenticación de nodo)
     ---
     security:
         - JWT: []
     tags:
         - Ajustes del sistema
+    description: >-
+        NO usa un JWT de login normal: requiere `Authorization: Bearer
+        <token>` donde `<token>` es un JWT firmado con JWT_SECRET_KEY y
+        luego cifrado con FERNET_KEY (ver app/utils/FernetAuth.py,
+        nodeFernetAuthenticate) — pensado para llamadas nodo-a-nodo
+        (NODE_TOKEN), no para sesiones de usuario del frontend.
     responses:
         200:
             description: Cache limpiada exitosamente
         401:
-            description: No tiene permisos para limpiar la cache
+            description: Token de nodo ausente, inválido, expirado o usuario inexistente
         500:
             description: Error al limpiar la cache
     """
@@ -503,13 +558,45 @@ def get_system_settings():
 @bp.route('/set-first-time', methods=['POST'])
 def set_first_time():
     """
-    Establecer el primer inicio del sistema
+    Establecer el primer inicio del sistema (crea el usuario admin inicial)
     ---
     tags:
         - Ajustes del sistema
+    description: >-
+        Solo funciona mientras el ajuste `first_time` siga activo (se
+        desactiva tras la primera ejecución exitosa); crea el usuario
+        administrador inicial con roles admin/editor/user/super_editor/publisher
+        y, si aún no existen las colecciones post_types/forms/users, crea el
+        tipo de contenido y formulario por defecto según `typeTemplate`.
+    parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+                - username
+                - password
+                - confirmPassword
+                - typeTemplate
+            properties:
+                username:
+                    type: string
+                    description: Se usa también como email del usuario admin
+                password:
+                    type: string
+                confirmPassword:
+                    type: string
+                typeTemplate:
+                    type: string
+                    description: 'Plantilla de tipo de contenido inicial, ej: "basic"'
     responses:
         200:
             description: Primer inicio establecido exitosamente
+        400:
+            description: >-
+                El sistema ya fue configurado, faltan campos requeridos,
+                algún campo llegó vacío, o el usuario ya existe
         500:
             description: Error al establecer el primer inicio
     """
@@ -520,13 +607,29 @@ def set_first_time():
 @jwt_required()
 def get_actions():
     """
-    Obtener las acciones del sistema
+    Obtener las acciones del sistema para un lugar de despliegue (placement)
     ---
+    security:
+        - JWT: []
     tags:
         - Ajustes del sistema
+    parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+                - placement
+            properties:
+                placement:
+                    type: string
+                    description: Ubicación de la UI para la que se solicitan las acciones disponibles
     responses:
         200:
             description: Acciones del sistema
+        401:
+            description: No tiene permisos para obtener las acciones del sistema
         500:
             description: Error al obtener las acciones del sistema
     """
@@ -547,11 +650,15 @@ def restart():
     """
     Reiniciar el sistema
     ---
+    security:
+        - JWT: []
     tags:
         - Ajustes del sistema
     responses:
         200:
-            description: Sistema reiniciado exitosamente
+            description: Reinicio del sistema solicitado exitosamente
+        401:
+            description: No tiene permisos para reiniciar el sistema
         500:
             description: Error al reiniciar el sistema
     """

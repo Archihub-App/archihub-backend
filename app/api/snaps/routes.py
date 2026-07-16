@@ -8,19 +8,40 @@ from app.api.snaps import services
 @jwt_required()
 def create_snap():
     """
-    Crear un nuevo recorte
+    Crear un nuevo recorte (snap) de un record, asociado al usuario autenticado
     ---
+    security:
+      - JWT: []
     tags:
       - Recortes
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            record_id:
+              type: string
+              description: Id del record sobre el que se crea el recorte.
+            type:
+              type: string
+              description: "Tipo de recorte: document, image, video o audio."
+            data:
+              type: object
+              description: >
+                Datos propios del recorte según el tipo (p. ej. bbox {x,y,width,height} y page para
+                document/image, begin/end en milisegundos para audio/video).
+          required:
+            - record_id
+            - type
+            - data
     responses:
         201:
-            description: Recorte creado
-        401:
-            description: Token inválido
+            description: Recorte creado exitosamente
         404:
-            description: Archivo no encontrado
+            description: El record referenciado (record_id) no existe
         500:
-            description: Error creando el recorte
+            description: Error creando el recorte (incluye el caso en que falte algún campo requerido en el body)
     """
     user = get_jwt_identity()
     body = request.json
@@ -31,8 +52,10 @@ def create_snap():
 @jwt_required()
 def delete_snap(id):
     """
-    Eliminar un recorte por su id
+    Eliminar un recorte por su id (solo el usuario propietario del recorte puede eliminarlo)
     ---
+    security:
+      - JWT: []
     tags:
       - Recortes
     parameters:
@@ -46,7 +69,7 @@ def delete_snap(id):
         204:
             description: Recorte eliminado exitosamente
         401:
-            description: No tienes permisos para eliminar este recorte
+            description: El recorte existe pero pertenece a otro usuario
         404:
             description: Recorte no encontrado
         500:
@@ -60,8 +83,10 @@ def delete_snap(id):
 @jwt_required()
 def get_snap(id):
     """
-    Obtener un recorte por su id
+    Obtener un recorte por su id (solo el usuario propietario del recorte puede consultarlo)
     ---
+    security:
+      - JWT: []
     tags:
       - Recortes
     parameters:
@@ -73,13 +98,16 @@ def get_snap(id):
         description: Id del recorte
     responses:
         200:
-            description: Recorte encontrado
+            description: >
+                Para type=document/image/video: una imagen JPEG recortada (image/jpeg) generada a partir del
+                bbox guardado en el recorte. Para type=audio: un stream del fragmento de audio. Para
+                cualquier otro type: el documento JSON del recorte (record_id, type, data).
         401:
-            description: No tienes permisos para ver este recorte
+            description: El recorte existe pero pertenece a otro usuario
         404:
             description: Recorte no encontrado
         500:
-            description: Error obteniendo el recorte
+            description: Error obteniendo el recorte (incluye fallas al leer/procesar el archivo asociado)
     """
     user = get_jwt_identity()
 
