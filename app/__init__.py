@@ -8,7 +8,7 @@ if not hasattr(torch, 'float8_e8m0fnu'):
 from app.version import __version__
 '''
 ARCHIHUB: A comprehensive tool for organizing and connecting information
-Author: Bitsol
+Author: BITSOL
 Website: https://bit-sol.com.co/
 Made with ❤️ in Colombia
 '''
