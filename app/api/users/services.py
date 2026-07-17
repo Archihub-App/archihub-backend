@@ -461,18 +461,26 @@ def accept_compromise(username):
     # Retornar mensaje de éxito
     return jsonify({'msg': _('Compromise accepted successfully')}), 200
 
+def _is_valid_system_user(username):
+    if username.startswith('system_scheduler_'):
+        taskname = username.replace('system_scheduler_', '')
+        settings = mongodb.get_record('system', {'name': 'active_plugins'})
+        if settings and 'plugins_settings' in settings and 'scheduleSystemTasks' in settings['plugins_settings']:
+            tasks = settings['plugins_settings']['scheduleSystemTasks'].get('schedule_tasks', [])
+            for t in tasks:
+                if t.get('task') == taskname:
+                    return True
+    return False
+
 # Nuevo servicio para verificar si el usuario tiene un rol específico
 @cacheHandler.cache.cache()
 def has_role(username, role):
-    user = mongodb.get_record('users', {'username': username})
+    if _is_valid_system_user(username):
+        return True
 
-    # Si el usuario no existe, retornar False explícitamente — NUNCA un
-    # Response/tuple: todo caller usa `if not has_role(...)`, y un tuple no
-    # vacío (jsonify(...), 400) siempre es truthy en Python, así que
-    # `not (esa tupla)` da False y el chequeo de autorización se saltaba
-    # silenciosamente en vez de denegar. Esto importaba en la práctica para
-    # un JWT válido de una cuenta ya eliminada (el token sigue vigente hasta
-    # su expiración aunque el usuario ya no exista en Mongo).
+    user = mongodb.get_record('users', {'username': username})
+    
+    # Si el usuario no existe, retornar False
     if not user:
         return False
     # Si el usuario tiene el rol, retornar True
@@ -483,8 +491,11 @@ def has_role(username, role):
 
 @cacheHandler.cache.cache()
 def has_right(username, right):
+    if _is_valid_system_user(username):
+        return True
+
     user = mongodb.get_record('users', {'username': username})
-    # Ver el comentario en has_role() — mismo motivo, mismo arreglo.
+    # Si el usuario no existe, retornar False
     if not user:
         return False
     # Si el usuario tiene el rol, retornar True

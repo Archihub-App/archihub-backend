@@ -423,8 +423,10 @@ def create(body, user, files, updateCache = True):
                 else:
                     records = create_record(str(body['_id']), user, temp_files, upload = False, filesTags = temp_files_obj)
             except Exception as e:
-                print(str(e))
-                return {'msg': str(e)}, 500
+                import traceback
+                print(f"Error in create_record: {e}")
+                traceback.print_exc()
+                return {'msg': str(e), 'trace': traceback.format_exc()}, 500
 
             update = {
                 'filesObj': records,
@@ -450,8 +452,10 @@ def create(body, user, files, updateCache = True):
         resp = {'msg': _('Resource created successfully'), 'id': str(new_resource.inserted_id), 'post_type': body['post_type']}
         return resp, 201
     except Exception as e:
-        print(str(e))
-        return {'msg': str(e)}, 500
+        import traceback
+        print(f"Error in create_resource: {e}")
+        traceback.print_exc()
+        return {'msg': str(e), 'trace': traceback.format_exc()}, 500
 
 def update_by_id(id, body, user, files, updateCache = True):
     try:
