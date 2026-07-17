@@ -8,6 +8,7 @@ from app.utils import DatabaseHandler
 from app.utils import CacheHandler
 from app.utils import HookHandler
 from copy import deepcopy
+from werkzeug.utils import secure_filename
 import uuid
 import os.path
 import requests
@@ -135,8 +136,15 @@ class PluginClass(Blueprint):
             raise Exception(str(e))
     
     def save_temp_file(self, file, filename):
+        # secure_filename strips path separators/traversal sequences (../,
+        # absolute paths, etc.) — filename is caller-supplied (e.g. from a
+        # plugin's uploaded file), and without this the initial file.save()
+        # below could write outside TEMPORAL_FILES_PATH before the
+        # UUID-rename ever happens. Matches the pattern already used for the
+        # main records upload path (records/services.py).
+        filename = secure_filename(filename)
         filename_new = str(uuid.uuid4()) + '.' + filename.rsplit('.', 1)[1].lower()
-        
+
         path = os.path.join(TEMPORAL_FILES_PATH)
         if not os.path.exists(path):
                     os.makedirs(path)
@@ -147,7 +155,7 @@ class PluginClass(Blueprint):
 
         os.rename(os.path.join(path, filename),
                             os.path.join(path, filename_new))
-        
+
         return filename_new
     
     def validate_fields(self, body, slug):

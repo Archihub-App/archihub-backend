@@ -9,7 +9,7 @@ from app.version import __version__
 '''
 ARCHIHUB: A comprehensive tool for organizing and connecting information
 Author: BITSOL
-Website: https://bit-sol.xyz/
+Website: https://bit-sol.com.co/
 Made with ❤️ in Colombia
 '''
 
@@ -81,11 +81,13 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     
     # agregar CORS
     frontend_url = os.environ.get('URL_FRONTEND')
-    origins = frontend_url.split(',') if frontend_url else "*"
+    origins = frontend_url.split(',') if frontend_url else [
+        'http://localhost:3000', 'http://127.0.0.1:3000',
+    ]
 
     CORS(app, resources={
-        r"/adminApi/*": {"origins": "*"},
-        r"/publicApi/*": {"origins": "*"},
+        r"/adminApi/*": {"origins": '*'},
+        r"/publicApi/*": {"origins": '*'},
         r"/*": {"origins": origins},
     })
     
@@ -102,9 +104,9 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             'description': 'This is the API documentation for [ArchiHub](https://www.instagram.com/archihub_app/). Additional information and general project documentation can be found [here](https://archihub-app.github.io/archihub.github.io/es/archihub/).<br /><br />Made with ❤️ in Colombia<br />',
             'termsOfService': 'https://archihub-app.github.io/archihub.github.io/es/conducta/',
             'contact': {
-                'name': 'BITSOL SAS',
-                'url': 'https://bit-sol.xyz/'#,
-                #'email': 'bitsol@gmail.com'
+                'name': 'BITSOL',
+                'url': 'https://bit-sol.com.co/',
+                'email': 'contact@bit-sol.com.co'
             },
             'license': {
                 'name': 'MIT',
@@ -191,6 +193,20 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.aiservices import bp as aiservices_bp
     app.register_blueprint(aiservices_bp, url_prefix='/aiservices')
 
+    # Registrar health blueprint (siempre activo). Incluye /health/live,
+    # /health/ready (sin autenticación) y /health/test-control/* (solo
+    # funcional cuando ARCHIHUB_TEST_MODE=true — ver la nota más abajo y
+    # app/utils/TestControlAuth.py). Un único blueprint en vez de dos: las
+    # rutas de test-control siempre están registradas, pero
+    # testControlAuthenticate las bloquea con 404 salvo que el modo de
+    # pruebas esté explícitamente activo.
+    from app.api.health import bp as health_bp
+    app.register_blueprint(health_bp, url_prefix='/health')
+
+    if os.environ.get('ARCHIHUB_TEST_MODE', '').lower() == 'true':
+        print('-'*50)
+        print('🧪 ⚠️  ' + 'Test-control API is active at /health/test-control/* (ARCHIHUB_TEST_MODE=true) — disposable instances only')
+
     # Helper function to find a record by ID
     from app.utils.functions import find_by_id
 
@@ -251,7 +267,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
 
     if os.environ.get('FLASK_ENV') == 'DEV':
         clear_cache()
-        
+
     return app
 
 # función para registrar plugins de forma dinámica
@@ -317,7 +333,7 @@ babel = Babel(app, locale_selector=get_locale)
 
 banner_width = 82
 version_str = f"v{__version__}"
-author_str = "Author: BITSOL"
+author_str = "Author: Bitsol"
 made_in_str = "Made with ❤️  in Colombia"
 website_str = "Website: https://bit-sol.com.co/"
 

@@ -105,16 +105,41 @@ def set_record_metadata(record, metadata):
     return record
 
 
+# get_by_filters is an admin-only endpoint whose whole purpose (per its own
+# Swagger description) is to accept a flexible, client-supplied Mongo
+# filter against the records collection — a narrow field allowlist (as
+# used for /users, /logs, whose real usage is a single known field) would
+# defeat that intent. Instead, recursively reject the specific operators
+# that enable server-side JS execution or query-structure injection, which
+# is the actual dangerous part of accepting a raw filter.
+_DANGEROUS_MONGO_OPERATORS = {'$where', '$function', '$accumulator', '$expr', '$jsonschema'}
+
+def _reject_dangerous_mongo_operators(value):
+    if isinstance(value, dict):
+        for key, sub_value in value.items():
+            if isinstance(key, str) and key.lower() in _DANGEROUS_MONGO_OPERATORS:
+                raise ValueError(_('Filter operator "%(op)s" is not allowed', op=key))
+            _reject_dangerous_mongo_operators(sub_value)
+    elif isinstance(value, list):
+        for item in value:
+            _reject_dangerous_mongo_operators(item)
+
 def get_by_filters(body, current_user):
     try:
+        filters = body['filters']
+        try:
+            _reject_dangerous_mongo_operators(filters)
+        except ValueError as e:
+            return {'msg': str(e)}, 400
+
         # Buscar el recurso en la base de datos
         records = list(mongodb.get_all_records(
-            'records', body['filters'], limit=20, skip=body['page'] * 20))
+            'records', filters, limit=20, skip=body['page'] * 20))
         # Si el recurso no existe, retornar error
         if not records:
             return {'msg': _('Record does not exist')}, 404
 
-        total = get_total(json.dumps(body['filters']))
+        total = get_total(json.dumps(filters))
 
         for r in records:
             r['id'] = str(r['_id'])
@@ -123,7 +148,7 @@ def get_by_filters(body, current_user):
 
         # registrar el log
         register_log(current_user, log_actions['record_get_all'], {
-                     'filters': body['filters']})
+                     'filters': filters})
         # retornar los records
         return parse_result(records), 200
 
