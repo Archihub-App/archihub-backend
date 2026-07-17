@@ -1,6 +1,7 @@
 from app.api.auth import bp
 from flask import jsonify, request
 from app.api.auth.services import archihub_login
+from flask_babel import gettext as _
 # En este archivo se registran las rutas de la API para la autenticación
 
 # Nuevo endpoint para hacer login
@@ -45,4 +46,10 @@ def login():
         
         
     except Exception as e:
-        return jsonify({'msg': str(e)}), 500
+        # archihub_login() returns its own proper (msg, status) responses for
+        # every expected case (rate limit, invalid credentials, LDAP) — this
+        # only catches genuinely unexpected errors (malformed request body, a
+        # crash, a DB/LDAP connection failure), which shouldn't be echoed
+        # verbatim to an unauthenticated caller. Log server-side instead.
+        print(f"login error: {e}")
+        return jsonify({'msg': _('An unexpected error occurred')}), 500
