@@ -103,11 +103,28 @@ def add_request(username):
     except Exception as e:
         raise Exception(str(e))
 
+# Whitelist for GET /users' filter body — never pass a raw client-supplied
+# dict straight into a Mongo query, since a client could embed Mongo
+# operators ($where, $regex, $gt, etc.) beyond the intended query surface.
+# The frontend only ever sends {} or {'username': '<value>'} today (see
+# UsersResults.tsx / LogsResults.tsx / FormItems.tsx) — only that field, as
+# a plain-string equality match, is accepted; everything else is dropped.
+_ALLOWED_USER_FILTER_FIELDS = {'username', 'name'}
+
+def _sanitize_user_filters(filters):
+    if not isinstance(filters, dict):
+        return {}
+    return {
+        key: value
+        for key, value in filters.items()
+        if key in _ALLOWED_USER_FILTER_FIELDS and isinstance(value, str)
+    }
+
 # Nuevo servicio para obtener todos los usuarios con filtros
 def get_all(body, current_user):
     try:
         page = body['page'] if 'page' in body else 0
-        filters = body['filters'] if 'filters' in body else {}
+        filters = _sanitize_user_filters(body['filters'] if 'filters' in body else {})
         users = list(mongodb.get_all_records(
             'users', filters, limit=20, skip=page * 20, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0, 'nodeToken': 0, 'vizToken': 0, 'requests': 0, 'lastRequest': 0, 'favorites': 0}, sort=[('name', 1)]))
         
@@ -290,21 +307,23 @@ def forgot_password(body):
         if 'value' not in admin_register_user or not admin_register_user['value']:
             return jsonify({'msg': _('Password recovery disabled')}), 400
     
+        # Always return the same response whether or not the account exists
+        # — returning a distinct 404 here let an unauthenticated caller
+        # enumerate valid usernames/emails by scripting this endpoint across
+        # a list. Only actually send the email when the account is real.
         user = mongodb.get_record('users', {'username': body['username']})
-        if not user:
-            return {'msg': _('User does not exist')}, 404
-        
-        from app.api.email.services import send_email
-        from app.api.email.templates import forgot_password_template
+        if user:
+            from app.api.email.services import send_email
+            from app.api.email.templates import forgot_password_template
 
-        token = create_access_token(identity=body['username'], expires_delta=timedelta(days=1))
-        token = fernet.encrypt(token.encode('utf-8'))
+            token = create_access_token(identity=body['username'], expires_delta=timedelta(days=1))
+            token = fernet.encrypt(token.encode('utf-8'))
 
-        link = f"{REDIRECT_URL}/reset-password?token={token.decode('utf-8')}"
+            link = f"{REDIRECT_URL}/reset-password?token={token.decode('utf-8')}"
 
-        send_email(body['username'], _('Password recovery'), forgot_password_template(link))
+            send_email(body['username'], _('Password recovery'), forgot_password_template(link))
 
-        return {'msg': _('Password recovery email sent')}, 200
+        return {'msg': _('If an account exists for this username, a password recovery email has been sent')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -446,10 +465,16 @@ def accept_compromise(username):
 @cacheHandler.cache.cache()
 def has_role(username, role):
     user = mongodb.get_record('users', {'username': username})
-    
-    # Si el usuario no existe, retornar error
+
+    # Si el usuario no existe, retornar False explícitamente — NUNCA un
+    # Response/tuple: todo caller usa `if not has_role(...)`, y un tuple no
+    # vacío (jsonify(...), 400) siempre es truthy en Python, así que
+    # `not (esa tupla)` da False y el chequeo de autorización se saltaba
+    # silenciosamente en vez de denegar. Esto importaba en la práctica para
+    # un JWT válido de una cuenta ya eliminada (el token sigue vigente hasta
+    # su expiración aunque el usuario ya no exista en Mongo).
     if not user:
-        return jsonify({'msg': _('User does not exist')}), 400
+        return False
     # Si el usuario tiene el rol, retornar True
     if role in user['roles']:
         return True
@@ -459,9 +484,9 @@ def has_role(username, role):
 @cacheHandler.cache.cache()
 def has_right(username, right):
     user = mongodb.get_record('users', {'username': username})
-    # Si el usuario no existe, retornar error
+    # Ver el comentario en has_role() — mismo motivo, mismo arreglo.
     if not user:
-        return jsonify({'msg': _('User does not exist')}), 400
+        return False
     # Si el usuario tiene el rol, retornar True
     if right in user['accessRights']:
         return True
@@ -495,9 +520,13 @@ def generate_token(username, password, admin = False, expiration = 2):
     # if not user['compromise']:
     #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
-    # Crear el token de acceso para el usuario con el username y sin expiración
+    # Crear el token de acceso para el usuario con el username
     if not admin:
-        access_token = create_access_token(identity=username, expires_delta=False)
+        # Bounded lifetime, not indefinite — a leaked public API token used
+        # to be valid forever with no way to expire it short of a manual DB
+        # edit. Still long enough for long-running integrations; rotate by
+        # regenerating.
+        access_token = create_access_token(identity=username, expires_delta=timedelta(days=365))
         # usamos Fernet para encriptar el token de acceso
         cipher = fernet.encrypt(access_token.encode('utf-8'))
 
@@ -531,7 +560,9 @@ def generate_node_token(username, password):
     # if not user['compromise']:
     #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
-    access_token = create_access_token(identity=username, expires_delta=False)
+    # Bounded lifetime, not indefinite — see generate_token()'s public-token
+    # comment above for why.
+    access_token = create_access_token(identity=username, expires_delta=timedelta(days=365))
     # usamos Fernet para encriptar el token de acceso
     cipher = fernet.encrypt(access_token.encode('utf-8'))
 
@@ -559,7 +590,9 @@ def generate_viz_token(username, password):
     # if not user['compromise']:
     #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
-    access_token = create_access_token(identity=username, expires_delta=False)
+    # Bounded lifetime, not indefinite — see generate_token()'s public-token
+    # comment above for why.
+    access_token = create_access_token(identity=username, expires_delta=timedelta(days=365))
     # usamos Fernet para encriptar el token de acceso
     cipher = fernet.encrypt(access_token.encode('utf-8'))
 

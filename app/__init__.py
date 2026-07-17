@@ -8,8 +8,8 @@ if not hasattr(torch, 'float8_e8m0fnu'):
 from app.version import __version__
 '''
 ARCHIHUB: A comprehensive tool for organizing and connecting information
-Author: BITSOL
-Website: https://bit-sol.xyz/
+Author: Bitsol
+Website: https://bit-sol.com.co/
 Made with ❤️ in Colombia
 '''
 
@@ -80,12 +80,24 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     app.config['BABEL_TRANSLATION_DIRECTORIES'] = get_translation_directories()
     
     # agregar CORS
+    # No wildcard "*" origins, on any resource (adminApi/publicApi
+    # previously had a hardcoded "*" regardless of URL_FRONTEND, and the
+    # catch-all silently fell back to "*" whenever URL_FRONTEND wasn't
+    # set) — bearer-token-in-header auth isn't sent automatically
+    # cross-origin by browsers, so this was mostly a hardening gap rather
+    # than a directly exploitable one today, but it's broader than
+    # necessary and would become dangerous the day any cookie/ambient auth
+    # is added. Set URL_FRONTEND explicitly for any real deployment; the
+    # localhost fallback below exists only so local dev keeps working
+    # without requiring that env var.
     frontend_url = os.environ.get('URL_FRONTEND')
-    origins = frontend_url.split(',') if frontend_url else "*"
+    origins = frontend_url.split(',') if frontend_url else [
+        'http://localhost:3000', 'http://127.0.0.1:3000',
+    ]
 
     CORS(app, resources={
-        r"/adminApi/*": {"origins": "*"},
-        r"/publicApi/*": {"origins": "*"},
+        r"/adminApi/*": {"origins": origins},
+        r"/publicApi/*": {"origins": origins},
         r"/*": {"origins": origins},
     })
     
@@ -102,9 +114,9 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             'description': 'This is the API documentation for [ArchiHub](https://www.instagram.com/archihub_app/). Additional information and general project documentation can be found [here](https://archihub-app.github.io/archihub.github.io/es/archihub/).<br /><br />Made with ❤️ in Colombia<br />',
             'termsOfService': 'https://archihub-app.github.io/archihub.github.io/es/conducta/',
             'contact': {
-                'name': 'BITSOL SAS',
-                'url': 'https://bit-sol.com.co/'#,
-                #'email': 'bitsol@gmail.com'
+                'name': 'Bitsol',
+                'url': 'https://bit-sol.com.co/',
+                'email': 'contact@bit-sol.com.co'
             },
             'license': {
                 'name': 'MIT',
@@ -331,7 +343,7 @@ babel = Babel(app, locale_selector=get_locale)
 
 banner_width = 82
 version_str = f"v{__version__}"
-author_str = "Author: BITSOL"
+author_str = "Author: Bitsol"
 made_in_str = "Made with ❤️  in Colombia"
 website_str = "Website: https://bit-sol.com.co/"
 
