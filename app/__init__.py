@@ -81,13 +81,11 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     
     # agregar CORS
     frontend_url = os.environ.get('URL_FRONTEND')
-    origins = frontend_url.split(',') if frontend_url else [
-        'http://localhost:3000', 'http://127.0.0.1:3000',
-    ]
+    origins = frontend_url.split(',') if frontend_url else "*"
 
     CORS(app, resources={
-        r"/adminApi/*": {"origins": '*'},
-        r"/publicApi/*": {"origins": '*'},
+        r"/adminApi/*": {"origins": "*"},
+        r"/publicApi/*": {"origins": "*"},
         r"/*": {"origins": origins},
     })
     
