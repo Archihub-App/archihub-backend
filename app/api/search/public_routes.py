@@ -25,17 +25,17 @@ def _parse_record_types_arg(value):
 @bp.route('/public', methods=['POST'])
 def get_all_public():
     """
-    Buscar recursos publicados por filtros, sin autenticación (Elasticsearch o vector DB)
+    Search published resources by filters, without authentication (Elasticsearch or vector DB)
     ---
     tags:
-        - Recursos
+        - Resources
     description: >
-        Ruta pública (sin JWT). Solo funciona si el blueprint "search" está registrado
-        (index_management.index_activation y/o .vector_activation activos en el sistema).
-        El body se delega en app.api.search.public_services.get_resources_by_filters ->
-        elasticUtils/vectorUtils, igual que POST /search pero sin usuario autenticado (los
-        post_type con `viewRoles` configurados quedan excluidos por diseño). `post_type` es
-        obligatorio.
+        Public route (no JWT). Only works if the "search" blueprint is registered
+        (index_management.index_activation and/or .vector_activation active in the system).
+        The body is delegated to app.api.search.public_services.get_resources_by_filters ->
+        elasticUtils/vectorUtils, same as POST /search but without an authenticated user (post_type
+        values with `viewRoles` configured are excluded by design). `post_type` is
+        required.
     parameters:
         - in: body
           name: body
@@ -50,7 +50,7 @@ def get_all_public():
                     type: string
                 searchSource:
                     type: string
-                    description: "'index' (Elasticsearch, por defecto) o 'vector'"
+                    description: "'index' (Elasticsearch, default) or 'vector'"
                 sortBy:
                     type: string
                 sortOrder:
@@ -65,9 +65,9 @@ def get_all_public():
                 - post_type
     responses:
         200:
-            description: Resources obtenidos exitosamente
+            description: Resources retrieved successfully
         500:
-            description: Error al obtener los resources (p.ej. falta "post_type" en el body, o no hay motor de búsqueda activo)
+            description: Error retrieving resources (e.g. "post_type" missing from the body, or no active search engine)
     """
     body = request.json
     resp = public_services.get_resources_by_filters(body)
@@ -81,26 +81,26 @@ def get_all_public():
 @bp.route('/public/rss', methods=['GET'])
 def get_blog_rss_public():
     """
-    Obtener el feed RSS del blog (recursos con viewType "blog") usando los filtros de búsqueda
+    Get the blog's RSS feed (resources with viewType "blog") using the search filters
     ---
     tags:
-        - Recursos
+        - Resources
     description: >
-        Ruta pública (sin JWT). El filtro se puede pasar de dos formas: (1) un único parámetro
-        `body` con un objeto JSON serializado (tiene prioridad sobre los demás), o (2) si
-        `body` no viene y la request no trae un JSON body, se arma a partir de los parámetros
-        de query individuales listados abajo. `post_type` (o el equivalente dentro de `body`)
-        es obligatorio; `input_filters`/`date_filters`/`location_filters`/`parents` deben ser
-        JSON válido si se envían. Internamente fuerza `viewType: "blog"` y `full_article: true`.
+        Public route (no JWT). The filter can be passed in two ways: (1) a single `body`
+        parameter with a serialized JSON object (takes priority over the others), or (2) if
+        `body` isn't provided and the request has no JSON body, it's assembled from the
+        individual query parameters listed below. `post_type` (or its equivalent inside `body`)
+        is required; `input_filters`/`date_filters`/`location_filters`/`parents` must be
+        valid JSON if sent. Internally forces `viewType: "blog"` and `full_article: true`.
     parameters:
         - in: query
           name: body
           type: string
-          description: JSON serializado con el filtro completo; si viene, ignora los demás parámetros de query
+          description: Serialized JSON with the full filter; if provided, the other query parameters are ignored
         - in: query
           name: post_type
           type: string
-          description: Slugs separados por coma. Obligatorio si no se usa "body"
+          description: Comma-separated slugs. Required if "body" is not used
         - in: query
           name: keyword
           type: string
@@ -113,7 +113,7 @@ def get_blog_rss_public():
         - in: query
           name: searchSource
           type: string
-          description: "'index' o 'vector'"
+          description: "'index' or 'vector'"
         - in: query
           name: page
           type: integer
@@ -123,36 +123,36 @@ def get_blog_rss_public():
         - in: query
           name: files
           type: string
-          description: "'true' para filtrar solo recursos con archivos"
+          description: "'true' to filter only resources with files"
         - in: query
           name: record_types
           type: string
-          description: "Lista JSON o valores separados por coma (alias: record_type)"
+          description: "JSON list or comma-separated values (alias: record_type)"
         - in: query
           name: input_filters
           type: string
-          description: JSON serializado
+          description: Serialized JSON
         - in: query
           name: date_filters
           type: string
-          description: JSON serializado
+          description: Serialized JSON
         - in: query
           name: location_filters
           type: string
-          description: JSON serializado
+          description: Serialized JSON
         - in: query
           name: parents
           type: string
-          description: JSON serializado
+          description: Serialized JSON
     produces:
         - application/rss+xml
     responses:
         200:
-            description: RSS generado exitosamente (content-type application/rss+xml)
+            description: RSS generated successfully (content-type application/rss+xml)
         400:
-            description: JSON inválido en alguno de los parámetros JSON, valor no numérico en page/size, o falta post_type
+            description: Invalid JSON in one of the JSON parameters, non-numeric value in page/size, or missing post_type
         500:
-            description: Error al generar el RSS (p.ej. no hay motor de búsqueda activo)
+            description: Error generating the RSS feed (e.g. no active search engine)
     """
     body = {}
     body_param = request.args.get('body')

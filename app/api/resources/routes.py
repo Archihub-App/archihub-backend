@@ -15,12 +15,12 @@ from flask_babel import _
 @jwt_required()
 def get_all():
     """
-    Obtener recursos de uno o varios tipos de contenido, paginados y filtrados
+    Get resources of one or more content types, paginated and filtered
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: body
           name: body
@@ -33,15 +33,15 @@ def get_all():
                     type: array
                     items:
                         type: string
-                    description: Slugs de los tipos de contenido a consultar (requerido)
+                    description: Slugs of the content types to query (required)
                 status:
                     type: string
                     enum: [published, draft, deleted]
                     default: published
-                    description: "'deleted' requiere rol admin/editor/super_editor (ver can_view_deleted)"
+                    description: "'deleted' requires the admin/editor/super_editor role (see can_view_deleted)"
                 page:
                     type: integer
-                    description: Página (multiplicada internamente por un límite fijo de 20)
+                    description: Page (internally multiplied by a fixed limit of 20)
                 parents:
                     type: object
                     properties:
@@ -49,7 +49,7 @@ def get_all():
                             type: string
                 files:
                     type: boolean
-                    description: Si es true, filtra solo recursos con archivos asociados
+                    description: If true, filters to only resources with associated files
                 activeColumns:
                     type: array
                     items:
@@ -57,7 +57,7 @@ def get_all():
                         properties:
                             destiny:
                                 type: string
-                    description: Columnas de metadata a incluir en la respuesta
+                    description: Metadata columns to include in the response
                 sortBy:
                     type: string
                     default: createdAt
@@ -67,11 +67,11 @@ def get_all():
                     default: asc
     responses:
         200:
-            description: "Objeto { total, resources } con los recursos obtenidos"
+            description: "Object { total, resources } with the retrieved resources"
         401:
-            description: No tiene permisos para ver alguno de los tipos de contenido solicitados, o solicita status=deleted sin permisos
+            description: Not authorized to view one of the requested content types, or requesting status=deleted without permission
         500:
-            description: Error al obtener los recursos (incluye KeyError si falta post_type)
+            description: Error retrieving the resources (includes a KeyError if post_type is missing)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -94,12 +94,12 @@ def get_all():
 @jwt_required()
 def create():
     """
-    Crear un recurso nuevo (multipart/form-data) y opcionalmente subir sus archivos
+    Create a new resource (multipart/form-data) and optionally upload its files
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     consumes:
         - multipart/form-data
     parameters:
@@ -108,27 +108,27 @@ def create():
           type: string
           required: true
           description: >
-            JSON string serializado (form field "data", no JSON body) con forma:
-            { post_type: string (requerido), status: 'draft'|'published' (requerido;
-            'published' exige rol publisher o admin), metadata: object (requerido,
-            validado contra el esquema del tipo de contenido), filesIds: string[]
-            (requerido aunque sea [], tags/orden de los archivos subidos), ident:
-            string (opcional, por defecto 'ident'), parents: object[] (opcional, si
-            se envía valida que el recurso sea jerárquico) }
+            Serialized JSON string (form field "data", not a JSON body) shaped as:
+            { post_type: string (required), status: 'draft'|'published' (required;
+            'published' requires the publisher or admin role), metadata: object (required,
+            validated against the content type's schema), filesIds: string[]
+            (required even if [], tags/order of the uploaded files), ident:
+            string (optional, defaults to 'ident'), parents: object[] (optional, if
+            sent validates that the resource is hierarchical) }
         - in: formData
           name: files
           type: file
           required: false
-          description: Archivos a asociar al recurso (campo repetible "files")
+          description: Files to associate with the resource (repeatable "files" field)
     responses:
         201:
-            description: "Recurso creado. Body: { msg, id, post_type }"
+            description: "Resource created. Body: { msg, id, post_type }"
         400:
-            description: Falta 'metadata', o hay errores de validación de campos (body incluye 'errors')
+            description: Missing 'metadata', or field validation errors (body includes 'errors')
         401:
-            description: No tiene rol admin/editor/super_editor, o falta rol requerido por el tipo de contenido, o intenta publicar sin rol publisher/admin
+            description: Missing the admin/editor/super_editor role, missing the role required by the content type, or attempting to publish without the publisher/admin role
         500:
-            description: Error inesperado al crear el recurso o sus archivos (incluye KeyError por campos ausentes en 'data')
+            description: Unexpected error creating the resource or its files (includes a KeyError for fields missing in 'data')
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -162,12 +162,12 @@ def create():
 @jwt_required()
 def get_by_id(id):
     """
-    Obtener un recurso por su id
+    Get a resource by its id
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: path
           name: id
@@ -175,13 +175,13 @@ def get_by_id(id):
           required: true
     responses:
         200:
-            description: Recurso obtenido exitosamente
+            description: Resource retrieved successfully
         401:
-            description: El recurso está eliminado y no tiene permisos para verlo, no tiene acceso (accessRights) o no tiene el rol de visualización requerido por el tipo de contenido
+            description: The resource is deleted and not authorized to view it, no access (accessRights), or missing the view role required by the content type
         404:
-            description: Recurso no encontrado
+            description: Resource not found
         500:
-            description: Error al obtener el recurso
+            description: Error retrieving the resource
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -196,15 +196,15 @@ def get_by_id(id):
 @jwt_required()
 def get_by_id_post(id):
     """
-    Obtener un recurso por su id (variante POST, equivalente a GET /<id>)
+    Get a resource by its id (POST variant, equivalent to GET /<id>)
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     description: >
-      Idéntico a GET /resources/{id}; no lee ni requiere ningún JSON body pese a
-      aceptar POST (el body enviado es ignorado por la implementación actual).
+      Identical to GET /resources/{id}; it does not read or require any JSON body despite
+      accepting POST (any body sent is ignored by the current implementation).
     parameters:
         - in: path
           name: id
@@ -212,13 +212,13 @@ def get_by_id_post(id):
           required: true
     responses:
         200:
-            description: Recurso obtenido exitosamente
+            description: Resource retrieved successfully
         401:
-            description: El recurso está eliminado y no tiene permisos para verlo, no tiene acceso (accessRights) o no tiene el rol de visualización requerido por el tipo de contenido
+            description: The resource is deleted and not authorized to view it, no access (accessRights), or missing the view role required by the content type
         404:
-            description: Recurso no encontrado
+            description: Resource not found
         500:
-            description: Error al obtener el recurso
+            description: Error retrieving the resource
     """
     body = request.json
     # Obtener el usuario actual
@@ -235,12 +235,12 @@ def get_by_id_post(id):
 @jwt_required()
 def update_by_id(id):
     """
-    Actualizar un recurso por su id (multipart/form-data)
+    Update a resource by its id (multipart/form-data)
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     consumes:
         - multipart/form-data
     parameters:
@@ -253,27 +253,27 @@ def update_by_id(id):
           type: string
           required: true
           description: >
-            JSON string serializado (form field "data", no JSON body) con forma:
-            { post_type: string (requerido), status: 'draft'|'published' (requerido;
-            'published' exige rol publisher o admin), metadata: object (requerido),
-            filesIds: string[] (requerido aunque sea []), deletedFiles: string[]
-            (requerido, ids de archivos a eliminar), updatedFiles: {id, order}[]
-            (opcional, reordena archivos existentes), ident: string (opcional),
-            parents: object[] (opcional) }
+            Serialized JSON string (form field "data", not a JSON body) shaped as:
+            { post_type: string (required), status: 'draft'|'published' (required;
+            'published' requires the publisher or admin role), metadata: object (required),
+            filesIds: string[] (required even if []), deletedFiles: string[]
+            (required, ids of files to delete), updatedFiles: {id, order}[]
+            (optional, reorders existing files), ident: string (optional),
+            parents: object[] (optional) }
         - in: formData
           name: files
           type: file
           required: false
-          description: Archivos nuevos a asociar al recurso (campo repetible "files")
+          description: New files to associate with the resource (repeatable "files" field)
     responses:
         200:
-            description: "Recurso actualizado. Body: { msg }"
+            description: "Resource updated. Body: { msg }"
         400:
-            description: Error al validar los campos o los archivos del recurso (body incluye 'errors')
+            description: Error validating the resource's fields or files (body includes 'errors')
         401:
-            description: No tiene rol admin/editor/super_editor, no es el creador del recurso, le falta el rol requerido por el tipo de contenido, o intenta publicar sin rol publisher/admin
+            description: Missing the admin/editor/super_editor role, not the resource's creator, missing the role required by the content type, or attempting to publish without the publisher/admin role
         500:
-            description: Error inesperado al actualizar el recurso (incluye KeyError por campos ausentes en 'data')
+            description: Unexpected error updating the resource (includes a KeyError for fields missing in 'data')
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -309,23 +309,23 @@ def update_by_id(id):
 @jwt_required()
 def update_granular_by_id(id):
     """
-    Actualizar un campo de metadata en todos los recursos padre de un record (archivo)
+    Update a metadata field across all parent resources of a record (file)
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     description: >
-      Pese a vivir bajo /resources, {id} es el id de un RECORD (archivo), no de un
-      recurso: se busca ese record, se toman sus 'parent' resources, y el campo de
-      metadata indicado se actualiza en cada uno de ellos (solo campos de tipo
-      text/text-area).
+      Despite living under /resources, {id} is the id of a RECORD (file), not a
+      resource: that record is looked up, its 'parent' resources are taken, and the
+      given metadata field is updated on each of them (only text/text-area
+      field types).
     parameters:
         - in: path
           name: id
           type: string
           required: true
-          description: Id del record (archivo) cuyos recursos padre se van a actualizar
+          description: Id of the record (file) whose parent resources will be updated
         - in: body
           name: body
           schema:
@@ -335,26 +335,26 @@ def update_granular_by_id(id):
             properties:
                 metadataPath:
                     type: string
-                    description: Ruta punteada dentro de 'metadata' (ej. 'firstLevel.title'); requerido
+                    description: Dotted path within 'metadata' (e.g. 'firstLevel.title'); required
                 value:
                     type: string
                     default: ""
-                    description: Debe ser string; se rechaza cualquier otro tipo
+                    description: Must be a string; any other type is rejected
                 concat:
                     type: boolean
                     default: false
-                    description: Si es true, concatena el valor en vez de reemplazarlo
+                    description: If true, concatenates the value instead of replacing it
     responses:
         200:
-            description: "Metadata actualizada. Body: { msg, updated, resources }"
+            description: "Metadata updated. Body: { msg, updated, resources }"
         400:
-            description: Falta metadataPath, value no es string, o ningún recurso padre pudo actualizarse (por autorización, esquema, o no encontrado)
+            description: Missing metadataPath, value is not a string, or no parent resource could be updated (due to authorization, schema, or not found)
         401:
-            description: No tiene rol admin/editor/super_editor
+            description: Missing the admin/editor/super_editor role
         404:
-            description: El record no existe o no tiene recursos padre
+            description: The record does not exist or has no parent resources
         500:
-            description: Error inesperado al actualizar la metadata
+            description: Unexpected error updating the metadata
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -379,12 +379,12 @@ def update_granular_by_id(id):
 @jwt_required()
 def update_file_order(id):
     """
-    Reordenar los archivos de un recurso por su id
+    Reorder a resource's files by its id
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: path
           name: id
@@ -397,7 +397,7 @@ def update_file_order(id):
             properties:
                 files:
                     type: array
-                    description: Nueva posición objetivo de algunos/todos los archivos (campo real; no "filesOrder")
+                    description: New target position for some/all files (actual field name; not "filesOrder")
                     items:
                         type: object
                         properties:
@@ -407,13 +407,13 @@ def update_file_order(id):
                                 type: integer
     responses:
         200:
-            description: Orden de archivos actualizado exitosamente
+            description: File order updated successfully
         401:
-            description: No tiene rol admin/editor/super_editor, o no tiene acceso (accessRights) al recurso
+            description: Missing the admin/editor/super_editor role, or no access (accessRights) to the resource
         404:
-            description: Recurso no encontrado
+            description: Resource not found
         500:
-            description: Error al actualizar el orden de los archivos
+            description: Error updating the file order
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -435,12 +435,12 @@ def update_file_order(id):
 @jwt_required()
 def delete_by_id():
     """
-    Eliminar (soft-delete) uno o varios recursos por su id
+    Delete (soft-delete) one or more resources by id
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: body
           name: body
@@ -448,18 +448,18 @@ def delete_by_id():
             type: array
             items:
                 type: string
-          description: Arreglo de ids de recursos (requerido, todos deben ser strings)
+          description: Array of resource ids (required, all must be strings)
     responses:
         200:
-            description: "Recursos eliminados. Body: { msg, ids }"
+            description: "Resources deleted. Body: { msg, ids }"
         400:
-            description: El body no es un arreglo, o contiene elementos que no son strings
+            description: The body is not an array, or contains elements that are not strings
         401:
-            description: No tiene rol admin/editor/super_editor, o le falta el rol requerido por el tipo de contenido de alguno de los recursos
+            description: Missing the admin/editor/super_editor role, or missing the role required by the content type of one of the resources
         404:
-            description: Alguno de los recursos no existe
+            description: One of the resources does not exist
         500:
-            description: Error inesperado al eliminar los recursos
+            description: Unexpected error deleting the resources
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -481,12 +481,12 @@ def delete_by_id():
 @jwt_required()
 def restore_by_id():
     """
-    Restaurar recursos eliminados por un arreglo de ids
+    Restore deleted resources by an array of ids
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: body
           name: body
@@ -499,20 +499,20 @@ def restore_by_id():
                     type: array
                     items:
                         type: string
-                    description: Requerido; arreglo de ids de recursos a restaurar
+                    description: Required; array of resource ids to restore
                 recursive:
                     type: boolean
                     default: false
-                    description: Si es true, también restaura los recursos hijos eliminados
+                    description: If true, also restores deleted child resources
     responses:
         200:
-            description: "Recursos restaurados. Body: { msg, ids }"
+            description: "Resources restored. Body: { msg, ids }"
         400:
-            description: El body no es un objeto, o ids/recursive tienen un tipo inválido
+            description: The body is not an object, or ids/recursive have an invalid type
         401:
-            description: No tiene rol admin
+            description: Missing the admin role
         500:
-            description: Error inesperado al restaurar recursos
+            description: Unexpected error restoring resources
     """
     current_user = get_jwt_identity()
 
@@ -542,16 +542,16 @@ def restore_by_id():
 @jwt_required()
 def get_tree():
     """
-    Obtener el árbol de recursos, en dos modos: 'tree' (navegación jerárquica) o 'list' (listado plano paginado)
+    Get the resource tree, in two modes: 'tree' (hierarchical navigation) or 'list' (flat paginated listing)
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     description: >
-      Requiere 'view' en el body ('tree' o 'list'); cualquier otro valor (o su
-      ausencia) hace que la ruta no devuelva respuesta (falla con 500 al
-      intentar serializar None).
+      Requires 'view' in the body ('tree' or 'list'); any other value (or its
+      absence) causes the route to return no response (fails with 500 when
+      trying to serialize None).
     parameters:
         - in: body
           name: body
@@ -566,10 +566,10 @@ def get_tree():
                     enum: [tree, list]
                 root:
                     type: string
-                    description: Id del recurso raíz, o 'all' para el nivel superior
+                    description: Id of the root resource, or 'all' for the top level
                 tree:
                     type: array
-                    description: Requerido si view=tree; lista de { slug } filtrados por rol de visualización
+                    description: Required if view=tree; list of { slug } filtered by view role
                     items:
                         type: object
                         properties:
@@ -577,27 +577,27 @@ def get_tree():
                                 type: string
                 postType:
                     type: string
-                    description: view=list; si se envía (no vacío), se usa junto con sus tipos padre en vez de activeTypes
+                    description: view=list; if sent (non-empty), used together with its parent types instead of activeTypes
                 activeTypes:
                     type: array
                     items:
                         type: string
-                    description: view=list; requerido si postType no se envía o está vacío
+                    description: view=list; required if postType is not sent or is empty
                 status:
                     type: string
                     enum: [published, draft, deleted]
                     default: published
-                    description: view=list; 'draft' requiere rol editor o admin
+                    description: view=list; 'draft' requires the editor or admin role
                 page:
                     type: integer
-                    description: view=list; opcional, tamaño de página fijo de 10
+                    description: view=list; optional, fixed page size of 10
     responses:
         200:
-            description: view=tree -> array de nodos; view=list -> array de recursos
+            description: view=tree -> array of nodes; view=list -> array of resources
         401:
-            description: No tiene el rol de visualización requerido por alguno de los tipos de contenido, o solicita status=draft sin rol editor/admin
+            description: Missing the view role required by one of the content types, or requesting status=draft without the editor/admin role
         500:
-            description: Error inesperado (incluye KeyError si faltan campos requeridos, o 'view' ausente/no reconocido)
+            description: Unexpected error (includes a KeyError if required fields are missing, or 'view' missing/unrecognized)
     """
     try:
         # Obtener el usuario actual
@@ -677,12 +677,12 @@ def get_tree():
 @jwt_required()
 def get_all_records(resource_id):
     """
-    Obtener (paginados) los archivos asociados a un recurso
+    Get (paginated) the files associated with a resource
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: path
           name: resource_id
@@ -697,19 +697,19 @@ def get_all_records(resource_id):
             properties:
                 page:
                     type: integer
-                    description: Requerido (número de página, sin default)
+                    description: Required (page number, no default)
                 groupImages:
                     type: boolean
-                    description: Si es true, agrupa las imágenes en una sola entrada de galería
+                    description: If true, groups images into a single gallery entry
     responses:
         200:
-            description: "Archivos obtenidos. Body: { data, total }"
+            description: "Files retrieved. Body: { data, total }"
         401:
-            description: No tiene acceso (accessRights) al recurso ni rol admin
+            description: No access (accessRights) to the resource and missing the admin role
         404:
-            description: Recurso no encontrado
+            description: Resource not found
         500:
-            description: Error al obtener los archivos (incluye KeyError si falta 'page')
+            description: Error retrieving the files (includes a KeyError if 'page' is missing)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -730,12 +730,12 @@ def get_all_records(resource_id):
 @jwt_required()
 def get_article_body(resource_id):
     """
-    Obtener el cuerpo del artículo de un recurso
+    Get the article body of a resource
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: path
           name: resource_id
@@ -743,13 +743,13 @@ def get_article_body(resource_id):
           required: true
     responses:
         200:
-            description: "Cuerpo del artículo obtenido. Body: { articleBody }"
+            description: "Article body retrieved. Body: { articleBody }"
         401:
-            description: No tiene rol editor/admin, o no tiene acceso (accessRights) al recurso
+            description: Missing editor/admin role, or no access (accessRights) to the resource
         404:
-            description: Recurso no encontrado
+            description: Resource not found
         500:
-            description: Error al obtener el cuerpo del artículo
+            description: Error retrieving the article body
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -769,12 +769,12 @@ def get_article_body(resource_id):
 @jwt_required()
 def update_article_body(resource_id):
     """
-    Actualizar el cuerpo del artículo de un recurso
+    Update the article body of a resource
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: path
           name: resource_id
@@ -789,18 +789,18 @@ def update_article_body(resource_id):
             properties:
                 articleBody:
                     type: array
-                    description: Requerido (no puede ser null/omitido); lista de bloques del artículo
+                    description: Required (cannot be null/omitted); list of article blocks
     responses:
         200:
-            description: Cuerpo del artículo actualizado exitosamente
+            description: Article body updated successfully
         400:
-            description: Falta articleBody
+            description: Missing articleBody
         401:
-            description: No tiene rol editor/admin
+            description: Missing editor/admin role
         404:
-            description: Recurso no encontrado
+            description: Resource not found
         500:
-            description: Error al actualizar el cuerpo del artículo
+            description: Error updating the article body
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -821,12 +821,12 @@ def update_article_body(resource_id):
 @jwt_required()
 def add_article_block_comment(resource_id):
     """
-    Guardar un comentario en un bloque del cuerpo del artículo
+    Save a comment on a block of the article body
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: path
           name: resource_id
@@ -841,24 +841,24 @@ def add_article_block_comment(resource_id):
             properties:
                 comment:
                     type: string
-                    description: Requerido, no puede ser vacío/solo espacios
+                    description: Required, cannot be empty/whitespace-only
                 blockIndex:
                     type: integer
-                    description: Índice del bloque (uno de blockIndex o blockId es requerido)
+                    description: Block index (one of blockIndex or blockId is required)
                 blockId:
                     type: string
-                    description: Id del bloque (uno de blockIndex o blockId es requerido)
+                    description: Block id (one of blockIndex or blockId is required)
     responses:
         200:
-            description: "Comentario guardado. Body: { msg, blockIndex, blockId, comment }"
+            description: "Comment saved. Body: { msg, blockIndex, blockId, comment }"
         400:
-            description: Falta comment, faltan blockIndex/blockId, blockIndex no es entero, o el articleBody/bloque/comentarios tienen un formato inválido
+            description: Missing comment, missing blockIndex/blockId, blockIndex is not an integer, or the articleBody/block/comments have an invalid format
         401:
-            description: No tiene rol editor/admin
+            description: Missing editor/admin role
         404:
-            description: Recurso o bloque no encontrado
+            description: Resource or block not found
         500:
-            description: Error al guardar el comentario
+            description: Error saving the comment
     """
     current_user = get_jwt_identity()
     body = request.json or {}
@@ -877,12 +877,12 @@ def add_article_block_comment(resource_id):
 @jwt_required()
 def download_all_records():
     """
-    Descargar el/los archivo(s) de un recurso (single file, o zip si tiene varios)
+    Download the file(s) of a resource (single file, or a zip if there are several)
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: body
           name: body
@@ -894,24 +894,24 @@ def download_all_records():
             properties:
                 id:
                     type: string
-                    description: Id del recurso (requerido)
+                    description: Resource id (required)
                 type:
                     type: string
                     enum: [original, small]
-                    description: Requerido; qué variante de los archivos descargar
+                    description: Required; which file variant to download
     produces:
         - application/octet-stream
     responses:
         200:
-            description: Archivo binario (attachment); un solo archivo directo, o un .zip si el recurso tiene más de uno
+            description: Binary file (attachment); a single file directly, or a .zip if the resource has more than one
         400:
-            description: La capacidad 'files_download' no está activa en la configuración del sistema
+            description: The 'files_download' capability is not active in the system configuration
         401:
-            description: No tiene acceso (accessRights) al recurso ni rol admin
+            description: No access (accessRights) to the resource and missing the admin role
         404:
-            description: El recurso o alguno de sus archivos no existe
+            description: The resource or one of its files does not exist
         500:
-            description: Error inesperado al generar la descarga (incluye KeyError si faltan 'id'/'type')
+            description: Unexpected error generating the download (includes a KeyError if 'id'/'type' are missing)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -925,12 +925,12 @@ def download_all_records():
 @jwt_required()
 def get_imgs(resource_id):
     """
-    Obtener las imágenes asociadas a un recurso (galería)
+    Get the images associated with a resource (gallery)
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: path
           name: resource_id
@@ -938,11 +938,11 @@ def get_imgs(resource_id):
           required: true
     responses:
         200:
-            description: Imágenes obtenidas exitosamente
+            description: Images retrieved successfully
         404:
-            description: Recurso no encontrado, o no tiene imágenes asociadas
+            description: Resource not found, or has no associated images
         500:
-            description: Error al obtener las imágenes
+            description: Error retrieving the images
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -959,13 +959,13 @@ def get_imgs(resource_id):
 @jwt_required()
 def favcount(resource_id):
     """
-    Obtener el contador de favoritos de un recurso
+    Get the favorites count of a resource
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
-    description: No valida rol ni accessRights más allá de requerir un JWT válido.
+        - Resources
+    description: Does not validate role or accessRights beyond requiring a valid JWT.
     parameters:
         - in: path
           name: resource_id
@@ -973,9 +973,9 @@ def favcount(resource_id):
           required: true
     responses:
         200:
-            description: "Contador obtenido. Body: { favCount }"
+            description: "Count retrieved. Body: { favCount }"
         500:
-            description: Error al obtener el contador de favoritos (incluye recurso inexistente)
+            description: Error retrieving the favorites count (includes a nonexistent resource)
     """
     # Llamar al servicio para obtener el contador de favoritos
     return services.get_favCount(resource_id)
@@ -985,16 +985,16 @@ def favcount(resource_id):
 @jwt_required()
 def change_post_type():
     """
-    Validar permisos de edición sobre el tipo de contenido actual de un recurso
+    Validate editing permissions over a resource's current content type
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
     description: >
-      Pese al nombre, la implementación actual solo valida que el usuario tenga
-      un rol de edición sobre el post_type actual del recurso indicado por 'id';
-      no persiste ningún cambio de post_type en la base de datos.
+      Despite the name, the current implementation only validates that the user
+      has an editing role over the current post_type of the resource indicated
+      by 'id'; it does not persist any post_type change to the database.
     parameters:
         - in: body
           name: body
@@ -1005,17 +1005,17 @@ def change_post_type():
             properties:
                 id:
                     type: string
-                    description: Requerido; id del recurso
+                    description: Required; resource id
                 post_type:
                     type: string
-                    description: Aceptado por la API pero no utilizado por la implementación actual
+                    description: Accepted by the API but not used by the current implementation
     responses:
         200:
-            description: Verificación exitosa
+            description: Verification successful
         401:
-            description: No tiene rol admin/editor sobre el tipo de contenido actual del recurso
+            description: Missing admin/editor role over the resource's current content type
         500:
-            description: Error inesperado (incluye KeyError si falta 'id', o recurso inexistente)
+            description: Unexpected error (includes a KeyError if 'id' is missing, or a nonexistent resource)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()

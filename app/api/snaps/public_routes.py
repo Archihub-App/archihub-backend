@@ -5,26 +5,26 @@ from app.api.snaps import public_services
 @bp.route('/public/<id>', methods=['GET'])
 def get_public_snap(id):
     """
-    Obtener un recorte público por su id, sin autenticación (usa el flujo público de records para validar acceso)
+    Get a public snap by its id, without authentication (uses the public records flow to validate access)
     ---
     tags:
-      - Recortes
+      - Snaps
     parameters:
       - in: path
         name: id
         schema:
           type: string
         required: true
-        description: Id del recorte
+        description: Id of the snap
     responses:
         200:
             description: >
-                Para type=document/image/video: una imagen JPEG recortada (image/jpeg). Para type=audio: un
-                stream del fragmento de audio. Para cualquier otro type: el documento JSON del recorte.
+                For type=document/image/video: a cropped JPEG image (image/jpeg). For type=audio: a
+                stream of the audio fragment. For any other type: the snap's JSON document.
         404:
-            description: Recorte no encontrado
+            description: Snap not found
         500:
-            description: Error obteniendo el recorte, o el record asociado no es accesible públicamente
+            description: Error retrieving the snap, or the associated record is not publicly accessible
     """
     resp = public_services.get_by_id(id)
     return resp

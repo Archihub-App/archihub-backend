@@ -9,19 +9,19 @@ from flask_babel import _
 @jwt_required()
 def get_llm_models():
     """
-    Listar los modelos/servicios de IA configurados (sin exponer la API key)
+    List the configured AI models/services (without exposing the API key)
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     responses:
         200:
-            description: Arreglo de modelos configurados en la colección "llm_models" (campo "key" excluido)
+            description: Array of models configured in the "llm_models" collection (the "key" field is excluded)
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin, processing o llm)
+            description: You don't have permission to perform this action (requires admin, processing, or llm role)
         500:
-            description: Error al obtener los modelos
+            description: Error retrieving the models
     """
     current_user = get_jwt_identity()
 
@@ -33,24 +33,24 @@ def get_llm_models():
         return tuple(llm_models)
     else:
         return llm_models
-    
+
 @bp.route('/providers', methods=['GET'])
 @jwt_required()
 def get_llm_providers():
     """
-    Listar los proveedores de IA soportados (OpenAI, Google, OpenRouter, Azure, Ollama, LlamaServer)
+    List the supported AI providers (OpenAI, Google, OpenRouter, Azure, Ollama, LlamaServer)
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     responses:
         200:
-            description: Arreglo/objeto con los proveedores soportados
+            description: Array/object with the supported providers
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin, processing o llm)
+            description: You don't have permission to perform this action (requires admin, processing, or llm role)
         500:
-            description: Error al obtener los proveedores
+            description: Error retrieving the providers
     """
     current_user = get_jwt_identity()
 
@@ -62,17 +62,17 @@ def get_llm_providers():
         return tuple(llm_providers)
     else:
         return llm_providers
-    
+
 @bp.route('', methods=['POST'])
 @jwt_required()
 def create_llm_model():
     """
-    Registrar un nuevo modelo/servicio de IA
+    Register a new AI model/service
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: body
           name: body
@@ -81,13 +81,13 @@ def create_llm_model():
             properties:
                 name:
                     type: string
-                    description: Nombre del modelo/servicio (debe ser único).
+                    description: Name of the model/service (must be unique).
                 provider:
                     type: string
-                    description: "Uno de los proveedores soportados: OpenAI, Google, OpenRouter, Azure, Ollama, LlamaServer."
+                    description: "One of the supported providers: OpenAI, Google, OpenRouter, Azure, Ollama, LlamaServer."
                 key:
                     type: string
-                    description: API key del proveedor. Se cifra con Fernet antes de guardarse.
+                    description: API key for the provider. Encrypted with Fernet before being saved.
                 endpoint:
                     type: string
                 endpointCognitive:
@@ -98,13 +98,13 @@ def create_llm_model():
                 - key
     responses:
         201:
-            description: Modelo creado exitosamente
+            description: Model created successfully
         400:
-            description: Ya existe un modelo con ese nombre
+            description: A model with that name already exists
         404:
-            description: El proveedor indicado no está en la lista de proveedores soportados
+            description: The specified provider is not in the list of supported providers
         500:
-            description: Error al crear el modelo (incluye el caso en que falte algún campo requerido en el body)
+            description: Error creating the model (includes the case where a required field is missing from the body)
     """
     current_user = get_jwt_identity()
 
@@ -120,40 +120,40 @@ def create_llm_model():
 @jwt_required()
 def list_skills():
     """
-    Listar los skills/agentes disponibles (SkillManager), con búsqueda y vista opcional en árbol
+    List the available skills/agents (SkillManager), with search and an optional tree view
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: query
           name: query
           type: string
           required: false
-          description: Texto de búsqueda (alias "q" también aceptado).
+          description: Search text (alias "q" is also accepted).
         - in: query
           name: q
           type: string
           required: false
-          description: Alias de "query".
+          description: Alias for "query".
         - in: query
           name: include_content
           type: boolean
           required: false
-          description: Si es verdadero, incluye el contenido completo de cada skill.
+          description: If true, includes the full content of each skill.
         - in: query
           name: tree
           type: boolean
           required: false
-          description: Si es verdadero, retorna los skills organizados en árbol de carpetas.
+          description: If true, returns the skills organized as a folder tree.
     responses:
         200:
-            description: Listado (o árbol) de skills disponibles
+            description: List (or tree) of available skills
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin, processing o llm)
+            description: You don't have permission to perform this action (requires admin, processing, or llm role)
         500:
-            description: Error al listar los skills
+            description: Error listing the skills
     """
     current_user = get_jwt_identity()
 
@@ -172,19 +172,19 @@ def list_skills():
 @jwt_required()
 def sync_skills():
     """
-    Sincronizar el catálogo de skills desde el sistema de archivos
+    Sync the skills catalog from the filesystem
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     responses:
         200:
-            description: '{"skills": [...], "count": <número de skills sincronizados>}'
+            description: '{"skills": [...], "count": <number of skills synced>}'
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin o processing)
+            description: You don't have permission to perform this action (requires admin or processing role)
         500:
-            description: Error al sincronizar los skills
+            description: Error syncing the skills
     """
     current_user = get_jwt_identity()
 
@@ -198,12 +198,12 @@ def sync_skills():
 @jwt_required()
 def create_skill():
     """
-    Crear un nuevo skill
+    Create a new skill
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: body
           name: body
@@ -212,20 +212,20 @@ def create_skill():
             properties:
                 path:
                     type: string
-                    description: Ruta/identificador del nuevo skill (alias "id" también aceptado).
+                    description: Path/identifier of the new skill (alias "id" is also accepted).
                 id:
                     type: string
-                    description: Alias de "path".
+                    description: Alias for "path".
                 content:
                     type: string
-                    description: Contenido del skill.
+                    description: Content of the skill.
     responses:
         201:
-            description: Skill creado exitosamente
+            description: Skill created successfully
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin o processing)
+            description: You don't have permission to perform this action (requires admin or processing role)
         500:
-            description: Error al crear el skill
+            description: Error creating the skill
     """
     current_user = get_jwt_identity()
 
@@ -240,27 +240,27 @@ def create_skill():
 @jwt_required()
 def get_skill(skill_path):
     """
-    Obtener un skill por su ruta, incluyendo su contenido
+    Get a skill by its path, including its content
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: path
           name: skill_path
           type: string
           required: true
-          description: Ruta del skill (puede incluir subcarpetas, p. ej. "carpeta/skill").
+          description: Path of the skill (may include subfolders, e.g. "folder/skill").
     responses:
         200:
-            description: Skill encontrado, con su contenido
+            description: Skill found, including its content
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin, processing o llm)
+            description: You don't have permission to perform this action (requires admin, processing, or llm role)
         404:
-            description: Skill no encontrado
+            description: Skill not found
         500:
-            description: Error al obtener el skill
+            description: Error retrieving the skill
     """
     current_user = get_jwt_identity()
 
@@ -274,18 +274,18 @@ def get_skill(skill_path):
 @jwt_required()
 def update_skill(skill_path):
     """
-    Actualizar un skill existente por su ruta
+    Update an existing skill by its path
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: path
           name: skill_path
           type: string
           required: true
-          description: Ruta del skill a actualizar.
+          description: Path of the skill to update.
         - in: body
           name: body
           schema:
@@ -293,14 +293,14 @@ def update_skill(skill_path):
             properties:
                 content:
                     type: string
-                    description: Nuevo contenido del skill.
+                    description: New content for the skill.
     responses:
         200:
-            description: Skill actualizado exitosamente
+            description: Skill updated successfully
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin o processing)
+            description: You don't have permission to perform this action (requires admin or processing role)
         500:
-            description: Error al actualizar el skill
+            description: Error updating the skill
     """
     current_user = get_jwt_identity()
 
@@ -315,27 +315,27 @@ def update_skill(skill_path):
 @jwt_required()
 def delete_skill(skill_path):
     """
-    Eliminar un skill por su ruta
+    Delete a skill by its path
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: path
           name: skill_path
           type: string
           required: true
-          description: Ruta del skill a eliminar.
+          description: Path of the skill to delete.
     responses:
         200:
-            description: Skill eliminado exitosamente
+            description: Skill deleted successfully
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin o processing)
+            description: You don't have permission to perform this action (requires admin or processing role)
         404:
-            description: Skill no encontrado
+            description: Skill not found
         500:
-            description: Error al eliminar el skill
+            description: Error deleting the skill
     """
     current_user = get_jwt_identity()
 
@@ -348,40 +348,40 @@ def delete_skill(skill_path):
 @jwt_required()
 def update_llm_model(model_id):
     """
-    Actualizar un modelo/servicio de IA existente
+    Update an existing AI model/service
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: path
           name: model_id
           type: string
           required: true
-          description: Id del modelo a actualizar.
+          description: Id of the model to update.
         - in: body
           name: body
           schema:
             type: object
             description: >
-                Todos los campos son opcionales. Si el provider guardado no es "Azure",
-                "endpoint"/"endpointCognitive" se descartan del payload aunque se envíen.
+                All fields are optional. If the stored provider is not "Azure",
+                "endpoint"/"endpointCognitive" are discarded from the payload even if sent.
             properties:
                 name:
                     type: string
                 key:
                     type: string
-                    description: Nueva API key (se cifra con Fernet antes de guardarse).
+                    description: New API key (encrypted with Fernet before being saved).
                 endpoint:
                     type: string
                 endpointCognitive:
                     type: string
     responses:
         200:
-            description: Modelo actualizado exitosamente
+            description: Model updated successfully
         500:
-            description: Error al actualizar el modelo (incluye id inválido o modelo inexistente)
+            description: Error updating the model (includes invalid id or nonexistent model)
     """
     current_user = get_jwt_identity()
 
@@ -396,25 +396,25 @@ def update_llm_model(model_id):
 @jwt_required()
 def delete_llm_model(model_id):
     """
-    Eliminar un modelo/servicio de IA
+    Delete an AI model/service
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: path
           name: model_id
           type: string
           required: true
-          description: Id del modelo a eliminar.
+          description: Id of the model to delete.
     responses:
         200:
-            description: Modelo eliminado exitosamente (no valida previamente que el modelo exista)
+            description: Model deleted successfully (does not check beforehand whether the model exists)
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin o processing)
+            description: You don't have permission to perform this action (requires admin or processing role)
         500:
-            description: Error al eliminar el modelo (p. ej. id con formato inválido)
+            description: Error deleting the model (e.g. invalid id format)
     """
     current_user = get_jwt_identity()
 
@@ -428,27 +428,27 @@ def delete_llm_model(model_id):
 @jwt_required()
 def get_llm_model(id):
     """
-    Obtener un modelo/servicio de IA por su id (sin exponer la API key)
+    Get an AI model/service by its id (without exposing the API key)
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: path
           name: id
           type: string
           required: true
-          description: Id del modelo.
+          description: Id of the model.
     responses:
         200:
-            description: Modelo encontrado (campo "key" excluido)
+            description: Model found (the "key" field is excluded)
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin, processing o llm)
+            description: You don't have permission to perform this action (requires admin, processing, or llm role)
         404:
-            description: Modelo no encontrado
+            description: Model not found
         500:
-            description: Error al obtener el modelo
+            description: Error retrieving the model
     """
     current_user = get_jwt_identity()
 
@@ -462,25 +462,25 @@ def get_llm_model(id):
 @jwt_required()
 def get_provider_models(id):
     """
-    Obtener la lista de modelos disponibles en el proveedor configurado por un modelo/servicio de IA
+    Get the list of models available from the provider configured for an AI model/service
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: path
           name: id
           type: string
           required: true
-          description: Id del modelo/servicio de IA registrado (define qué proveedor y credenciales usar).
+          description: Id of the registered AI model/service (defines which provider and credentials to use).
     responses:
         200:
-            description: Lista de modelos que expone el proveedor (llamada en vivo al proveedor de IA)
+            description: List of models exposed by the provider (live call to the AI provider)
         500:
             description: >
-                Error al consultar el proveedor (modelo no encontrado, proveedor no soportado, o error de
-                la API del proveedor)
+                Error querying the provider (model not found, unsupported provider, or an error from
+                the provider's API)
     """
     current_user = get_jwt_identity()
 
@@ -494,12 +494,12 @@ def get_provider_models(id):
 @jwt_required()
 def set_conversation():
     """
-    Enviar un mensaje/turno de conversación a un asistente de IA (transcripción, documento, galería de imágenes o atlas)
+    Send a message/conversation turn to an AI assistant (transcription, document, image gallery, or atlas)
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: body
           name: body
@@ -508,23 +508,23 @@ def set_conversation():
             properties:
                 type:
                     type: string
-                    description: "Tipo de conversación: transcription, document, image_gallery o atlas (atlas requiere la capability del mismo nombre habilitada en la configuración del sistema)."
+                    description: "Conversation type: transcription, document, image_gallery, or atlas (atlas requires the capability of the same name to be enabled in the system configuration)."
                 provider:
                     type: object
-                    description: 'Objeto con al menos "id" (id del modelo/servicio de IA a usar).'
+                    description: 'Object with at least "id" (id of the AI model/service to use).'
             required:
                 - type
                 - provider
             description: >
-                El resto de campos requeridos varían según "type" (p. ej. record_id, mensajes, imágenes) y
-                son validados/transformados por SkillManager.prepare_conversation_payload antes de procesarse.
+                The remaining required fields vary depending on "type" (e.g. record_id, messages, images) and
+                are validated/transformed by SkillManager.prepare_conversation_payload before processing.
     responses:
         200:
-            description: Respuesta del asistente de IA (forma depende de "type"; puede incluir streaming)
+            description: Response from the AI assistant (shape depends on "type"; may include streaming)
         500:
             description: >
-                Error procesando la conversación (incluye "type" no reconocido o payload inválido, que
-                resultan en una respuesta vacía con status 200 sin cuerpo por cómo retorna esta vista)
+                Error processing the conversation (includes an unrecognized "type" or invalid payload, which
+                result in an empty response with status 200 and no body, due to how this view returns)
     """
     current_user = get_jwt_identity()
 
@@ -539,29 +539,29 @@ def set_conversation():
 @jwt_required()
 def get_conversation(id):
     """
-    Obtener una conversación de IA por su id (solo del usuario autenticado)
+    Get an AI conversation by its id (only for the authenticated user)
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: path
           name: id
           type: string
           required: true
-          description: Id de la conversación.
+          description: Id of the conversation.
     responses:
         200:
             description: >
-                Conversación encontrada (_id, created_at, updated_at, resource_id, page, messages). Las
-                imágenes referenciadas en los mensajes se convierten a base64 al vuelo.
+                Conversation found (_id, created_at, updated_at, resource_id, page, messages). Images
+                referenced in the messages are converted to base64 on the fly.
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin, processing o llm)
+            description: You don't have permission to perform this action (requires admin, processing, or llm role)
         404:
-            description: Conversación no encontrada (o no pertenece al usuario autenticado)
+            description: Conversation not found (or does not belong to the authenticated user)
         500:
-            description: Error al obtener la conversación
+            description: Error retrieving the conversation
     """
     current_user = get_jwt_identity()
 
@@ -575,29 +575,29 @@ def get_conversation(id):
 @jwt_required()
 def delete_conversation(id):
     """
-    Eliminar una conversación de IA por su id (solo del usuario autenticado)
+    Delete an AI conversation by its id (only for the authenticated user)
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: path
           name: id
           type: string
           required: true
-          description: Id de la conversación.
+          description: Id of the conversation.
     responses:
         200:
-            description: Conversación eliminada exitosamente
+            description: Conversation deleted successfully
         400:
-            description: El id de conversación no tiene un formato válido de ObjectId
+            description: The conversation id is not a valid ObjectId format
         401:
-            description: No tienes permisos para realizar esta acción (requiere rol admin, processing o llm)
+            description: You don't have permission to perform this action (requires admin, processing, or llm role)
         404:
-            description: Conversación no encontrada (o no pertenece al usuario autenticado)
+            description: Conversation not found (or does not belong to the authenticated user)
         500:
-            description: Error al eliminar la conversación
+            description: Error deleting the conversation
     """
     current_user = get_jwt_identity()
 
@@ -611,12 +611,12 @@ def delete_conversation(id):
 @jwt_required()
 def get_conversation_history():
     """
-    Obtener el historial de conversaciones (primer mensaje de cada una) para un record, galería de imágenes o el asistente atlas
+    Get the conversation history (first message of each) for a record, image gallery, or the atlas assistant
     ---
     security:
         - JWT: []
     tags:
-        - Servicios de IA
+        - AI Services
     parameters:
         - in: body
           name: body
@@ -625,21 +625,21 @@ def get_conversation_history():
             properties:
                 type:
                     type: string
-                    description: "record, transcription, document, image_gallery o atlas."
+                    description: "record, transcription, document, image_gallery, or atlas."
                 id:
                     type: string
-                    description: Id del record o del recurso (resource_id), según "type". No aplica para type=atlas.
+                    description: Id of the record or resource (resource_id), depending on "type". Not applicable for type=atlas.
                 processing_slug:
                     type: string
-                    description: Filtro opcional por slug de procesamiento (alias "slug" también aceptado). Aplica a transcription/document/atlas.
+                    description: Optional filter by processing slug (alias "slug" is also accepted). Applies to transcription/document/atlas.
     responses:
         200:
             description: >
-                Arreglo de conversaciones (_id, created_at, updated_at, type, processing_slug, y "messages"
-                recortado al primer mensaje de cada conversación). Si el record referenciado no existe o no
-                es accesible, o si "type" no coincide con ninguno de los casos soportados, retorna 500 o [].
+                Array of conversations (_id, created_at, updated_at, type, processing_slug, and "messages"
+                trimmed to the first message of each conversation). If the referenced record doesn't exist or
+                isn't accessible, or if "type" doesn't match any supported case, returns 500 or [].
         500:
-            description: Error al obtener el historial (incluye record inaccesible/inexistente para record/transcription/document)
+            description: Error retrieving the history (includes an inaccessible/nonexistent record for record/transcription/document)
     """
     current_user = get_jwt_identity()
 

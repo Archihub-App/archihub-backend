@@ -108,7 +108,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
             },
             'license': {
                 'name': 'MIT',
-                'url': 'https://archihub-app.github.io/archihub.github.io/es/licencia/'
+                'url': 'https://archihub-app.github.io/archihub.github.io/en/licencia/'
             }
         }
     }

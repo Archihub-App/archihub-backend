@@ -8,12 +8,12 @@ from app.api.snaps import services
 @jwt_required()
 def create_snap():
     """
-    Crear un nuevo recorte (snap) de un record, asociado al usuario autenticado
+    Create a new snap (clip) of a record, associated with the authenticated user
     ---
     security:
       - JWT: []
     tags:
-      - Recortes
+      - Snaps
     parameters:
       - in: body
         name: body
@@ -22,26 +22,26 @@ def create_snap():
           properties:
             record_id:
               type: string
-              description: Id del record sobre el que se crea el recorte.
+              description: Id of the record the snap is being created from.
             type:
               type: string
-              description: "Tipo de recorte: document, image, video o audio."
+              description: "Snap type: document, image, video, or audio."
             data:
               type: object
               description: >
-                Datos propios del recorte según el tipo (p. ej. bbox {x,y,width,height} y page para
-                document/image, begin/end en milisegundos para audio/video).
+                Snap-specific data depending on the type (e.g. bbox {x,y,width,height} and page for
+                document/image, begin/end in milliseconds for audio/video).
           required:
             - record_id
             - type
             - data
     responses:
         201:
-            description: Recorte creado exitosamente
+            description: Snap created successfully
         404:
-            description: El record referenciado (record_id) no existe
+            description: The referenced record (record_id) does not exist
         500:
-            description: Error creando el recorte (incluye el caso en que falte algún campo requerido en el body)
+            description: Error creating the snap (includes the case where a required body field is missing)
     """
     user = get_jwt_identity()
     body = request.json
@@ -52,28 +52,28 @@ def create_snap():
 @jwt_required()
 def delete_snap(id):
     """
-    Eliminar un recorte por su id (solo el usuario propietario del recorte puede eliminarlo)
+    Delete a snap by its id (only the snap's owning user can delete it)
     ---
     security:
       - JWT: []
     tags:
-      - Recortes
+      - Snaps
     parameters:
       - in: path
         name: id
         schema:
           type: string
         required: true
-        description: Id del recorte
+        description: Snap id
     responses:
         204:
-            description: Recorte eliminado exitosamente
+            description: Snap deleted successfully
         401:
-            description: El recorte existe pero pertenece a otro usuario
+            description: The snap exists but belongs to another user
         404:
-            description: Recorte no encontrado
+            description: Snap not found
         500:
-            description: Error eliminando el recorte
+            description: Error deleting the snap
     """
     user = get_jwt_identity()
 
@@ -83,31 +83,31 @@ def delete_snap(id):
 @jwt_required()
 def get_snap(id):
     """
-    Obtener un recorte por su id (solo el usuario propietario del recorte puede consultarlo)
+    Get a snap by its id (only the snap's owning user can view it)
     ---
     security:
       - JWT: []
     tags:
-      - Recortes
+      - Snaps
     parameters:
       - in: path
         name: id
         schema:
           type: string
         required: true
-        description: Id del recorte
+        description: Snap id
     responses:
         200:
             description: >
-                Para type=document/image/video: una imagen JPEG recortada (image/jpeg) generada a partir del
-                bbox guardado en el recorte. Para type=audio: un stream del fragmento de audio. Para
-                cualquier otro type: el documento JSON del recorte (record_id, type, data).
+                For type=document/image/video: a cropped JPEG image (image/jpeg) generated from the
+                bbox stored in the snap. For type=audio: a stream of the audio fragment. For
+                any other type: the snap's JSON document (record_id, type, data).
         401:
-            description: El recorte existe pero pertenece a otro usuario
+            description: The snap exists but belongs to another user
         404:
-            description: Recorte no encontrado
+            description: Snap not found
         500:
-            description: Error obteniendo el recorte (incluye fallas al leer/procesar el archivo asociado)
+            description: Error retrieving the snap (includes failures reading/processing the associated file)
     """
     user = get_jwt_identity()
 

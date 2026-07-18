@@ -8,10 +8,10 @@ from flask import request
 @bp.route('/level', methods=['POST'])
 def get_level():
     """
-    Obtener las formas geográficas de un nivel administrativo, opcionalmente filtradas por padre o por un área geográfica (bounds)
+    Get the geographic shapes for an administrative level, optionally filtered by parent or by a geographic area (bounds)
     ---
     tags:
-        - Niveles
+        - Levels
     parameters:
         - in: body
           name: body
@@ -21,16 +21,16 @@ def get_level():
                 level:
                     type: integer
                     default: 0
-                    description: Nivel administrativo (properties.admin_level) a consultar.
+                    description: Administrative level (properties.admin_level) to query.
                 parent:
                     type: string
-                    description: Identificador de la forma padre (filtro opcional).
+                    description: Identifier of the parent shape (optional filter).
                 area_threshold:
                     type: number
-                    description: Área mínima (en las unidades de la geometría) que debe tener una forma para incluirse. Se ignora si level=0 (se usa 4.0) o si se envía "bounds" con área intermedia/pequeña (se recalcula automáticamente).
+                    description: Minimum area (in the geometry's units) a shape must have to be included. Ignored if level=0 (4.0 is used instead) or if "bounds" is sent with an intermediate/small area (recalculated automatically).
                 bounds:
                     type: object
-                    description: Rectángulo geográfico opcional usado para filtrar por intersección espacial y para ajustar automáticamente el nivel/umbral de simplificación según su área.
+                    description: Optional geographic rectangle used to filter by spatial intersection and to automatically adjust the level/simplification threshold based on its area.
                     properties:
                         minLng:
                             type: number
@@ -42,9 +42,9 @@ def get_level():
                             type: number
     responses:
         200:
-            description: Arreglo de formas (geometry + properties.name/ident + centroid), simplificadas y filtradas por área mínima. Puede ser vacío.
+            description: Array of shapes (geometry + properties.name/ident + centroid), simplified and filtered by minimum area. May be empty.
         500:
-            description: Error al obtener el nivel de consulta
+            description: Error retrieving the query level
     """
     body = request.json
     # Llamar al servicio para obtener un nivel de consulta

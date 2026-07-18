@@ -7,13 +7,13 @@ from app.utils.TestControlAuth import testControlAuthenticate
 @bp.route('/live', methods=['GET'])
 def live():
     """
-    Confirma que el proceso de Flask está en ejecución
+    Confirms that the Flask process is running
     ---
     tags:
-        - Salud del sistema
+        - System health
     responses:
         200:
-            description: El proceso está vivo
+            description: The process is alive
     """
     return {'alive': True}, 200
 
@@ -21,15 +21,15 @@ def live():
 @bp.route('/ready', methods=['GET'])
 def ready():
     """
-    Verifica la conectividad con MongoDB, Redis, Elasticsearch, Qdrant y Celery
+    Checks connectivity with MongoDB, Redis, Elasticsearch, Qdrant, and Celery
     ---
     tags:
-        - Salud del sistema
+        - System health
     responses:
         200:
-            description: Todas las dependencias requeridas están disponibles
+            description: All required dependencies are available
         503:
-            description: Al menos una dependencia no está disponible
+            description: At least one dependency is unavailable
     """
     resp, status = services.get_readiness()
     return resp, status
@@ -42,10 +42,10 @@ def ready():
 @testControlAuthenticate
 def test_control_status():
     """
-    Devuelve metadatos de la instancia de pruebas desechable
+    Returns metadata about the disposable test instance
     ---
     tags:
-        - Control de pruebas
+        - Test control
     parameters:
         - in: header
           name: X-ArchiHUB-Test-Secret
@@ -53,13 +53,13 @@ def test_control_status():
           type: string
     responses:
         200:
-            description: Metadatos de la instancia
+            description: Instance metadata
         401:
-            description: Secreto de pruebas inválido o ausente
+            description: Invalid or missing test secret
         403:
-            description: La instancia no está marcada como desechable
+            description: The instance is not marked as disposable
         404:
-            description: El modo de pruebas no está activo
+            description: Test mode is not active
     """
     resp, status_code = testcontrol_services.get_status()
     return resp, status_code
@@ -69,10 +69,10 @@ def test_control_status():
 @testControlAuthenticate
 def test_control_routes():
     """
-    Devuelve el inventario en vivo de rutas de Flask, para compararlo con Swagger
+    Returns the live inventory of Flask routes, to compare against Swagger
     ---
     tags:
-        - Control de pruebas
+        - Test control
     parameters:
         - in: header
           name: X-ArchiHUB-Test-Secret
@@ -80,13 +80,13 @@ def test_control_routes():
           type: string
     responses:
         200:
-            description: Inventario de rutas
+            description: Route inventory
         401:
-            description: Secreto de pruebas inválido o ausente
+            description: Invalid or missing test secret
         403:
-            description: La instancia no está marcada como desechable
+            description: The instance is not marked as disposable
         404:
-            description: El modo de pruebas no está activo
+            description: Test mode is not active
     """
     resp, status_code = testcontrol_services.get_routes()
     return resp, status_code
@@ -96,10 +96,10 @@ def test_control_routes():
 @testControlAuthenticate
 def test_control_reset():
     """
-    Reinicia la instancia desechable: borra los datos y siembra una línea base determinística
+    Resets the disposable instance: wipes the data and seeds a deterministic baseline
     ---
     tags:
-        - Control de pruebas
+        - Test control
     parameters:
         - in: header
           name: X-ArchiHUB-Test-Secret
@@ -107,13 +107,13 @@ def test_control_reset():
           type: string
     responses:
         202:
-            description: El reinicio se encoló; sondear /health/test-control/reset/{taskId}
+            description: The reset was queued; poll /health/test-control/reset/{taskId}
         401:
-            description: Secreto de pruebas inválido o ausente
+            description: Invalid or missing test secret
         403:
-            description: La instancia no está marcada como desechable
+            description: The instance is not marked as disposable
         404:
-            description: El modo de pruebas no está activo
+            description: Test mode is not active
     """
     resp, status_code = testcontrol_services.start_reset()
     return resp, status_code
@@ -123,11 +123,11 @@ def test_control_reset():
 @testControlAuthenticate
 def test_control_reset_status(task_id):
     """
-    Sondea el estado de una tarea de reinicio y, una vez completada, devuelve las
-    credenciales de administrador generadas para esta ejecución
+    Polls the status of a reset task and, once completed, returns the
+    admin credentials generated for this run
     ---
     tags:
-        - Control de pruebas
+        - Test control
     parameters:
         - in: header
           name: X-ArchiHUB-Test-Secret
@@ -139,13 +139,13 @@ def test_control_reset_status(task_id):
           type: string
     responses:
         200:
-            description: Estado de la tarea de reinicio
+            description: Reset task status
         401:
-            description: Secreto de pruebas inválido o ausente
+            description: Invalid or missing test secret
         403:
-            description: La instancia no está marcada como desechable
+            description: The instance is not marked as disposable
         404:
-            description: El modo de pruebas no está activo
+            description: Test mode is not active
     """
     resp, status_code = testcontrol_services.poll_reset(task_id)
     return resp, status_code

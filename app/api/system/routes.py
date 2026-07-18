@@ -20,19 +20,19 @@ from flask import current_app as app
 @jwt_required()
 def get_all():
     """
-    Obtener todos los ajustes del sistema
+    Get all system settings
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Lista de ajustes del sistema
+            description: List of system settings
         401:
-            description: No tiene permisos para obtener los ajustes del sistema
+            description: You don't have permission to retrieve the system settings
         500:
-            description: Error al obtener los ajustes del sistema
+            description: Error retrieving the system settings
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -48,23 +48,23 @@ def get_all():
 @jwt_required()
 def update():
     """
-    Actualizar los ajustes del sistema
+    Update the system settings
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     parameters:
         - in: body
           name: body
           required: true
           description: >-
-              Objeto con cualquier combinación de las siguientes claves de
-              nivel superior (todas opcionales, se actualizan solo las
-              presentes); cada valor es a su vez el objeto `data` completo
-              de ese ajuste (lista de {id, value}); actualiza post_types_settings,
+              Object with any combination of the following top-level keys
+              (all optional, only the ones present are updated); each value
+              is in turn the complete `data` object of that setting
+              (list of {id, value}); updates post_types_settings,
               access_rights, api_activation, index_management, user_management
-              y/o files_management en la colección `system`.
+              and/or files_management in the `system` collection.
           schema:
             type: object
             properties:
@@ -82,11 +82,11 @@ def update():
                     type: object
     responses:
         200:
-            description: Ajustes del sistema actualizados exitosamente
+            description: System settings updated successfully
         401:
-            description: No tiene permisos para actualizar los ajustes del sistema
+            description: You don't have permission to update the system settings
         500:
-            description: Error al actualizar los ajustes del sistema
+            description: Error updating the system settings
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -104,19 +104,19 @@ def update():
 @jwt_required()
 def get_default_cataloging_type():
     """
-    Obtener el tipo por defecto del modulo de catalogacion
+    Get the default type for the cataloging module
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Tipo por defecto del modulo de catalogacion
+            description: Default type for the cataloging module
         404:
-            description: No existe el tipo por defecto del modulo de catalogacion
+            description: The default type for the cataloging module does not exist
         500:
-            description: Error al obtener el tipo por defecto del modulo de catalogacion
+            description: Error retrieving the default type for the cataloging module
     """
     # Llamar al servicio para obtener el tipo por defecto del modulo de catalogacion
     resp = services.get_default_cataloging_type()
@@ -129,19 +129,19 @@ def get_default_cataloging_type():
 @jwt_required()
 def get_plugins():
     """
-    Obtener el listado de plugins en la carpeta plugins
+    Get the list of plugins in the plugins folder
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Listado de plugins en la carpeta plugins
+            description: List of plugins in the plugins folder
         401:
-            description: No tiene permisos para obtener el listado de plugins en la carpeta plugins
+            description: You don't have permission to retrieve the list of plugins in the plugins folder
         500:
-            description: Error al obtener el listado de plugins en la carpeta plugins
+            description: Error retrieving the list of plugins in the plugins folder
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -161,34 +161,33 @@ def get_plugins():
 @jwt_required()
 def activate_plugin():
     """
-    Reemplazar el listado de plugins activos
+    Replace the list of active plugins
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     parameters:
         - in: body
           name: body
           required: true
           description: >-
-              Arreglo (no un objeto) con los nombres de las carpetas de
-              plugin (bajo app/plugins/) a activar; cualquier nombre que no
-              corresponda a una carpeta de plugin válida (con __init__.py)
-              se ignora en silencio. Reemplaza por completo el registro
-              `active_plugins`, solicita un reinicio en caliente (SIGHUP)
-              del proceso.
+              Array (not an object) with the names of the plugin folders
+              (under app/plugins/) to activate; any name that does not
+              correspond to a valid plugin folder (with __init__.py)
+              is silently ignored. Completely replaces the `active_plugins`
+              record, requests a hot restart (SIGHUP) of the process.
           schema:
             type: array
             items:
                 type: string
     responses:
         200:
-            description: Plugins activados exitosamente, se solicitó reinicio
+            description: Plugins activated successfully, a restart was requested
         401:
-            description: No tiene permisos para activar los plugins
+            description: You don't have permission to activate the plugins
         500:
-            description: Error al activar los plugins
+            description: Error activating the plugins
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -205,26 +204,26 @@ def activate_plugin():
 @jwt_required()
 def change_plugin_status(plugin_name):
     """
-    Activar/desactivar un plugin
+    Activate/deactivate a plugin
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     parameters:
         - in: path
           name: plugin_name
           schema:
             type: string
           required: true
-          description: Nombre del plugin
+          description: Plugin name
     responses:
         200:
-            description: Plugin activado/desactivado exitosamente
+            description: Plugin activated/deactivated successfully
         401:
-            description: No tiene permisos para activar/desactivar el plugin
+            description: You don't have permission to activate/deactivate the plugin
         500:
-            description: Error al activar/desactivar el plugin
+            description: Error activating/deactivating the plugin
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -239,19 +238,19 @@ def change_plugin_status(plugin_name):
 @jwt_required()
 def get_access_rights():
     """
-    Obtener el listado de access rights
+    Get the list of access rights
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Listado de access rights
+            description: List of access rights
         401:
-            description: No tiene permisos para obtener el listado de access rights
+            description: You don't have permission to retrieve the list of access rights
         500:
-            description: Error al obtener el listado de access rights
+            description: Error retrieving the list of access rights
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -266,19 +265,19 @@ def get_access_rights():
 @jwt_required()
 def get_roles():
     """
-    Obtener el listado de roles
+    Get the list of roles
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Listado de roles
+            description: List of roles
         401:
-            description: No tiene permisos para obtener el listado de roles
+            description: You don't have permission to retrieve the list of roles
         500:
-            description: Error al obtener el listado de roles
+            description: Error retrieving the list of roles
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -293,23 +292,23 @@ def get_roles():
 @jwt_required()
 def regenerate_index():
     """
-    Iniciar la regeneración del index
+    Start regenerating the index
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Regeneración del index iniciada exitosamente (encolada en Celery)
+            description: Index regeneration started successfully (queued in Celery)
         400:
-            description: La indexación está desactivada en index_management
+            description: Indexing is disabled in index_management
         401:
-            description: No tiene permisos para iniciar la regeneración del index
+            description: You don't have permission to start the index regeneration
         404:
-            description: No existe el registro index_management en la colección system
+            description: The index_management record does not exist in the system collection
         500:
-            description: Error al iniciar la regeneración del index
+            description: Error starting the index regeneration
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -323,23 +322,23 @@ def regenerate_index():
 @jwt_required()
 def index_resources():
     """
-    Iniciar la indexación completa de recursos
+    Start the full indexing of resources
     ---
     security:
         - JWT: []
     tags:
-       - Ajustes del sistema
+       - System settings
     responses:
         200:
-            description: Indexación de recursos iniciada exitosamente (encolada en Celery)
+            description: Resource indexing started successfully (queued in Celery)
         400:
-            description: La indexación no está habilitada en index_management
+            description: Indexing is not enabled in index_management
         401:
-            description: No tiene permisos para iniciar la indexación de recursos
+            description: You don't have permission to start the resource indexing
         404:
-            description: No existe el registro index_management en la colección system
+            description: The index_management record does not exist in the system collection
         500:
-            description: Error al iniciar la indexación de recursos
+            description: Error starting the resource indexing
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -353,19 +352,19 @@ def index_resources():
 @jwt_required()
 def index_geometries():
     """
-    Iniciar la indexación de geometrías
+    Start indexing geometries
     ---
     security:
         - JWT: []
     tags:
-       - Ajustes del sistema
+       - System settings
     responses:
         200:
-            description: Indexación de geometrías iniciada exitosamente (encolada en Celery)
+            description: Geometry indexing started successfully (queued in Celery)
         401:
-            description: No tiene permisos para iniciar la indexación de geometrías
+            description: You don't have permission to start the geometry indexing
         500:
-            description: Error al iniciar la indexación de geometrías
+            description: Error starting the geometry indexing
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -379,19 +378,19 @@ def index_geometries():
 @jwt_required()
 def regenerate_index_geometries():
     """
-    Iniciar la regeneración del index de geometrías
+    Start regenerating the geometries index
     ---
     security:
         - JWT: []
     tags:
-       - Ajustes del sistema
+       - System settings
     responses:
         200:
-            description: Regeneración del index de geometrías iniciada exitosamente (encolada en Celery)
+            description: Geometries index regeneration started successfully (queued in Celery)
         401:
-            description: No tiene permisos para iniciar la regeneración del index de geometrías
+            description: You don't have permission to start the geometries index regeneration
         500:
-            description: Error al iniciar la regeneración del index de geometrías
+            description: Error starting the geometries index regeneration
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -405,19 +404,19 @@ def regenerate_index_geometries():
 @jwt_required()
 def clear_cache():
     """
-    Limpiar la cache
+    Clear the cache
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Cache limpiada exitosamente
+            description: Cache cleared successfully
         401:
-            description: No tiene permisos para limpiar la cache
+            description: You don't have permission to clear the cache
         500:
-            description: Error al limpiar la cache
+            description: Error clearing the cache
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -431,25 +430,25 @@ def clear_cache():
 @nodeFernetAuthenticate
 def node_clear_cache(user):
     """
-    Limpiar la cache desde los nodos de procesamiento (autenticación de nodo)
+    Clear the cache from the processing nodes (node authentication)
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     description: >-
-        NO usa un JWT de login normal: requiere `Authorization: Bearer
-        <token>` donde `<token>` es un JWT firmado con JWT_SECRET_KEY y
-        luego cifrado con FERNET_KEY (ver app/utils/FernetAuth.py,
-        nodeFernetAuthenticate) — pensado para llamadas nodo-a-nodo
-        (NODE_TOKEN), no para sesiones de usuario del frontend.
+        Does NOT use a normal login JWT: requires `Authorization: Bearer
+        <token>` where `<token>` is a JWT signed with JWT_SECRET_KEY and
+        then encrypted with FERNET_KEY (see app/utils/FernetAuth.py,
+        nodeFernetAuthenticate) — meant for node-to-node calls
+        (NODE_TOKEN), not for frontend user sessions.
     responses:
         200:
-            description: Cache limpiada exitosamente
+            description: Cache cleared successfully
         401:
-            description: Token de nodo ausente, inválido, expirado o usuario inexistente
+            description: Missing, invalid, or expired node token, or nonexistent user
         500:
-            description: Error al limpiar la cache
+            description: Error clearing the cache
     """
     
     # Llamar al servicio para limpiar la cache
@@ -459,19 +458,19 @@ def node_clear_cache(user):
 @jwt_required()
 def geo_load():
     """
-    Cargar poligonos de georeferenciación
+    Load georeferencing polygons
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Polígonos geográficos actualizados
+            description: Geographic polygons updated
         401:
-            description: No tiene permisos para actualizar los poligonos
+            description: You don't have permission to update the polygons
         500:
-            description: Error al actualizar los poligonos
+            description: Error updating the polygons
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -487,19 +486,19 @@ def geo_load():
 @jwt_required()
 def zip_files_delete():
     """
-    Eliminar archivos zip
+    Delete zip files
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Archivos eliminados exitosamente
+            description: Files deleted successfully
         401:
-            description: No tiene permisos para eliminar los archivos
+            description: You don't have permission to delete the files
         500:
-            description: Error al eliminar los archivos
+            description: Error deleting the files
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -514,19 +513,19 @@ def zip_files_delete():
 @jwt_required()
 def inventory_files_delete():
     """
-    Eliminar archivos excel de inventario
+    Delete inventory excel files
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Archivos eliminados exitosamente
+            description: Files deleted successfully
         401:
-            description: No tiene permisos para eliminar los archivos
+            description: You don't have permission to delete the files
         500:
-            description: Error al eliminar los archivos
+            description: Error deleting the files
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -540,15 +539,15 @@ def inventory_files_delete():
 @bp.route('/get-settings', methods=['GET'])
 def get_system_settings():
     """
-    Obtener el idioma del sistema
+    Get the system language
     ---
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Idioma del sistema
+            description: System language
         500:
-            description: Error al obtener el idioma del sistema
+            description: Error retrieving the system language
     """
     resp = services.get_system_settings()
     if isinstance(resp, list):
@@ -558,16 +557,16 @@ def get_system_settings():
 @bp.route('/set-first-time', methods=['POST'])
 def set_first_time():
     """
-    Establecer el primer inicio del sistema (crea el usuario admin inicial)
+    Set the system's first-time initialization (creates the initial admin user)
     ---
     tags:
-        - Ajustes del sistema
+        - System settings
     description: >-
-        Solo funciona mientras el ajuste `first_time` siga activo (se
-        desactiva tras la primera ejecución exitosa); crea el usuario
-        administrador inicial con roles admin/editor/user/super_editor/publisher
-        y, si aún no existen las colecciones post_types/forms/users, crea el
-        tipo de contenido y formulario por defecto según `typeTemplate`.
+        Only works while the `first_time` setting is still active (it is
+        deactivated after the first successful run); creates the initial
+        admin user with the admin/editor/user/super_editor/publisher roles
+        and, if the post_types/forms/users collections don't already exist,
+        creates the default content type and form according to `typeTemplate`.
     parameters:
         - in: body
           name: body
@@ -582,23 +581,23 @@ def set_first_time():
             properties:
                 username:
                     type: string
-                    description: Se usa también como email del usuario admin
+                    description: Also used as the admin user's email
                 password:
                     type: string
                 confirmPassword:
                     type: string
                 typeTemplate:
                     type: string
-                    description: 'Plantilla de tipo de contenido inicial, ej: "basic"'
+                    description: 'Initial content type template, e.g.: "basic"'
     responses:
         200:
-            description: Primer inicio establecido exitosamente
+            description: First-time initialization set successfully
         400:
             description: >-
-                El sistema ya fue configurado, faltan campos requeridos,
-                algún campo llegó vacío, o el usuario ya existe
+                The system was already configured, required fields are
+                missing, a field was empty, or the user already exists
         500:
-            description: Error al establecer el primer inicio
+            description: Error setting the first-time initialization
     """
     body = request.get_json()
     return services.set_first_time(body)
@@ -607,12 +606,12 @@ def set_first_time():
 @jwt_required()
 def get_actions():
     """
-    Obtener las acciones del sistema para un lugar de despliegue (placement)
+    Get the system actions for a UI placement
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     parameters:
         - in: body
           name: body
@@ -624,14 +623,14 @@ def get_actions():
             properties:
                 placement:
                     type: string
-                    description: Ubicación de la UI para la que se solicitan las acciones disponibles
+                    description: UI location for which the available actions are requested
     responses:
         200:
-            description: Acciones del sistema
+            description: System actions
         401:
-            description: No tiene permisos para obtener las acciones del sistema
+            description: You don't have permission to retrieve the system actions
         500:
-            description: Error al obtener las acciones del sistema
+            description: Error retrieving the system actions
     """
     body = request.get_json()
     current_user = get_jwt_identity()
@@ -648,19 +647,19 @@ def get_actions():
 @jwt_required()
 def restart():
     """
-    Reiniciar el sistema
+    Restart the system
     ---
     security:
         - JWT: []
     tags:
-        - Ajustes del sistema
+        - System settings
     responses:
         200:
-            description: Reinicio del sistema solicitado exitosamente
+            description: System restart requested successfully
         401:
-            description: No tiene permisos para reiniciar el sistema
+            description: You don't have permission to restart the system
         500:
-            description: Error al reiniciar el sistema
+            description: Error restarting the system
     """
 
     # Obtener el usuario actual

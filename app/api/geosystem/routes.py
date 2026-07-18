@@ -7,10 +7,10 @@ from flask import request
 @bp.route('/polygon', methods=['POST'])
 def get_polygon():
     """
-    Obtener el/los polígono(s) geográfico(s) de una o varias formas administrativas
+    Get the geographic polygon(s) for one or more administrative shapes
     ---
     tags:
-        - Niveles
+        - Levels
     parameters:
         - in: body
           name: body
@@ -19,29 +19,29 @@ def get_polygon():
             properties:
                 ident:
                     type: string
-                    description: Identificador de la forma. Si se omite, se retorna un listado de formas que cumplan el resto de filtros.
+                    description: Identifier of the shape. If omitted, a list of shapes matching the remaining filters is returned.
                 parent:
                     type: string
-                    description: Identificador de la forma padre (filtro opcional).
+                    description: Identifier of the parent shape (optional filter).
                 level:
                     type: integer
-                    description: Nivel administrativo (properties.admin_level) a consultar.
+                    description: Administrative level (properties.admin_level) to query.
                 retention:
                     type: number
                     default: 0.1
-                    description: Porcentaje de retención de puntos usado al simplificar la geometría.
+                    description: Point retention percentage used when simplifying the geometry.
                 type:
                     type: string
-                    description: Tipo de forma (properties.shape_type). El valor especial "administrative" ignora ident/level y fuerza level=1 usando ident como parent.
+                    description: Shape type (properties.shape_type). The special value "administrative" ignores ident/level and forces level=1 using ident as parent.
     responses:
         200:
             description: >
-                Si se envía "ident", retorna un único feature GeoJSON (geometry + properties.name/ident/type).
-                Si no se envía, retorna un arreglo de features GeoJSON que cumplen los filtros (puede ser vacío).
+                If "ident" is sent, returns a single GeoJSON feature (geometry + properties.name/ident/type).
+                If not sent, returns an array of GeoJSON features matching the filters (can be empty).
         404:
-            description: No se encontró una forma con el "ident" solicitado (solo aplica cuando se envía "ident")
+            description: No shape was found with the requested "ident" (only applies when "ident" is sent)
         500:
-            description: Error al obtener el polígono
+            description: Error retrieving the polygon
     """
     data = request.get_json()
     ident = data.get('ident')
