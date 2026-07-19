@@ -13,20 +13,20 @@ from flask_babel import _
 @jwt_required()
 def get_all():
     """
-    Obtener todos los estándares de metadatos de la base de datos
+    Get all metadata standards from the database
     ---
     security:
         - JWT: []
     tags:
-        - Estándares de metadatos
-    description: Requiere el rol admin. Devuelve únicamente los campos name, description y slug de cada formulario (no la lista completa de fields).
+        - Metadata Standards
+    description: Requires the admin role. Returns only the name, description, and slug fields of each form (not the full fields list).
     responses:
         200:
-            description: Lista de estándares de metadatos obtenida exitosamente (solo name, description, slug)
+            description: List of metadata standards retrieved successfully (name, description, slug only)
         401:
-            description: No tienes permisos para realizar esta acción (no eres admin)
+            description: You don't have permission to perform this action (not an admin)
         500:
-            description: Error al obtener los estándares de metadatos
+            description: Error retrieving the metadata standards
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -44,13 +44,13 @@ def get_all():
 @jwt_required()
 def create():
     """
-    Crear un estándar de metadatos (formulario) nuevo con el body del request
+    Create a new metadata standard (form) with the request body
     ---
     security:
         - JWT: []
     tags:
-        - Estándares de metadatos
-    description: Requiere el rol admin. Si slug no se envía (o va vacío), se genera automáticamente a partir de name; si el slug ya existe, se le añade un sufijo numérico incremental. Exactamente uno de los campos de fields debe tener destiny igual a metadata.firstLevel.title y ser de tipo text, o la creación falla. Todas las excepciones de validación se devuelven como 500, no 400.
+        - Metadata Standards
+    description: Requires the admin role. If slug is not sent (or is empty), it's auto-generated from name; if the slug already exists, an incremental numeric suffix is appended. Exactly one of the fields entries must have destiny equal to metadata.firstLevel.title and be of type text, or creation fails. All validation exceptions are returned as 500, not 400.
     parameters:
         - in: body
           name: body
@@ -63,23 +63,23 @@ def create():
                     type: string
                 slug:
                     type: string
-                    description: Opcional; se autogenera desde name si se omite o va vacío.
+                    description: Optional; auto-generated from name if omitted or empty.
                 fields:
                     type: array
                     items:
                         type: object
-                        description: Cada campo requiere al menos label; si tiene destiny, debe iniciar con "metadata" (salvo type separator/file), y no puede ser igual a "ident".
+                        description: Each field requires at least label; if it has destiny, it must start with "metadata" (except type separator/file), and cannot be equal to "ident".
             required:
                 - name
                 - description
                 - fields
     responses:
         201:
-            description: Estándar de metadatos creado exitosamente
+            description: Metadata standard created successfully
         401:
-            description: No tienes permisos para realizar esta acción (no eres admin)
+            description: You don't have permission to perform this action (not an admin)
         500:
-            description: Error al crear el estándar de metadatos (incluye errores de validación de fields, p. ej. falta el campo con destiny metadata.firstLevel.title)
+            description: Error creating the metadata standard (includes fields validation errors, e.g. missing the field with destiny metadata.firstLevel.title)
     """
     # Obtener el body de la request
     body = request.json
@@ -97,13 +97,13 @@ def create():
 @jwt_required()
 def get_by_slug(slug):
     """
-    Obtener un formulario (estándar de metadatos) por su slug
+    Get a form (metadata standard) by its slug
     ---
     security:
         - JWT: []
     tags:
-        - Estándares de metadatos
-    description: Requiere el rol admin. Nótese que esta ruta acepta método POST, no GET. El formulario devuelto incluye un campo accessRights inyectado automáticamente al inicio de fields.
+        - Metadata Standards
+    description: Requires the admin role. Note that this route accepts the POST method, not GET. The returned form includes an accessRights field automatically injected at the start of fields.
     parameters:
         - in: path
           name: slug
@@ -111,13 +111,13 @@ def get_by_slug(slug):
           required: true
     responses:
         200:
-            description: Formulario obtenido exitosamente
+            description: Form retrieved successfully
         401:
-            description: No tienes permisos para realizar esta acción (no eres admin)
+            description: You don't have permission to perform this action (not an admin)
         404:
-            description: Formulario no encontrado
+            description: Form not found
         500:
-            description: Error al obtener el formulario
+            description: Error retrieving the form
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -138,13 +138,13 @@ def get_by_slug(slug):
 @jwt_required()
 def update_by_slug(slug):
     """
-    Actualizar un formulario (estándar de metadatos) por su slug
+    Update a form (metadata standard) by its slug
     ---
     security:
         - JWT: []
     tags:
-        - Estándares de metadatos
-    description: Requiere el rol admin. Se valida y recalcula el esquema combinado de metadatos de todos los formularios antes de guardar; la validación de fields aplica igual que en la creación.
+        - Metadata Standards
+    description: Requires the admin role. The combined metadata schema of all forms is validated and recalculated before saving; fields validation applies the same as on creation.
     parameters:
         - in: path
           name: slug
@@ -168,13 +168,13 @@ def update_by_slug(slug):
                 - fields
     responses:
         200:
-            description: Estándar de metadatos actualizado exitosamente
+            description: Metadata standard updated successfully
         401:
-            description: No tienes permisos para realizar esta acción (no eres admin)
+            description: You don't have permission to perform this action (not an admin)
         404:
-            description: Formulario no encontrado
+            description: Form not found
         500:
-            description: Error al actualizar el estándar de metadatos (incluye errores de validación de fields)
+            description: Error updating the metadata standard (includes fields validation errors)
     """
     # Obtener el body de la request
     body = request.json
@@ -192,13 +192,13 @@ def update_by_slug(slug):
 @jwt_required()
 def delete_by_slug(slug):
     """
-    Eliminar un formulario (estándar de metadatos) por su slug
+    Delete a form (metadata standard) by its slug
     ---
     security:
         - JWT: []
     tags:
-        - Estándares de metadatos
-    description: Requiere el rol admin. Se rechaza si algún tipo de contenido (post_type) usa este formulario como su metadata.
+        - Metadata Standards
+    description: Requires the admin role. Rejected if any content type (post_type) uses this form as its metadata.
     parameters:
         - in: path
           name: slug
@@ -207,15 +207,15 @@ def delete_by_slug(slug):
           required: true
     responses:
         204:
-            description: Formulario eliminado exitosamente (sin contenido en la respuesta)
+            description: Form deleted successfully (no content in the response)
         400:
-            description: El formulario está siendo usado por un tipo de contenido
+            description: The form is being used by a content type
         401:
-            description: No tienes permisos para realizar esta acción (no eres admin)
+            description: You don't have permission to perform this action (not an admin)
         404:
-            description: Formulario no encontrado
+            description: Form not found
         500:
-            description: Error al eliminar el formulario
+            description: Error deleting the form
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -230,13 +230,13 @@ def delete_by_slug(slug):
 @jwt_required()
 def duplicate_by_slug(slug):
     """
-    Duplicar un formulario (estándar de metadatos) por su slug
+    Duplicate a form (metadata standard) by its slug
     ---
     security:
         - JWT: []
     tags:
-        - Estándares de metadatos
-    description: Requiere el rol admin. Crea una copia con el nombre "<name> (copy)"; el nuevo slug se genera igual que en la creación (a partir del nuevo name, con sufijo numérico si colisiona).
+        - Metadata Standards
+    description: Requires the admin role. Creates a copy named "<name> (copy)"; the new slug is generated the same way as on creation (from the new name, with a numeric suffix on collision).
     parameters:
         - in: path
           name: slug
@@ -245,13 +245,13 @@ def duplicate_by_slug(slug):
           required: true
     responses:
         201:
-            description: Formulario duplicado exitosamente
+            description: Form duplicated successfully
         401:
-            description: No tienes permisos para realizar esta acción (no eres admin)
+            description: You don't have permission to perform this action (not an admin)
         404:
-            description: Formulario original no encontrado
+            description: Original form not found
         500:
-            description: Error al duplicar el formulario
+            description: Error duplicating the form
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -265,20 +265,20 @@ def duplicate_by_slug(slug):
 @jwt_required()
 def get_all_fields():
     """
-    Obtener todos los tipos de campos disponibles para formularios
+    Get all field types available for forms
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de campos
-    description: Requiere el rol admin. Lista fija de tipos de campo (text, text-area, number, simple-date, select, select-multiple2, checkbox, file, repeater, separator, author, location, userslit), extensible por plugins vía el hook get_fields_types.
+        - Field Types
+    description: Requires the admin role. Fixed list of field types (text, text-area, number, simple-date, select, select-multiple2, checkbox, file, repeater, separator, author, location, userslit), extensible by plugins via the get_fields_types hook.
     responses:
         200:
-            description: Lista de tipos de campos obtenida exitosamente
+            description: List of field types retrieved successfully
         401:
-            description: No tienes permisos para realizar esta acción (no eres admin)
+            description: You don't have permission to perform this action (not an admin)
         500:
-            description: Error al obtener los tipos de campos
+            description: Error retrieving the field types
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()

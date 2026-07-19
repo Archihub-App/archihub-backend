@@ -8,20 +8,20 @@ import json
 @fernetAuthenticate
 def get_all(username, isAdmin):
     """
-    Obtener recursos publicados: listado paginado por tipo, o búsqueda por palabra clave
+    Get published resources: paginated listing by type, or keyword search
     ---
     security:
         - JWT: []
     tags:
-        - Api Pública
+        - Public Api
     description: >
-        Requiere un token Fernet cifrado de la Api Pública (header `Authorization: Bearer <token>`,
-        distinto del JWT normal de `/auth/login`; ver app.utils.FernetAuth.publicFernetAuthenticate).
-        Si `keyword` viene no vacío en el body, la búsqueda se delega en
-        app.api.search.public_services.get_resources_by_filters (Elasticsearch o vector DB,
-        según las capacidades activas del sistema). En caso contrario se delega en
-        app.api.resources.public_services.get_all, que requiere `post_type` (lista de slugs) y
-        solo devuelve recursos con `status: "published"`.
+        Requires an encrypted Fernet token from the Public Api (header `Authorization: Bearer <token>`,
+        distinct from the normal JWT from `/auth/login`; see app.utils.FernetAuth.publicFernetAuthenticate).
+        If `keyword` is present and non-empty in the body, the search is delegated to
+        app.api.search.public_services.get_resources_by_filters (Elasticsearch or vector DB,
+        depending on the system's active capabilities). Otherwise it is delegated to
+        app.api.resources.public_services.get_all, which requires `post_type` (list of slugs) and
+        only returns resources with `status: "published"`.
     parameters:
         - in: body
           name: body
@@ -30,15 +30,15 @@ def get_all(username, isAdmin):
             properties:
                 keyword:
                     type: string
-                    description: Si viene no vacío, activa el flujo de búsqueda en vez del listado
+                    description: If non-empty, activates the search flow instead of the listing
                 searchSource:
                     type: string
-                    description: "'index' (Elasticsearch, por defecto) o 'vector' — solo aplica con keyword"
+                    description: "'index' (Elasticsearch, default) or 'vector' — only applies with keyword"
                 post_type:
                     type: array
                     items:
                         type: string
-                    description: Requerido cuando no hay keyword; slugs de los tipos de contenido a listar
+                    description: Required when there is no keyword; slugs of the content types to list
                 page:
                     type: integer
                 activeColumns:
@@ -47,10 +47,10 @@ def get_all(username, isAdmin):
                         type: object
                 parents:
                     type: object
-                    description: "{'id': ...} para filtrar por padre directo"
+                    description: "{'id': ...} to filter by direct parent"
                 files:
                     type: boolean
-                    description: Si es true, filtra solo recursos que tengan archivos asociados
+                    description: If true, filters only resources that have associated files
                 sortBy:
                     type: string
                     default: createdAt
@@ -59,11 +59,11 @@ def get_all(username, isAdmin):
                     default: asc
     responses:
         200:
-            description: Recursos obtenidos exitosamente
+            description: Resources retrieved successfully
         401:
-            description: Un tipo de contenido solicitado tiene restricción de rol de visualización que el usuario no cumple
+            description: A requested content type has a view-role restriction the user does not meet
         500:
-            description: Error al obtener los recursos (p.ej. falta "post_type" en el body sin keyword)
+            description: Error retrieving the resources (e.g. missing "post_type" in the body without keyword)
     """
     body = request.json
 
@@ -83,18 +83,18 @@ def get_all(username, isAdmin):
 @fernetAuthenticate
 def get_types(username, isAdmin):
     """
-    Obtener todos los tipos de contenido (delega en app.api.types.services.get_all)
+    Get all content types (delegates to app.api.types.services.get_all)
     ---
     security:
         - JWT: []
     tags:
-        - Api Pública
-    description: Requiere un token Fernet cifrado de la Api Pública (ver descripción de POST /publicApi).
+        - Public Api
+    description: Requires an encrypted Fernet token from the Public Api (see the POST /publicApi description).
     responses:
         200:
-            description: Recursos obtenidos exitosamente
+            description: Resources retrieved successfully
         500:
-            description: Error al obtener los recursos
+            description: Error retrieving the resources
     """
     from app.api.types.services import get_all as get_all_types
     resp = get_all_types()
@@ -108,28 +108,28 @@ def get_types(username, isAdmin):
 @fernetAuthenticate
 def get_item(username, isAdmin, id):
     """
-    Obtener un recurso publicado por su ID (delega en app.api.resources.public_services.get_by_id)
+    Get a published resource by its ID (delegates to app.api.resources.public_services.get_by_id)
     ---
     security:
         - JWT: []
     tags:
-        - Api Pública
-    description: Requiere un token Fernet cifrado de la Api Pública (ver descripción de POST /publicApi).
+        - Public Api
+    description: Requires an encrypted Fernet token from the Public Api (see the POST /publicApi description).
     parameters:
         - in: path
           name: id
           type: string
           required: true
-          description: ObjectId de MongoDB del recurso
+          description: MongoDB ObjectId of the resource
     responses:
         200:
-            description: Recurso obtenido exitosamente
+            description: Resource retrieved successfully
         401:
-            description: Token no provisto/inválido/expirado, o el recurso tiene accessRights/viewRoles que el usuario público no cumple
+            description: Token not provided/invalid/expired, or the resource has accessRights/viewRoles the public user does not meet
         500:
             description: >
-                Error al obtener el recurso. Nota: un id inexistente o no publicado también
-                cae aquí con 500 (excepción genérica "Recurso no existe"), no un 404 dedicado.
+                Error retrieving the resource. Note: a nonexistent or unpublished id also
+                falls here with 500 (generic "Resource does not exist" exception), not a dedicated 404.
     """
     from app.api.resources.public_services import get_by_id as get_by_id_public
     resp =  get_by_id_public(id)

@@ -14,7 +14,7 @@ from flask_babel import _
 @jwt_required()
 def get_all():
     """
-    Obtener records paginados según un filtro de Mongo (solo administradores)
+    Get paginated records matching a Mongo filter (admins only)
     ---
     security:
         - JWT: []
@@ -28,22 +28,22 @@ def get_all():
             properties:
                 filters:
                     type: object
-                    description: filtro de Mongo aplicado a la colección records
+                    description: Mongo filter applied to the records collection
                 page:
                     type: integer
-                    description: número de página (20 resultados por página, empezando en 0)
+                    description: page number (20 results per page, starting at 0)
             required:
                 - filters
                 - page
     responses:
         200:
-            description: Records que cumplen el filtro (cada elemento incluye el total de resultados en el campo total)
+            description: Records matching the filter (each element includes the total result count in the total field)
         401:
-            description: El usuario no tiene rol admin, o el token JWT es inválido/no fue enviado
+            description: The user doesn't have the admin role, or the JWT token is invalid/wasn't sent
         404:
-            description: Ningún record cumple el filtro
+            description: No record matches the filter
         500:
-            description: Error inesperado, incluyendo filters/page ausentes en el body
+            description: Unexpected error, including filters/page missing from the body
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -61,7 +61,7 @@ def get_all():
 @jwt_required()
 def get_by_id(id):
     """
-    Obtener un record por su id, si el usuario tiene permisos de acceso
+    Get a record by its id, if the user has access permission
     ---
     security:
         - JWT: []
@@ -72,16 +72,16 @@ def get_by_id(id):
           name: id
           type: string
           required: true
-          description: id del record a obtener
+          description: id of the record to retrieve
     responses:
         200:
             description: Record
         401:
-            description: El accessRights del record no lo permite al usuario actual, o el token JWT es inválido/no fue enviado
+            description: The record's accessRights doesn't allow the current user, or the JWT token is invalid/wasn't sent
         404:
-            description: Record no existe
+            description: Record does not exist
         500:
-            description: Error inesperado
+            description: Unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -98,7 +98,7 @@ def get_by_id(id):
 @jwt_required()
 def get_by_gallery_index():
     """
-    Obtener un record de la galería de imágenes de un recurso, dado el id del recurso y el índice de la imagen
+    Get a record from a resource's image gallery, given the resource id and the image index
     ---
     security:
         - JWT: []
@@ -112,24 +112,24 @@ def get_by_gallery_index():
             properties:
                 id:
                     type: string
-                    description: id del recurso (resource) que contiene la galería
+                    description: id of the resource that contains the gallery
                 index:
                     type: integer
-                    description: índice de la imagen dentro de filesObj a obtener
+                    description: index of the image within filesObj to retrieve
             required:
                 - id
                 - index
     responses:
         200:
-            description: Record de la imagen en la posición solicitada
+            description: Record of the image at the requested position
         400:
-            description: id o index no especificado en el body
+            description: id or index not specified in the body
         401:
-            description: El accessRights del record no lo permite al usuario actual
+            description: The record's accessRights doesn't allow the current user
         404:
-            description: Record no existe
+            description: Record does not exist
         500:
-            description: Error inesperado (recurso no existe, índice fuera de rango, etc.)
+            description: Unexpected error (resource does not exist, index out of range, etc.)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -148,7 +148,7 @@ def get_by_gallery_index():
 @jwt_required()
 def get_stream_by_id(id):
     """
-    Obtener el stream (video/audio/imagen) de un record por su id, opcionalmente un fragmento de tiempo
+    Get the stream (video/audio/image) of a record by its id, optionally a time fragment
     ---
     security:
         - JWT: []
@@ -159,29 +159,29 @@ def get_stream_by_id(id):
           name: id
           type: string
           required: true
-          description: id del record a obtener
+          description: id of the record to retrieve
         - in: query
           name: size
           type: string
           required: false
-          description: tamaño de la imagen (small, medium, large); solo aplica a records de tipo imagen
+          description: image size (small, medium, large); only applies to image-type records
         - in: query
           name: start_ms
           type: number
           required: false
-          description: inicio del fragmento en segundos (solo video/audio); requiere end_ms
+          description: fragment start in seconds (video/audio only); requires end_ms
         - in: query
           name: end_ms
           type: number
           required: false
-          description: fin del fragmento en segundos (solo video/audio); requiere start_ms
+          description: fragment end in seconds (video/audio only); requires start_ms
     responses:
         200:
-            description: Archivo (stream completo, o fragmento generado con ffmpeg si se especifican start_ms/end_ms)
+            description: File (full stream, or fragment generated with ffmpeg if start_ms/end_ms are specified)
         400:
-            description: start_ms/end_ms inválidos (no numéricos, negativos, o end_ms menor/igual a start_ms)
+            description: Invalid start_ms/end_ms (non-numeric, negative, or end_ms less than or equal to start_ms)
         500:
-            description: Record no existe o sin permiso de acceso (ambos casos colapsan a 500 en este endpoint), o error generando el fragmento
+            description: Record does not exist or no access permission (both cases collapse to 500 on this endpoint), or error generating the fragment
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -200,7 +200,7 @@ def get_stream_by_id(id):
 @jwt_required()
 def download_records():
     """
-    Descargar el archivo original o procesado ("small") de un record
+    Download the original or processed ("small") file of a record
     ---
     security:
         - JWT: []
@@ -214,22 +214,22 @@ def download_records():
             properties:
                 id:
                     type: string
-                    description: id del record a descargar
+                    description: id of the record to download
                 type:
                     type: string
-                    description: 'valor "original" (archivo original sin procesar) o "small" (versión procesada)'
+                    description: 'value "original" (raw, unprocessed file) or "small" (processed version)'
             required:
                 - id
                 - type
     responses:
         200:
-            description: Archivo descargado (attachment)
+            description: File downloaded (attachment)
         400:
-            description: La descarga de archivos está desactivada en la configuración del sistema, o id no especificado en el body
+            description: File downloads are disabled in the system configuration, or id not specified in the body
         404:
-            description: El record no tiene processing/fileProcessing generado
+            description: The record has no processing/fileProcessing generated
         500:
-            description: Record no existe, sin permiso de acceso, type no soportado, u otro error inesperado
+            description: Record does not exist, no access permission, unsupported type, or another unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -243,7 +243,7 @@ def download_records():
 @jwt_required()
 def get_transcription_by_id(id):
     """
-    Obtener la transcripción (resultado de un procesamiento av_transcribe) de un record por su id
+    Get the transcription (result of an av_transcribe processing) of a record by its id
     ---
     security:
         - JWT: []
@@ -254,7 +254,7 @@ def get_transcription_by_id(id):
           name: id
           type: string
           required: true
-          description: id del record
+          description: id of the record
         - in: body
           name: body
           schema:
@@ -262,17 +262,17 @@ def get_transcription_by_id(id):
             properties:
                 slug:
                     type: string
-                    description: identificador del procesamiento (plugin) del que se quiere la transcripción
+                    description: identifier of the processing (plugin) the transcription is wanted from
                 page:
                     type: integer
-                    description: página de segmentos a obtener (por defecto 0)
+                    description: page of segments to retrieve (default 0)
             required:
                 - slug
     responses:
         200:
-            description: Transcripción del record
+            description: Record's transcription
         500:
-            description: Record no existe, sin permiso de acceso, slug ausente en el body, u otro error inesperado
+            description: Record does not exist, no access permission, slug missing from the body, or another unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -288,7 +288,7 @@ def get_transcription_by_id(id):
 @jwt_required()
 def edit_document_transcription(id):
     """
-    Editar un segmento de la transcripción (texto, tiempos y speaker) de un record por su id
+    Edit a transcription segment (text, times, and speaker) of a record by its id
     ---
     security:
         - JWT: []
@@ -299,7 +299,7 @@ def edit_document_transcription(id):
           name: id
           type: string
           required: true
-          description: id del record
+          description: id of the record
         - in: body
           name: body
           schema:
@@ -307,22 +307,22 @@ def edit_document_transcription(id):
             properties:
                 slug:
                     type: string
-                    description: identificador del procesamiento (plugin) de la transcripción
+                    description: identifier of the transcription's processing (plugin)
                 index:
                     type: integer
-                    description: índice del segmento a editar
+                    description: index of the segment to edit
                 text:
                     type: string
-                    description: nuevo texto del segmento
+                    description: new segment text
                 start:
                     type: number
-                    description: nuevo tiempo de inicio del segmento
+                    description: new segment start time
                 end:
                     type: number
-                    description: nuevo tiempo de fin del segmento
+                    description: new segment end time
                 speaker:
                     type: string
-                    description: nuevo speaker del segmento (opcional)
+                    description: new segment speaker (optional)
             required:
                 - slug
                 - index
@@ -331,13 +331,13 @@ def edit_document_transcription(id):
                 - end
     responses:
         200:
-            description: Segmento de transcripción editado exitosamente
+            description: Transcription segment edited successfully
         401:
-            description: El usuario no tiene rol admin/editor/transcriber, o (si es transcriber) no tiene una tarea asignada sobre este record en estado review/pending/rejected
+            description: The user doesn't have the admin/editor/transcriber role, or (if transcriber) has no task assigned on this record in review/pending/rejected state
         404:
-            description: Record no existe, no tiene transcripción, no tiene el slug indicado, o el slug no corresponde a un procesamiento av_transcribe
+            description: Record does not exist, has no transcription, doesn't have the given slug, or the slug doesn't correspond to an av_transcribe processing
         500:
-            description: Record no existe o sin permiso de acceso (verificación inicial), u otro error inesperado
+            description: Record does not exist or no access permission (initial check), or another unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -357,7 +357,7 @@ def edit_document_transcription(id):
 @jwt_required()
 def edit_document_transcription_speaker(id):
     """
-    Renombrar un speaker en todos los segmentos de la transcripción de un record
+    Rename a speaker across all segments of a record's transcription
     ---
     security:
         - JWT: []
@@ -368,7 +368,7 @@ def edit_document_transcription_speaker(id):
         name: id
         type: string
         required: true
-        description: id del record
+        description: id of the record
       - in: body
         name: body
         schema:
@@ -376,24 +376,24 @@ def edit_document_transcription_speaker(id):
           properties:
               slug:
                   type: string
-                  description: identificador del procesamiento (plugin) de la transcripción
+                  description: identifier of the transcription's processing (plugin)
               speaker:
                   type: string
-                  description: nuevo nombre del speaker (junto con oldSpeaker aplica el renombrado en los segmentos que coincidan)
+                  description: new speaker name (together with oldSpeaker, applies the rename to matching segments)
               oldSpeaker:
                   type: string
-                  description: nombre actual del speaker a reemplazar
+                  description: current speaker name to replace
           required:
               - slug
     responses:
         200:
-            description: Speaker editado exitosamente
+            description: Speaker edited successfully
         401:
-            description: El usuario no tiene rol admin/editor/transcriber, o (si es transcriber) no tiene una tarea asignada sobre este record en estado review/pending/rejected
+            description: The user doesn't have the admin/editor/transcriber role, or (if transcriber) has no task assigned on this record in review/pending/rejected state
         404:
-            description: Record no existe, no tiene transcripción, no tiene el slug indicado, o el slug no corresponde a un procesamiento av_transcribe
+            description: Record does not exist, has no transcription, doesn't have the given slug, or the slug doesn't correspond to an av_transcribe processing
         500:
-            description: Record no existe o sin permiso de acceso (verificación inicial), u otro error inesperado
+            description: Record does not exist or no access permission (initial check), or another unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -413,7 +413,7 @@ def edit_document_transcription_speaker(id):
 @jwt_required()
 def delete_document_transcription(id):
     """
-    Eliminar un segmento de la transcripción de un record por su id
+    Delete a transcription segment of a record by its id
     ---
     security:
         - JWT: []
@@ -424,7 +424,7 @@ def delete_document_transcription(id):
           name: id
           type: string
           required: true
-          description: id del record
+          description: id of the record
         - in: body
           name: body
           schema:
@@ -432,22 +432,22 @@ def delete_document_transcription(id):
             properties:
                 slug:
                     type: string
-                    description: identificador del procesamiento (plugin) de la transcripción
+                    description: identifier of the transcription's processing (plugin)
                 index:
                     type: integer
-                    description: índice del segmento a eliminar
+                    description: index of the segment to delete
             required:
                 - slug
                 - index
     responses:
         200:
-            description: Segmento de transcripción eliminado exitosamente
+            description: Transcription segment deleted successfully
         401:
-            description: El usuario no tiene rol admin/editor/transcriber, o (si es transcriber) no tiene una tarea asignada sobre este record en estado review/pending/rejected
+            description: The user doesn't have the admin/editor/transcriber role, or (if transcriber) has no task assigned on this record in review/pending/rejected state
         404:
-            description: Record no existe, no tiene transcripción, no tiene el slug indicado, o el slug no corresponde a un procesamiento av_transcribe
+            description: Record does not exist, has no transcription, doesn't have the given slug, or the slug doesn't correspond to an av_transcribe processing
         500:
-            description: Record no existe o sin permiso de acceso (verificación inicial), u otro error inesperado
+            description: Record does not exist or no access permission (initial check), or another unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -467,7 +467,7 @@ def delete_document_transcription(id):
 @jwt_required()
 def get_metadata_by_id(id):
     """
-    Obtener los metadatos de un procesamiento (plugin) de un record por su id y slug
+    Get the metadata of a record's processing (plugin) by its id and slug
     ---
     security:
         - JWT: []
@@ -478,7 +478,7 @@ def get_metadata_by_id(id):
           name: id
           type: string
           required: true
-          description: id del record
+          description: record id
         - in: body
           name: body
           schema:
@@ -486,14 +486,14 @@ def get_metadata_by_id(id):
             properties:
                 slug:
                     type: string
-                    description: identificador del procesamiento (plugin) del que se quieren los metadatos
+                    description: identifier of the processing (plugin) the metadata is wanted from
             required:
                 - slug
     responses:
         200:
-            description: Metadatos del procesamiento
+            description: Processing metadata
         500:
-            description: Record no existe, sin permiso de acceso, slug ausente en el body, u otro error inesperado
+            description: Record does not exist, no access permission, slug missing from the body, or another unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -509,7 +509,7 @@ def get_metadata_by_id(id):
 @jwt_required()
 def get_result_by_id(id):
     """
-    Obtener el resultado de un procesamiento (plugin) de un record por su id y slug
+    Get the result of a record's processing (plugin) by its id and slug
     ---
     security:
         - JWT: []
@@ -520,7 +520,7 @@ def get_result_by_id(id):
           name: id
           type: string
           required: true
-          description: id del record
+          description: record id
         - in: body
           name: body
           schema:
@@ -528,14 +528,14 @@ def get_result_by_id(id):
             properties:
                 slug:
                     type: string
-                    description: identificador del procesamiento (plugin) del que se quiere el resultado
+                    description: identifier of the processing (plugin) the result is wanted from
             required:
                 - slug
     responses:
         200:
-            description: Resultado del procesamiento
+            description: Processing result
         500:
-            description: Record no existe, sin permiso de acceso, slug ausente en el body, u otro error inesperado
+            description: Record does not exist, no access permission, slug missing from the body, or another unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -551,7 +551,7 @@ def get_result_by_id(id):
 @jwt_required()
 def get_document_by_id(id):
     """
-    Obtener el detalle (páginas en baja resolución) de un documento por su id
+    Get the detail (low-resolution pages) of a document by its id
     ---
     security:
         - JWT: []
@@ -562,12 +562,12 @@ def get_document_by_id(id):
           name: id
           type: string
           required: true
-          description: id del record
+          description: record id
     responses:
         200:
-            description: Detalle del documento
+            description: Document detail
         500:
-            description: Record no existe o sin permiso de acceso, u otro error inesperado
+            description: Record does not exist or no access permission, or another unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -579,7 +579,7 @@ def get_document_by_id(id):
 @jwt_required()
 def get_page_by_id(id):
     """
-    Obtener una o varias páginas (imágenes) de un documento por su id
+    Get one or more pages (images) of a document by its id
     ---
     security:
         - JWT: []
@@ -590,7 +590,7 @@ def get_page_by_id(id):
           name: id
           type: string
           required: true
-          description: id del record (o del recurso, si gallery es true)
+          description: record id (or resource id, if gallery is true)
         - in: body
           name: body
           schema:
@@ -600,21 +600,21 @@ def get_page_by_id(id):
                     type: array
                     items:
                         type: string
-                    description: números de página a obtener
+                    description: page numbers to retrieve
                 size:
                     type: string
-                    description: tamaño de las páginas a obtener (small/large)
+                    description: size of the pages to retrieve (small/large)
                 gallery:
                     type: boolean
-                    description: si es true, id se interpreta como un recurso (resource) y se obtienen imágenes de su galería en lugar de páginas de un documento
+                    description: if true, id is interpreted as a resource and images are retrieved from its gallery instead of a document's pages
             required:
                 - pages
                 - size
     responses:
         200:
-            description: Imágenes de las páginas solicitadas
+            description: Images of the requested pages
         500:
-            description: Record/recurso no existe o sin permiso de acceso, pages/size ausentes en el body, u otro error inesperado
+            description: Record/resource does not exist or no access permission, missing pages/size in the body, or another unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -631,7 +631,7 @@ def get_page_by_id(id):
 @jwt_required()
 def get_blocks_by_id(id):
     """
-    Obtener los bloques (OCR/layout) de una página de un record por su id
+    Get the blocks (OCR/layout) of a page of a record by its id
     ---
     security:
         - JWT: []
@@ -642,7 +642,7 @@ def get_blocks_by_id(id):
           name: id
           type: string
           required: true
-          description: id del record
+          description: record id
         - in: body
           name: body
           schema:
@@ -650,21 +650,21 @@ def get_blocks_by_id(id):
             properties:
                 page:
                     type: integer
-                    description: número de página
+                    description: page number
                 block:
-                    description: identificador/índice del bloque a obtener
+                    description: identifier/index of the block to retrieve
                 slug:
                     type: string
-                    description: identificador del procesamiento (plugin) del que se quieren los bloques
+                    description: identifier of the processing (plugin) the blocks are wanted from
             required:
                 - page
                 - block
                 - slug
     responses:
         200:
-            description: Bloques de la página solicitada
+            description: Blocks of the requested page
         500:
-            description: page, block o slug ausentes en el body (el endpoint responde 500, no 400, en este caso), record no existe, u otro error inesperado
+            description: page, block, or slug missing from the body (this endpoint responds 500, not 400, in this case), record does not exist, or another unexpected error
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -689,7 +689,7 @@ def get_blocks_by_id(id):
 @jwt_required()
 def post_label():
     """
-    Agregar un bloque a un procesamiento de un record (solo admin/editor)
+    Add a block to a processing of a record (admin/editor only)
     ---
     security:
         - JWT: []
@@ -703,21 +703,21 @@ def post_label():
             properties:
                 id_doc:
                     type: string
-                    description: id del record a modificar
+                    description: id of the record to modify
                 type_block:
                     type: string
-                    description: tipo de bloque a agregar; actualmente solo "blocks" está implementado
+                    description: type of block to add; currently only "blocks" is implemented
                 slug:
                     type: string
-                    description: identificador del procesamiento (plugin) a modificar
+                    description: identifier of the processing (plugin) to modify
                 page:
                     type: integer
-                    description: número de página (1-indexado) donde se agrega el bloque
+                    description: page number (1-indexed) where the block is added
                 bbox:
-                    description: coordenadas del bloque
+                    description: coordinates of the block
                 data:
                     type: object
-                    description: datos adicionales del bloque (se combinan con bbox en el nuevo bloque)
+                    description: additional block data (merged with bbox into the new block)
             required:
                 - id_doc
                 - type_block
@@ -727,13 +727,13 @@ def post_label():
                 - data
     responses:
         200:
-            description: Bloque agregado exitosamente
+            description: Block added successfully
         401:
-            description: El usuario no tiene rol admin ni editor
+            description: Missing admin/editor role
         404:
-            description: Record no existe
+            description: Record does not exist
         500:
-            description: Error inesperado (por ejemplo, campos requeridos ausentes en el body)
+            description: Unexpected error (e.g. required fields missing from the body)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -751,7 +751,7 @@ def post_label():
 @jwt_required()
 def set_label():
     """
-    Actualizar un bloque existente de un procesamiento de un record (solo admin/editor)
+    Update an existing block of a processing of a record (admin/editor only)
     ---
     security:
         - JWT: []
@@ -765,24 +765,24 @@ def set_label():
             properties:
                 id_doc:
                     type: string
-                    description: id del record a modificar
+                    description: id of the record to modify
                 type_block:
                     type: string
-                    description: tipo de bloque a actualizar; actualmente solo "blocks" está implementado
+                    description: type of block to update; currently only "blocks" is implemented
                 slug:
                     type: string
-                    description: identificador del procesamiento (plugin) a modificar
+                    description: identifier of the processing (plugin) to modify
                 page:
                     type: integer
-                    description: número de página (1-indexado) donde está el bloque
+                    description: page number (1-indexed) where the block is
                 index:
                     type: integer
-                    description: índice del bloque dentro de la página
+                    description: index of the block within the page
                 bbox:
-                    description: nuevas coordenadas del bloque
+                    description: new coordinates of the block
                 data:
                     type: object
-                    description: pares clave/valor a actualizar en el bloque
+                    description: key/value pairs to update on the block
             required:
                 - id_doc
                 - type_block
@@ -793,13 +793,13 @@ def set_label():
                 - data
     responses:
         200:
-            description: Bloque actualizado exitosamente
+            description: Block updated successfully
         401:
-            description: El usuario no tiene rol admin ni editor
+            description: Missing admin/editor role
         404:
-            description: Record no existe
+            description: Record does not exist
         500:
-            description: Error inesperado (por ejemplo, campos requeridos ausentes en el body)
+            description: Unexpected error (e.g. required fields missing from the body)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -817,7 +817,7 @@ def set_label():
 @jwt_required()
 def delete_label():
     """
-    Eliminar un bloque existente de un procesamiento de un record (solo admin/editor)
+    Delete an existing block of a processing of a record (admin/editor only)
     ---
     security:
         - JWT: []
@@ -831,19 +831,19 @@ def delete_label():
             properties:
                 id_doc:
                     type: string
-                    description: id del record a modificar
+                    description: id of the record to modify
                 type_block:
                     type: string
-                    description: tipo de bloque a eliminar; actualmente solo "blocks" está implementado
+                    description: type of block to delete; currently only "blocks" is implemented
                 slug:
                     type: string
-                    description: identificador del procesamiento (plugin) a modificar
+                    description: identifier of the processing (plugin) to modify
                 page:
                     type: integer
-                    description: número de página (1-indexado) donde está el bloque
+                    description: page number (1-indexed) where the block is
                 index:
                     type: integer
-                    description: índice del bloque a eliminar dentro de la página
+                    description: index of the block to delete within the page
             required:
                 - id_doc
                 - type_block
@@ -852,13 +852,13 @@ def delete_label():
                 - index
     responses:
         200:
-            description: Bloque eliminado exitosamente
+            description: Block deleted successfully
         401:
-            description: El usuario no tiene rol admin ni editor
+            description: Missing admin/editor role
         404:
-            description: Record no existe
+            description: Record does not exist
         500:
-            description: Error inesperado (por ejemplo, campos requeridos ausentes en el body)
+            description: Unexpected error (e.g. required fields missing from the body)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -876,7 +876,7 @@ def delete_label():
 @jwt_required()
 def favcount(record_id):
     """
-    Obtener el número de favoritos (favCount) de un record por su id
+    Get the favorites count (favCount) of a record by its id
     ---
     security:
         - JWT: []
@@ -887,14 +887,14 @@ def favcount(record_id):
           name: record_id
           type: string
           required: true
-          description: id del record a consultar
+          description: id of the record to query
     responses:
         200:
-            description: Número de favoritos del record (entero)
+            description: Favorites count of the record (integer)
         404:
-            description: Record no existe
+            description: Record does not exist
         500:
-            description: Error inesperado
+            description: Unexpected error
     """
     # Llamar al servicio para obtener un record por su id
     return services.get_favCount(record_id)

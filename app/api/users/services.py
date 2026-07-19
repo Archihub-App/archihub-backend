@@ -313,15 +313,24 @@ def forgot_password(body):
         # a list. Only actually send the email when the account is real.
         user = mongodb.get_record('users', {'username': body['username']})
         if user:
-            from app.api.email.services import send_email
-            from app.api.email.templates import forgot_password_template
+            try:
+                from app.api.email.services import send_email
+                from app.api.email.templates import forgot_password_template
 
-            token = create_access_token(identity=body['username'], expires_delta=timedelta(days=1))
-            token = fernet.encrypt(token.encode('utf-8'))
+                token = create_access_token(identity=body['username'], expires_delta=timedelta(days=1))
+                token = fernet.encrypt(token.encode('utf-8'))
 
-            link = f"{REDIRECT_URL}/reset-password?token={token.decode('utf-8')}"
+                link = f"{REDIRECT_URL}/reset-password?token={token.decode('utf-8')}"
 
-            send_email(body['username'], _('Password recovery'), forgot_password_template(link))
+                send_email(body['username'], _('Password recovery'), forgot_password_template(link))
+            except Exception as e:
+                # A real account whose email send fails (e.g. SMTP is down)
+                # must still get the SAME response as a nonexistent account —
+                # letting this hit the outer except below would return 500
+                # only for real accounts, recreating the enumeration oracle
+                # in exactly this failure mode. Log server-side, respond
+                # identically either way.
+                print(f"forgot_password: failed to send recovery email: {e}")
 
         return {'msg': _('If an account exists for this username, a password recovery email has been sent')}, 200
     except Exception as e:

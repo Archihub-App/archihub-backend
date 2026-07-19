@@ -8,7 +8,7 @@ from flask_babel import gettext as _
 @bp.route('/login', methods=['POST'])
 def login():
     """
-    Login para obtener el token de acceso al gestor documental
+    Login to obtain the access token for the document manager
     ---
     tags:
         - Auth
@@ -27,15 +27,15 @@ def login():
                 - password
     responses:
         200:
-            description: Login exitoso, retorna access_token. Si LDAP_HOST está configurado se intenta primero contra LDAP (y de no existir localmente, se registra automáticamente); si falla o no está configurado, se valida contra la base de datos local con bcrypt
+            description: Successful login, returns access_token. If LDAP_HOST is configured, LDAP is tried first (auto-registering the user locally if they don't exist yet); if it fails or isn't configured, the local database is validated against with bcrypt
         401:
-            description: Contraseña incorrecta
+            description: Incorrect password
         404:
-            description: El usuario no existe
+            description: The user does not exist
         429:
-            description: Demasiados intentos fallidos de login para este usuario (5 en los últimos 10 minutos); intentar de nuevo más tarde
+            description: Too many failed login attempts for this user (5 within the last 10 minutes); try again later
         500:
-            description: Error en el servidor (excepción no controlada)
+            description: Server error (unhandled exception)
     """
     try:
         # Obtener username y password del request

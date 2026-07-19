@@ -7,7 +7,7 @@ import json
 @bp.route('/public/<id>', methods=['GET'])
 def get_by_id_public(id):
     """
-    Obtener un record por su id sin autenticación (solo si su accessRights permite el acceso público)
+    Get a record by its id without authentication (only if its accessRights allow public access)
     ---
     tags:
         - Records
@@ -16,18 +16,18 @@ def get_by_id_public(id):
           name: id
           type: string
           required: true
-          description: id del record a obtener
+          description: id of the record to retrieve
     responses:
         200:
             description: Record
         401:
-            description: El record tiene un accessRights restringido (no es de acceso público)
+            description: The record has restricted accessRights (not publicly accessible)
         404:
-            description: Record no existe
+            description: Record does not exist
         500:
-            description: Error inesperado
+            description: Unexpected error
     """
-    # Llamar al servicio para obtener un record por su id
+    # Call the service to get a record by its id
     resp = public_services.get_by_id(id)
     if isinstance(resp, list):
         return tuple(resp)
@@ -37,7 +37,7 @@ def get_by_id_public(id):
 @bp.route('/public/<id>/stream', methods=['GET'])
 def stream_by_id_public(id):
     """
-    Obtener el stream (video/audio/imagen) de un record público por su id, opcionalmente un fragmento de tiempo
+    Get the stream (video/audio/image) of a public record by its id, optionally a time fragment
     ---
     tags:
         - Records
@@ -46,45 +46,45 @@ def stream_by_id_public(id):
           name: id
           type: string
           required: true
-          description: id del record a obtener
+          description: id of the record to retrieve
         - in: query
           name: size
           type: string
           required: false
-          description: tamaño de la imagen (small, medium, large); solo aplica a records de tipo imagen
+          description: image size (small, medium, large); only applies to image-type records
         - in: query
           name: start_ms
           type: number
           required: false
-          description: inicio del fragmento en segundos (solo video/audio); requiere end_ms
+          description: start of the fragment in seconds (video/audio only); requires end_ms
         - in: query
           name: end_ms
           type: number
           required: false
-          description: fin del fragmento en segundos (solo video/audio); requiere start_ms
+          description: end of the fragment in seconds (video/audio only); requires start_ms
     responses:
         200:
-            description: Archivo (stream completo, o fragmento generado con ffmpeg si se especifican start_ms/end_ms)
+            description: File (full stream, or a fragment generated with ffmpeg if start_ms/end_ms are specified)
         400:
-            description: start_ms/end_ms inválidos (no numéricos, negativos, o end_ms menor/igual a start_ms)
+            description: Invalid start_ms/end_ms (non-numeric, negative, or end_ms less than or equal to start_ms)
         401:
-            description: El record tiene un accessRights restringido (no es de acceso público)
+            description: The record has restricted accessRights (not publicly accessible)
         404:
-            description: Record no existe
+            description: Record does not exist
         500:
-            description: Error generando el fragmento u otro error inesperado
+            description: Error generating the fragment or another unexpected error
     """
     size = request.args.get('size')
     start_ms = request.args.get('start_ms')
     end_ms = request.args.get('end_ms')
-    # Llamar al servicio para obtener un record por su id
+    # Call the service to get a record by its id
     resp = public_services.get_stream(id, size, start_ms, end_ms)
     return resp
 
 @bp.route('/public/<id>/transcription', methods=['POST'])
 def get_transcription_by_id_public(id):
     """
-    Obtener la transcripción de un record público por su id
+    Get the transcription of a public record by its id
     ---
     tags:
         - Records
@@ -93,7 +93,7 @@ def get_transcription_by_id_public(id):
           name: id
           type: string
           required: true
-          description: id del record
+          description: id of the record
         - in: body
           name: body
           schema:
@@ -101,26 +101,26 @@ def get_transcription_by_id_public(id):
             properties:
                 slug:
                     type: string
-                    description: identificador del procesamiento (plugin) del que se quiere la transcripción; si se omite, la búsqueda se hace con slug=None
+                    description: identifier of the processing (plugin) whose transcription is wanted; if omitted, the lookup is done with slug=None
     responses:
         200:
-            description: Transcripción del record
+            description: Record transcription
         401:
-            description: El record tiene un accessRights restringido (no es de acceso público)
+            description: The record has restricted accessRights (not publicly accessible)
         404:
-            description: Record no existe
+            description: Record does not exist
         500:
-            description: Error inesperado
+            description: Unexpected error
     """
     body = request.json
-    # Llamar al servicio para obtener un record por su id
+    # Call the service to get a record by its id
     resp = public_services.get_transcription(id, body.get('slug'))
     return resp
 
 @bp.route('/public/<id>/pages', methods=['POST'])
 def get_page_by_id_public(id):
     """
-    Obtener una o varias páginas (imágenes) de un documento público por su id
+    Get one or more pages (images) of a public document by its id
     ---
     tags:
         - Records
@@ -129,7 +129,7 @@ def get_page_by_id_public(id):
           name: id
           type: string
           required: true
-          description: id del record (o del recurso, si gallery es true)
+          description: id of the record (or of the resource, if gallery is true)
         - in: body
           name: body
           schema:
@@ -139,29 +139,29 @@ def get_page_by_id_public(id):
                     type: array
                     items:
                         type: string
-                    description: números de página a obtener
+                    description: page numbers to retrieve
                 size:
                     type: string
-                    description: tamaño de las páginas a obtener (small/large)
+                    description: size of the pages to retrieve (small/large)
                 gallery:
                     type: boolean
-                    description: si es true, id se interpreta como un recurso (resource) y se obtienen imágenes de su galería en lugar de páginas de un documento
+                    description: if true, id is interpreted as a resource and images are retrieved from its gallery instead of pages of a document
             required:
                 - pages
                 - size
     responses:
         200:
-            description: Imágenes de las páginas solicitadas
+            description: Images of the requested pages
         401:
-            description: El record/recurso tiene un accessRights restringido (no es de acceso público)
+            description: The record/resource has restricted accessRights (not publicly accessible)
         404:
-            description: Record/recurso no existe
+            description: Record/resource does not exist
         500:
-            description: pages/size ausentes en el body, u otro error inesperado
+            description: pages/size missing in the body, or another unexpected error
     """
     body = request.json
 
-    # Llamar al servicio para obtener un record por su id
+    # Call the service to get a record by its id
     if 'gallery' in body and body['gallery'] == True:
         return public_services.get_document_gallery(id, body['pages'], body['size'])
     else:
@@ -170,7 +170,7 @@ def get_page_by_id_public(id):
 @bp.route('/public/galleryinfo', methods=['POST'])
 def get_by_gallery_index_public():
     """
-    Obtener un record de la galería de imágenes de un recurso público, dado el id del recurso y el índice de la imagen
+    Get a record from a public resource's image gallery, given the resource id and the image index
     ---
     tags:
         - Records
@@ -182,27 +182,27 @@ def get_by_gallery_index_public():
             properties:
                 id:
                     type: string
-                    description: id del recurso (resource) que contiene la galería
+                    description: id of the resource that contains the gallery
                 index:
                     type: integer
-                    description: índice de la imagen dentro de filesObj a obtener
+                    description: index of the image within filesObj to retrieve
             required:
                 - id
                 - index
     responses:
         200:
-            description: Record de la imagen en la posición solicitada
+            description: Record of the image at the requested position
         400:
-            description: id o index no especificado en el body
+            description: id or index not specified in the body
         401:
-            description: El record tiene un accessRights restringido (no es de acceso público)
+            description: The record has restricted accessRights (not publicly accessible)
         404:
-            description: Record no existe
+            description: Record does not exist
         500:
-            description: Error inesperado (recurso no existe, índice fuera de rango, etc.)
+            description: Unexpected error (resource does not exist, index out of range, etc.)
     """
     body = request.json
-    # Llamar al servicio para obtener un record por su id
+    # Call the service to get a record by its id
     resp = public_services.get_by_index_gallery(body)
     if isinstance(resp, list):
         return tuple(resp)
@@ -212,7 +212,7 @@ def get_by_gallery_index_public():
 @bp.route('/public/download', methods=['POST'])
 def download_public():
     """
-    Descargar el archivo original o procesado ("small") de un record público
+    Download the original or processed ("small") file of a public record
     ---
     tags:
         - Records
@@ -224,25 +224,25 @@ def download_public():
             properties:
                 id:
                     type: string
-                    description: id del record a descargar
+                    description: id of the record to download
                 type:
                     type: string
-                    description: 'valor "original" (archivo original sin procesar) o "small" (versión procesada)'
+                    description: 'value "original" (unprocessed original file) or "small" (processed version)'
             required:
                 - id
                 - type
     responses:
         200:
-            description: Record descargado exitosamente (attachment)
+            description: Record downloaded successfully (attachment)
         400:
-            description: id no especificado en el body
+            description: id not specified in the body
         401:
-            description: El record tiene un accessRights restringido (no es de acceso público)
+            description: The record has restricted accessRights (not publicly accessible)
         404:
-            description: El record no tiene processing/fileProcessing generado
+            description: The record does not have processing/fileProcessing generated
         500:
-            description: Record no existe, type ausente o no soportado, u otro error inesperado
+            description: Record does not exist, type missing or unsupported, or another unexpected error
     """
     body = request.json
-    # Llamar al servicio para obtener un record por su id
+    # Call the service to get a record by its id
     return public_services.download_records(body)

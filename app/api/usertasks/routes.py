@@ -11,18 +11,18 @@ from flask_babel import _
 @jwt_required()
 def get_tasks():
     """
-    Obtener un listado paginado de tareas de usuario, filtradas por estado y opcionalmente por usuario
+    Get a paginated list of user tasks, filtered by status and optionally by user
     ---
     security:
         - JWT: []
     tags:
-        - Tareas
+        - Tasks
     description: >
-        `user` debe estar SIEMPRE presente en el body (aunque sea vacío/null) — se accede
-        como `body['user']` sin valor por defecto, así que su ausencia produce un KeyError
-        no capturado (error 500 genérico de Flask), no un 400. Un usuario sin rol admin/
-        team_lead solo puede consultar sus propias tareas (`user` debe igualar al usuario
-        autenticado).
+        `user` must ALWAYS be present in the body (even if empty/null) — it's accessed
+        as `body['user']` with no default value, so its absence produces an uncaught
+        KeyError (generic Flask 500 error), not a 400. A user without the admin/
+        team_lead role can only view their own tasks (`user` must match the
+        authenticated user).
     parameters:
         - in: body
           name: body
@@ -31,12 +31,12 @@ def get_tasks():
             properties:
                 user:
                     type: string
-                    description: Username a filtrar, o "" para "todos" (solo permitido con rol admin/team_lead)
+                    description: Username to filter by, or "" for "all" (only allowed with the admin/team_lead role)
                 status:
                     type: array
                     items:
                         type: string
-                    description: Estados a incluir (usertasks.status $in), p.ej. ["pending", "review"]
+                    description: Statuses to include (usertasks.status $in), e.g. ["pending", "review"]
                 page:
                     type: integer
                     default: 1
@@ -45,13 +45,13 @@ def get_tasks():
                 - status
     responses:
         200:
-            description: Tareas obtenidas exitosamente ({results, total})
+            description: Tasks retrieved successfully ({results, total})
         400:
-            description: Debe especificar el estado de las tareas ("status" ausente en el body)
+            description: Task status must be specified ("status" missing from the body)
         401:
-            description: No tiene permisos suficientes (rol insuficiente, o intenta ver tareas de otro usuario)
+            description: Not authorized (insufficient role, or attempting to view another user's tasks)
         500:
-            description: Error al obtener las tareas (incluye el caso de "user" ausente en el body)
+            description: Error retrieving the tasks (includes the case of a missing "user" in the body)
     """
     current_user = get_jwt_identity()
     body = request.json
@@ -77,13 +77,13 @@ def get_tasks():
 @jwt_required()
 def get_resource_tasks(resourceId):
     """
-    Obtener la tarea pendiente/en revisión/rechazada más reciente de un recurso
+    Get the most recent pending/in-review/rejected task for a resource
     ---
     security:
         - JWT: []
     tags:
-        - Tareas
-    description: Requiere el rol admin, team_lead o editor.
+        - Tasks
+    description: Requires the admin, team_lead, or editor role.
     parameters:
         - in: path
           name: resourceId
@@ -91,13 +91,13 @@ def get_resource_tasks(resourceId):
           required: true
     responses:
         200:
-            description: Tarea del recurso obtenida exitosamente
+            description: Resource task retrieved successfully
         401:
-            description: No tiene permisos suficientes
+            description: Not authorized
         404:
-            description: No hay tareas pendientes/en revisión/rechazadas para este recurso
+            description: No pending/in-review/rejected tasks for this resource
         500:
-            description: Error al obtener las tareas del recurso
+            description: Error retrieving the resource's tasks
     """
     current_user = get_jwt_identity()
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor'):
@@ -109,13 +109,13 @@ def get_resource_tasks(resourceId):
 @jwt_required()
 def get_record_tasks(recordId):
     """
-    Obtener la tarea pendiente/en revisión/rechazada más reciente de un record
+    Get the most recent pending/in-review/rejected task for a record
     ---
     security:
         - JWT: []
     tags:
-        - Tareas
-    description: Requiere el rol admin, team_lead, editor o transcriber.
+        - Tasks
+    description: Requires the admin, team_lead, editor, or transcriber role.
     parameters:
         - in: path
           name: recordId
@@ -123,13 +123,13 @@ def get_record_tasks(recordId):
           required: true
     responses:
         200:
-            description: Tarea del record obtenida exitosamente
+            description: Record task retrieved successfully
         401:
-            description: No tiene permisos suficientes
+            description: Not authorized
         404:
-            description: No hay tareas pendientes/en revisión/rechazadas para este record
+            description: No pending/in-review/rejected tasks for this record
         500:
-            description: Error al obtener las tareas del record
+            description: Error retrieving the record's tasks
     """
     current_user = get_jwt_identity()
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'transcriber'):
@@ -141,20 +141,20 @@ def get_record_tasks(recordId):
 @jwt_required()
 def get_editors():
     """
-    Obtener los usuarios con rol "editor" o "transcriber" (para asignarlos como editor de una tarea)
+    Get users with the "editor" or "transcriber" role (to assign them as a task's editor)
     ---
     security:
         - JWT: []
     tags:
-        - Tareas
-    description: Requiere el rol admin, team_lead, editor o transcriber.
+        - Tasks
+    description: Requires the admin, team_lead, editor, or transcriber role.
     responses:
         200:
-            description: Editores de tareas obtenidos exitosamente
+            description: Task editors retrieved successfully
         401:
-            description: No tiene permisos suficientes
+            description: Not authorized
         500:
-            description: Error al obtener los editores de tareas
+            description: Error retrieving the task editors
     """
     current_user = get_jwt_identity()
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'transcriber'):
@@ -166,17 +166,17 @@ def get_editors():
 @jwt_required()
 def create_task():
     """
-    Crear una tarea de revisión/transcripción sobre un recurso o un record
+    Create a review/transcription task on a resource or a record
     ---
     security:
         - JWT: []
     tags:
-        - Tareas
+        - Tasks
     description: >
-        Requiere el rol admin o team_lead. Debe venir exactamente `resourceId` O `recordId`
-        (no ambos son necesarios, pero se comprueba `resourceId` primero); no puede existir
-        ya una tarea con status "pending" para ese mismo recurso/record. El status inicial
-        siempre se fija a "pending" y el comentario inicial queda asociado al usuario autenticado.
+        Requires the admin or team_lead role. Exactly `resourceId` OR `recordId` must be
+        given (both aren't needed, but `resourceId` is checked first); a "pending" task
+        must not already exist for that same resource/record. The initial status is
+        always set to "pending" and the initial comment is associated with the authenticated user.
     parameters:
         - in: body
           name: body
@@ -185,30 +185,30 @@ def create_task():
             properties:
                 resourceId:
                     type: string
-                    description: Id del recurso a revisar (mutuamente alternativo con recordId)
+                    description: Id of the resource to review (mutually exclusive with recordId)
                 recordId:
                     type: string
-                    description: Id del record/archivo a transcribir (mutuamente alternativo con resourceId)
+                    description: Id of the record/file to transcribe (mutually exclusive with resourceId)
                 user:
                     type: string
-                    description: Username del usuario asignado a la tarea
+                    description: Username of the user assigned to the task
                 comment:
                     type: string
-                    description: Comentario/instrucción inicial de la tarea
+                    description: Initial comment/instruction for the task
             required:
                 - user
                 - comment
     responses:
         201:
-            description: Tarea creada exitosamente
+            description: Task created successfully
         400:
             description: >
-                Falta resourceId/recordId, falta user, falta comment, alguno viene vacío,
-                o ya existe una tarea pendiente para ese recurso/record
+                Missing resourceId/recordId, missing user, missing comment, one of them is
+                empty, or a pending task already exists for that resource/record
         401:
-            description: No tiene el rol admin/team_lead requerido
+            description: Missing the required admin/team_lead role
         500:
-            description: Error al crear la tarea
+            description: Error creating the task
     """
     current_user = get_jwt_identity()
     if not user_services.has_role(current_user, 'admin') and not user_services.has_role(current_user, 'team_lead'):
@@ -220,20 +220,20 @@ def create_task():
 @jwt_required()
 def update_task(taskId):
     """
-    Actualizar una tarea (agregar comentario y, opcionalmente, transicionar su estado)
+    Update a task (add a comment and, optionally, transition its status)
     ---
     security:
         - JWT: []
     tags:
-        - Tareas
+        - Tasks
     description: >
-        Requiere el rol editor, team_lead, transcriber o admin. `comment` es obligatorio en
-        cada actualización (se accede como `body['comment']` sin valor por defecto; su
-        ausencia produce un KeyError no capturado -> error 500, no un 400) y se añade al
-        historial de comentarios existente. Transiciones de estado permitidas: una tarea
-        "pending" solo puede pasar a "review", y solo por el propio usuario asignado; una
-        tarea "review" solo puede pasar a "approved"/"rejected", y solo por un team_lead o
-        admin. Una tarea ya "approved" no puede modificarse.
+        Requires the editor, team_lead, transcriber, or admin role. `comment` is required
+        on every update (accessed as `body['comment']` with no default value; its absence
+        produces an uncaught KeyError -> 500 error, not a 400) and is appended to the
+        existing comment history. Allowed status transitions: a "pending" task can only
+        move to "review", and only by the assigned user; a "review" task can only move
+        to "approved"/"rejected", and only by a team_lead or admin. An already-"approved"
+        task can no longer be modified.
     parameters:
         - in: path
           name: taskId
@@ -255,15 +255,15 @@ def update_task(taskId):
                 - comment
     responses:
         200:
-            description: Tarea actualizada exitosamente
+            description: Task updated successfully
         400:
-            description: La tarea ya está "approved" y no admite más cambios
+            description: The task is already "approved" and no longer accepts changes
         401:
-            description: No tiene el rol requerido para la transición de estado solicitada
+            description: Missing the role required for the requested status transition
         404:
-            description: La tarea no existe
+            description: The task does not exist
         500:
-            description: Error al actualizar la tarea (incluye el caso de "comment" ausente en el body)
+            description: Error updating the task (includes the case of a missing "comment" in the body)
     """
     current_user = get_jwt_identity()
     if not user_services.has_role(current_user, 'editor') and not user_services.has_role(current_user, 'team_lead') and not user_services.has_role(current_user, 'transcriber') and not user_services.has_role(current_user, 'admin'):

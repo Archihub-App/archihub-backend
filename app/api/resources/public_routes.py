@@ -7,14 +7,14 @@ from app.utils.functions import cache_type_roles
 @bp.route('/getall/public', methods=['POST'])
 def get_all_public():
     """
-    Obtener recursos publicados de uno o varios tipos de contenido (sin autenticación)
+    Get published resources of one or more content types (no authentication)
     ---
     tags:
-        - Recursos
+        - Resources
     description: >
-      No requiere JWT. Solo devuelve recursos con status='published'; si alguno de
-      los post_type solicitados tiene viewRoles configurados (acceso restringido),
-      la solicitud completa se rechaza con 401.
+      Does not require JWT. Only returns resources with status='published'; if any of
+      the requested post_type values has viewRoles configured (restricted access),
+      the whole request is rejected with 401.
     parameters:
         - in: body
           name: body
@@ -27,10 +27,10 @@ def get_all_public():
                     type: array
                     items:
                         type: string
-                    description: Requerido; slugs de los tipos de contenido a consultar
+                    description: Required; slugs of the content types to query
                 page:
                     type: integer
-                    description: Página (límite fijo de 20)
+                    description: Page (fixed limit of 20)
                 parents:
                     type: object
                     properties:
@@ -38,7 +38,7 @@ def get_all_public():
                             type: string
                 files:
                     type: boolean
-                    description: Si es true, filtra solo recursos con archivos asociados
+                    description: If true, filters only resources with associated files
                 activeColumns:
                     type: array
                     items:
@@ -55,11 +55,11 @@ def get_all_public():
                     default: asc
     responses:
         200:
-            description: "Objeto { total, resources } con los recursos publicados"
+            description: "Object { total, resources } with the published resources"
         401:
-            description: Alguno de los post_type solicitados tiene viewRoles (no es público)
+            description: One of the requested post_type values has viewRoles (not public)
         500:
-            description: Error al obtener los recursos (incluye KeyError si falta post_type)
+            description: Error retrieving resources (includes KeyError if post_type is missing)
     """
     body = request.json
     body = json.dumps(body)
@@ -73,11 +73,11 @@ def get_all_public():
 @bp.route('/public/<id>', methods=['GET'])
 def get_by_id_public(id):
     """
-    Obtener un recurso publicado por su id (sin autenticación)
+    Get a published resource by its id (no authentication)
     ---
     tags:
-        - Recursos
-    description: No requiere JWT. Solo devuelve el recurso si es de acceso público (sin accessRights restrictivos ni viewRoles).
+        - Resources
+    description: Does not require JWT. Only returns the resource if it's publicly accessible (no restrictive accessRights or viewRoles).
     parameters:
         - in: path
           name: id
@@ -85,13 +85,13 @@ def get_by_id_public(id):
           required: true
     responses:
         200:
-            description: Recurso obtenido exitosamente
+            description: Resource retrieved successfully
         401:
-            description: El recurso tiene accessRights o viewRoles que restringen el acceso público
+            description: The resource has accessRights or viewRoles that restrict public access
         404:
-            description: Recurso no encontrado
+            description: Resource not found
         500:
-            description: Error al obtener el recurso
+            description: Error retrieving the resource
     """
     resp = public_services.get_by_id(id)
 
@@ -103,11 +103,11 @@ def get_by_id_public(id):
 @bp.route('/public/<resource_id>/records', methods=['POST'])
 def get_all_records_public(resource_id):
     """
-    Obtener (paginados) los archivos de un recurso publicado (sin autenticación)
+    Get (paginated) the files of a published resource (no authentication)
     ---
     tags:
-        - Recursos
-    description: No requiere JWT. Solo funciona si el recurso es de acceso público (sin accessRights restrictivos).
+        - Resources
+    description: Does not require JWT. Only works if the resource is publicly accessible (no restrictive accessRights).
     parameters:
         - in: path
           name: resource_id
@@ -122,19 +122,19 @@ def get_all_records_public(resource_id):
             properties:
                 page:
                     type: integer
-                    description: Requerido (número de página, sin default)
+                    description: Required (page number, no default)
                 groupImages:
                     type: boolean
-                    description: Si es true, agrupa las imágenes en una sola entrada de galería
+                    description: If true, groups images into a single gallery entry
     responses:
         200:
-            description: "Archivos obtenidos. Body: { data, total }"
+            description: "Files retrieved. Body: { data, total }"
         401:
-            description: El recurso tiene accessRights que restringen el acceso público
+            description: The resource has accessRights that restrict public access
         404:
-            description: Recurso no encontrado
+            description: Resource not found
         500:
-            description: Error al obtener los archivos (incluye KeyError si falta 'page')
+            description: Error retrieving the files (includes KeyError if 'page' is missing)
     """
     body = request.json
 
@@ -151,15 +151,15 @@ def get_all_records_public(resource_id):
 @bp.route('/public/tree', methods=['POST'])
 def get_tree_public():
     """
-    Obtener el árbol de recursos publicados, sin autenticación ('tree' o 'list')
+    Get the tree of published resources, without authentication ('tree' or 'list')
     ---
     tags:
-        - Recursos
+        - Resources
     description: >
-      No requiere JWT. Solo incluye tipos de contenido sin viewRoles configurados
-      (los que sí los tienen se omiten silenciosamente, no dan 401). Requiere
-      'view' en el body ('tree' o 'list'); cualquier otro valor (o su ausencia)
-      hace que la ruta no devuelva respuesta (falla con 500).
+      Does not require JWT. Only includes content types with no viewRoles configured
+      (those that do are silently omitted, not rejected with 401). Requires
+      'view' in the body ('tree' or 'list'); any other value (or its absence)
+      causes the route to return no response (fails with 500).
     parameters:
         - in: body
           name: body
@@ -174,10 +174,10 @@ def get_tree_public():
                     enum: [tree, list]
                 root:
                     type: string
-                    description: Id del recurso raíz, o 'all' para el nivel superior
+                    description: Id of the root resource, or 'all' for the top level
                 tree:
                     type: array
-                    description: Requerido si view=tree; lista de { slug }
+                    description: Required if view=tree; list of { slug }
                     items:
                         type: object
                         properties:
@@ -185,20 +185,20 @@ def get_tree_public():
                                 type: string
                 postType:
                     type: string
-                    description: view=list; si se envía (no vacío), se usa junto con sus tipos padre en vez de activeTypes
+                    description: view=list; if sent (non-empty), used together with its parent types instead of activeTypes
                 activeTypes:
                     type: array
                     items:
                         type: string
-                    description: view=list; requerido si postType no se envía o está vacío
+                    description: view=list; required if postType is not sent or is empty
                 page:
                     type: integer
-                    description: view=list; opcional, tamaño de página fijo de 10
+                    description: view=list; optional, fixed page size of 10
     responses:
         200:
-            description: view=tree -> array de nodos; view=list -> array de recursos publicados
+            description: view=tree -> array of nodes; view=list -> array of published resources
         500:
-            description: Error inesperado (incluye KeyError si faltan campos requeridos, o 'view' ausente/no reconocido)
+            description: Unexpected error (includes KeyError if required fields are missing, or 'view' missing/unrecognized)
     """
     try:
         body = request.json
@@ -258,10 +258,10 @@ def get_tree_public():
 @bp.route('/public/<resource_id>/imgs', methods=['GET'])
 def get_imgs_public(resource_id):
     """
-    Obtener las imágenes de un recurso publicado (sin autenticación)
+    Get the images of a published resource (no authentication)
     ---
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: path
           name: resource_id
@@ -269,11 +269,11 @@ def get_imgs_public(resource_id):
           required: true
     responses:
         200:
-            description: Imágenes obtenidas exitosamente
+            description: Images retrieved successfully
         404:
-            description: Recurso no encontrado, o no tiene imágenes asociadas
+            description: Resource not found, or has no associated images
         500:
-            description: Error al obtener las imágenes
+            description: Error retrieving the images
     """
     # Llamar al servicio para obtener los recursos
     resp = public_services.get_resource_images(resource_id)
@@ -286,10 +286,10 @@ def get_imgs_public(resource_id):
 @bp.route('/public/download_records', methods=['POST'])
 def download_public():
     """
-    Descargar el/los archivo(s) de un recurso publicado (sin autenticación)
+    Download the file(s) of a published resource (no authentication)
     ---
     tags:
-        - Recursos
+        - Resources
     parameters:
         - in: body
           name: body
@@ -301,22 +301,22 @@ def download_public():
             properties:
                 id:
                     type: string
-                    description: Id del recurso (requerido; debe estar published)
+                    description: Resource id (required; must be published)
                 type:
                     type: string
                     enum: [original, small]
-                    description: Requerido; qué variante de los archivos descargar
+                    description: Required; which file variant to download
     produces:
         - application/octet-stream
     responses:
         200:
-            description: Archivo binario (attachment); un solo archivo directo, o un .zip si el recurso tiene más de uno
+            description: Binary file (attachment); a single direct file, or a .zip if the resource has more than one
         401:
-            description: El recurso tiene accessRights que restringen el acceso público
+            description: The resource has accessRights that restrict public access
         404:
-            description: El recurso no existe (o no está published), o alguno de sus archivos no existe
+            description: The resource doesn't exist (or isn't published), or one of its files doesn't exist
         500:
-            description: Error inesperado al generar la descarga (incluye KeyError si faltan 'id'/'type')
+            description: Unexpected error generating the download (includes KeyError if 'id'/'type' are missing)
     """
     body = request.json
     
