@@ -350,3 +350,58 @@ def get_type(username, isAdmin, slug):
 
     # Call the service to get the resource type
     return services.get_type(slug, username)
+
+# New endpoint for mapping plugin endpoints with fernet auth
+@bp.route('/plugins/<plugin>/<path:pluginEndpoint>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+@fernetAuthenticate
+def map_plugin_endpoint(username, isAdmin, plugin, pluginEndpoint):
+    """
+    Map a plugin endpoint using fernet auth by making an internal sub-request
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Admin API
+    parameters:
+        - in: path
+          name: plugin
+          type: string
+          required: true
+          description: Name of the plugin
+        - in: path
+          name: pluginEndpoint
+          type: string
+          required: true
+          description: Path inside the plugin
+    responses:
+        200:
+            description: Request completed successfully
+        401:
+            description: Token not provided/invalid or the user does not have the admin role
+        500:
+            description: Error mapping the request
+    """
+    if not isAdmin:
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    from flask import current_app, request, Response
+
+    # Target internal path (plugins are mounted at /<plugin_name>)
+    target_path = f"/{plugin}/{pluginEndpoint}"
+
+    try:
+        # Strip host, content-length, and authorization (fernet token) to avoid conflicts
+        headers = {key: value for (key, value) in request.headers if key.lower() not in ['host', 'content-length', 'authorization']}
+        client = current_app.test_client()
+        
+        resp = client.open(
+            path=target_path,
+            method=request.method,
+            data=request.get_data(),
+            headers=headers,
+            query_string=request.query_string
+        )
+        
+        return Response(resp.data, status=resp.status_code, headers=dict(resp.headers))
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500
