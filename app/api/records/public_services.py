@@ -10,7 +10,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.users.services import has_right
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata
+from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata, get_dzi_data
 from werkzeug.utils import secure_filename
 import os
 import shutil
@@ -83,12 +83,17 @@ def extract_important_exif(metadata):
     return cleaned
 
 
-def get_document_gallery(id, pages, size):
+def get_document_gallery(id, pages, size, dzi=False, dzi_payload=None):
     try:
         from app.api.resources.public_services import get_by_id as get_resource_by_id
         resp_, status = get_resource_by_id(id)
         if status != 200:
             return resp_, status
+
+        if dzi and dzi_payload:
+            resp = get_dzi_data(id, pages, dzi_payload)
+            response = Response(json.dumps(resp).encode('utf-8'), mimetype='application/json', direct_passthrough=False)
+            return response
         
         pages = json.dumps(pages)
         resp = cache_get_imgs_gallery_by_id(id, pages, size)

@@ -623,7 +623,7 @@ def get_page_by_id(id):
 
     # Llamar al servicio para obtener un record por su id
     if 'gallery' in body and body['gallery'] == True:
-        return services.get_document_gallery(id, body['pages'], body['size'], current_user)
+        return services.get_document_gallery(id, body.get('pages', []), body.get('size', 'small'), current_user, dzi=body.get('dzi', False), dzi_payload=body.get('dzi_payload'))
     else:
         return services.get_document_pages(id, body['pages'], body['size'], current_user)
 

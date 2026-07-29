@@ -163,7 +163,7 @@ def get_page_by_id_public(id):
 
     # Call the service to get a record by its id
     if 'gallery' in body and body['gallery'] == True:
-        return public_services.get_document_gallery(id, body['pages'], body['size'])
+        return public_services.get_document_gallery(id, body.get('pages', []), body.get('size', 'small'), dzi=body.get('dzi', False), dzi_payload=body.get('dzi_payload'))
     else:
         return public_services.get_document_pages(id, body['pages'], body['size'])
 
