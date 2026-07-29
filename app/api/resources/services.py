@@ -268,6 +268,21 @@ def get_all(body, user):
 
         filters['status'] = requested_status
 
+        if not has_role(user, 'admin'):
+            user_data = mongodb.get_record('users', {'username': user}, fields={'accessRights': 1}) if user else None
+            user_rights = user_data.get('accessRights', []) if user_data else []
+            if '$and' not in filters:
+                filters['$and'] = []
+            filters['$and'].append({
+                '$or': [
+                    {'accessRights': {'$in': user_rights}},
+                    {'accessRights': None},
+                    {'accessRights': {'$exists': False}},
+                    {'accessRights': ''},
+                    {'accessRights': []}
+                ]
+            })
+
         if filters['status'] == 'draft':
             filters.pop('status')
             filters_ = {'$or': [{'status': 'draft', **filters}, {'status': 'created', **filters}, {'status': 'updated', **filters}]}
