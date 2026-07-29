@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     libsndfile1 \
     ffmpeg \
     poppler-utils \
+    libvips-dev \
     libreoffice \
     libimage-exiftool-perl \
     && rm -rf /var/lib/apt/lists/*
