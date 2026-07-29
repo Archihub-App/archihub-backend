@@ -24,11 +24,13 @@ def main(filepath, output):
         image = pyvips.Image.new_from_file(filepath, access='sequential')
         max_dim = max(image.width, image.height)
 
+        is_dzi = False
         if max_dim >= 4096:
             # dzsave genera un archivo .dzi y una carpeta "_files" con los tiles
             # Ej: output_tiles.dzi y output_tiles_files/
             image.dzsave(output + '_tiles')
+            is_dzi = True
 
-        return True, metadata_list[0] if metadata_list else None
+        return True, metadata_list[0] if metadata_list else None, is_dzi
     except Exception as e:
         raise Exception('Error al convertir el archivo: ' + str(e))

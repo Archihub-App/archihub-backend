@@ -80,7 +80,7 @@ def process_file(file, instance=None):
             
             instance.update_data('records', str(file['_id']), update)
     elif 'image' in file['mime']:
-        result, metadata = ImageProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
+        result, metadata, is_dzi = ImageProcessing.main(path, os.path.join(WEB_FILES_PATH, path_dir, filename))
         if result:
             update = {
                 'processing': {
@@ -90,6 +90,9 @@ def process_file(file, instance=None):
                     }
                 }
             }
+            if is_dzi:
+                update['processing']['fileProcessing']['dzi'] = True
+                
             if metadata:
                 update['processing']['fileProcessing']['metadata'] = metadata
             
