@@ -8,19 +8,40 @@ from app.api.snaps import services
 @jwt_required()
 def create_snap():
     """
-    Crear un nuevo recorte
+    Create a new snap (clip) of a record, associated with the authenticated user
     ---
+    security:
+      - JWT: []
     tags:
-      - Recortes
+      - Snaps
+    parameters:
+      - in: body
+        name: body
+        schema:
+          type: object
+          properties:
+            record_id:
+              type: string
+              description: Id of the record the snap is being created from.
+            type:
+              type: string
+              description: "Snap type: document, image, video, or audio."
+            data:
+              type: object
+              description: >
+                Snap-specific data depending on the type (e.g. bbox {x,y,width,height} and page for
+                document/image, begin/end in milliseconds for audio/video).
+          required:
+            - record_id
+            - type
+            - data
     responses:
         201:
-            description: Recorte creado
-        401:
-            description: Token inválido
+            description: Snap created successfully
         404:
-            description: Archivo no encontrado
+            description: The referenced record (record_id) does not exist
         500:
-            description: Error creando el recorte
+            description: Error creating the snap (includes the case where a required body field is missing)
     """
     user = get_jwt_identity()
     body = request.json
@@ -31,26 +52,28 @@ def create_snap():
 @jwt_required()
 def delete_snap(id):
     """
-    Eliminar un recorte por su id
+    Delete a snap by its id (only the snap's owning user can delete it)
     ---
+    security:
+      - JWT: []
     tags:
-      - Recortes
+      - Snaps
     parameters:
       - in: path
         name: id
         schema:
           type: string
         required: true
-        description: Id del recorte
+        description: Snap id
     responses:
         204:
-            description: Recorte eliminado exitosamente
+            description: Snap deleted successfully
         401:
-            description: No tienes permisos para eliminar este recorte
+            description: The snap exists but belongs to another user
         404:
-            description: Recorte no encontrado
+            description: Snap not found
         500:
-            description: Error eliminando el recorte
+            description: Error deleting the snap
     """
     user = get_jwt_identity()
 
@@ -60,26 +83,31 @@ def delete_snap(id):
 @jwt_required()
 def get_snap(id):
     """
-    Obtener un recorte por su id
+    Get a snap by its id (only the snap's owning user can view it)
     ---
+    security:
+      - JWT: []
     tags:
-      - Recortes
+      - Snaps
     parameters:
       - in: path
         name: id
         schema:
           type: string
         required: true
-        description: Id del recorte
+        description: Snap id
     responses:
         200:
-            description: Recorte encontrado
+            description: >
+                For type=document/image/video: a cropped JPEG image (image/jpeg) generated from the
+                bbox stored in the snap. For type=audio: a stream of the audio fragment. For
+                any other type: the snap's JSON document (record_id, type, data).
         401:
-            description: No tienes permisos para ver este recorte
+            description: The snap exists but belongs to another user
         404:
-            description: Recorte no encontrado
+            description: Snap not found
         500:
-            description: Error obteniendo el recorte
+            description: Error retrieving the snap (includes failures reading/processing the associated file)
     """
     user = get_jwt_identity()
 

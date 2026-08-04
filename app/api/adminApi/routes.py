@@ -9,186 +9,221 @@ from flask_babel import _
 @bp.route('/get_system_info', methods=['GET'])
 @fernetAuthenticate
 def get_info(username, isAdmin):
+    """
+    Get general system information (content types, active capabilities, and metrics)
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Admin API
+    description: >
+        Requires an admin token issued by the API's token flow
+        (an encrypted Fernet token sent in the `Authorization: Bearer <token>` header,
+        distinct from the normal JWT from `/auth/login`). The user must have the `admin` role.
+    responses:
+        200:
+            description: System information retrieved successfully (post_types, capabilities, metrics)
+        401:
+            description: Token not provided, invalid, expired, or the user does not have the admin role
+        500:
+            description: Error retrieving the system information
+    """
     if not isAdmin:
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
     return services.get_system_info(username)
 
-# Nuevo POST endpoint para crear nuevos recursos
+# New POST endpoint for creating new resources
 @bp.route('/create', methods=['POST'])
 @fernetAuthenticate
 def new_resource(username, isAdmin):
     """
-    Crear un nuevo recurso
+    Create a new resource (delegates to app.api.resources.services.create after filling in default fields)
     ---
+    security:
+        - JWT: []
     tags:
-        - Api de administrador
+        - Admin API
+    consumes:
+        - multipart/form-data
+    description: >
+        Requires an admin token (see `/get_system_info`). The body is NOT JSON: it's
+        `multipart/form-data` with a `data` field containing the serialized JSON of the resource
+        and, optionally, one or more files under the `files` field. If `post_type`, `status`,
+        `parent`, `parents`, `filesIds`, or `updateCache` are not present in `data`, they are
+        filled in with default values before forwarding the request to the resources service.
     parameters:
-        - in: body
-          name: body
-          schema:
-            type: object
-            properties:
-                name:
-                    type: string
-                description:
-                    type: string
-                metadata:
-                    type: array
-                    items:
-                        type: object
-                icon:
-                    type: string
-                hierarchical:
-                    type: boolean
-                parentType:
-                    type: string
+        - in: formData
+          name: data
+          type: string
+          required: true
+          description: 'Serialized JSON, e.g. {"metadata": {...}, "post_type": "...", "status": "published"}'
+        - in: formData
+          name: files
+          type: file
+          required: false
+          description: One or more files to attach to the resource (can be repeated)
     responses:
         201:
-            description: Recurso creado exitosamente
+            description: Resource created successfully
         400:
-            description: El recurso no tiene metadata
+            description: The resource is missing metadata required by its content type
         401:
-            description: No tiene permisos para crear un recurso
+            description: Token not provided/invalid or the user does not have the admin role
         500:
-            description: Error al crear el recurso
+            description: Error creating the resource (e.g. missing "data" field in the form)
     """
     if not isAdmin:
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
-    # Obtener el body del request
+    # Get the request body
     body = request.form.to_dict()
     files = request.files.getlist('files')
     data = json.loads(body['data'])
-    # Llamar al servicio para crear el recurso
+    # Call the service to create the resource
     return services.create(data, username, files)
 
-# Nuevo POST endpoint para actualizar un recurso
+# New POST endpoint for updating a resource
 @bp.route('/update', methods=['POST'])
 @fernetAuthenticate
 def update_resource(username, isAdmin):
     """
-    Actualizar un recurso
+    Update an existing resource (delegates to app.api.resources.services.update_by_id)
     ---
+    security:
+        - JWT: []
     tags:
-        - Api de administrador
+        - Admin API
+    consumes:
+        - multipart/form-data
+    description: >
+        Requires an admin token. Same as `/create`, the body is `multipart/form-data`,
+        not JSON: an `id` field with the resource id, a `data` field with the serialized JSON of
+        the changes, and optionally new files under `files`. `deletedFiles` is filled in with
+        `[]` in `data` if not provided.
     parameters:
-        - in: body
-          name: body
-          schema:
-            type: object
-            properties:
-                id:
-                    type: string
-                name:
-                    type: string
-                description:
-                    type: string
-                metadata:
-                    type: array
-                    items:
-                        type: object
-                icon:
-                    type: string
-                hierarchical:
-                    type: boolean
-                parentType:
-                    type: string
+        - in: formData
+          name: id
+          type: string
+          required: true
+          description: Id of the resource to update (KeyError/500 if missing)
+        - in: formData
+          name: data
+          type: string
+          required: true
+          description: Serialized JSON with the fields to update
+        - in: formData
+          name: files
+          type: file
+          required: false
+          description: New files to attach (can be repeated)
     responses:
         200:
-            description: Recurso actualizado exitosamente
+            description: Resource updated successfully
         401:
-            description: No tiene permisos para actualizar un recurso
+            description: Token not provided/invalid or the user does not have the admin role
         500:
-            description: Error al actualizar el recurso
+            description: Error updating the resource (e.g. missing "id" or "data" in the form)
     """
     if not isAdmin:
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
-    # Obtener el body del request
+    # Get the request body
     body = request.form.to_dict()
     files = request.files.getlist('files')
     data = json.loads(body['data'])
 
-    # Llamar al servicio para actualizar el recurso
+    # Call the service to update the resource
     return services.update(body['id'], data, username, files)
 
-# Nuevo POST endpoint para obtener el id de un recurso por su nombre
+# New POST endpoint for getting a resource's id by its name
 @bp.route('/get_id', methods=['POST'])
 @fernetAuthenticate
 def get_resource_id(username, isAdmin):
     """
-    Obtener el id de un recurso por su nombre
+    Get the id (and basic fields) of a single published resource matching a filter
     ---
+    security:
+        - JWT: []
     tags:
-        - Api de administrador
+        - Admin API
+    description: >
+        The body is used AS-IS as a MongoDB filter on the `resources` collection
+        (`status: "published"` is automatically added to it), so it can include
+        any indexed field of the resource (e.g. a metadata path), not just `name`.
+        Returns the first matching resource.
     parameters:
         - in: body
           name: body
           schema:
             type: object
-            properties:
-                name:
-                    type: string
+            description: 'Arbitrary MongoDB filter, e.g. {"metadata.firstLevel.title": "..."}'
     responses:
         200:
-            description: Id del recurso obtenido exitosamente
-        400:
-            description: El recurso no existe
+            description: Resource found (id, post_type, metadata, filesObj, parent, parents)
         401:
-            description: No tiene permisos para obtener el id del recurso
+            description: Token not provided/invalid or the user does not have the admin role
+        404:
+            description: No published resource matching the filter was found
         500:
-            description: Error al obtener el id del recurso
+            description: Error retrieving the resource id
     """
     if not isAdmin:
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
-    # Obtener el body del request
+    # Get the request body
     body = request.json
 
-    # Llamar al servicio para obtener el id del recurso
+    # Call the service to get the resource id
     return services.get_id(body, username)
 
-# Nuevo POST endpoint para obtener el id de un recurso por su nombre
+# New POST endpoint for getting a resource's id by its name
 @bp.route('/get_opts_id', methods=['POST'])
 @fernetAuthenticate
 def get_opts_id(username, isAdmin):
     """
-    Obtener el id de un recurso por su nombre
+    Get the id of a list option (the "options" collection) by its exact term
     ---
+    security:
+        - JWT: []
     tags:
-        - Api de administrador
+        - Admin API
     parameters:
         - in: body
           name: body
           schema:
             type: object
             properties:
-                name:
+                term:
                     type: string
+            required:
+                - term
     responses:
         200:
-            description: Id del recurso obtenido exitosamente
-        400:
-            description: El recurso no existe
+            description: Option id retrieved successfully
         401:
-            description: No tiene permisos para obtener el id del recurso
+            description: Token not provided/invalid or the user does not have the admin role
+        404:
+            description: No option exists with that term
         500:
-            description: Error al obtener el id del recurso
+            description: Error retrieving the option id (e.g. missing "term" in the body)
     """
     if not isAdmin:
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
-    # Obtener el body del request
+    # Get the request body
     body = request.json
 
-    # Llamar al servicio para obtener el id del recurso
+    # Call the service to get the resource id
     return services.get_opts_id(body, username)
 
 @bp.route('/create_type', methods=['POST'])
 @fernetAuthenticate
 def create_type(username, isAdmin):
     """
-    Crear un nuevo tipo de contenido
+    Create a new content type (delegates to app.api.types.services.create)
     ---
+    security:
+        - JWT: []
     tags:
-        - Api de administrador
+        - Admin API
+    description: Requires an admin token. The body is forwarded as-is to app.api.types.services.create.
     parameters:
         - in: body
           name: body
@@ -207,44 +242,51 @@ def create_type(username, isAdmin):
                         type: object
                 icon:
                     type: string
+            required:
+                - name
+                - slug
     responses:
         201:
-            description: Tipo de contenido creado exitosamente
+            description: Content type created successfully
         400:
-            description: El nombre o el slug del tipo de contenido está vacío
+            description: The content type's name or slug is empty
         401:
-            description: No tiene permisos para crear un tipo de contenido
+            description: You do not have permission to create a content type
         500:
-            description: Error al crear el tipo de contenido
+            description: Error creating the content type
     """
     if not isAdmin:
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
-    # Obtener el body del request
+    # Get the request body
     body = request.json
 
-    # Llamar al servicio para crear el tipo de contenido
+    # Call the service to create the content type
     return services.create_type(body, username)
 
 @bp.route('/update_type', methods=['POST'])
 @fernetAuthenticate
 def update_type(username, isAdmin):
     """
-    Actualizar un tipo de contenido
+    Update a content type (delegates to app.api.types.services.update_by_slug)
     ---
+    security:
+        - JWT: []
     tags:
-        - Api de administrador
+        - Admin API
+    description: >
+        Requires an admin token. `slug` identifies the type to update and is
+        required (read directly from `body['slug']`; its absence produces a 500 error,
+        not a 400). There is no `id` field for this endpoint.
     parameters:
         - in: body
           name: body
           schema:
             type: object
             properties:
-                id:
+                slug:
                     type: string
                 name:
-                    type: string
-                slug:
                     type: string
                 description:
                     type: string
@@ -254,52 +296,112 @@ def update_type(username, isAdmin):
                         type: object
                 icon:
                     type: string
+            required:
+                - slug
     responses:
         200:
-            description: Tipo de contenido actualizado exitosamente
+            description: Content type updated successfully
         401:
-            description: No tiene permisos para actualizar un tipo de contenido
+            description: Token not provided/invalid or the user does not have the admin role
         404:
-            description: El tipo de contenido no existe
+            description: The content type does not exist
         500:
-            description: Error al actualizar el tipo de contenido
+            description: Error updating the content type (e.g. missing "slug" in the body)
     """
     if not isAdmin:
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
-    # Obtener el body del request
+    # Get the request body
     body = request.json
 
-    # Llamar al servicio para actualizar el tipo de contenido
+    # Call the service to update the content type
     return services.update_type(body, username)
 
 @bp.route('/get_type/<slug>', methods=['GET'])
 @fernetAuthenticate
 def get_type(username, isAdmin, slug):
     """
-    Obtener el tipo de contenido por su slug
+    Get the content type by its slug (delegates to app.api.types.services.get_by_slug)
     ---
+    security:
+        - JWT: []
     tags:
-        - Api de administrador
+        - Admin API
+    description: Requires an admin token.
     parameters:
         - in: path
           name: slug
           schema:
             type: string
           required: true
-          description: Slug del tipo de contenido
+          description: Slug of the content type
     responses:
         200:
-            description: Tipo del recurso obtenido exitosamente
+            description: Resource type retrieved successfully
         401:
-            description: No tiene permisos para obtener el tipo del recurso
+            description: You do not have permission to retrieve the resource type
         404:
-            description: El tipo de contenido no existe
+            description: The content type does not exist
         500:
-            description: Error al obtener el tipo del recurso
+            description: Error retrieving the resource type
     """
     if not isAdmin:
         return jsonify({'msg': _('You don\'t have the required authorization')}), 401
 
-    # Llamar al servicio para obtener el tipo del recurso
+    # Call the service to get the resource type
     return services.get_type(slug, username)
+
+# New endpoint for mapping plugin endpoints with fernet auth
+@bp.route('/plugins/<plugin>/<path:pluginEndpoint>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+@fernetAuthenticate
+def map_plugin_endpoint(username, isAdmin, plugin, pluginEndpoint):
+    """
+    Map a plugin endpoint using fernet auth by making an internal sub-request
+    ---
+    security:
+        - JWT: []
+    tags:
+        - Admin API
+    parameters:
+        - in: path
+          name: plugin
+          type: string
+          required: true
+          description: Name of the plugin
+        - in: path
+          name: pluginEndpoint
+          type: string
+          required: true
+          description: Path inside the plugin
+    responses:
+        200:
+            description: Request completed successfully
+        401:
+            description: Token not provided/invalid or the user does not have the admin role
+        500:
+            description: Error mapping the request
+    """
+    if not isAdmin:
+        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+
+    from flask import current_app, request, Response
+
+    # Target internal path (plugins are mounted at /<plugin_name>)
+    target_path = f"/{plugin}/{pluginEndpoint}"
+
+    try:
+        # Strip host, content-length, and authorization (fernet token) to avoid conflicts
+        headers = {key: value for (key, value) in request.headers if key.lower() not in ['host', 'content-length', 'authorization']}
+        client = current_app.test_client()
+        
+        resp = client.open(
+            path=target_path,
+            method=request.method,
+            data=request.get_data(),
+            headers=headers,
+            query_string=request.query_string
+        )
+        
+        return Response(resp.data, status=resp.status_code, headers=dict(resp.headers))
+    except Exception as e:
+        return jsonify({'msg': str(e)}), 500

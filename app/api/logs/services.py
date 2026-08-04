@@ -124,17 +124,29 @@ def register_log(username, action, metadata=None):
     # Retornar mensaje de éxito
     return jsonify({'msg': _('Log created successfully')}), 201
 
+_ALLOWED_LOG_FILTER_FIELDS = {'username', 'action'}
+
+def _sanitize_log_filters(filters):
+    if not isinstance(filters, dict):
+        return {}
+    return {
+        key: value
+        for key, value in filters.items()
+        if key in _ALLOWED_LOG_FILTER_FIELDS and isinstance(value, str)
+    }
+
 # Nuevo servicio para obtener todos los logs de acuerdo a un filtro
 def filter(body):
     try:
+        filters = _sanitize_log_filters(body['filters'])
         # Obtener todos los logs de la coleccion logs
-        logs = mongodb.get_all_records('logs', body['filters'], limit=20, sort=[
+        logs = mongodb.get_all_records('logs', filters, limit=20, sort=[
                                         ('date', -1)], skip=body['page'] * 20, fields={'_id': 0})
         # Si no hay logs, retornar error
         if not logs:
             return {'msg': _('Logs not found')}, 404
         # Obtener el total de logs
-        total = get_total(json.dumps(body['filters']))
+        total = get_total(json.dumps(filters))
         # Parsear el resultado
         logs = parse_result(logs)
         # Normalizar metadata para details

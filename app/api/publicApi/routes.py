@@ -8,33 +8,62 @@ import json
 @fernetAuthenticate
 def get_all(username, isAdmin):
     """
-    Obtener todos los recursos
+    Get published resources: paginated listing by type, or keyword search
     ---
     security:
         - JWT: []
     tags:
-        - Api Pública
+        - Public Api
+    description: >
+        Requires an encrypted Fernet token from the Public Api (header `Authorization: Bearer <token>`,
+        distinct from the normal JWT from `/auth/login`; see app.utils.FernetAuth.publicFernetAuthenticate).
+        If `keyword` is present and non-empty in the body, the search is delegated to
+        app.api.search.public_services.get_resources_by_filters (Elasticsearch or vector DB,
+        depending on the system's active capabilities). Otherwise it is delegated to
+        app.api.resources.public_services.get_all, which requires `post_type` (list of slugs) and
+        only returns resources with `status: "published"`.
     parameters:
         - in: body
           name: body
           schema:
             type: object
             properties:
-                post_type:
+                keyword:
                     type: string
+                    description: If non-empty, activates the search flow instead of the listing
+                searchSource:
+                    type: string
+                    description: "'index' (Elasticsearch, default) or 'vector' — only applies with keyword"
+                post_type:
+                    type: array
+                    items:
+                        type: string
+                    description: Required when there is no keyword; slugs of the content types to list
                 page:
                     type: integer
-                files:
+                activeColumns:
+                    type: array
+                    items:
+                        type: object
+                parents:
                     type: object
-                sort_order:
+                    description: "{'id': ...} to filter by direct parent"
+                files:
+                    type: boolean
+                    description: If true, filters only resources that have associated files
+                sortBy:
                     type: string
-                sort_by:
+                    default: createdAt
+                sortOrder:
                     type: string
+                    default: asc
     responses:
         200:
-            description: Recursos obtenidos exitosamente
+            description: Resources retrieved successfully
+        401:
+            description: A requested content type has a view-role restriction the user does not meet
         500:
-            description: Error al obtener los recursos
+            description: Error retrieving the resources (e.g. missing "post_type" in the body without keyword)
     """
     body = request.json
 
@@ -54,17 +83,18 @@ def get_all(username, isAdmin):
 @fernetAuthenticate
 def get_types(username, isAdmin):
     """
-    Obtener todos los tipos de contenido
+    Get all content types (delegates to app.api.types.services.get_all)
     ---
     security:
         - JWT: []
     tags:
-        - Api Pública
+        - Public Api
+    description: Requires an encrypted Fernet token from the Public Api (see the POST /publicApi description).
     responses:
         200:
-            description: Recursos obtenidos exitosamente
+            description: Resources retrieved successfully
         500:
-            description: Error al obtener los recursos
+            description: Error retrieving the resources
     """
     from app.api.types.services import get_all as get_all_types
     resp = get_all_types()
@@ -78,24 +108,28 @@ def get_types(username, isAdmin):
 @fernetAuthenticate
 def get_item(username, isAdmin, id):
     """
-    Obtener recurso por ID
+    Get a published resource by its ID (delegates to app.api.resources.public_services.get_by_id)
     ---
     security:
         - JWT: []
     tags:
-        - Api Pública
+        - Public Api
+    description: Requires an encrypted Fernet token from the Public Api (see the POST /publicApi description).
     parameters:
         - in: path
           name: id
           type: string
           required: true
+          description: MongoDB ObjectId of the resource
     responses:
         200:
-            description: Recurso obtenido exitosamente
+            description: Resource retrieved successfully
         401:
-            description: No tiene permisos para obtener el recurso
+            description: Token not provided/invalid/expired, or the resource has accessRights/viewRoles the public user does not meet
         500:
-            description: Error al obtener los recursos
+            description: >
+                Error retrieving the resource. Note: a nonexistent or unpublished id also
+                falls here with 500 (generic "Resource does not exist" exception), not a dedicated 404.
     """
     from app.api.resources.public_services import get_by_id as get_by_id_public
     resp =  get_by_id_public(id)

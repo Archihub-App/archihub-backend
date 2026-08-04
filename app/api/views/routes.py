@@ -10,22 +10,28 @@ import json
 @jwt_required()
 def get_view(view_id):
     """
-    Obtener una vista de consulta
+    Get a query view by its id (includes its base64 thumbnail if it has one)
     ---
+    security:
+        - JWT: []
     tags:
-        - Vistas
+        - Views
+    description: Requires the "admin" or "editor" role.
     parameters:
         - in: path
           name: view_id
           type: string
           required: true
+          description: MongoDB ObjectId of the view
     responses:
         200:
-            description: Retorna la vista de consulta
+            description: Returns the query view
         401:
-            description: No tienes permisos para realizar esta acción
+            description: You don't have the required admin/editor role
+        404:
+            description: The view does not exist
         500:
-            description: Error al obtener la vista de consulta
+            description: Unhandled internal error (e.g. view_id with an invalid ObjectId format)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -43,22 +49,47 @@ def get_view(view_id):
 @jwt_required()
 def update_view(view_id):
     """
-    Actualizar una vista de consulta
+    Update a query view (name, description, visible types, thumbnail, etc.)
     ---
+    security:
+        - JWT: []
     tags:
-        - Vistas
+        - Views
+    consumes:
+        - multipart/form-data
+    description: >
+        Requires the "admin" or "editor" role. The body is `multipart/form-data`, not JSON: a
+        `data` field with the serialized JSON of the fields to update (see ViewUpdate:
+        name, description, parent, root, visible, defaultView, slug — all optional) and,
+        optionally, a SINGLE image file under `files` that replaces the thumbnail
+        (the view's previous associated file is deleted).
     parameters:
         - in: path
           name: view_id
           type: string
           required: true
+          description: MongoDB ObjectId of the view
+        - in: formData
+          name: data
+          type: string
+          required: true
+          description: Serialized JSON with the fields to update
+        - in: formData
+          name: files
+          type: file
+          required: false
+          description: At most one image file (jpg/jpeg/png/gif/tif/tiff/heic/bmp/webp)
     responses:
         200:
-            description: Vista de consulta actualizada exitosamente
+            description: Query view updated successfully
+        400:
+            description: More than one file was sent, or the file is not a supported image
         401:
-            description: No tienes permisos para realizar esta acción
+            description: You don't have the required admin/editor role
+        404:
+            description: The view does not exist
         500:
-            description: Error al actualizar la vista de consulta
+            description: Error updating the query view (e.g. missing "data" in the form, or image processing failed)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -79,22 +110,26 @@ def update_view(view_id):
 @jwt_required()
 def delete_view(view_id):
     """
-    Eliminar una vista de consulta
+    Delete a query view (and its associated thumbnail, if it has one)
     ---
+    security:
+        - JWT: []
     tags:
-        - Vistas
+        - Views
+    description: Requires the "admin" or "editor" role.
     parameters:
         - in: path
           name: view_id
           type: string
           required: true
+          description: MongoDB ObjectId of the view
     responses:
         200:
-            description: Vista de consulta eliminada exitosamente
+            description: Query view deleted successfully (also returned if the id didn't exist — there's no explicit 404)
         401:
-            description: No tienes permisos para realizar esta acción
+            description: You don't have the required admin/editor role
         500:
-            description: Error al eliminar la vista de consulta
+            description: Error deleting the query view
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -109,37 +144,39 @@ def delete_view(view_id):
 @jwt_required()
 def new_view():
     """
-    Crear una nueva vista de consulta
+    Create a new query view
     ---
+    security:
+        - JWT: []
     tags:
-        - Vistas
+        - Views
+    consumes:
+        - multipart/form-data
+    description: >
+        Requires the "admin" or "editor" role. The body is `multipart/form-data`, not JSON: a
+        `data` field with the serialized JSON of the view (see the View model: name, slug,
+        description, parent, root, visible are required; defaultView defaults to
+        "list") and, optionally, a SINGLE image file under `files` as the thumbnail.
     parameters:
-        - in: body
-          name: body
-          schema:
-            type: object
-            properties:
-                name:
-                    type: string
-                description:
-                    type: string
-                metadata:
-                    type: array
-                    items:
-                        type: object
-                icon:
-                    type: string
-                hierarchical:
-                    type: boolean
-                parentType:
-                    type: string
+        - in: formData
+          name: data
+          type: string
+          required: true
+          description: 'Serialized JSON, e.g. {"name": "...", "slug": "...", "description": "...", "parent": "", "root": "...", "visible": ["..."]}'
+        - in: formData
+          name: files
+          type: file
+          required: false
+          description: At most one image file (jpg/jpeg/png/gif/tif/tiff/heic/bmp/webp)
     responses:
-        200:
-            description: Vista de consulta creada exitosamente
+        201:
+            description: Query view created successfully
+        400:
+            description: More than one file was sent, or the file is not a supported image
         401:
-            description: No tienes permisos para realizar esta acción
+            description: You don't have the required admin/editor role
         500:
-            description: Error al crear la vista de consulta
+            description: Error creating the query view (e.g. a required field is missing in "data", or image processing failed)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()

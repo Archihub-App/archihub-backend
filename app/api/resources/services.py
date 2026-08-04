@@ -268,6 +268,21 @@ def get_all(body, user):
 
         filters['status'] = requested_status
 
+        if not has_role(user, 'admin'):
+            user_data = mongodb.get_record('users', {'username': user}, fields={'accessRights': 1}) if user else None
+            user_rights = user_data.get('accessRights', []) if user_data else []
+            if '$and' not in filters:
+                filters['$and'] = []
+            filters['$and'].append({
+                '$or': [
+                    {'accessRights': {'$in': user_rights}},
+                    {'accessRights': None},
+                    {'accessRights': {'$exists': False}},
+                    {'accessRights': ''},
+                    {'accessRights': []}
+                ]
+            })
+
         if filters['status'] == 'draft':
             filters.pop('status')
             filters_ = {'$or': [{'status': 'draft', **filters}, {'status': 'created', **filters}, {'status': 'updated', **filters}]}
@@ -423,8 +438,10 @@ def create(body, user, files, updateCache = True):
                 else:
                     records = create_record(str(body['_id']), user, temp_files, upload = False, filesTags = temp_files_obj)
             except Exception as e:
-                print(str(e))
-                return {'msg': str(e)}, 500
+                import traceback
+                print(f"Error in create_record: {e}")
+                traceback.print_exc()
+                return {'msg': str(e), 'trace': traceback.format_exc()}, 500
 
             update = {
                 'filesObj': records,
@@ -450,8 +467,10 @@ def create(body, user, files, updateCache = True):
         resp = {'msg': _('Resource created successfully'), 'id': str(new_resource.inserted_id), 'post_type': body['post_type']}
         return resp, 201
     except Exception as e:
-        print(str(e))
-        return {'msg': str(e)}, 500
+        import traceback
+        print(f"Error in create_resource: {e}")
+        traceback.print_exc()
+        return {'msg': str(e), 'trace': traceback.format_exc()}, 500
 
 def update_by_id(id, body, user, files, updateCache = True):
     try:
@@ -1475,6 +1494,7 @@ def get_resource(id, user, postQuery = False):
     if 'parents' in resource:
         if resource['parents']:
             for r in resource['parents']:
+                print(r)
                 r_ = mongodb.get_record('resources', {'_id': ObjectId(r['id'])}, fields={'metadata.firstLevel.title': 1, 'post_type': 1})
                 r['name'] = r_['metadata']['firstLevel']['title']
                 r['icon'] = get_icon(r_['post_type'])
@@ -2368,6 +2388,8 @@ def has_parent_postType(post_type, compare):
         # Si el tipo de post no existe, retornar error
         if not post_type:
             return {'msg': _('Post type does not exist')}, 404
+        if 'parentType' not in post_type:
+            raise Exception('Post type does not have parents. Check if it is the correct post type.')
         # Si el tipo de post tiene padre, retornar True
         if len(post_type['parentType']) > 0:
             for p in post_type['parentType']:

@@ -11,7 +11,7 @@ from app.utils.LogActions import log_actions
 from app.api.logs.services import register_log
 from app.api.users.services import has_right
 from app.api.records.models import RecordUpdate as FileRecordUpdate
-from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata, has_role, cache_get_processing_result
+from app.utils.functions import cache_get_record_stream, cache_get_record_transcription, cache_get_record_document_detail, cache_get_pages_by_id, cache_get_block_by_page_id, cache_get_imgs_gallery_by_id, cache_get_processing_metadata, has_role, cache_get_processing_result, get_dzi_data
 from werkzeug.utils import secure_filename
 import os
 import shutil
@@ -105,16 +105,34 @@ def set_record_metadata(record, metadata):
     return record
 
 
+_DANGEROUS_MONGO_OPERATORS = {'$where', '$function', '$accumulator', '$expr', '$jsonschema'}
+
+def _reject_dangerous_mongo_operators(value):
+    if isinstance(value, dict):
+        for key, sub_value in value.items():
+            if isinstance(key, str) and key.lower() in _DANGEROUS_MONGO_OPERATORS:
+                raise ValueError(_('Filter operator "%(op)s" is not allowed', op=key))
+            _reject_dangerous_mongo_operators(sub_value)
+    elif isinstance(value, list):
+        for item in value:
+            _reject_dangerous_mongo_operators(item)
+
 def get_by_filters(body, current_user):
     try:
+        filters = body['filters']
+        try:
+            _reject_dangerous_mongo_operators(filters)
+        except ValueError as e:
+            return {'msg': str(e)}, 400
+
         # Buscar el recurso en la base de datos
         records = list(mongodb.get_all_records(
-            'records', body['filters'], limit=20, skip=body['page'] * 20))
+            'records', filters, limit=20, skip=body['page'] * 20))
         # Si el recurso no existe, retornar error
         if not records:
             return {'msg': _('Record does not exist')}, 404
 
-        total = get_total(json.dumps(body['filters']))
+        total = get_total(json.dumps(filters))
 
         for r in records:
             r['id'] = str(r['_id'])
@@ -123,7 +141,7 @@ def get_by_filters(body, current_user):
 
         # registrar el log
         register_log(current_user, log_actions['record_get_all'], {
-                     'filters': body['filters']})
+                     'filters': filters})
         # retornar los records
         return parse_result(records), 200
 
@@ -544,6 +562,8 @@ def get_by_id(id, current_user, fullFields=False):
                 if key == 'fileProcessing':
                     if 'cloud' in record['processing'][key]:
                         keys[key]['cloud'] = record['processing'][key]['cloud']
+                    if 'dzi' in record['processing'][key] and record['processing'][key]['dzi']:
+                        keys[key]['dzi'] = record['processing'][key]['dzi']
 
             record['processing'] = keys
 
@@ -836,12 +856,19 @@ def get_document_pages(id, pages, size, current_user):
         return {'msg': str(e)}, 500
 
 
-def get_document_gallery(id, pages, size, current_user):
+def get_document_gallery(id, pages, size, current_user, dzi=False, dzi_payload=None):
     try:
         from app.api.resources.services import get_by_id as get_resource_by_id
         resp_, status = get_resource_by_id(id, current_user)
         if status != 200:
             return {'msg': resp_['msg']}, 500
+
+        if dzi and dzi_payload:
+            resp = get_dzi_data(id, pages, dzi_payload)
+            response = Response(json.dumps(resp).encode(
+                'utf-8'), mimetype='application/json', direct_passthrough=False)
+            return response
+
         pages = json.dumps(pages)
         resp = cache_get_imgs_gallery_by_id(id, pages, size)
         response = Response(json.dumps(resp).encode(

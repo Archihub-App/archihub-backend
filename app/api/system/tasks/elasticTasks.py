@@ -1,6 +1,7 @@
 from celery import shared_task
 from app.utils import DatabaseHandler
 from app.utils import IndexHandler
+from app.utils import HookHandler
 import os
 from bson.objectid import ObjectId
 from app.utils.index.spanish_settings import settings as spanish_settings
@@ -12,6 +13,7 @@ from datetime import datetime, timezone
 
 index_handler = IndexHandler.IndexHandler()
 mongodb = DatabaseHandler.DatabaseHandler()
+hookHandler = HookHandler.HookHandler()
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
 class _HTMLStripper(HTMLParser):
@@ -218,8 +220,15 @@ def index_resources_task(body={}):
                 records_ids = []
                 records_labels_map = {}
                 if 'filesObj' in resource:
-                    records_ids = [r['id'] for r in resource['filesObj']]
-                    records_labels_map = {r['id']: r.get('tag') for r in resource['filesObj'] if 'id' in r}
+                    def _get_order(file_obj):
+                        try:
+                            return int(file_obj.get('order', 0))
+                        except (TypeError, ValueError):
+                            return 0
+                            
+                    sorted_files = sorted(resource['filesObj'], key=_get_order)
+                    records_ids = [r['id'] for r in sorted_files if 'id' in r]
+                    records_labels_map = {r['id']: r.get('tag') for r in sorted_files if 'id' in r}
                 document['records'] = []
                 records_ids = [ObjectId(r) for r in records_ids]
                 if records_ids:
@@ -241,6 +250,10 @@ def index_resources_task(body={}):
                 ]
                 document['records'] = records
 
+                document_tmp = hookHandler.call('resource_index', document, resource)
+                if document_tmp:
+                    document = document_tmp
+
                 if 'accessRights' in resource:
                     if resource['accessRights']:
                         document['accessRights'] = resource['accessRights']
@@ -260,7 +273,6 @@ def index_resources_task(body={}):
         skip += 1000
         resources = list(mongodb.get_all_records(
             'resources', {}, limit=1000, skip=skip))
-
     resp = _("Indexing finished for %(count)s resources", count=resouces_count)
     return resp
 

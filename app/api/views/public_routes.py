@@ -7,15 +7,16 @@ from app.api.views import services
 @bp.route('', methods=['GET'])
 def get_views():
     """
-    Obtener todas las vistas de consulta
+    Get the public listing of all query views (name, slug, description, thumbnail)
     ---
     tags:
-        - Vistas
+        - Views
+    description: Public route, does not require authentication.
     responses:
         200:
-            description: Retorna todas las vistas de consulta
+            description: Returns all query views
         500:
-            description: Error al obtener las vistas de consulta
+            description: Error retrieving the query views
     """
     # Llamar al servicio para obtener todas las vistas de consulta
     resp = services.get_all()
@@ -27,10 +28,12 @@ def get_views():
 @bp.route('/info/<view_slug>', methods=['GET'])
 def get_view_info(view_slug):
     """
-    Obtener información de una vista de consulta
+    Get extended information for a query view by its slug (forms, types,
+    file count per type, etc.), used to render the public view
     ---
     tags:
-        - Vistas
+        - Views
+    description: Public route, does not require authentication.
     parameters:
         - in: path
           name: view_slug
@@ -38,11 +41,13 @@ def get_view_info(view_slug):
           required: true
     responses:
         200:
-            description: Información de la vista de consulta
-        404:
-            description: Vista de consulta no encontrada
+            description: Query view information
         500:
-            description: Error al obtener la información de la vista de consulta
+            description: >
+                Unhandled internal error. Note: the code attempts to iterate view['visible']
+                before checking whether the view exists, so a nonexistent slug produces
+                an uncaught exception (TypeError, Flask's generic 500 error page),
+                not the 404 response documented in earlier versions of this endpoint.
     """
     # Llamar al servicio para obtener la información de una vista de consulta
     resp = services.get_view_info(view_slug)

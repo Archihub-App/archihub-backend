@@ -66,13 +66,14 @@ def fernetAuthenticate(func):
                 # verificar que el usuario tenga el rol de administrador
                 if not has_role(username, 'admin'):
                     return jsonify({'msg': _('You do not have permission to perform this action')}), 401
-            
-            
+
+
         except Exception as e:
-            return jsonify({'msg': str(e)}), 401
-        
+            print(f"fernetAuthenticate error: {e}")
+            return jsonify({'msg': _('Invalid or expired token')}), 401
+
         return func(username, isAdmin, *arg, **kwargs)
-        
+
     return wrapper
 
 def publicFernetAuthenticate(func):
@@ -94,7 +95,13 @@ def publicFernetAuthenticate(func):
 
             username = decoded_token['sub']
             isAdmin = False
-            
+
+            # verificar si el token tiene fecha de expiración
+            if 'exp' in decoded_token:
+                expiracion = decoded_token['exp']
+                if expiracion < time.time():
+                    return jsonify({'msg': _('The token has expired')}), 401
+
             # obtener el usuario actual
             current_user = get_by_username(username)
             if has_role(username, 'admin'):
@@ -108,12 +115,12 @@ def publicFernetAuthenticate(func):
                 # verificar que el auth_header sea igual al token del usuario
                 if auth_header != current_user['token']:
                     return jsonify({'msg': _('The token is not valid')}), 401
-                
+
                 try:
                     add_request(username)
                 except Exception as e:
                     return jsonify({'msg': str(e)}), 401
-                
+
             else:
                 # verificar que el auth_header sea igual al token del usuario
                 if auth_header != current_user['token']:
@@ -121,15 +128,16 @@ def publicFernetAuthenticate(func):
                 # verificar que el usuario tenga el rol de administrador
                 if not has_role(username, 'admin'):
                     return jsonify({'msg': _('You do not have permission to perform this action')}), 401
-            
-            
+
+
         except Exception as e:
-            return jsonify({'msg': str(e)}), 401
-        
+            print(f"publicFernetAuthenticate error: {e}")
+            return jsonify({'msg': _('Invalid or expired token')}), 401
+
         return func(username, isAdmin, *arg, **kwargs)
-        
+
     return wrapper
-        
+
 
 def nodeFernetAuthenticate(func):
     @wraps(func)
@@ -166,9 +174,10 @@ def nodeFernetAuthenticate(func):
             # verificar que el auth_header sea igual al token del usuario
             if auth_header != current_user['nodeToken']:
                 return jsonify({'msg': _('The token is not valid')}), 401
-            
+
         except Exception as e:
-            return jsonify({'msg': str(e)}), 401
+            print(f"nodeFernetAuthenticate error: {e}")
+            return jsonify({'msg': _('Invalid or expired token')}), 401
         
         return func(username, *arg, **kwargs)
         

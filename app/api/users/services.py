@@ -103,11 +103,22 @@ def add_request(username):
     except Exception as e:
         raise Exception(str(e))
 
+_ALLOWED_USER_FILTER_FIELDS = {'username', 'name'}
+
+def _sanitize_user_filters(filters):
+    if not isinstance(filters, dict):
+        return {}
+    return {
+        key: value
+        for key, value in filters.items()
+        if key in _ALLOWED_USER_FILTER_FIELDS and isinstance(value, str)
+    }
+
 # Nuevo servicio para obtener todos los usuarios con filtros
 def get_all(body, current_user):
     try:
         page = body['page'] if 'page' in body else 0
-        filters = body['filters'] if 'filters' in body else {}
+        filters = _sanitize_user_filters(body['filters'] if 'filters' in body else {})
         users = list(mongodb.get_all_records(
             'users', filters, limit=20, skip=page * 20, fields={'password': 0, 'status': 0, 'photo': 0, 'compromise': 0, 'token': 0, 'adminToken': 0, 'nodeToken': 0, 'vizToken': 0, 'requests': 0, 'lastRequest': 0, 'favorites': 0}, sort=[('name', 1)]))
         
@@ -291,20 +302,21 @@ def forgot_password(body):
             return jsonify({'msg': _('Password recovery disabled')}), 400
     
         user = mongodb.get_record('users', {'username': body['username']})
-        if not user:
-            return {'msg': _('User does not exist')}, 404
-        
-        from app.api.email.services import send_email
-        from app.api.email.templates import forgot_password_template
+        if user:
+            try:
+                from app.api.email.services import send_email
+                from app.api.email.templates import forgot_password_template
 
-        token = create_access_token(identity=body['username'], expires_delta=timedelta(days=1))
-        token = fernet.encrypt(token.encode('utf-8'))
+                token = create_access_token(identity=body['username'], expires_delta=timedelta(days=1))
+                token = fernet.encrypt(token.encode('utf-8'))
 
-        link = f"{REDIRECT_URL}/reset-password?token={token.decode('utf-8')}"
+                link = f"{REDIRECT_URL}/reset-password?token={token.decode('utf-8')}"
 
-        send_email(body['username'], _('Password recovery'), forgot_password_template(link))
+                send_email(body['username'], _('Password recovery'), forgot_password_template(link))
+            except Exception as e:
+                print(f"forgot_password: failed to send recovery email: {e}")
 
-        return {'msg': _('Password recovery email sent')}, 200
+        return {'msg': _('If an account exists for this username, a password recovery email has been sent')}, 200
     except Exception as e:
         return {'msg': str(e)}, 500
     
@@ -442,14 +454,28 @@ def accept_compromise(username):
     # Retornar mensaje de éxito
     return jsonify({'msg': _('Compromise accepted successfully')}), 200
 
+def _is_valid_system_user(username):
+    if username.startswith('system_scheduler_'):
+        taskname = username.replace('system_scheduler_', '')
+        settings = mongodb.get_record('system', {'name': 'active_plugins'})
+        if settings and 'plugins_settings' in settings and 'scheduleSystemTasks' in settings['plugins_settings']:
+            tasks = settings['plugins_settings']['scheduleSystemTasks'].get('schedule_tasks', [])
+            for t in tasks:
+                if t.get('task') == taskname:
+                    return True
+    return False
+
 # Nuevo servicio para verificar si el usuario tiene un rol específico
 @cacheHandler.cache.cache()
 def has_role(username, role):
+    if _is_valid_system_user(username):
+        return True
+
     user = mongodb.get_record('users', {'username': username})
     
-    # Si el usuario no existe, retornar error
+    # Si el usuario no existe, retornar False
     if not user:
-        return jsonify({'msg': _('User does not exist')}), 400
+        return False
     # Si el usuario tiene el rol, retornar True
     if role in user['roles']:
         return True
@@ -458,10 +484,13 @@ def has_role(username, role):
 
 @cacheHandler.cache.cache()
 def has_right(username, right):
+    if _is_valid_system_user(username):
+        return True
+
     user = mongodb.get_record('users', {'username': username})
-    # Si el usuario no existe, retornar error
+    # Si el usuario no existe, retornar False
     if not user:
-        return jsonify({'msg': _('User does not exist')}), 400
+        return False
     # Si el usuario tiene el rol, retornar True
     if right in user['accessRights']:
         return True
@@ -495,9 +524,9 @@ def generate_token(username, password, admin = False, expiration = 2):
     # if not user['compromise']:
     #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
-    # Crear el token de acceso para el usuario con el username y sin expiración
+    # Crear el token de acceso para el usuario con el username
     if not admin:
-        access_token = create_access_token(identity=username, expires_delta=False)
+        access_token = create_access_token(identity=username, expires_delta=timedelta(days=365))
         # usamos Fernet para encriptar el token de acceso
         cipher = fernet.encrypt(access_token.encode('utf-8'))
 
@@ -531,11 +560,10 @@ def generate_node_token(username, password):
     # if not user['compromise']:
     #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
-    access_token = create_access_token(identity=username, expires_delta=False)
+    access_token = create_access_token(identity=username, expires_delta=timedelta(days=365))
     # usamos Fernet para encriptar el token de acceso
     cipher = fernet.encrypt(access_token.encode('utf-8'))
 
-    # encrypt the access token
     update = UserUpdate(nodeToken=cipher)
 
     # guardar el token de acceso en la base de datos
@@ -559,11 +587,10 @@ def generate_viz_token(username, password):
     # if not user['compromise']:
     #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
-    access_token = create_access_token(identity=username, expires_delta=False)
+    access_token = create_access_token(identity=username, expires_delta=timedelta(days=365))
     # usamos Fernet para encriptar el token de acceso
     cipher = fernet.encrypt(access_token.encode('utf-8'))
 
-    # encrypt the access token
     update = UserUpdate(vizToken=cipher)
 
     # guardar el token de acceso en la base de datos

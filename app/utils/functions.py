@@ -359,6 +359,31 @@ def get_resource_records_public(ids, page=0, limit=10, groupImages=False):
     except Exception as e:
         raise Exception(str(e))
 
+def _load_chunked_result(record_id, storage):
+    if storage.get('type') != 'chunked':
+        return []
+    collection = storage.get('collection')
+    batch_id = storage.get('batchId')
+    if not collection:
+        return []
+
+    chunk_filters = {'recordId': ObjectId(record_id)}
+    if batch_id:
+        chunk_filters['batchId'] = batch_id
+
+    chunk_docs = list(mongodb.get_all_records(
+        collection,
+        chunk_filters,
+        sort=[('chunkIndex', 1)],
+        fields={'_id': 0, 'pages': 1},
+    ))
+
+    pages = []
+    for chunk_doc in chunk_docs:
+        pages.extend(chunk_doc.get('pages', []))
+    
+    return pages
+
 
 @cacheHandler.cache.cache(limit=1000)
 def cache_get_record_stream(id):
@@ -399,15 +424,23 @@ def cache_get_processing_result(id, slug):
     if slug not in record['processing']:
         raise Exception(_('Record has not been processed with {slug}', slug=slug))
 
-    result = record['processing'][slug]['result']
-    # iterate each key in result and if the value is a datetime, convert it to string
-    for key in result:
-        if isinstance(result[key], datetime.datetime):
-            result[key] = result[key].strftime('%Y-%m-%d %H:%M:%S')
-        elif isinstance(result[key], list):
-            for i in range(len(result[key])):
-                if isinstance(result[key][i], datetime.datetime):
-                    result[key][i] = result[key][i].strftime('%Y-%m-%d %H:%M:%S')
+    processing_data = record['processing'][slug]
+    storage = processing_data.get('result_storage', {})
+    
+    if storage.get('type') == 'chunked':
+        result = _load_chunked_result(id, storage)
+    else:
+        result = processing_data.get('result', [])
+
+    if isinstance(result, dict):
+        # iterate each key in result and if the value is a datetime, convert it to string
+        for key in result:
+            if isinstance(result[key], datetime.datetime):
+                result[key] = result[key].strftime('%Y-%m-%d %H:%M:%S')
+            elif isinstance(result[key], list):
+                for i in range(len(result[key])):
+                    if isinstance(result[key][i], datetime.datetime):
+                        result[key][i] = result[key][i].strftime('%Y-%m-%d %H:%M:%S')
 
     return result
 
@@ -815,7 +848,15 @@ def cache_get_block_by_page_id(id, page, slug, block=None, user=None):
         if not os.path.exists(file):
             raise Exception(_('File not found'))
 
-        resp = record['processing'][slug]['result'][page - 1]
+        processing_data = record['processing'][slug]
+        storage = processing_data.get('result_storage', {})
+        if storage.get('type') == 'chunked':
+            full_result = _load_chunked_result(id, storage)
+            resp = full_result[page - 1] if page - 1 < len(full_result) else {}
+        else:
+            full_result = processing_data.get('result', [])
+            resp = full_result[page - 1] if page - 1 < len(full_result) else {}
+
         labels = record['processing'][slug]['labels'] if 'labels' in record['processing'][slug] else []
 
         if block == 'blocks':
@@ -894,6 +935,81 @@ def cache_get_imgs_gallery_by_id(id, pages, size):
 
     return response
         
+
+def get_dzi_data(resource_id, pages, dzi_payload):
+    """
+    Devuelve el XML descriptor (.dzi) o un tile específico de una imagen DZI.
+    
+    pages: list of int. El primer elemento indica el índice de la imagen en la galería.
+    dzi_payload:
+      - type: 'xml'  → devuelve el contenido del archivo .dzi
+      - type: 'tile'  → devuelve el tile especificado por level, col, row
+        - level: int (nivel de zoom)
+        - col: int (columna del tile)
+        - row: int (fila del tile)
+    """
+    # Usar el primer elemento de 'pages' como el índice de la imagen en la galería
+    index = pages[0] if pages and len(pages) > 0 else 0
+    payload_type = dzi_payload.get('type', 'xml')
+
+    resource = mongodb.get_record('resources', {'_id': ObjectId(resource_id)}, fields={'filesObj': 1})
+    if not resource or 'filesObj' not in resource:
+        raise Exception(_('Resource not found'))
+
+    ids = [r['id'] for r in resource['filesObj']]
+
+    imgs = list(mongodb.get_all_records(
+        'records',
+        {'_id': {'$in': [ObjectId(id) for id in ids]}, 'processing.fileProcessing.type': 'image', 'processing.fileProcessing.dzi': True},
+        fields={'processing': 1}
+    ))
+
+    order_dict = {file['id']: file.get('order', 0) for file in resource['filesObj']}
+    imgs = sorted(imgs, key=lambda x: order_dict.get(x['_id'], float('inf')))
+
+    if index >= len(imgs) or index < 0:
+        raise Exception(_('Image index out of range'))
+
+    img_record = imgs[index]
+    path = img_record['processing']['fileProcessing']['path']
+    tiles_base = os.path.join(WEB_FILES_PATH, path + '_tiles')
+
+    if payload_type == 'xml':
+        dzi_file = tiles_base + '.dzi'
+        if not os.path.exists(dzi_file):
+            raise Exception(_('DZI file not found'))
+
+        with open(dzi_file, 'r') as f:
+            xml_content = f.read()
+
+        return {'type': 'xml', 'data': xml_content}
+
+    elif payload_type == 'tile':
+        level = dzi_payload.get('level')
+        col = dzi_payload.get('col')
+        row = dzi_payload.get('row')
+
+        if level is None or col is None or row is None:
+            raise Exception(_('level, col, and row are required for tile requests'))
+
+        tiles_dir = tiles_base + '_files'
+        tile_path = os.path.join(tiles_dir, str(level), f'{col}_{row}.jpeg')
+
+        if not os.path.exists(tile_path):
+            tile_path = os.path.join(tiles_dir, str(level), f'{col}_{row}.png')
+
+        if not os.path.exists(tile_path):
+            raise Exception(_('Tile not found'))
+
+        with open(tile_path, 'rb') as f:
+            data = f.read()
+            encoded_data = base64.b64encode(data).decode('utf-8')
+
+        ext = os.path.splitext(tile_path)[1].lstrip('.')
+        return {'type': 'tile', 'data': encoded_data, 'format': ext}
+
+    else:
+        raise Exception(_('Invalid dzi_payload type, expected xml or tile'))
 
 @cacheHandler.cache.cache(limit=5000)
 def cache_get_pages_by_id(id, pages, size):

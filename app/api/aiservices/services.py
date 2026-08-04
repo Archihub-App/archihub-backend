@@ -8,11 +8,12 @@ from flask import Response
 from bson import json_util
 from bson.objectid import ObjectId
 from app.api.aiservices.models import LlmProvider, LlmProviderUpdate
-from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider, OllamaProvider, LlamaServerProvider
+from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, OpenRouterProvider, AzureProvider, OllamaProvider, LlamaServerProvider
 
 PROVIDER_CLASSES = {
     'OpenAI': OpenAIProvider,
     'Google': GoogleProvider,
+    'OpenRouter': OpenRouterProvider,
     'Azure': AzureProvider,
     'Ollama': OllamaProvider,
     'LlamaServer': LlamaServerProvider
@@ -190,6 +191,7 @@ def get_provider_models(id):
         response = provider.getModels()
         return response, 200
     except Exception as e:
+        print(f"FATAL ERROR IN get_provider_models: {e}")
         return {'msg': str(e)}, 500
     
 def set_conversation(data, user):

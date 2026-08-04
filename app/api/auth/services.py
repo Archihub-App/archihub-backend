@@ -165,14 +165,14 @@ def archihub_login(username, password):
             record_login_attempt(username)  # Record failed LDAP attempt
         
     user = get_user(username)
-    
+
     if not user:
         record_login_attempt(username)  # Record failed attempt
-        return jsonify({'msg': _('User not found')}), 404
-    
+        return jsonify({'msg': _('Invalid username or password')}), 401
+
     if not bcrypt.checkpw(password.encode('utf-8'), user['password'].encode('utf-8')):
         record_login_attempt(username)  # Record failed attempt
-        return jsonify({'msg': _('Invalid password')}), 401
+        return jsonify({'msg': _('Invalid username or password')}), 401
     
     clear_login_attempts(username)  # Clear attempts on successful login
     access_token = create_access_token(identity=username, expires_delta=expires_delta)

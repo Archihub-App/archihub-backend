@@ -42,6 +42,7 @@ def update(id, body, user, files):
 def get_id(body, user):
     resource = None
     body['status'] = 'published'
+    print(body)
     resource = mongodb.get_record('resources', body, {'_id': 1, 'post_type': 1, 'metadata': 1, 'filesObj': 1, 'parent': 1, 'parents': 1})
     if resource is None:
         return {'msg': _('Resource not found')}, 404

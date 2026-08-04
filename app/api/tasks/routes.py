@@ -17,31 +17,45 @@ from flask import current_app as app
 @jwt_required()
 def get_tasks(user):
     """
-    Obtener las tasks de un usuario
+    Get a user's tasks (paginated, 10 per page)
     ---
+    security:
+        - JWT: []
     tags:
-        - Tareas de procesamiento
+        - Processing Tasks
     parameters:
         - in: path
           name: user
           required: true
           type: string
-          description: Nombre de usuario
+          description: >-
+              Username, or the literal "automatic" for system-generated
+              tasks (requires the admin role, unless the authenticated
+              user is "automatic" itself)
         - in: body
           name: body
           required: true
+          description: >-
+              Required JSON body (may be empty, `{}`); all keys are
+              optional.
           schema:
+            type: object
             properties:
                 page:
                     type: integer
-                    description: Página de resultados
+                    description: 'Result page, 0-indexed (10 tasks per page); defaults to 0 if omitted'
+                automatic:
+                    description: >-
+                        If this key is present (any value), the "automatic"
+                        user's tasks are listed instead of the ones for the
+                        `user` path param
     responses:
         200:
-            description: Lista de tasks
+            description: List of tasks
         401:
-            description: No tiene permisos para obtener las tareas
+            description: Not authorized to get the tasks
         500:
-            description: Error al obtener las tasks
+            description: Error retrieving the tasks
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -57,23 +71,25 @@ def get_tasks(user):
 @jwt_required()
 def get_tasks_total(user):
     """
-    Obtener el total de tasks de un usuario
+    Get a user's total task count
     ---
+    security:
+        - JWT: []
     tags:
-        - Tareas de procesamiento
+        - Processing Tasks
     parameters:
         - in: path
           name: user
           required: true
           type: string
-          description: Nombre de usuario
+          description: Username
     responses:
         200:
-            description: Total de tasks
+            description: Total task count
         401:
-            description: No tiene permisos para obtener el total de tareas
+            description: Not authorized to get the task total
         500:
-            description: Error al obtener el total de tasks
+            description: Error retrieving the task total
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -89,17 +105,19 @@ def get_tasks_total(user):
 @jwt_required()
 def test_celery_result_all():
     """
-    Devuelve las tasks actualmente en ejecución
+    Returns the tasks currently running
     ---
+    security:
+        - JWT: []
     tags:
-        - Tareas de procesamiento
+        - Processing Tasks
     responses:
         200:
-            description: Listado de tasks
+            description: List of tasks
         401:
-            description: No tiene permisos para obtener las tareas en ejecución
+            description: Not authorized to get the running tasks
         500:
-            description: Error al recuperar las tasks
+            description: Error retrieving the tasks
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -119,27 +137,29 @@ def test_celery_result_all():
 @jwt_required()
 def delete_task(taskId):
     """
-    Elimina una task
+    Deletes a task
     ---
+    security:
+        - JWT: []
     tags:
-        - Tareas de procesamiento
+        - Processing Tasks
     parameters:
         - in: path
           name: taskId
           required: true
           type: string
-          description: ID de la tarea
+          description: Task ID
     responses:
         200:
-            description: La tarea se detuvo correctamente
+            description: The task was stopped successfully
         400:
-            description: No se puede detener la tarea
+            description: The task cannot be stopped
         401:
-            description: No tiene permisos para eliminar la tarea
+            description: Not authorized to delete the task
         404:
-            description: La tarea no existe
+            description: The task does not exist
         500:
-            description: Error al eliminar la task
+            description: Error deleting the task
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()

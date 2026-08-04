@@ -19,19 +19,20 @@ mongodb = DatabaseHandler.DatabaseHandler()
 @jwt_required()
 def get_all():
     """
-    Obtener todos los tipos de contenido de catalogación
+    Get all cataloging content types
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de contenido
+        - Content types
+    description: No additional role restriction beyond having a valid session (401 only if the JWT token is missing or invalid). Returns only name, description, and slug for each type.
     responses:
         200:
-            description: Lista de tipos de contenido
+            description: List of content types (name, description, slug only)
         401:
-            description: No tiene permisos para obtener los tipos de contenido
+            description: JWT token missing or invalid
         500:
-            description: Error al obtener los tipos de contenido
+            description: Error retrieving the content types
     """
     # Llamar al servicio para obtener todos los tipos de contenido
     resp = services.get_all()
@@ -45,12 +46,13 @@ def get_all():
 @jwt_required()
 def create():
     """
-    Crear un tipo de contenido nuevo con el body del request
+    Create a new content type with the request body
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de contenido
+        - Content types
+    description: Requires the admin role. slug is a required key in the body (may be sent empty to auto-generate it from name); if a non-empty slug is sent that already exists, creation fails with 400.
     parameters:
         - in: body
           name: body
@@ -61,30 +63,35 @@ def create():
                     type: string
                 description:
                     type: string
+                slug:
+                    type: string
+                    description: Required key; send "" to auto-generate the slug from name.
                 metadata:
-                    type: array
-                    items:
-                        type: object
+                    type: string
+                    description: Slug of the form (forms) associated as the type's metadata.
                 icon:
                     type: string
                 hierarchical:
                     type: boolean
                 parentType:
-                    type: string
-                slug:
-                    type: string
+                    type: array
+                    items:
+                        type: object
+                isArticle:
+                    type: boolean
             required:
                 - name
                 - description
+                - slug
     responses:
         201:
-            description: Tipo de contenido creado
+            description: Content type created
         400:
-            description: Error al crear el tipo de contenido
+            description: The slug already exists, or name/slug are empty
         401:
-            description: No tiene permisos para crear un tipo de contenido
+            description: You don't have permission to create a content type (not admin)
         500:
-            description: Error al crear el tipo de contenido
+            description: Error creating the content type
     """
 
     # Obtener el body de la request
@@ -132,23 +139,27 @@ def create():
 @jwt_required()
 def get_by_slug(slug):
     """
-    Obtener un tipo de contenido por su slug
+    Get a content type by its slug
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de contenido
+        - Content types
+    description: Requires the admin or editor role. If the type has viewRoles configured, the user is additionally required to have admin or one of those roles. The response includes parentsTypes (parent hierarchy) and, if it has associated metadata, the resolved form.
     parameters:
-        - slug (string): slug del tipo de contenido a obtener
+        - in: path
+          name: slug
+          type: string
+          required: true
     responses:
         200:
-            description: Tipo de contenido
+            description: Content type
         401:
-            description: No tiene permisos para obtener un tipo de contenido
+            description: You don't have permission to retrieve this content type
         404:
-            description: Tipo de contenido no existe
+            description: Content type does not exist
         500:
-            description: Error al obtener el tipo de contenido
+            description: Error retrieving the content type (includes errors resolving the metadata form)
     """
     # se obtiene el usuario actual
     current_user = get_jwt_identity()
@@ -180,19 +191,20 @@ def get_by_slug(slug):
 @jwt_required()
 def update_by_slug(slug):
     """
-    Actualizar un tipo de contenido por su slug
+    Update a content type by its slug
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de contenido
+        - Content types
+    description: Requires the admin or editor role. parentType must always be sent (even as an empty list); if omitted from the body, the request fails with 500 due to an internal KeyError. If parentType includes the type's own slug as a parent, it is automatically removed from the list to prevent a direct cycle. editRoles/viewRoles are validated against the existing roles.
     parameters:
         - in: path
           name: slug
           schema:
             type: string
           required: true
-          description: slug del tipo de contenido a actualizar
+          description: slug of the content type to update
         - in: body
           name: body
           schema:
@@ -202,17 +214,35 @@ def update_by_slug(slug):
                     type: string
                 description:
                     type: string
-            
-                    
+                icon:
+                    type: string
+                hierarchical:
+                    type: boolean
+                parentType:
+                    type: array
+                    items:
+                        type: object
+                metadata:
+                    type: string
+                editRoles:
+                    type: array
+                    items:
+                        type: string
+                viewRoles:
+                    type: array
+                    items:
+                        type: string
+                isArticle:
+                    type: boolean
     responses:
         200:
-            description: Tipo de contenido actualizado
+            description: Content type updated
         401:
-            description: No tiene permisos para actualizar un tipo de contenido
+            description: You don't have permission to update a content type (not admin or editor)
         404:
-            description: Tipo de contenido no existe
+            description: Content type does not exist
         500:
-            description: Error al actualizar el tipo de contenido
+            description: Error updating the content type (includes nonexistent roles in editRoles/viewRoles)
     """
     # se obtiene el usuario actual
     current_user = get_jwt_identity()
@@ -230,28 +260,29 @@ def update_by_slug(slug):
 @jwt_required()
 def delete_by_slug(slug):
     """
-    Eliminar un tipo de contenido por su slug
+    Delete a content type by its slug
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de contenido
+        - Content types
+    description: Requires the admin or editor role. Does not physically delete the associated resources; it marks them with status "deleted".
     parameters:
         - in: path
           name: slug
           schema:
             type: string
           required: true
-          description: slug del tipo de contenido a eliminar
+          description: slug of the content type to delete
     responses:
         200:
-            description: Tipo de contenido eliminado
+            description: Content type deleted (and its resources marked as deleted)
         401:
-            description: No tiene permisos para eliminar un tipo de contenido
+            description: You don't have permission to delete a content type (not admin or editor)
         404:
-            description: Tipo de contenido no existe
+            description: Content type does not exist
         500:
-            description: Error al eliminar el tipo de contenido
+            description: Error deleting the content type
     """
     # se obtiene el usuario actual
     current_user = get_jwt_identity()
@@ -269,21 +300,40 @@ def delete_by_slug(slug):
 @jwt_required()
 def get_type_viz():
     """
-    Obtener información de los tipos de contenido
+    Get visualization statistics (charts) for a content type
     ---
     security:
         - JWT: []
     tags:
-        - Tipos de contenido
+        - Content types
+    description: >
+      Requires the admin or editor role. type accepts timeCreated (count by
+      creation date), statusCount (count by status), or authorCount (top 10 by
+      createdBy); any other type value returns an ok message with no data.
+    parameters:
+        - in: body
+          name: body
+          schema:
+            type: object
+            properties:
+                slug:
+                    type: string
+                    description: slug of the content type
+                type:
+                    type: string
+                    enum: [timeCreated, statusCount, authorCount]
+            required:
+                - slug
+                - type
     responses:
         200:
-            description: Información de los tipos de contenido
+            description: Aggregated data for the requested chart
         400:
-            description: Error al obtener la información de los tipos de contenido
+            description: Missing slug or type in the body
         401:
-            description: No tiene permisos para obtener la información de los tipos de contenido
+            description: You don't have permission for this action (not admin or editor)
         500:
-            description: Error al obtener la información de los tipos de contenido
+            description: Error retrieving the information
     """
     body = request.get_json()
 

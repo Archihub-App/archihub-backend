@@ -41,6 +41,7 @@ class ExtendedPluginClass(PluginClass):
                 return {'msg': 'No tiene permisos suficientes'}, 401
             
             body = request.form.to_dict()
+            print(body)
             data = body['data']
             data = json.loads(data)
             overwrite = data['overwrite'] if 'overwrite' in data else False

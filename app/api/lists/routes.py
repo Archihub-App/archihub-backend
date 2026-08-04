@@ -12,19 +12,20 @@ from flask_babel import _
 @jwt_required()
 def get_all():
     """
-    Obtener todos los listados de la base de datos
+    Get all lists from the database
     ---
     security:
         - JWT: []
     tags:
-        - Listados
+        - Lists
+    description: Requires the admin or editor role. Returns only the name and id fields of each list.
     responses:
         200:
-            description: Lista de listados obtenida exitosamente
+            description: List of lists retrieved successfully (name and id only)
         401:
-            description: No tienes permisos para realizar esta acción
+            description: You don't have permission to perform this action (not admin or editor)
         500:
-            description: Error al obtener los listados
+            description: Error retrieving the lists
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -44,12 +45,13 @@ def get_all():
 @jwt_required()
 def create():
     """
-    Crear un listado nuevo con el body del request
+    Create a new list with the request body
     ---
     security:
         - JWT: []
     tags:
-        - Listados
+        - Lists
+    description: Requires the admin or editor role. Each element of options is inserted as an independent document in the options collection; the list stores only their ids.
     parameters:
         - in: body
           name: body
@@ -60,24 +62,26 @@ def create():
                     type: string
                 description:
                     type: string
-                slug:
-                    type: string
-                fields:
+                options:
                     type: array
                     items:
                         type: object
+                        properties:
+                            term:
+                                type: string
+                        required:
+                            - term
             required:
                 - name
                 - description
+                - options
     responses:
         201:
-            description: Listado creado exitosamente
-        400:
-            description: Error al crear el listado
+            description: List created successfully
         401:
-            description: No tienes permisos para realizar esta acción
+            description: You don't have permission to perform this action (not admin or editor)
         500:
-            description: Error al crear el listado
+            description: Error creating the list (includes a malformed body, e.g. missing options)
     """
     # Obtener el body de la request
     body = request.json
@@ -96,12 +100,13 @@ def create():
 @jwt_required()
 def get_by_id(id):
     """
-    Obtener un estándar por su id
+    Get a list by its id
     ---
     security:
         - JWT: []
     tags:
-        - Listados
+        - Lists
+    description: Requires the admin or editor role. Returns name, description, and options (each option resolved to {id, term}).
     parameters:
         - in: path
           name: id
@@ -109,13 +114,13 @@ def get_by_id(id):
           required: true
     responses:
         200:
-            description: Listado obtenido exitosamente
+            description: >
+              List retrieved successfully. Note - if the id does not exist or is invalid,
+              this route also responds 200 with an error message in the body instead
+              of 404, due to exception handling that does not propagate the
+              status code.
         401:
-            description: No tienes permisos para realizar esta acción
-        404:
-            description: Listado no encontrado
-        500:
-            description: Error al obtener el listado
+            description: You don't have permission to perform this action (not admin or editor)
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
@@ -137,15 +142,21 @@ def get_by_id(id):
 @jwt_required()
 def update_by_id(id):
     """
-    Actualizar un listado por su id
+    Update a list by its id
     ---
     security:
         - JWT: []
     tags:
-        - Listados
+        - Lists
+    description: >
+      Requires the admin or editor role. The body must include options; each existing
+      element (with id) is updated, each new element is inserted, and those
+      marked deleted=true are excluded from the resulting list. If options is
+      omitted from the body, the route makes no change and returns no response
+      (fails with a Flask 500 error).
     parameters:
         - in: path
-          name: slug
+          name: id
           schema:
             type: string
           required: true
@@ -162,20 +173,28 @@ def update_by_id(id):
                     type: array
                     items:
                         type: object
-
+                        properties:
+                            id:
+                                type: string
+                                description: Present to update an existing option; absent to create a new one.
+                            term:
+                                type: string
+                            deleted:
+                                type: boolean
+                                description: If true, the option is removed from the list.
             required:
-                - name
+                - options
     responses:
         200:
-            description: Listado actualizado exitosamente
+            description: List updated successfully
         400:
-            description: Error al actualizar el listado
+            description: The body is not valid JSON
         401:
-            description: No tienes permisos para realizar esta acción
+            description: You don't have permission to perform this action (not admin or editor)
         404:
-            description: Listado no encontrado
+            description: List not found
         500:
-            description: Error al actualizar el listado
+            description: Error updating the list (includes the case of a body missing the options key)
     """
     
     # Obtener el usuario actual
@@ -197,27 +216,28 @@ def update_by_id(id):
 @jwt_required()
 def delete_by_id(id):
     """
-    Eliminar un listado por su slug
+    Delete a list by its id
     ---
     security:
         - JWT: []
     tags:
-        - Listados
+        - Lists
+    description: Requires the admin or editor role. It is not validated whether the list is in use by any form or field before deleting it.
     parameters:
         - in: path
-          name: slug
+          name: id
           schema:
             type: string
           required: true
     responses:
         200:
-            description: Listado eliminado exitosamente
+            description: List deleted successfully
         401:
-            description: No tienes permisos para realizar esta acción
+            description: You don't have permission to perform this action (not admin or editor)
         404:
-            description: Listado no encontrado
+            description: List not found
         500:
-            description: Error al eliminar el listado
+            description: Error deleting the list
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()

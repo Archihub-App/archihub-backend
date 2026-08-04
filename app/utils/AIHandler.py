@@ -2,7 +2,7 @@ import os
 from app.utils import DatabaseHandler
 from app.api.aiservices.services import get_llm_models as get_ai_models
 from app.api.aiservices.services import get_provider_models
-from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, AzureProvider, OllamaProvider, LlamaServerProvider
+from app.api.aiservices.utils.ModelsProviders import OpenAIProvider, GoogleProvider, OpenRouterProvider, AzureProvider, OllamaProvider, LlamaServerProvider
 
 mongodb = DatabaseHandler.DatabaseHandler()
 
@@ -12,6 +12,7 @@ class AIHandler:
     PROVIDER_CLASSES = {
         'OpenAI': OpenAIProvider,
         'Google': GoogleProvider,
+        'OpenRouter': OpenRouterProvider,
         'Azure': AzureProvider,
         'Ollama': OllamaProvider,
         'LlamaServer': LlamaServerProvider
@@ -40,11 +41,14 @@ class AIHandler:
         self.models = models if isinstance(models, list) else []
         
     def get_models_with_capabilities(self, capabilities):
+        self.start()
         if not self.models:
+            print("AIHandler: No models available in self.models")
             return []
         filtered_models = []
         for model in self.models:
             available_models = model.get('models', [])
+            print(f"AIHandler: Checking provider '{model.get('name')}' with {len(available_models)} models")
             for m in available_models:
                 model_caps = m.get('capabilities')
                 if model_caps and isinstance(model_caps, list) and any(cap in model_caps for cap in capabilities):
@@ -53,7 +57,7 @@ class AIHandler:
                         'name': model['name'],
                         'model': m
                     })
-        
+        print(f"AIHandler: filtered_models count = {len(filtered_models)}")
         return filtered_models
     
     def get_provider_class(self, filters):
@@ -72,6 +76,7 @@ class AIHandler:
         return provider
     
     def call_model(self, model, messages=None, stream=False):
+        self.start()
         if not self.models:
             raise Exception('No AI models available')
 

@@ -16,4 +16,7 @@ class CacheHandler:
     
     def clear_cache(self):
         # Limpiar la cache
-    	pass
+        try:
+            self.cache.client.flushdb()
+        except Exception:
+            pass

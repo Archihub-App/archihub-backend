@@ -25,31 +25,49 @@ def _parse_record_types_arg(value):
 @bp.route('/public', methods=['POST'])
 def get_all_public():
     """
-    Obtener todos los resources dado un body de filtros
+    Search published resources by filters, without authentication (Elasticsearch or vector DB)
     ---
     tags:
-        - Recursos
+        - Resources
+    description: >
+        Public route (no JWT). Only works if the "search" blueprint is registered
+        (index_management.index_activation and/or .vector_activation active in the system).
+        The body is delegated to app.api.search.public_services.get_resources_by_filters ->
+        elasticUtils/vectorUtils, same as POST /search but without an authenticated user (post_type
+        values with `viewRoles` configured are excluded by design). `post_type` is
+        required.
     parameters:
         - in: body
           name: body
           schema:
             type: object
             properties:
-                filters:
-                    type: object
-                sort:
+                post_type:
+                    type: array
+                    items:
+                        type: string
+                keyword:
                     type: string
-                limit:
+                searchSource:
+                    type: string
+                    description: "'index' (Elasticsearch, default) or 'vector'"
+                sortBy:
+                    type: string
+                sortOrder:
+                    type: string
+                activeColumns:
+                    type: array
+                    items:
+                        type: object
+                size:
                     type: integer
-                skip:
-                    type: integer
+            required:
+                - post_type
     responses:
         200:
-            description: Resources obtenidos exitosamente
-        401:
-            description: No tiene permisos para obtener los resources
+            description: Resources retrieved successfully
         500:
-            description: Error al obtener los resources
+            description: Error retrieving resources (e.g. "post_type" missing from the body, or no active search engine)
     """
     body = request.json
     resp = public_services.get_resources_by_filters(body)
@@ -63,20 +81,39 @@ def get_all_public():
 @bp.route('/public/rss', methods=['GET'])
 def get_blog_rss_public():
     """
-    Obtener feed RSS del blog usando los filtros de busqueda
+    Get the blog's RSS feed (resources with viewType "blog") using the search filters
     ---
     tags:
-        - Recursos
+        - Resources
+    description: >
+        Public route (no JWT). The filter can be passed in two ways: (1) a single `body`
+        parameter with a serialized JSON object (takes priority over the others), or (2) if
+        `body` isn't provided and the request has no JSON body, it's assembled from the
+        individual query parameters listed below. `post_type` (or its equivalent inside `body`)
+        is required; `input_filters`/`date_filters`/`location_filters`/`parents` must be
+        valid JSON if sent. Internally forces `viewType: "blog"` and `full_article: true`.
     parameters:
+        - in: query
+          name: body
+          type: string
+          description: Serialized JSON with the full filter; if provided, the other query parameters are ignored
         - in: query
           name: post_type
           type: string
+          description: Comma-separated slugs. Required if "body" is not used
         - in: query
           name: keyword
           type: string
         - in: query
-          name: status
+          name: sortBy
           type: string
+        - in: query
+          name: sortOrder
+          type: string
+        - in: query
+          name: searchSource
+          type: string
+          description: "'index' or 'vector'"
         - in: query
           name: page
           type: integer
@@ -84,15 +121,38 @@ def get_blog_rss_public():
           name: size
           type: integer
         - in: query
-          name: body
+          name: files
           type: string
+          description: "'true' to filter only resources with files"
+        - in: query
+          name: record_types
+          type: string
+          description: "JSON list or comma-separated values (alias: record_type)"
+        - in: query
+          name: input_filters
+          type: string
+          description: Serialized JSON
+        - in: query
+          name: date_filters
+          type: string
+          description: Serialized JSON
+        - in: query
+          name: location_filters
+          type: string
+          description: Serialized JSON
+        - in: query
+          name: parents
+          type: string
+          description: Serialized JSON
+    produces:
+        - application/rss+xml
     responses:
         200:
-            description: RSS generado exitosamente
+            description: RSS generated successfully (content-type application/rss+xml)
         400:
-            description: Filtros invalidos
+            description: Invalid JSON in one of the JSON parameters, non-numeric value in page/size, or missing post_type
         500:
-            description: Error al generar RSS
+            description: Error generating the RSS feed (e.g. no active search engine)
     """
     body = {}
     body_param = request.args.get('body')

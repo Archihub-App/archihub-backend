@@ -15,33 +15,74 @@ from flask_babel import _
 @jwt_required()
 def get_all():
     """
-    Obtener todos los resources dado un body de filtros
+    Search authenticated resources by filters (Elasticsearch or vector DB, depending on active capabilities)
     ---
     security:
         - JWT: []
     tags:
-        - Recursos
+        - Resources
+    description: >
+        Only works if the "search" blueprint is registered (requires the system to have
+        `index_management.index_activation` and/or `.vector_activation` active; otherwise the
+        route doesn't exist -> generic Flask 404). The body is passed as-is to
+        app.api.search.utils.elasticUtils.get_resources_by_filters (searchSource='index',
+        default) or vectorUtils (searchSource='vector'). `post_type` is required; the
+        remaining fields are optional and their defaults are applied in the underlying
+        search engine.
     parameters:
         - in: body
           name: body
           schema:
             type: object
             properties:
-                filters:
-                    type: object
-                sort:
+                post_type:
+                    type: array
+                    items:
+                        type: string
+                keyword:
                     type: string
-                limit:
+                searchSource:
+                    type: string
+                    description: "'index' (Elasticsearch, default) or 'vector'"
+                sortBy:
+                    type: string
+                    default: createdAt
+                sortOrder:
+                    type: string
+                    default: asc
+                activeColumns:
+                    type: array
+                    items:
+                        type: object
+                viewType:
+                    type: string
+                    default: list
+                size:
                     type: integer
-                skip:
-                    type: integer
+                    default: 20
+                operator:
+                    type: string
+                    default: AND
+                record_types:
+                    type: array
+                    items:
+                        type: string
+                        enum: [image, document, video, audio]
+                parents:
+                    type: object
+            required:
+                - post_type
     responses:
         200:
-            description: Resources obtenidos exitosamente
+            description: Resources retrieved successfully
         401:
-            description: No tiene permisos para obtener los resources
+            description: Missing or invalid JWT token (standard flask_jwt_extended response)
         500:
-            description: Error al obtener los resources
+            description: >
+                Error retrieving resources (e.g. missing "post_type" in the body, no active
+                search engine). Note: insufficient role to view one of the requested
+                post_type values also lands here with 500 ("You don't have the required
+                authorization"), not 401, because the exception is caught generically.
     """
     # Obtener el usuario actual
     current_user = get_jwt_identity()
