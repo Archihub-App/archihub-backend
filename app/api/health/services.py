@@ -29,9 +29,6 @@ def check_elasticsearch():
     if not (index_activation and index_activation['value']):
         return 'disabled', None
     try:
-        # Reuses the already-initialized singleton (constructed at app startup
-        # when index_activation is on); never construct it here, since a fresh
-        # construction attempt would try to bootstrap an index from scratch.
         from app.utils import IndexHandler
         index_handler = IndexHandler.IndexHandler()
         index_handler.get_aliases()
@@ -46,9 +43,6 @@ def check_qdrant():
     if not (vector_activation and vector_activation['value']):
         return 'disabled', None
     try:
-        # Same reasoning as check_elasticsearch: only touch the singleton when
-        # vector search is already active, otherwise this would trigger a cold
-        # SentenceTransformer load + collection bootstrap just to answer a ping.
         from app.utils import VectorDatabaseHandler
         vector_handler = VectorDatabaseHandler.VectorDatabaseHandler()
         vector_handler.qdrant.get_collections()

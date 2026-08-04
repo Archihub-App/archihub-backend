@@ -103,12 +103,6 @@ def add_request(username):
     except Exception as e:
         raise Exception(str(e))
 
-# Whitelist for GET /users' filter body — never pass a raw client-supplied
-# dict straight into a Mongo query, since a client could embed Mongo
-# operators ($where, $regex, $gt, etc.) beyond the intended query surface.
-# The frontend only ever sends {} or {'username': '<value>'} today (see
-# UsersResults.tsx / LogsResults.tsx / FormItems.tsx) — only that field, as
-# a plain-string equality match, is accepted; everything else is dropped.
 _ALLOWED_USER_FILTER_FIELDS = {'username', 'name'}
 
 def _sanitize_user_filters(filters):
@@ -307,10 +301,6 @@ def forgot_password(body):
         if 'value' not in admin_register_user or not admin_register_user['value']:
             return jsonify({'msg': _('Password recovery disabled')}), 400
     
-        # Always return the same response whether or not the account exists
-        # — returning a distinct 404 here let an unauthenticated caller
-        # enumerate valid usernames/emails by scripting this endpoint across
-        # a list. Only actually send the email when the account is real.
         user = mongodb.get_record('users', {'username': body['username']})
         if user:
             try:
@@ -324,12 +314,6 @@ def forgot_password(body):
 
                 send_email(body['username'], _('Password recovery'), forgot_password_template(link))
             except Exception as e:
-                # A real account whose email send fails (e.g. SMTP is down)
-                # must still get the SAME response as a nonexistent account —
-                # letting this hit the outer except below would return 500
-                # only for real accounts, recreating the enumeration oracle
-                # in exactly this failure mode. Log server-side, respond
-                # identically either way.
                 print(f"forgot_password: failed to send recovery email: {e}")
 
         return {'msg': _('If an account exists for this username, a password recovery email has been sent')}, 200
@@ -542,10 +526,6 @@ def generate_token(username, password, admin = False, expiration = 2):
     
     # Crear el token de acceso para el usuario con el username
     if not admin:
-        # Bounded lifetime, not indefinite — a leaked public API token used
-        # to be valid forever with no way to expire it short of a manual DB
-        # edit. Still long enough for long-running integrations; rotate by
-        # regenerating.
         access_token = create_access_token(identity=username, expires_delta=timedelta(days=365))
         # usamos Fernet para encriptar el token de acceso
         cipher = fernet.encrypt(access_token.encode('utf-8'))
@@ -580,13 +560,10 @@ def generate_node_token(username, password):
     # if not user['compromise']:
     #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
-    # Bounded lifetime, not indefinite — see generate_token()'s public-token
-    # comment above for why.
     access_token = create_access_token(identity=username, expires_delta=timedelta(days=365))
     # usamos Fernet para encriptar el token de acceso
     cipher = fernet.encrypt(access_token.encode('utf-8'))
 
-    # encrypt the access token
     update = UserUpdate(nodeToken=cipher)
 
     # guardar el token de acceso en la base de datos
@@ -610,13 +587,10 @@ def generate_viz_token(username, password):
     # if not user['compromise']:
     #     return jsonify({'msg': _('User has not accepted the compromise')}), 400
     
-    # Bounded lifetime, not indefinite — see generate_token()'s public-token
-    # comment above for why.
     access_token = create_access_token(identity=username, expires_delta=timedelta(days=365))
     # usamos Fernet para encriptar el token de acceso
     cipher = fernet.encrypt(access_token.encode('utf-8'))
 
-    # encrypt the access token
     update = UserUpdate(vizToken=cipher)
 
     # guardar el token de acceso en la base de datos

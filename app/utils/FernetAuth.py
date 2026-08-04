@@ -69,14 +69,6 @@ def fernetAuthenticate(func):
 
 
         except Exception as e:
-            # This wraps token decrypt/decode (Fernet, PyJWT) — the real
-            # exception text (library internals, stack context) isn't safe
-            # to hand to an unauthenticated-until-proven-otherwise caller
-            # probing the auth boundary. Log it server-side, return a
-            # generic message. (The add_request except block above is
-            # intentionally untouched — that one surfaces a real,
-            # translated, user-facing rate-limit message, not a technical
-            # exception.)
             print(f"fernetAuthenticate error: {e}")
             return jsonify({'msg': _('Invalid or expired token')}), 401
 
@@ -104,11 +96,7 @@ def publicFernetAuthenticate(func):
             username = decoded_token['sub']
             isAdmin = False
 
-            # verificar si el token tiene fecha de expiración (jwt.decode ya
-            # rechaza tokens vencidos por su cuenta cuando 'exp' está
-            # presente, pero se deja explícito por consistencia con
-            # fernetAuthenticate/nodeFernetAuthenticate y para dar un
-            # mensaje traducido en vez del genérico de la librería)
+            # verificar si el token tiene fecha de expiración
             if 'exp' in decoded_token:
                 expiracion = decoded_token['exp']
                 if expiracion < time.time():
@@ -143,7 +131,6 @@ def publicFernetAuthenticate(func):
 
 
         except Exception as e:
-            # See fernetAuthenticate's matching comment above.
             print(f"publicFernetAuthenticate error: {e}")
             return jsonify({'msg': _('Invalid or expired token')}), 401
 
@@ -189,7 +176,6 @@ def nodeFernetAuthenticate(func):
                 return jsonify({'msg': _('The token is not valid')}), 401
 
         except Exception as e:
-            # See fernetAuthenticate's matching comment above.
             print(f"nodeFernetAuthenticate error: {e}")
             return jsonify({'msg': _('Invalid or expired token')}), 401
         

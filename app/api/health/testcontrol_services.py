@@ -42,20 +42,6 @@ def get_routes():
 
 
 def _wipe_mongo():
-    # 'system' is NOT preserved wholesale: it holds cross-references into
-    # collections that do get dropped every reset (e.g. the 'access_rights'
-    # option's stored list IDs point into 'lists'). Preserving the whole
-    # collection left those references dangling after the first reset,
-    # breaking every reset after it (register_user() -> get_roles() ->
-    # get_list_by_id() on a since-deleted list). Every reset must leave
-    # 'system' as empty as a genuinely fresh install, with exactly one
-    # exception: the test_mode_active marker.
-    #
-    # 'system' is deliberately never dropped (unlike every other collection):
-    # dropping it would mean the marker briefly doesn't exist, and any
-    # /health/test-control/* request landing in that window would see
-    # is_disposable_instance() as false. Deleting every OTHER document from
-    # 'system' keeps the marker present at all times, closing that race.
     mongodb.delete_records('system', {'name': {'$ne': TEST_MODE_MARKER_NAME}})
 
     for name in mongodb.get_collections():
@@ -115,9 +101,6 @@ def _seed_baseline(run_id):
 
     set_system_setting()
 
-    # register_user() requires the username to look like an email
-    # (see validate_user_fields in app/api/users/services.py) — 'username'
-    # doubles as the login/email field throughout the users API.
     admin_username = 'test_admin@archihub.test'
     admin_password = secrets.token_urlsafe(18)
     seed_body = {
@@ -156,11 +139,6 @@ def start_reset():
     run_id = str(uuid.uuid4())
     task = reset_task.delay(run_id)
 
-    # Track the run in the regular tasks collection for admin visibility, but
-    # never let the generated credentials land there — that collection is
-    # readable through the JWT-protected /tasks endpoints, while credentials
-    # must only ever be retrievable through the test-control-secret-gated
-    # poll_reset() below.
     try:
         add_task(task.id, 'testcontrol.reset', 'automatic', 'msg')
     except Exception:

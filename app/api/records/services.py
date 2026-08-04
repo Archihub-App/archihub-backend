@@ -105,13 +105,6 @@ def set_record_metadata(record, metadata):
     return record
 
 
-# get_by_filters is an admin-only endpoint whose whole purpose (per its own
-# Swagger description) is to accept a flexible, client-supplied Mongo
-# filter against the records collection — a narrow field allowlist (as
-# used for /users, /logs, whose real usage is a single known field) would
-# defeat that intent. Instead, recursively reject the specific operators
-# that enable server-side JS execution or query-structure injection, which
-# is the actual dangerous part of accepting a raw filter.
 _DANGEROUS_MONGO_OPERATORS = {'$where', '$function', '$accumulator', '$expr', '$jsonschema'}
 
 def _reject_dangerous_mongo_operators(value):

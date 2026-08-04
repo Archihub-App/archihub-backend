@@ -124,11 +124,6 @@ def register_log(username, action, metadata=None):
     # Retornar mensaje de éxito
     return jsonify({'msg': _('Log created successfully')}), 201
 
-# Whitelist for POST /logs' filter body — never pass a raw client-supplied
-# dict straight into a Mongo query (Mongo operator injection via $where,
-# $regex, etc.). The frontend only ever filters by username and/or action
-# (see LogsResults.tsx), as plain-string equality; everything else is
-# dropped.
 _ALLOWED_LOG_FILTER_FIELDS = {'username', 'action'}
 
 def _sanitize_log_filters(filters):

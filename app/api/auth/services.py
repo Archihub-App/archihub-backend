@@ -166,10 +166,6 @@ def archihub_login(username, password):
         
     user = get_user(username)
 
-    # Same status code and message whether the username doesn't exist or the
-    # password is wrong — returning different responses (previously 404 vs
-    # 401) lets an unauthenticated caller enumerate valid usernames by
-    # scripting login attempts across a username list.
     if not user:
         record_login_attempt(username)  # Record failed attempt
         return jsonify({'msg': _('Invalid username or password')}), 401

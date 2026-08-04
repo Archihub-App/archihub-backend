@@ -136,12 +136,6 @@ class PluginClass(Blueprint):
             raise Exception(str(e))
     
     def save_temp_file(self, file, filename):
-        # secure_filename strips path separators/traversal sequences (../,
-        # absolute paths, etc.) — filename is caller-supplied (e.g. from a
-        # plugin's uploaded file), and without this the initial file.save()
-        # below could write outside TEMPORAL_FILES_PATH before the
-        # UUID-rename ever happens. Matches the pattern already used for the
-        # main records upload path (records/services.py).
         filename = secure_filename(filename)
         filename_new = str(uuid.uuid4()) + '.' + filename.rsplit('.', 1)[1].lower()
 

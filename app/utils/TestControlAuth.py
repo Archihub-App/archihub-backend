@@ -49,12 +49,6 @@ def testControlAuthenticate(func):
         if not is_disposable_instance():
             return jsonify({'msg': 'This instance is not marked as a disposable test instance'}), 403
 
-        # hmac.compare_digest instead of != — a plain string compare is not
-        # constant-time, and this is guarding a destructive endpoint. The
-        # `not test_secret_key` check comes first since compare_digest
-        # requires two same-type, non-None arguments (TEST_SECRET_HEADER_KEY
-        # has no insecure fallback — see config.py — so it can legitimately
-        # be unset).
         secret_header = request.headers.get('X-ArchiHUB-Test-Secret')
         if not secret_header or not test_secret_key or not hmac.compare_digest(secret_header, test_secret_key):
             return jsonify({'msg': 'Invalid or missing X-ArchiHUB-Test-Secret header'}), 401

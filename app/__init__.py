@@ -191,13 +191,7 @@ def create_app(config_class=config[os.environ['FLASK_ENV']]):
     from app.api.aiservices import bp as aiservices_bp
     app.register_blueprint(aiservices_bp, url_prefix='/aiservices')
 
-    # Registrar health blueprint (siempre activo). Incluye /health/live,
-    # /health/ready (sin autenticación) y /health/test-control/* (solo
-    # funcional cuando ARCHIHUB_TEST_MODE=true — ver la nota más abajo y
-    # app/utils/TestControlAuth.py). Un único blueprint en vez de dos: las
-    # rutas de test-control siempre están registradas, pero
-    # testControlAuthenticate las bloquea con 404 salvo que el modo de
-    # pruebas esté explícitamente activo.
+    # Registrar health blueprint
     from app.api.health import bp as health_bp
     app.register_blueprint(health_bp, url_prefix='/health')
 
