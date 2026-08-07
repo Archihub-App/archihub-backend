@@ -204,11 +204,13 @@ def _register_routers(app: FastAPI) -> None:
     # reads. See that module for why app.routes cannot be walked instead.
     from archihub.api.health.router import router as health_router
     from archihub.api.health.router import test_control_router
+    from archihub.api.lists.router import router as lists_router
     from archihub.api.types.router import router as types_router
     from archihub.core.routing import include_router
 
     include_router(app, health_router)
     include_router(app, types_router)
+    include_router(app, lists_router)
 
     # Always mounted, exactly like the legacy blueprint. These routes exist on
     # every instance; it is the per-request dependency that 404s them when the

@@ -21,7 +21,6 @@
     "Volatile values (_id, createdAt, token, task_id, ...) are already replaced",
     "with a type marker globally, so they never cause false failures."
   ],
-
   "cases": [
     {
       "name": "health: liveness",
@@ -47,7 +46,6 @@
         "Celery is excluded entirely because worker ping timing is racy."
       ]
     },
-
     {
       "_comment_next": [
         "Below: templates for the domains ported in Phase 3, in the order the plan",
@@ -79,11 +77,6 @@
       "auth": false
     },
     {
-      "name": "_lists: list all",
-      "path": "/lists",
-      "auth": true
-    },
-    {
       "name": "_forms: list all",
       "path": "/forms",
       "auth": true
@@ -92,14 +85,21 @@
       "name": "_users: list all",
       "method": "POST",
       "path": "/users",
-      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "body": {
+        "filters": {},
+        "page": 0,
+        "limit": 20
+      },
       "auth": true
     },
     {
       "name": "_auth: login with unknown user returns 401, byte-identical to wrong password",
       "method": "POST",
       "path": "/auth/login",
-      "body": { "username": "definitely-not-a-real-user@example.invalid", "password": "wrong" },
+      "body": {
+        "username": "definitely-not-a-real-user@example.invalid",
+        "password": "wrong"
+      },
       "auth": false,
       "_note": [
         "Guards the account-enumeration fix: an unknown username and a wrong",
@@ -116,15 +116,39 @@
       "name": "_records: get by filters",
       "method": "POST",
       "path": "/records/filters",
-      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "body": {
+        "filters": {},
+        "page": 0,
+        "limit": 20
+      },
       "auth": true
     },
     {
       "name": "_resources: list",
       "method": "POST",
       "path": "/resources",
-      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "body": {
+        "filters": {},
+        "page": 0,
+        "limit": 20
+      },
       "auth": true
+    },
+    {
+      "name": "lists: list all",
+      "path": "/lists",
+      "auth": true
+    },
+    {
+      "name": "lists: unknown id",
+      "path": "/lists/000000000000000000000000",
+      "auth": true,
+      "_note": "Legacy returns 200 with an array body here; the port returns 404. Expected to differ - see BACKEND_FINDINGS F13."
+    },
+    {
+      "name": "lists: unauthenticated is 401",
+      "path": "/lists",
+      "auth": false
     }
   ]
 }
