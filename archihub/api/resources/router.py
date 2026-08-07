@@ -17,9 +17,14 @@ import logging
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 
-from archihub.api.resources import article, hierarchy, services
+from archihub.api.resources import article, editing, hierarchy, services
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS, CurrentUser, get_current_user
+from archihub.core.security.jwt import (
+    LEGACY_ROLE_FAILURE_STATUS,
+    CurrentUser,
+    get_current_user,
+    require_role_any,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +36,13 @@ _RESPONSES = {401: {"description": "Missing/invalid token, or insufficient acces
 def _respond(result) -> JSONResponse:
     payload, status_code = result
     return JSONResponse(status_code=status_code, content=payload)
+
+
+# The editorial routes are gated twice: coarsely here, so a reader never reaches
+# the service at all, and precisely inside it against the specific resource.
+require_editor = require_role_any(
+    "admin", "editor", "super_editor", status_code=LEGACY_ROLE_FAILURE_STATUS
+)
 
 
 @router.post(
@@ -162,6 +174,83 @@ def favcount(resource_id: str) -> JSONResponse:
     Declared before ``/{resource_id}`` so the literal segment wins the match.
     """
     return _respond(services.get_fav_count(resource_id))
+
+
+@router.post(
+    "/updateorder/{resource_id}",
+    responses={
+        200: {"description": "File order updated"},
+        404: {"description": "No such resource"},
+        **_RESPONSES,
+    },
+)
+def update_file_order(
+    resource_id: str,
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(require_editor),
+) -> JSONResponse:
+    """Move files to new positions within a resource.
+
+    Send only the files that moved, as ``{"files": [{"id": ..., "order": ...}]}``
+    - the rest keep their relative order and everything is renumbered from zero.
+    """
+    return _respond(editing.update_files_order(resource_id, body, current_user.username))
+
+
+@router.post(
+    "/change-post-type",
+    responses={
+        200: {"description": "Permission verified"},
+        404: {"description": "No such resource"},
+        **_RESPONSES,
+    },
+)
+def change_post_type(
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(require_editor),
+) -> JSONResponse:
+    """Verify the caller may edit a resource's current content type.
+
+    DESPITE THE NAME, NOTHING IS CHANGED. This is a permission check that was
+    never finished; the legacy Swagger already documents it as such and the
+    response message is preserved because the frontend displays it. See
+    BACKEND_FINDINGS F25.
+    """
+    return _respond(editing.change_post_type(body, current_user.username))
+
+
+@router.put(
+    "/{record_id}/granular",
+    responses={
+        200: {"description": "Field updated on the record's parent resources"},
+        400: {"description": "Unusable path or value, or no parent could be updated"},
+        404: {"description": "No such record, or it has no parent resources"},
+        **_RESPONSES,
+    },
+)
+def update_granular_by_id(
+    record_id: str,
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(require_editor),
+) -> JSONResponse:
+    """Set one free-text field across every resource a file belongs to.
+
+    ``{record_id}`` is a **record** (a file), not a resource, despite the path -
+    the transcription and OCR tools work file-by-file and write their result up
+    into the catalogue entries that file belongs to.
+
+    Partial success is reported as success: a caller entitled to edit only some
+    of the parents gets those updated and a count.
+    """
+    return _respond(
+        editing.update_granular(
+            record_id,
+            body.get("metadataPath"),
+            body.get("value", ""),
+            current_user.username,
+            concat=bool(body.get("concat", False)),
+        )
+    )
 
 
 @router.get(

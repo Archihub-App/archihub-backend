@@ -97,8 +97,6 @@ def may_edit(user: str, resource: dict, is_admin: bool) -> bool:
     content type, or grant ``super_editor`` - and either is preferable to the
     alternative of leaving article content world-writable.
     """
-    from archihub.api.users.services import has_role
-
     if is_admin:
         return True
 
@@ -107,9 +105,9 @@ def may_edit(user: str, resource: dict, is_admin: bool) -> bool:
 
     edit_roles = hierarchy.type_roles(resource.get("post_type") or "")["editRoles"]
     if edit_roles:
-        return any(has_role(user, role) for role in edit_roles)
+        return access.holds_edit_role(user, resource.get("post_type"), is_admin)
 
-    return resource.get("createdBy") == user or has_role(user, "super_editor")
+    return access.owns_or_supervises(user, resource, is_admin)
 
 
 def _load(resource_id: str, fields: dict | None = None):

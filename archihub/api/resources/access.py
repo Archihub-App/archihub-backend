@@ -125,6 +125,42 @@ def may_view_resource(username: str, resource: dict, is_admin: bool) -> bool:
     return required in held
 
 
+def holds_edit_role(username: str, post_type: str | None, is_admin: bool) -> bool:
+    """Whether the content type's ``editRoles`` admit this caller.
+
+    A type declaring none is unconstrained by this check - which is why it can
+    never be the *only* check on a write path. See BACKEND_FINDINGS S17 for what
+    happened where it was.
+    """
+    from archihub.api.resources.hierarchy import type_roles
+    from archihub.api.users.services import has_role
+
+    if is_admin:
+        return True
+
+    edit_roles = type_roles(post_type or "")["editRoles"]
+    if not edit_roles:
+        return True
+
+    return any(has_role(username, role) for role in edit_roles)
+
+
+def owns_or_supervises(username: str, resource: dict, is_admin: bool) -> bool:
+    """The ownership half of the write rule: creator, ``super_editor``, or admin.
+
+    ``createdBy`` is read with ``.get`` - documents predating the field exist,
+    and the original's direct subscript turned one of those into a 500 on every
+    attempt to edit it.
+    """
+    from archihub.api.users.services import has_role
+
+    if is_admin:
+        return True
+    if resource.get("createdBy") == username:
+        return True
+    return has_role(username, "super_editor")
+
+
 def may_see_deleted(username: str | None, is_admin: bool) -> bool:
     """Only administrators may browse the recycle bin."""
     return is_admin
