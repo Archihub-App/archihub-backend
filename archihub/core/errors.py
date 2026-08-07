@@ -80,6 +80,27 @@ class PermissionDeniedError(BusinessError):
     status_code = status.HTTP_403_FORBIDDEN
 
 
+class InvalidTokenError(BusinessError):
+    """A token that is present but unusable: malformed, badly signed, wrong type.
+
+    422, NOT 401 - and that is deliberate. flask_jwt_extended splits these two
+    cases and the split is part of the wire contract this migration preserves:
+
+        missing header / expired token  -> 401
+        malformed / bad signature /
+        refresh token used as access    -> 422
+
+    ``upgrade_front`` performs exact status-code equality checks at roughly 187
+    call sites, so silently collapsing 422 into 401 here would be a behavioural
+    change smuggled in under a framework swap. If this should become 401 (which
+    is arguably more correct, and would make the frontend redirect to login
+    instead of showing an error), that is a deliberate contract change to make
+    alongside a frontend audit - see PLAN_FASTAPI.md decision 2.
+    """
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
 class NotFoundError(BusinessError):
     status_code = status.HTTP_404_NOT_FOUND
 

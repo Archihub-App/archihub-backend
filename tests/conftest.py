@@ -32,3 +32,27 @@ def settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def pinned_locale() -> Iterator[None]:
+    """Pin the translation locale to English for every test.
+
+    User-facing strings go through ``_()``, so assertions that compare against
+    the English source text only hold while the active locale is English. The
+    locale is an instance-wide setting read from MongoDB, which means without
+    this the result depends on whether a database happens to be reachable from
+    the test machine and what language that instance is configured for - tests
+    that pass on a laptop with nothing running fail on one with a Spanish-
+    configured stack up. (Exactly that happened during development.)
+
+    ``tests/test_i18n.py`` clears this in its own autouse fixture, which runs
+    after this one, so translation itself is still tested properly.
+    """
+    import time
+
+    from archihub.core import i18n
+
+    i18n._locale_cache = ("en", time.monotonic())
+    yield
+    i18n.reset_locale_cache()
