@@ -77,11 +77,6 @@
       "auth": false
     },
     {
-      "name": "_forms: list all",
-      "path": "/forms",
-      "auth": true
-    },
-    {
       "name": "_users: list all",
       "method": "POST",
       "path": "/users",
@@ -149,6 +144,29 @@
       "name": "lists: unauthenticated is 401",
       "path": "/lists",
       "auth": false
+    },
+    {
+      "name": "forms: list all",
+      "path": "/forms",
+      "auth": true
+    },
+    {
+      "name": "forms: field types",
+      "path": "/forms/fields",
+      "auth": true
+    },
+    {
+      "name": "forms: get one (POST, not GET)",
+      "method": "POST",
+      "path": "/forms/formulario",
+      "auth": true,
+      "_note": "Retrieving a form is a POST - FormService.getForm sends POST and expects 200."
+    },
+    {
+      "name": "forms: unknown slug is 404",
+      "method": "POST",
+      "path": "/forms/definitely-not-a-form",
+      "auth": true
     }
   ]
 }

@@ -34,6 +34,11 @@ logger = logging.getLogger(__name__)
 
 COLLECTION = "post_types"
 
+# Upper bound on the -1, -2, ... suffix search when deriving a unique slug.
+# The loop is driven by what the database reports, so an existence query that
+# always answers "yes" would otherwise spin a request thread forever.
+MAX_SLUG_ATTEMPTS = 1000
+
 
 def _mongo():
     from archihub.infra.mongo import get_mongo
@@ -74,7 +79,9 @@ def make_unique_slug(name: str) -> str:
     base = slugify(name)
     candidate = base
     index = 1
-    while slug_exists(candidate):
+    while candidate and slug_exists(candidate):
+        if index > MAX_SLUG_ATTEMPTS:
+            raise RuntimeError(_("Could not generate a unique slug for {name}", name=base))
         candidate = f"{base}-{index}"
         index += 1
     return candidate
