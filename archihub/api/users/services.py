@@ -29,6 +29,7 @@ Phase 3 step 2, together with its invalidation sites.
 
 from __future__ import annotations
 
+import bcrypt
 import datetime
 import logging
 
@@ -85,6 +86,74 @@ def get_by_username(username: str) -> dict:
     user["_id"] = str(user["_id"])
     user.setdefault("favorites", [])
     return user
+
+
+def get_user(username: str) -> dict | None:
+    """Full user record for authentication, or None.
+
+    Returns None for an unverified account, so an account awaiting verification
+    cannot be logged into. The projection omits fields the login path has no use
+    for; ``password`` IS included, because verifying it is the point.
+    """
+    user = _mongo().get_record(
+        "users",
+        {"username": username},
+        fields={"status": 0, "photo": 0, "requests": 0, "lastRequest": 0},
+    )
+    if not user:
+        return None
+
+    # Absent means "verified" - the flag was introduced after accounts already
+    # existed, so its absence must not lock those accounts out.
+    if user.get("verified") is False:
+        return None
+
+    user.setdefault("favorites", [])
+    user["_id"] = str(user["_id"])
+    return user
+
+
+def register_user(body: dict) -> tuple[dict, int]:
+    """Create a user account.
+
+    Roles and access rights are validated against the configured vocabularies:
+    an unrecognised value is rejected rather than stored, because a role that
+    does not exist would silently grant nothing and look like a configuration
+    that had been applied.
+    """
+    from archihub.core.roles import verify_access_rights_exist, verify_roles_exist
+
+    mongo = _mongo()
+
+    if mongo.get_record("users", {"username": body.get("username")}, {"username": 1}):
+        return {"msg": _("User already exists")}, 400
+
+    try:
+        roles = verify_roles_exist(body.get("roles") or [])
+        rights = verify_access_rights_exist(body.get("accessRights") or [])
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    password = body.get("password") or ""
+    hashed = (
+        bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        if password
+        else ""
+    )
+
+    record = {
+        "username": body.get("username"),
+        "name": body.get("name"),
+        "password": hashed,
+        "roles": roles,
+        "accessRights": rights,
+        "loginType": body.get("loginType", "local"),
+        "verified": body.get("verified", True),
+        "createdAt": datetime.datetime.now(),
+    }
+    mongo.insert_record("users", record)
+    logger.info("Created account %s", record["username"])
+    return {"msg": _("User created successfully")}, 201
 
 
 def has_role(username: str, role: str) -> bool:
