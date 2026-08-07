@@ -69,7 +69,9 @@ def mongo(monkeypatch):
 
 
 def patch_result(monkeypatch, result: FakeResult):
-    monkeypatch.setattr(services, "AsyncResult", lambda task_id: result)
+    # Patch the `_result` seam rather than AsyncResult itself: the service binds
+    # the Celery app explicitly, so AsyncResult is called with two arguments.
+    monkeypatch.setattr(services, "_result", lambda task_id: result)
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +153,7 @@ def test_errors_allow_work_rather_than_blocking_it(mongo, monkeypatch):
     def _explode(task_id):
         raise ConnectionError("broker down")
 
-    monkeypatch.setattr(services, "AsyncResult", _explode)
+    monkeypatch.setattr(services, "_result", _explode)
     assert services.has_task("alice", "plugin.job") is False
 
 

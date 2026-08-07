@@ -66,6 +66,13 @@ celery_app.conf.worker_concurrency = 1 if _worker_pool == "solo" else settings.c
 # settings change takes effect without restarting beat. See worker/scheduler.py.
 celery_app.conf.beat_scheduler = "archihub.worker.scheduler:MongoPluginScheduler"
 
+# Claim Celery's process-global default app slot. Our own code always passes the
+# app explicitly (see api/tasks/services._result), but plugin and third-party
+# code commonly constructs a bare `AsyncResult(task_id)`, which resolves against
+# this default - and an unclaimed default carries a DisabledBackend whose every
+# state query raises.
+celery_app.set_default()
+
 # Task modules. Bodies for the in-scope plugins arrive in Phase 4; listing the
 # package now means a newly added module is picked up without touching this file.
 celery_app.autodiscover_tasks(["archihub.worker.tasks"], force=False)

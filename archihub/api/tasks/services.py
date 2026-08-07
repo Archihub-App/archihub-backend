@@ -40,6 +40,26 @@ from celery.result import AsyncResult
 
 logger = logging.getLogger(__name__)
 
+
+def _result(task_id: str) -> AsyncResult:
+    """An AsyncResult bound to THIS application's broker and backend.
+
+    A bare ``AsyncResult(task_id)`` resolves against Celery's *default* app,
+    which is process-global state. If nothing has claimed that slot the default
+    carries a ``DisabledBackend`` and every state query raises
+    ``AttributeError: 'DisabledBackend' object has no attribute
+    '_get_task_meta_for'``.
+
+    The legacy code worked only because ``celery_init_app`` called
+    ``set_default()`` as a side effect of building the Flask app. Depending on
+    that is fragile - it makes task polling silently conditional on which module
+    happened to be imported first. Passing the app explicitly removes the
+    ambient dependency.
+    """
+    from archihub.worker.celery_app import celery_app
+
+    return AsyncResult(task_id, app=celery_app)
+
 STATUS_PENDING = "pending"
 STATUS_COMPLETED = "completed"
 STATUS_FAILED = "failed"
@@ -135,7 +155,7 @@ def has_task(username: str, task_name: str) -> bool:
             logger.warning("Task record for %s/%s has no taskId", username, task_name)
             return False
 
-        result = AsyncResult(task_id)
+        result = _result(task_id)
 
         if result.state in IN_FLIGHT_STATES and not result.ready():
             return True
@@ -155,7 +175,7 @@ def has_task(username: str, task_name: str) -> bool:
 
 def get_task_status(task_id: str) -> dict[str, Any]:
     """Current state of one task, for polling endpoints."""
-    result = AsyncResult(task_id)
+    result = _result(task_id)
 
     if result.state in IN_FLIGHT_STATES and not result.ready():
         payload: dict[str, Any] = {"status": STATUS_PENDING}
@@ -171,3 +191,101 @@ def get_task_status(task_id: str) -> dict[str, Any]:
         return {"status": STATUS_FAILED, "result": ""}
 
     return {"status": result.state.lower()}
+
+
+# ---------------------------------------------------------------------------
+# Listing
+# ---------------------------------------------------------------------------
+
+PAGE_SIZE = 10
+
+
+def may_read_tasks_of(current_user: str, requested_user: str, is_admin: bool) -> bool:
+    """Whether ``current_user`` may read ``requested_user``'s task list.
+
+    A user may read their own tasks. Administrators may read anyone's, including
+    the ``automatic`` pseudo-user that hooks and the scheduler own.
+
+    STATED AS A POSITIVE RULE ON PURPOSE. The legacy guard was written as a
+    negative:
+
+        if not has_role(current_user, 'admin') and (current_user != user
+                                                    and user == 'automatic'):
+
+    which only refuses when the *requested* user is literally ``automatic`` - so
+    a non-admin asking for any other person's username fell straight through it.
+    A condition of this shape is hard to read correctly, which is most of why it
+    was wrong; an allow-rule is checkable at a glance.
+    """
+    if is_admin:
+        return True
+    return current_user == requested_user
+
+
+def get_tasks(user: str, body: dict) -> tuple[list | dict, int]:
+    """One user's tasks, newest first, reconciling any that have since finished."""
+    try:
+        mongo = _mongo()
+        page = int(body.get("page") or 0)
+
+        tasks = list(
+            mongo.get_all_records(
+                "tasks",
+                {"user": {"$in": [user]}},
+                sort=[("date", -1)],
+                limit=PAGE_SIZE,
+                skip=page * PAGE_SIZE,
+            )
+        )
+
+        resolved = []
+        for task in tasks:
+            entry = dict(task)
+            entry["_id"] = str(entry.get("_id"))
+            entry["date"] = entry["date"].isoformat() if hasattr(entry.get("date"), "isoformat") else entry.get("date")
+            # The stored status is a snapshot; Celery is the authority on
+            # whether the work has since finished.
+            if entry.get("status") == STATUS_PENDING and entry.get("taskId"):
+                current = get_task_status(entry["taskId"])
+                if current.get("status") != STATUS_PENDING:
+                    _sync_finished_task(entry["taskId"], _result(entry["taskId"]))
+                entry.update(current)
+            # 'automatic' is an internal identity; present it as the system.
+            if entry.get("user") == "automatic":
+                entry["user"] = "system"
+            resolved.append(entry)
+
+        return resolved, 200
+    except Exception as exc:
+        logger.exception("Could not list tasks for %s", user)
+        return {"msg": str(exc)}, 500
+
+
+def get_tasks_total(user: str) -> int:
+    return _mongo().count("tasks", {"user": user})
+
+
+def stop_task(task_id: str, current_user: str) -> tuple[dict, int]:
+    """Revoke a running task and mark it failed.
+
+    ``terminate=True`` kills the worker process handling it. That is the only
+    thing that stops the long-running media and AI jobs this exists for - they
+    do not check for revocation between steps - but it does mean the task is
+    interrupted wherever it happens to be, so anything it was midway through
+    writing is left as it was.
+    """
+    from archihub.core.i18n import gettext as _
+
+    try:
+        from archihub.worker.celery_app import celery_app
+
+        celery_app.control.revoke(task_id, terminate=True)
+    except Exception as exc:
+        logger.exception("Could not revoke task %s", task_id)
+        return {"msg": str(exc)}, 500
+
+    _mongo().update_record(
+        "tasks", {"taskId": task_id}, {"status": STATUS_FAILED, "result": ""}
+    )
+    logger.info("Task %s revoked by %s", task_id, current_user)
+    return {"msg": _("Task stopped successfully")}, 200
