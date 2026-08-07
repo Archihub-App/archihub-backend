@@ -147,16 +147,16 @@ def _slugs_for_post_type(post_type: str) -> list[str] | None:
 
 @router.get(
     "/favcount/{resource_id}",
+    # The identity is not used, only required - so the dependency is declared on
+    # the route rather than taken as an unread parameter.
+    dependencies=[Depends(get_current_user)],
     responses={
         200: {"description": "How many users have favourited this resource"},
         404: {"description": "No such resource"},
         **_RESPONSES,
     },
 )
-def favcount(
-    resource_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
-) -> JSONResponse:
+def favcount(resource_id: str) -> JSONResponse:
     """The favourite count of a resource.
 
     Declared before ``/{resource_id}`` so the literal segment wins the match.
