@@ -328,6 +328,58 @@ def get_by_gallery_index(body: dict, user: str) -> tuple[dict, int]:
 
 
 # ---------------------------------------------------------------------------
+# Plugin output
+# ---------------------------------------------------------------------------
+
+
+def get_processing_result(record: dict, slug: str) -> tuple[dict | list, int]:
+    """What a named processing produced for this record.
+
+    Large results are stored as chunk documents in a separate collection rather
+    than inline, so both shapes are read. Datetimes are rendered as strings
+    because the result is plugin-defined and may hold them at any depth the
+    JSON encoder would otherwise refuse.
+    """
+    from archihub.api.records.viewers import load_chunked_result
+
+    processing = record.get("processing")
+    entry = processing.get(slug) if isinstance(processing, dict) else None
+    if not isinstance(entry, dict):
+        return {"msg": _("Record has not been processed with {slug}", slug=slug)}, 404
+
+    storage = entry.get("result_storage") or {}
+    if storage.get("type") == "chunked":
+        result = load_chunked_result(record.get("_id"), storage)
+    else:
+        result = entry.get("result")
+        if result is None:
+            result = []
+
+    return parse_result(result), 200
+
+
+def get_processing_metadata(record: dict, slug: str) -> tuple[dict, int]:
+    """The metadata block a named processing extracted.
+
+    EXIF is filtered to the presentable subset here as it is on the detail
+    route - this endpoint reads the same stored block, and serving it whole
+    would hand back the GPS coordinates and camera serial numbers the detail
+    route is careful to drop.
+    """
+    processing = record.get("processing")
+    entry = processing.get(slug) if isinstance(processing, dict) else None
+    if not isinstance(entry, dict):
+        return {"msg": _("Record has not been processed with {slug}", slug=slug)}, 404
+
+    result = entry.get("result")
+    metadata = result.get("metadata") if isinstance(result, dict) else None
+    if metadata is None:
+        return {"msg": _("Record does not contain metadata")}, 404
+
+    return parse_result(important_exif(metadata)), 200
+
+
+# ---------------------------------------------------------------------------
 # Favourites
 # ---------------------------------------------------------------------------
 

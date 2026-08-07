@@ -72,6 +72,45 @@ def may_view_record(username: str, record: dict, is_admin: bool) -> bool:
     return all(_parent_permits(username, parent) for parent in record.get("parent") or [])
 
 
+def is_public(record: dict) -> bool:
+    """Whether an anonymous caller may see this record.
+
+    A record is public when it restricts nothing itself **and** every resource
+    it is filed under is public - which carries the published check and the
+    inherited access right with it, through ``resources.access.is_public``.
+
+    The legacy public layer checked only that the *record* declared no access
+    right and that each parent's own right was absent. It never checked that the
+    parent was published, so **a file attached to an unpublished draft was
+    served to anonymous callers** through `/records/public/<id>` as soon as
+    somebody knew its id. Ids are not secret: they appear in the authenticated
+    listing every cataloguer can see. Recorded as BACKEND_FINDINGS S20.
+    """
+    if record.get("accessRights"):
+        return False
+
+    parents = record.get("parent") or []
+    if not parents:
+        # A record filed nowhere is reachable through no public resource, so
+        # nothing publishes it. The legacy code treated this as public.
+        return False
+
+    return all(_parent_is_public(parent) for parent in parents)
+
+
+def _parent_is_public(parent) -> bool:
+    from archihub.api.resources.access import is_public as resource_is_public
+
+    if not isinstance(parent, dict) or not parent.get("id"):
+        return False
+
+    resource = _load_resource(parent["id"], public=True)
+    if not resource:
+        return False
+
+    return resource_is_public(resource)
+
+
 def _parent_permits(username: str, parent) -> bool:
     from archihub.api.resources.access import effective_access_right
 
@@ -87,7 +126,7 @@ def _parent_permits(username: str, parent) -> bool:
     return holds(username, effective_access_right(resource))
 
 
-def _load_resource(resource_id: str):
+def _load_resource(resource_id: str, public: bool = False):
     from bson.objectid import ObjectId
 
     try:
@@ -95,6 +134,10 @@ def _load_resource(resource_id: str):
     except Exception:
         return None
 
-    return _mongo().get_record(
-        "resources", {"_id": object_id}, fields={"accessRights": 1, "parents": 1}
-    )
+    fields = {"accessRights": 1, "parents": 1}
+    if public:
+        # The public rule additionally needs the publication state and the type,
+        # so it can apply the same three gates the authenticated rule does.
+        fields.update({"status": 1, "post_type": 1})
+
+    return _mongo().get_record("resources", {"_id": object_id}, fields=fields)

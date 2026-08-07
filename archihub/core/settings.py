@@ -154,6 +154,14 @@ class Settings(BaseSettings):
     # choosing a number. See PLAN_FASTAPI.md section 6.
     max_upload_bytes: int = Field(default=5 * 1024 * 1024 * 1024, validation_alias="MAX_UPLOAD_BYTES")
 
+    # How many characters of transcript one page of the transcription viewer
+    # holds. The legacy module read this at import time and silently fell back
+    # to the default on a non-integer or non-positive value; typed here so a
+    # bad value is a startup error naming the variable instead.
+    transcription_page_char_limit: int = Field(
+        default=6000, gt=0, validation_alias="TRANSCRIPTION_PAGE_CHAR_LIMIT"
+    )
+
     # ------------------------------------------------------------------
     # Networking / nodes
     # ------------------------------------------------------------------

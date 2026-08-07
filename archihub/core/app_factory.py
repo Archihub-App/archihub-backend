@@ -198,6 +198,37 @@ def _register_middleware(app: FastAPI, settings: Settings) -> None:
     )
 
 
+def _assert_public_routes_win(app: FastAPI) -> None:
+    """Fail at startup if a parameterised route shadows a public one.
+
+    A shadowed public route does not error - it authenticates, so an anonymous
+    caller gets 401 where the contract promises a document. That is invisible in
+    a route inventory and easy to reintroduce by moving one ``include_router``
+    line, so it is checked here rather than trusted to ordering discipline.
+    """
+    from archihub.core.routing import iter_api_routes
+
+    seen_parameterised: list[str] = []
+    for path, route in iter_api_routes(app):
+        if "/public" in path:
+            for earlier in seen_parameterised:
+                if _would_capture(earlier, path):
+                    raise RuntimeError(
+                        f"Route {earlier!r} is registered before {path!r} and would "
+                        "capture it. Mount the public router first."
+                    )
+        elif "{" in path:
+            seen_parameterised.append(path)
+
+
+def _would_capture(parameterised: str, literal: str) -> bool:
+    """Whether ``parameterised`` matches ``literal``'s shape segment for segment."""
+    left, right = parameterised.strip("/").split("/"), literal.strip("/").split("/")
+    if len(left) != len(right):
+        return False
+    return all(a.startswith("{") or a == b for a, b in zip(left, right))
+
+
 def _register_routers(app: FastAPI) -> None:
     # NOTE: use archihub.core.routing.include_router, never app.include_router
     # directly - the wrapper keeps the registry that /health/test-control/routes
@@ -208,6 +239,7 @@ def _register_routers(app: FastAPI) -> None:
     from archihub.api.forms.router import router as forms_router
     from archihub.api.lists.router import router as lists_router
     from archihub.api.logs.router import router as logs_router
+    from archihub.api.records.public_router import router as records_public_router
     from archihub.api.records.router import router as records_router
     from archihub.api.resources.router import router as resources_router
     from archihub.api.system.router import router as system_router
@@ -228,7 +260,16 @@ def _register_routers(app: FastAPI) -> None:
     include_router(app, tasks_router)
     include_router(app, usertasks_router)
     include_router(app, resources_router)
+
+    # ORDER MATTERS, and not only for readability. The public record routes all
+    # begin with the literal segment `public`, which `GET /records/{record_id}`
+    # in the authenticated router would otherwise capture - Starlette matches in
+    # registration order and takes the first route whose path converts. Mounted
+    # first, then asserted below so a future reordering fails loudly instead of
+    # quietly turning every public route into an authenticated 401.
+    include_router(app, records_public_router)
     include_router(app, records_router)
+    _assert_public_routes_win(app)
 
     # Always mounted, exactly like the legacy blueprint. These routes exist on
     # every instance; it is the per-request dependency that 404s them when the

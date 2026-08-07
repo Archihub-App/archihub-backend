@@ -276,6 +276,42 @@ def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
         return {"msg": str(exc)}, 500
 
 
+def load_visible(
+    resource_id: str, user: str, fields: dict | None = None
+) -> tuple[dict | None, tuple[dict, int] | None]:
+    """``(resource, error)``. Exactly one of them is not ``None``.
+
+    The same three gates ``get_by_id`` applies, for callers that need the raw
+    document rather than the rendered one - the gallery viewers, which want
+    ``filesObj`` and nothing else. Kept beside ``get_by_id`` so the rule has one
+    home; a caller that re-derives it from ``resource["accessRights"]`` misses
+    ancestor inheritance, which is exactly how it went wrong once already.
+
+    The projection must include ``accessRights``, ``parents``, ``status`` and
+    ``post_type`` for the gates to be answerable, so they are added to whatever
+    the caller asked for.
+    """
+    from archihub.api.users.services import has_role
+
+    object_id = _to_object_id(resource_id)
+    if object_id is None:
+        return None, ({"msg": _("Resource does not exist")}, 404)
+
+    projection = None
+    if fields:
+        projection = {**fields, "accessRights": 1, "parents": 1, "status": 1, "post_type": 1}
+
+    resource = _mongo().get_record(COLLECTION, {"_id": object_id}, fields=projection)
+    if not resource:
+        return None, ({"msg": _("Resource does not exist")}, 404)
+
+    if not _may_open(user, resource, has_role(user, "admin")):
+        logger.info("Denied %s access to resource %s", user, resource_id)
+        return None, ({"msg": _("Resource does not exist")}, 404)
+
+    return resource, None
+
+
 def _may_open(user: str, resource: dict, is_admin: bool) -> bool:
     """The full visibility rule for a single resource."""
     if resource.get("status") == "deleted" and not access.may_see_deleted(user, is_admin):

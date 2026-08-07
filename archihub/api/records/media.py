@@ -97,6 +97,103 @@ def _media_type(kind: str, filename: str) -> str:
     return guess_media_type(filename)
 
 
+# ---------------------------------------------------------------------------
+# Download
+# ---------------------------------------------------------------------------
+
+#: The two things a caller may ask to download. ``original`` is the archival
+#: master as deposited; ``small`` is the web derivative.
+DOWNLOAD_KINDS = ("original", "small")
+
+#: Capability that must be present in the instance's system settings for any
+#: download to be served at all. An archive can turn distribution off entirely.
+DOWNLOAD_CAPABILITY = "files_download"
+
+
+class DownloadRefused(Exception):
+    """The download cannot be served, with the status to answer."""
+
+    def __init__(self, message: str, status_code: int = 400) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def downloads_enabled() -> bool:
+    from archihub.api.system.services import get_system_settings
+
+    settings, _status = get_system_settings()
+    return DOWNLOAD_CAPABILITY in (settings.get("capabilities") or [])
+
+
+def download_path(record: dict, kind: str):
+    """The file a download request means, and the name to serve it under.
+
+    The archival master is served for ``original`` and the web derivative for
+    ``small`` - except for documents, whose "derivative" is a directory of page
+    images rather than a single file, so the master is served for both. That
+    asymmetry is the original's and is deliberate: there is no single-file
+    rendition of a document to hand back.
+
+    The original ended with an ``if``/``elif`` over the requested kind and no
+    ``else``, so an unrecognised value fell off the end returning ``None``,
+    which Flask rendered as a 500 with an empty body.
+    """
+    if kind not in DOWNLOAD_KINDS:
+        raise DownloadRefused(_("Unsupported download type"), 400)
+
+    processing = record.get("processing") or {}
+    file_processing = processing.get("fileProcessing") if isinstance(processing, dict) else None
+    if not isinstance(file_processing, dict) or not file_processing.get("type"):
+        raise DownloadRefused(_("Record does not have fileProcessing"), 404)
+
+    stored_original = record.get("filepath")
+    media_kind = file_processing["type"]
+
+    if kind == "original" or media_kind == "document":
+        if not stored_original:
+            raise DownloadRefused(_("Record does not have files"), 404)
+        path = filestore.resolve_within(get_settings().original_files_path, stored_original)
+        return path, _download_name(record, path)
+
+    suffix = DERIVATIVE_SUFFIX.get((media_kind, "large" if media_kind == "image" else None))
+    if suffix is None:
+        raise DownloadRefused(_("Record is not audio, video, or image"), 400)
+
+    stored = file_processing.get("path")
+    if not stored:
+        raise DownloadRefused(_("Record has not been processed"), 404)
+
+    path = filestore.resolve_within(get_settings().web_files_path, stored + suffix)
+    return path, _download_name(record, path)
+
+
+def _download_name(record: dict, path) -> str:
+    """What the browser should call the saved file.
+
+    The record's display name with the served file's real extension, so a
+    downloaded scan is not named after the UUID it is stored under. Falls back
+    to the stored name when there is no display name.
+    """
+    label = record.get("displayName") or record.get("name") or path.stem
+    stem = filestore.secure_name(str(label)) or path.stem
+    if stem.lower().endswith(path.suffix.lower()):
+        return stem
+    return stem + path.suffix
+
+
+def download(record: dict, kind: str):
+    """A ``FileResponse`` that saves rather than plays."""
+    if not downloads_enabled():
+        raise DownloadRefused(_("Files download isn't active"), 400)
+
+    path, name = download_path(record, kind)
+    if not path.is_file():
+        logger.info("Download target missing on disk: %s", path)
+        raise DownloadRefused(_("Record does not have files"), 404)
+
+    return file_response(path, download_name=name, as_attachment=True)
+
+
 def parse_fragment_bounds(start_ms, end_ms) -> tuple[float, float] | None:
     """Validate a requested time range, or ``None`` if none was asked for.
 

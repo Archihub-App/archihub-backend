@@ -161,6 +161,37 @@ def owns_or_supervises(username: str, resource: dict, is_admin: bool) -> bool:
     return has_role(username, "super_editor")
 
 
+def is_public(resource: dict) -> bool:
+    """Whether an anonymous caller may see this resource.
+
+    THREE CONDITIONS, and they mirror the authenticated rule with the caller's
+    rights fixed at "none":
+
+    * it is **published** - a draft is work in progress and the recycle bin is
+      not a public archive;
+    * its **effective** access right is absent, which is inherited, so an item
+      filed under a reserved fonds is not public even if it declares nothing
+      itself;
+    * its content type declares no ``viewRoles`` - a type restricted to some
+      role cannot be visible to someone holding none.
+
+    Stated once here rather than in each public service, because the legacy
+    public layer applied a different subset at each of its six routes.
+    """
+    if resource.get("status") != "published":
+        return False
+    if effective_access_right(resource):
+        return False
+
+    post_type = resource.get("post_type")
+    if not post_type:
+        return True
+
+    from archihub.api.resources.hierarchy import type_roles
+
+    return not type_roles(post_type).get("viewRoles")
+
+
 def may_see_deleted(username: str | None, is_admin: bool) -> bool:
     """Only administrators may browse the recycle bin."""
     return is_admin

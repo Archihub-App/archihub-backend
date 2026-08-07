@@ -1,0 +1,88 @@
+# Spanish translations for the FastAPI backend.
+#
+# This catalogue holds ONLY msgids introduced by the rewrite. The legacy
+# catalogue under app/translations/ is the primary source and is deliberately
+# left untouched: app/ is the reference implementation the diff harness compares
+# against, so nothing in the port writes to it. archihub/core/i18n.py registers
+# this directory as a fallback, consulted only for strings the legacy catalogue
+# does not define - so an existing translation always wins.
+#
+# At Phase 7 cutover, when app/ is deleted, the two catalogues merge into this
+# one.
+msgid ""
+msgstr ""
+"Project-Id-Version: archihub\n"
+"Language: es_ES\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "DZI file not found"
+msgstr "No se encontró el archivo DZI"
+
+msgid "Filters are required"
+msgstr "Los filtros son obligatorios"
+
+msgid "Filter operator \"{op}\" is not allowed"
+msgstr "El operador de filtro \"{op}\" no está permitido"
+
+msgid "Fragment extraction is not available yet"
+msgstr "La extracción de fragmentos aún no está disponible"
+
+msgid "Image index out of range"
+msgstr "Índice de imagen fuera de rango"
+
+msgid "Invalid block index"
+msgstr "Índice de bloque inválido"
+
+msgid "Invalid dzi_payload type, expected xml or tile"
+msgstr "Tipo de dzi_payload inválido, se esperaba xml o tile"
+
+msgid "Invalid page number"
+msgstr "Número de página inválido"
+
+msgid "Invalid segment index"
+msgstr "Índice de segmento inválido"
+
+msgid "Nothing to update"
+msgstr "No hay nada que actualizar"
+
+msgid "This processing result cannot be edited"
+msgstr "Este resultado de procesamiento no se puede editar"
+
+msgid "Tile not found"
+msgstr "No se encontró el mosaico"
+
+msgid "Unknown size \"{size}\""
+msgstr "Tamaño desconocido \"{size}\""
+
+msgid "Unsupported block type"
+msgstr "Tipo de bloque no soportado"
+
+msgid "Unsupported download type"
+msgstr "Tipo de descarga no soportado"
+
+msgid "Untitled"
+msgstr "Sin título"
+
+msgid "bbox is missing"
+msgstr "bbox está faltando"
+
+msgid "id_doc is missing"
+msgstr "id_doc está faltando"
+
+msgid "level, col, and row are required for tile requests"
+msgstr "level, col y row son obligatorios para las solicitudes de mosaico"
+
+msgid "level, col, and row must be integers"
+msgstr "level, col y row deben ser números enteros"
+
+msgid "slug is missing"
+msgstr "slug está faltando"
+
+msgid "speaker and oldSpeaker are required"
+msgstr "speaker y oldSpeaker son obligatorios"
+
+msgid "{field} is missing"
+msgstr "{field} está faltando"
