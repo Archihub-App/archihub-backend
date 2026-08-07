@@ -41,3 +41,19 @@ python-ldap
 geopandas
 topojson
 pyvips
+
+# --- FastAPI stack (the archihub/ package) -------------------------------
+# Additive: the legacy Flask stack is unaffected by these being present.
+# Retired together with requirements.txt itself when PLAN_FASTAPI.md section 9
+# moves the project to pyproject.toml.
+fastapi
+uvicorn[standard]
+pydantic-settings
+# Required by FastAPI for ANY Form()/File() route - multipart parsing is not
+# built in the way Werkzeug's is. Without it, an upload route raises at import
+# time, not at request time.
+python-multipart
+# Imported directly by archihub/api/resources/validation.py for ISO date
+# parsing. It arrived transitively via Celery before; a direct import deserves
+# a direct declaration.
+python-dateutil
