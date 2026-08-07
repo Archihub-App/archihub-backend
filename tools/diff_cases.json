@@ -58,9 +58,25 @@
       ]
     },
     {
-      "name": "_types: list all",
+      "name": "types: list all",
       "path": "/types",
       "auth": true
+    },
+    {
+      "name": "types: get one by slug",
+      "path": "/types/carpeta",
+      "auth": true,
+      "_note": "Adjust the slug to one that exists on the instance under test."
+    },
+    {
+      "name": "types: unknown slug is 404",
+      "path": "/types/definitely-not-a-type",
+      "auth": true
+    },
+    {
+      "name": "types: unauthenticated is 401",
+      "path": "/types",
+      "auth": false
     },
     {
       "name": "_lists: list all",

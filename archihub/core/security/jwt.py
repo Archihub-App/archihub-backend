@@ -95,11 +95,30 @@ def get_current_user(
     return CurrentUser(username=tokens.get_identity(claims), claims=claims)
 
 
-def require_role_any(*roles: str) -> Callable[..., CurrentUser]:
+# The status code a role failure produces on routes ported from the legacy API.
+#
+# 403 is correct and is what new routes use. The legacy API answered 401 for
+# permission failures at ~223 sites, and `upgrade_front` performs exact
+# status-code equality checks at roughly 187 call sites - so flipping this
+# during a backend-only migration would break the frontend with no matching
+# change on the other side.
+#
+# Ported routes therefore pass `status_code=LEGACY_ROLE_FAILURE_STATUS`
+# explicitly. It is a marker as much as a value: grep for it to find every route
+# awaiting the coordinated flip, then delete the argument (not the constant's
+# value) once the frontend audit lands. See PLAN_FASTAPI.md decision 2.
+LEGACY_ROLE_FAILURE_STATUS = 401
+
+
+def require_role_any(*roles: str, status_code: int | None = None) -> Callable[..., CurrentUser]:
     """Dependency factory: require at least one of ``roles``.
 
     Mirrors ``PluginClass.validate_roles``, which also passed when *any* of the
     listed roles matched.
+
+    ``status_code`` defaults to 403 (correct). Ported routes pass
+    ``LEGACY_ROLE_FAILURE_STATUS`` to preserve the existing wire contract - see
+    the constant's comment.
     """
 
     def _dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
@@ -109,7 +128,9 @@ def require_role_any(*roles: str) -> Callable[..., CurrentUser]:
             logger.info(
                 "Denied %s access requiring one of %s", current_user.username, list(roles)
             )
-            raise PermissionDeniedError(_(MSG_INSUFFICIENT_PERMISSIONS))
+            raise PermissionDeniedError(
+                _(MSG_INSUFFICIENT_PERMISSIONS), status_code=status_code
+            )
         return current_user
 
     return _dependency
