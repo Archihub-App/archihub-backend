@@ -1,0 +1,215 @@
+"""Resource listing and detail.
+
+The archive's highest-traffic read path.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+import pytest
+from bson.objectid import ObjectId
+
+from archihub.api.resources import services
+
+VALID_ID = "6a70b833497d4440325c94b1"
+
+
+class FakeMongo:
+    def __init__(self):
+        self.records: dict = {}
+        self.rows: dict[str, list] = {}
+        self.last_query: dict | None = None
+
+    def get_record(self, collection, filters, fields=None):
+        source = self.records.get(collection)
+        return source(filters) if callable(source) else source
+
+    def get_all_records(self, collection, filters=None, sort=None, limit=0, skip=0, fields=None):
+        self.last_query = filters
+        return [dict(r) for r in self.rows.get(collection, [])]
+
+    def count(self, collection, filters=None):
+        return len(self.rows.get(collection, []))
+
+
+@pytest.fixture
+def mongo(monkeypatch):
+    fake = FakeMongo()
+    monkeypatch.setattr(services, "_mongo", lambda: fake)
+    monkeypatch.setattr(services.access, "_mongo", lambda: fake)
+    monkeypatch.setattr(services, "_metadata_field_types", lambda pts, cols: [])
+    monkeypatch.setattr(services, "_access_right_term", lambda v: v)
+    return fake
+
+
+@pytest.fixture
+def as_admin(monkeypatch):
+    monkeypatch.setattr("archihub.api.users.services.has_role", lambda u, r: True)
+
+
+@pytest.fixture
+def as_user(monkeypatch):
+    monkeypatch.setattr("archihub.api.users.services.has_role", lambda u, r: False)
+
+
+# ---------------------------------------------------------------------------
+# Detail - existence must not leak
+# ---------------------------------------------------------------------------
+
+
+def test_a_resource_the_caller_may_not_see_is_404_not_403(mongo, as_user):
+    """A distinct status would confirm the resource exists.
+
+    404 for both "absent" and "forbidden" means an unauthorised caller learns
+    nothing from the difference.
+    """
+    mongo.records["resources"] = {"_id": ObjectId(VALID_ID), "accessRights": ["restricted"]}
+    mongo.records["users"] = {"accessRights": ["public"]}
+
+    payload, status = services.get_by_id(VALID_ID, "alice")
+
+    assert status == 404
+    assert payload["msg"] == services._("Resource does not exist")
+
+
+def test_an_absent_resource_is_404_with_the_same_message(mongo, as_user):
+    mongo.records["resources"] = None
+    payload, status = services.get_by_id(VALID_ID, "alice")
+    assert status == 404
+
+
+def test_a_malformed_id_is_404_not_500(mongo, as_user):
+    _payload, status = services.get_by_id("not-an-object-id", "alice")
+    assert status == 404
+
+
+def test_an_unrestricted_resource_is_visible(mongo, as_user):
+    mongo.records["resources"] = {"_id": ObjectId(VALID_ID), "accessRights": None}
+    mongo.records["users"] = {"accessRights": []}
+
+    _payload, status = services.get_by_id(VALID_ID, "alice")
+    assert status == 200
+
+
+def test_a_matching_right_grants_access(mongo, as_user):
+    mongo.records["resources"] = {"_id": ObjectId(VALID_ID), "accessRights": ["internal"]}
+    mongo.records["users"] = {"accessRights": ["internal", "public"]}
+
+    _payload, status = services.get_by_id(VALID_ID, "alice")
+    assert status == 200
+
+
+def test_an_admin_sees_a_restricted_resource(mongo, as_admin):
+    mongo.records["resources"] = {"_id": ObjectId(VALID_ID), "accessRights": ["secret"]}
+
+    _payload, status = services.get_by_id(VALID_ID, "admin")
+    assert status == 200
+
+
+# ---------------------------------------------------------------------------
+# Listing
+# ---------------------------------------------------------------------------
+
+
+def test_a_non_admin_listing_is_access_constrained(mongo, as_user, monkeypatch):
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    mongo.records["users"] = {"accessRights": ["public"]}
+    mongo.rows["resources"] = []
+
+    services.get_all({"post_type": ["carpeta"], "status": "published"}, "alice")
+
+    assert "$and" in mongo.last_query
+
+
+def test_an_admin_listing_is_not_access_constrained(mongo, as_admin, monkeypatch):
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    mongo.rows["resources"] = []
+
+    services.get_all({"post_type": ["carpeta"], "status": "published"}, "admin")
+
+    assert "$and" not in mongo.last_query
+
+
+def test_a_hidden_content_type_is_refused(mongo, as_user, monkeypatch):
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: False)
+
+    _payload, status = services.get_all({"post_type": ["restricted"]}, "alice")
+    assert status == 401
+
+
+def test_the_listing_reports_a_file_count_not_the_files(mongo, as_admin, monkeypatch):
+    """Returning the file records themselves would inflate every listing page."""
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    mongo.rows["resources"] = [
+        {"_id": ObjectId(VALID_ID), "filesObj": [{"id": 1}, {"id": 2}, {"id": 3}]}
+    ]
+
+    payload, _status = services.get_all({"post_type": ["x"]}, "admin")
+
+    assert payload["resources"][0]["files"] == 3
+    assert "filesObj" not in payload["resources"][0]
+
+
+def test_dates_are_serialised(mongo, as_admin, monkeypatch):
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    mongo.rows["resources"] = [{"_id": ObjectId(VALID_ID), "createdAt": datetime(2026, 1, 2, 3, 4, 5)}]
+
+    payload, _status = services.get_all({"post_type": ["x"]}, "admin")
+    assert payload["resources"][0]["createdAt"] == "2026-01-02T03:04:05"
+
+
+def test_non_text_columns_are_required_to_be_present(mongo, as_admin, monkeypatch):
+    """Otherwise the listing shows empty cells for the very column the caller
+    asked to display."""
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    monkeypatch.setattr(
+        services, "_metadata_field_types",
+        lambda pts, cols: [{"destiny": "metadata.date", "type": "simple-date"}],
+    )
+    mongo.rows["resources"] = []
+
+    services.get_all(
+        {"post_type": ["x"], "activeColumns": ["metadata.date"]}, "admin"
+    )
+
+    assert mongo.last_query["metadata.date"] == {"$exists": True, "$ne": None}
+
+
+def test_a_text_column_is_not_required_to_be_present(mongo, as_admin, monkeypatch):
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    monkeypatch.setattr(
+        services, "_metadata_field_types",
+        lambda pts, cols: [{"destiny": "metadata.title", "type": "text"}],
+    )
+    mongo.rows["resources"] = []
+
+    services.get_all({"post_type": ["x"], "activeColumns": ["metadata.title"]}, "admin")
+
+    assert "metadata.title" not in mongo.last_query
+
+
+# ---------------------------------------------------------------------------
+# Cross-domain helpers
+# ---------------------------------------------------------------------------
+
+
+def test_resource_type_of_a_missing_resource_is_none_not_an_error(mongo):
+    """Legacy raised. Callers enriching a list would turn one stale reference
+    into a failed page."""
+    mongo.records["resources"] = None
+    assert services.get_resource_type(VALID_ID) is None
+
+
+def test_resource_type_of_a_malformed_id_is_none(mongo):
+    assert services.get_resource_type("nope") is None
+
+
+def test_a_type_without_view_roles_is_visible_to_everyone(mongo, as_user):
+    mongo.records["post_types"] = {"viewRoles": []}
+    assert services.can_view_type("alice", "carpeta") is True
+
+
+def test_a_type_with_view_roles_requires_one_of_them(mongo, as_user):
+    mongo.records["post_types"] = {"viewRoles": ["curator"]}
+    assert services.can_view_type("alice", "restricted") is False
