@@ -52,6 +52,79 @@ def access_rights_clause(username: str | None) -> dict:
     return {"$or": [{"accessRights": {"$in": user_access_rights(username)}}, *_NO_RIGHTS_CLAUSES]}
 
 
+def effective_access_right(resource: dict) -> str | None:
+    """The access right that actually governs a resource.
+
+    ACCESS RIGHTS ARE INHERITED. A resource that declares none is governed by
+    the nearest ancestor that does - so restricting a fonds restricts everything
+    filed under it, which is how archival access conditions are normally
+    expressed. Missing this is what makes the difference between "this series is
+    reserved" and "this series is reserved, but every item in it is public".
+
+    Two changes from the original ``get_accessRights``:
+
+    * it raised for a resource with no ``parents`` key and again for an ancestor
+      with no ``accessRights`` key, both of which occur in real documents;
+    * it resolved ancestors with a single ``$in`` query and took whichever came
+      back first, so which right won was down to Mongo's storage order. Here the
+      stored ``parents`` order decides, which :func:`hierarchy.ancestors` sorts
+      nearest-first - the nearest ancestor's condition is the one that applies.
+    """
+    own = resource.get("accessRights")
+    if own:
+        return own
+
+    parents = resource.get("parents") or []
+    parent_ids = [p.get("id") for p in parents if isinstance(p, dict) and p.get("id")]
+    if not parent_ids:
+        return None
+
+    from bson.objectid import ObjectId
+
+    object_ids = []
+    for parent_id in parent_ids:
+        try:
+            object_ids.append(ObjectId(parent_id))
+        except Exception:
+            logger.warning("Resource lists an unusable ancestor id %r", parent_id)
+
+    if not object_ids:
+        return None
+
+    rows = _mongo().get_all_records(
+        "resources", {"_id": {"$in": object_ids}}, fields={"accessRights": 1}
+    )
+    rights = {str(row["_id"]): row.get("accessRights") for row in rows}
+
+    for parent_id in parent_ids:
+        if rights.get(parent_id):
+            return rights[parent_id]
+
+    return None
+
+
+def may_view_resource(username: str, resource: dict, is_admin: bool) -> bool:
+    """Whether this caller may open this resource.
+
+    Administrators always may. Everyone else must hold the governing access
+    right, if there is one.
+    """
+    if is_admin:
+        return True
+
+    required = effective_access_right(resource)
+    if not required:
+        return True
+
+    held = user_access_rights(username)
+    # The field is declared a single id, but list-valued documents exist in real
+    # data - which is why the "no rights" clauses above have to enumerate the
+    # empty list too. A list means any one of them is sufficient.
+    if isinstance(required, list):
+        return bool(set(required) & set(held))
+    return required in held
+
+
 def may_see_deleted(username: str | None, is_admin: bool) -> bool:
     """Only administrators may browse the recycle bin."""
     return is_admin

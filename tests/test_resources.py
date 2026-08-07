@@ -108,6 +108,114 @@ def test_an_admin_sees_a_restricted_resource(mongo, as_admin):
 
 
 # ---------------------------------------------------------------------------
+# Detail - the three gates
+#
+# An earlier version of this port applied only the access-rights one, checked
+# against the resource's own field. That was wrong in three separate ways, all
+# of which widened access; these pin each of them.
+# ---------------------------------------------------------------------------
+
+
+PARENT_ID = "6a70b833497d4440325c94b2"
+
+
+def test_access_rights_are_inherited_from_an_ancestor(mongo, as_user):
+    """Restricting a fonds restricts everything filed under it.
+
+    That is how archival access conditions are normally expressed, and reading
+    only the resource's own field would make a reserved series full of public
+    items - the opposite of what the archivist configured.
+    """
+    mongo.records["resources"] = {
+        "_id": ObjectId(VALID_ID),
+        "accessRights": None,
+        "parents": [{"id": PARENT_ID}],
+    }
+    mongo.rows["resources"] = [{"_id": ObjectId(PARENT_ID), "accessRights": "reserved"}]
+    mongo.records["users"] = {"accessRights": ["public"]}
+
+    _payload, status = services.get_by_id(VALID_ID, "alice")
+    assert status == 404
+
+
+def test_holding_the_inherited_right_grants_access(mongo, as_user):
+    mongo.records["resources"] = {
+        "_id": ObjectId(VALID_ID),
+        "accessRights": None,
+        "parents": [{"id": PARENT_ID}],
+    }
+    mongo.rows["resources"] = [{"_id": ObjectId(PARENT_ID), "accessRights": "reserved"}]
+    mongo.records["users"] = {"accessRights": ["reserved"]}
+
+    _payload, status = services.get_by_id(VALID_ID, "alice")
+    assert status == 200
+
+
+def test_a_resource_with_a_declared_right_does_not_consult_its_ancestors(mongo, as_user):
+    """Its own condition is the more specific one."""
+    mongo.records["resources"] = {
+        "_id": ObjectId(VALID_ID),
+        "accessRights": "internal",
+        "parents": [{"id": PARENT_ID}],
+    }
+    mongo.rows["resources"] = [{"_id": ObjectId(PARENT_ID), "accessRights": "reserved"}]
+    mongo.records["users"] = {"accessRights": ["internal"]}
+
+    _payload, status = services.get_by_id(VALID_ID, "alice")
+    assert status == 200
+
+
+def test_an_unusable_ancestor_id_does_not_break_the_lookup(mongo, as_user):
+    mongo.records["resources"] = {
+        "_id": ObjectId(VALID_ID),
+        "accessRights": None,
+        "parents": [{"id": "not-an-object-id"}],
+    }
+    mongo.records["users"] = {"accessRights": []}
+
+    _payload, status = services.get_by_id(VALID_ID, "alice")
+    assert status == 200
+
+
+def test_a_deleted_resource_is_hidden_from_non_admins(mongo, as_user):
+    mongo.records["resources"] = {
+        "_id": ObjectId(VALID_ID),
+        "accessRights": None,
+        "status": "deleted",
+    }
+    mongo.records["users"] = {"accessRights": []}
+
+    _payload, status = services.get_by_id(VALID_ID, "alice")
+    assert status == 404
+
+
+def test_an_admin_may_open_a_deleted_resource(mongo, as_admin):
+    mongo.records["resources"] = {
+        "_id": ObjectId(VALID_ID),
+        "accessRights": None,
+        "status": "deleted",
+    }
+
+    _payload, status = services.get_by_id(VALID_ID, "admin")
+    assert status == 200
+
+
+def test_a_content_types_view_roles_are_enforced_on_the_detail_route(mongo, as_user):
+    """The listing has always applied this; the detail route must too, or the
+    restriction is one guessed URL away from being bypassed."""
+
+    def by_collection(filters):
+        return {"viewRoles": ["curator"]}
+
+    mongo.records["resources"] = {"_id": ObjectId(VALID_ID), "accessRights": None, "post_type": "foto"}
+    mongo.records["users"] = {"accessRights": []}
+    mongo.records["post_types"] = by_collection
+
+    _payload, status = services.get_by_id(VALID_ID, "alice")
+    assert status == 404
+
+
+# ---------------------------------------------------------------------------
 # Listing
 # ---------------------------------------------------------------------------
 

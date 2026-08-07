@@ -17,7 +17,7 @@ import logging
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 
-from archihub.api.resources import hierarchy, services
+from archihub.api.resources import article, hierarchy, services
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS, CurrentUser, get_current_user
 
@@ -162,6 +162,70 @@ def favcount(resource_id: str) -> JSONResponse:
     Declared before ``/{resource_id}`` so the literal segment wins the match.
     """
     return _respond(services.get_fav_count(resource_id))
+
+
+@router.get(
+    "/{resource_id}/article",
+    responses={
+        200: {"description": "The article body, or null if the resource has none"},
+        404: {"description": "No such resource"},
+        **_RESPONSES,
+    },
+)
+def get_article_body(
+    resource_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """The long-form article attached to a resource.
+
+    Readable by anyone who may read the resource itself, which includes access
+    rights inherited from its ancestors.
+    """
+    return _respond(article.get_article_body(resource_id, current_user.username))
+
+
+@router.post(
+    "/{resource_id}/article",
+    responses={
+        200: {"description": "Article body updated"},
+        400: {"description": "Missing or malformed article body"},
+        404: {"description": "No such resource"},
+        **_RESPONSES,
+    },
+)
+def update_article_body(
+    resource_id: str,
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Replace a resource's article.
+
+    Only ``articleBody`` is written. The legacy route built its update from the
+    entire request body, so other resource fields could be changed through it.
+    """
+    return _respond(article.update_article_body(resource_id, body, current_user.username))
+
+
+@router.post(
+    "/{resource_id}/article/comments",
+    responses={
+        200: {"description": "Comment added"},
+        400: {"description": "Missing comment, or an unusable block reference"},
+        404: {"description": "No such resource, or no such block"},
+        **_RESPONSES,
+    },
+)
+def add_article_block_comment(
+    resource_id: str,
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Attach a reviewer comment to one block of the article.
+
+    Address the block by ``blockId`` where possible - ``blockIndex`` is only
+    meaningful against the version of the article the client was looking at.
+    """
+    return _respond(article.add_block_comment(resource_id, body, current_user.username))
 
 
 @router.get(

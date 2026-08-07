@@ -242,9 +242,17 @@ def _access_right_term(access_right):
 def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
     """One resource, if the caller may see it.
 
-    The access check is applied to the fetched document rather than folded into
-    the query, so "does not exist" and "exists but you may not see it" produce
-    the same 404 - a distinct 403 would confirm the resource is there.
+    THREE GATES, all of which the original applied and all of which must stay:
+    the recycle bin is administrators-only, the governing access right must be
+    held (and it is **inherited from ancestors** - see
+    ``access.effective_access_right``), and the content type may restrict
+    viewing by role.
+
+    The checks are applied to the fetched document rather than folded into the
+    query, so "does not exist" and "exists but you may not see it" produce the
+    same 404. The original answered 401 for the second case, which confirmed the
+    resource was there; ``upgrade_front`` compares this response against 200
+    only, so the change is invisible to it.
     """
     object_id = _to_object_id(resource_id)
     if object_id is None:
@@ -257,7 +265,7 @@ def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
         if not resource:
             return {"msg": _("Resource does not exist")}, 404
 
-        if not has_role(user, "admin") and not _may_view(user, resource):
+        if not _may_open(user, resource, has_role(user, "admin")):
             logger.info("Denied %s access to resource %s", user, resource_id)
             return {"msg": _("Resource does not exist")}, 404
 
@@ -266,6 +274,18 @@ def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
     except Exception as exc:
         logger.exception("Could not load resource %s", resource_id)
         return {"msg": str(exc)}, 500
+
+
+def _may_open(user: str, resource: dict, is_admin: bool) -> bool:
+    """The full visibility rule for a single resource."""
+    if resource.get("status") == "deleted" and not access.may_see_deleted(user, is_admin):
+        return False
+
+    if not access.may_view_resource(user, resource, is_admin):
+        return False
+
+    post_type = resource.get("post_type")
+    return not post_type or can_view_type(user, post_type)
 
 
 def get_fav_count(resource_id: str) -> tuple[dict, int]:
@@ -289,17 +309,3 @@ def get_fav_count(resource_id: str) -> tuple[dict, int]:
     return {"favCount": resource.get("favCount") or 0}, 200
 
 
-def _may_view(user: str, resource: dict) -> bool:
-    """Whether a non-admin may see this document.
-
-    Mirrors the listing's rule, applied to one record: unrestricted resources
-    are visible to anyone, otherwise the caller must hold the right.
-    """
-    required = resource.get("accessRights")
-    if not required:
-        return True
-
-    rights = access.user_access_rights(user)
-    if isinstance(required, list):
-        return bool(set(required) & set(rights))
-    return required in rights
