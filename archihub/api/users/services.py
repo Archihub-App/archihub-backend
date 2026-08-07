@@ -417,3 +417,335 @@ def get_favorites(username: str, body: dict) -> tuple[dict | list, int]:
         resolved.append(record)
 
     return {"total": total, "resources": resolved}, 200
+
+
+# ---------------------------------------------------------------------------
+# Account lifecycle
+# ---------------------------------------------------------------------------
+
+# Roles that constitute "a system role". A user must retain at least one, or
+# they would exist with no way to do anything.
+SYSTEM_ROLES = frozenset({"admin", "editor", "user"})
+
+# Never returned by a user lookup, in any projection.
+_DETAIL_PROJECTION = {
+    "password": 0, "status": 0, "photo": 0, "compromise": 0,
+    "token": 0, "adminToken": 0, "nodeToken": 0, "vizToken": 0,
+}
+
+
+def get_by_id(user_id: str) -> tuple[dict, int]:
+    from bson.objectid import ObjectId
+
+    try:
+        object_id = ObjectId(user_id)
+    except Exception:
+        # A malformed id is a client error, not a server fault. Legacy let
+        # InvalidId escape into the 500 handler along with its bson message.
+        return {"msg": _("User not found")}, 404
+
+    user = _mongo().get_record("users", {"_id": object_id}, fields=_DETAIL_PROJECTION)
+    if not user:
+        return {"msg": _("User not found")}, 404
+
+    user["_id"] = str(user["_id"])
+    user.setdefault("favorites", [])
+    return user, 200
+
+
+def _user_management_flag(entry_id: str, fallback_index: int) -> bool:
+    """Read a self-service toggle from the `user_management` settings document.
+
+    Looked up by id with a positional fallback, so a reordered settings document
+    does not silently flip a feature on or off - the legacy code indexed
+    `data[0]` and `data[1]` directly.
+    """
+    record = _mongo().get_record("system", {"name": "user_management"})
+    data = (record or {}).get("data") or []
+
+    entry = next((item for item in data if item.get("id") == entry_id), None)
+    if entry is None and len(data) > fallback_index:
+        entry = data[fallback_index]
+
+    return bool((entry or {}).get("value"))
+
+
+def self_registration_enabled() -> bool:
+    return _user_management_flag("user_registration", 0)
+
+
+def password_recovery_enabled() -> bool:
+    return _user_management_flag("user_password_recovery", 1)
+
+
+def register_me(body: dict) -> tuple[dict, int]:
+    """Self-service registration, when the instance allows it.
+
+    The account is created unverified: roles and access rights are fixed here
+    rather than taken from the body, so a self-registering user cannot grant
+    themselves anything.
+    """
+    if not self_registration_enabled():
+        return {"msg": _("User registration disabled")}, 400
+
+    payload = {
+        "username": body.get("username"),
+        "name": body.get("name"),
+        "password": body.get("password") or "",
+        "roles": [{"id": "user"}],
+        "accessRights": [],
+        "verified": False,
+    }
+    return register_user(payload)
+
+
+def forgot_password(body: dict) -> tuple[dict, int]:
+    """Begin password recovery.
+
+    INVARIANT: the response is identical whether or not the account exists, and
+    whether or not the mail actually goes out. A distinct error for an unknown
+    account - or a 500 when SMTP is down for a real one but a 200 for an invented
+    one - turns this endpoint into a way to test which usernames are registered.
+    That is why the send is wrapped in its own handler and its failure only
+    reaches the log.
+    """
+    if not password_recovery_enabled():
+        return {"msg": _("Password recovery disabled")}, 400
+
+    username = body.get("username")
+    user = _mongo().get_record("users", {"username": username}, {"username": 1})
+
+    if user:
+        try:
+            _send_recovery_email(username)
+        except Exception:
+            logger.error("Could not send a password recovery message", exc_info=True)
+
+    return {
+        "msg": _(
+            "If an account exists for this username, a password recovery email has been sent"
+        )
+    }, 200
+
+
+def _send_recovery_email(username: str) -> None:
+    import os
+    from datetime import timedelta
+
+    from cryptography.fernet import Fernet
+
+    from archihub.api.email.services import send_email
+    from archihub.api.email.templates import forgot_password_template
+    from archihub.core.security import tokens
+    from archihub.core.settings import get_settings
+
+    token = tokens.create_access_token(username, expires_delta=timedelta(days=1))
+    cipher = Fernet(get_settings().fernet_key).encrypt(token.encode()).decode()
+
+    link = f"{os.environ.get('REDIRECT_URL', '')}/reset-password?token={cipher}"
+    send_email(username, _("Password recovery"), forgot_password_template(link))
+
+
+def update_user(body: dict, current_user: str) -> tuple[dict, int]:
+    """Administrative update of another account."""
+    from bson.objectid import ObjectId
+
+    from archihub.core.roles import verify_access_rights_exist, verify_roles_exist
+
+    try:
+        object_id = ObjectId(body.get("_id"))
+    except Exception:
+        return {"msg": _("User not found")}, 404
+
+    mongo = _mongo()
+    user = mongo.get_record("users", {"_id": object_id}, fields={"username": 1})
+    if not user:
+        return {"msg": _("User not found")}, 404
+
+    if body.get("username") and user.get("username") != body["username"]:
+        return {"msg": _("You cannot change the username")}, 400
+
+    try:
+        roles = verify_roles_exist(body.get("roles") or [])
+        rights = verify_access_rights_exist(body.get("accessRights") or [])
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    if not SYSTEM_ROLES.intersection(roles):
+        return {"msg": _("You must have at least one system role")}, 400
+
+    update: dict = {"roles": roles, "accessRights": rights}
+    if body.get("name") is not None:
+        update["name"] = body["name"]
+
+    mongo.update_record("users", {"_id": object_id}, update)
+    _register_log(current_user, "user_update", {"user": user.get("username")})
+    return {"msg": _("User updated successfully")}, 200
+
+
+def delete_user(body: dict, current_user: str) -> tuple[dict, int]:
+    """Delete an account, and revoke everything it could still authenticate with.
+
+    Deleting the user document alone is not enough: API keys live in their own
+    collection and a session JWT stays valid until it expires. The keys are
+    revoked here; session tokens are covered by BACKEND_FINDINGS S7, which is
+    still open.
+    """
+    username = body.get("username")
+
+    if username == current_user:
+        return {"msg": _("You cannot delete yourself")}, 400
+
+    mongo = _mongo()
+    if not mongo.get_record("users", {"username": username}, {"username": 1}):
+        return {"msg": _("User does not exist")}, 404
+
+    mongo.delete_record("users", {"username": username})
+
+    try:
+        from archihub.core.security import api_keys
+
+        api_keys.revoke_all(username)
+    except Exception:
+        logger.error("Could not revoke API keys for a deleted account", exc_info=True)
+
+    _register_log(current_user, "user_delete", {"user": username})
+    return {"msg": _("User deleted successfully")}, 200
+
+
+def update_me(body: dict, current_user: str) -> tuple[dict, int]:
+    """Self-service profile update.
+
+    The current password is required even to change the display name: this
+    endpoint can change the password, so a hijacked session must not be able to
+    take over the account outright.
+    """
+    import bcrypt as _bcrypt
+
+    mongo = _mongo()
+    user = mongo.get_record("users", {"username": current_user}, fields={"password": 1, "name": 1})
+    if not user:
+        return {"msg": _("User not found")}, 404
+
+    current_password = body.get("password") or ""
+    stored = (user.get("password") or "").encode("utf-8")
+    if not stored or not _bcrypt.checkpw(current_password.encode("utf-8"), stored):
+        return {"msg": _("Incorrect password")}, 400
+
+    update: dict = {}
+
+    if body.get("name") and body["name"] != user.get("name"):
+        update["name"] = body["name"]
+
+    new_password = body.get("new_password") or ""
+    if new_password:
+        confirmation = body.get("new_password_confirmation")
+        # Only enforced when supplied: the confirmation is a UI affordance, and
+        # a client that omits it should not silently skip the password change.
+        if confirmation is not None and new_password != confirmation:
+            return {"msg": _("Passwords do not match")}, 400
+        update["password"] = _bcrypt.hashpw(
+            new_password.encode("utf-8"), _bcrypt.gensalt()
+        ).decode("utf-8")
+
+    if not update:
+        return {"msg": _("No changes were made")}, 400
+
+    mongo.update_record("users", {"username": current_user}, update)
+
+    if "password" in update:
+        # A password change must not leave previously issued keys usable - that
+        # is usually the point of changing it.
+        try:
+            from archihub.core.security import api_keys
+
+            api_keys.revoke_all(current_user)
+        except Exception:
+            logger.error("Could not revoke API keys after a password change", exc_info=True)
+
+    return {"msg": _("User updated successfully")}, 200
+
+
+def accept_compromise(username: str) -> tuple[dict, int]:
+    _mongo().update_record("users", {"username": username}, {"compromise": True})
+    return {"msg": _("Compromise accepted successfully")}, 200
+
+
+def _register_log(user: str, action_key: str, metadata: dict) -> None:
+    try:
+        from archihub.api.logs.services import register_log
+
+        register_log(user, action_key, metadata)
+    except ImportError:
+        logger.debug("logs domain not ported yet; audit entry %s not written", action_key)
+
+
+# ---------------------------------------------------------------------------
+# API keys
+# ---------------------------------------------------------------------------
+#
+# These wrap core/security/api_keys.py. The current password is required to
+# issue one: an API key is a long-lived credential, so minting one from a
+# hijacked session would be a durable takeover that outlives the session itself.
+#
+# The returned value is the ONLY copy - the server stores a hash. Callers must
+# surface it to the user immediately.
+
+
+def _verify_current_password(username: str, password: str) -> bool:
+    import bcrypt as _bcrypt
+
+    user = _mongo().get_record("users", {"username": username}, fields={"password": 1})
+    stored = ((user or {}).get("password") or "").encode("utf-8")
+    if not stored:
+        return False
+    try:
+        return _bcrypt.checkpw((password or "").encode("utf-8"), stored)
+    except (ValueError, TypeError):
+        return False
+
+
+def issue_api_key(
+    username: str,
+    password: str,
+    scope: str,
+    *,
+    name: str | None = None,
+    expires_in=None,
+) -> tuple[dict, int]:
+    from archihub.core.security import api_keys
+
+    if not _verify_current_password(username, password):
+        return {"msg": _("Incorrect password")}, 400
+
+    try:
+        key = api_keys.create_key(
+            username,
+            scope,
+            name=name,
+            expires_in=expires_in if expires_in is not None else api_keys.DEFAULT_LIFETIME,
+        )
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    _register_log(username, "user_update", {"api_key": {"scope": scope}})
+    return {
+        "access_token": key,
+        # Stated in the payload as well as the docs: this response is the only
+        # time the value exists.
+        "msg": _("Store this key now - it will not be shown again"),
+    }, 200
+
+
+def list_api_keys(username: str) -> tuple[list, int]:
+    from archihub.core.security import api_keys
+
+    return api_keys.list_keys(username), 200
+
+
+def revoke_api_key(username: str, key_id: str) -> tuple[dict, int]:
+    from archihub.core.security import api_keys
+
+    if not api_keys.revoke_key(key_id, username):
+        return {"msg": _("API key not found")}, 404
+    return {"msg": _("API key revoked")}, 200

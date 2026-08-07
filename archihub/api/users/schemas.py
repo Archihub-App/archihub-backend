@@ -76,3 +76,82 @@ class UpdateMeRequest(BaseModel):
     name: str | None = None
     password: str | None = None
     new_password: str | None = None
+
+
+class RegisterRequest(BaseModel):
+    """Administrative account creation."""
+
+    model_config = ConfigDict(extra="allow")
+
+    username: str
+    name: str | None = None
+    password: str = ""
+    roles: list[dict] = Field(default_factory=list)
+    accessRights: list[dict] = Field(default_factory=list)
+
+
+class RegisterMeRequest(BaseModel):
+    """Self-service registration.
+
+    Deliberately does NOT accept roles or accessRights. `extra="ignore"` rather
+    than "allow": a self-registering caller must not be able to influence their
+    own privileges by adding fields, and ignoring is safer than relying on the
+    service to strip them.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    username: str
+    name: str | None = None
+    password: str = ""
+
+
+class ForgotPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    username: str
+
+
+class UpdateUserRequest(BaseModel):
+    """Administrative update of another account."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str = Field(validation_alias="_id")
+    username: str | None = None
+    name: str | None = None
+    roles: list[dict] = Field(default_factory=list)
+    accessRights: list[dict] = Field(default_factory=list)
+
+
+class DeleteUserRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    username: str
+
+
+class SelfUpdateRequest(BaseModel):
+    """Self-service profile update.
+
+    The current password is required even to change a display name, because this
+    same endpoint can change the password.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    password: str
+    name: str | None = None
+    new_password: str | None = None
+    new_password_confirmation: str | None = None
+
+
+class ApiKeyRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    password: str
+    name: str | None = None
+
+
+class AdminApiKeyRequest(ApiKeyRequest):
+    # Days. `false` means "no expiry", matching the legacy contract.
+    duration: int | bool = 2
