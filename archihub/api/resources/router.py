@@ -17,7 +17,13 @@ import logging
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 
-from archihub.api.resources import article, editing, hierarchy, services
+import json
+
+from fastapi import File, Form, UploadFile
+
+from archihub.api.records.storage import IncomingFile, UnsupportedFileType
+from archihub.api.resources import article, editing, hierarchy, services, write
+from archihub.core.files import UnsupportedFile, UploadTooLarge
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
     LEGACY_ROLE_FAILURE_STATUS,
@@ -62,6 +68,127 @@ def get_all(
     administrator; see ``resources/access.py``.
     """
     return _respond(services.get_all(body, current_user.username))
+
+
+def _parse_data(data: str) -> dict:
+    """The JSON document the frontend sends inside a multipart ``data`` field.
+
+    Kept as hand-parsed JSON rather than a Pydantic model: the metadata inside
+    it is validated against the content type's runtime-defined form, which no
+    static schema can express. See PLAN_FASTAPI.md section 7.
+    """
+    try:
+        parsed = json.loads(data)
+    except (TypeError, ValueError):
+        raise ValueError(_("The data field is not valid JSON"))
+
+    if not isinstance(parsed, dict):
+        raise ValueError(_("The data field must be an object"))
+    return parsed
+
+
+def _incoming(uploads: list[UploadFile] | None, body: dict) -> list[IncomingFile]:
+    """Pair each upload with the file field it belongs to.
+
+    ``filesIds`` carries one entry per upload, in order, naming the form's file
+    field (``filetag``) and the position the file should take.
+    """
+    tags = body.get("filesIds") or []
+    incoming = []
+
+    for index, upload in enumerate(uploads or []):
+        tag = tags[index] if index < len(tags) else {}
+        if not isinstance(tag, dict):
+            tag = {}
+        incoming.append(
+            IncomingFile.from_upload(
+                upload, tag=tag.get("filetag") or "file", order=tag.get("order")
+            )
+        )
+
+    return incoming
+
+
+def _write_response(call) -> JSONResponse:
+    """Run a write and turn its file-level refusals into ordinary answers."""
+    try:
+        return _respond(call())
+    except UploadTooLarge as exc:
+        return JSONResponse(status_code=413, content={"msg": str(exc)})
+    except (UnsupportedFileType, UnsupportedFile) as exc:
+        return JSONResponse(status_code=400, content={"msg": str(exc)})
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"msg": str(exc)})
+
+
+@router.post(
+    "",
+    responses={
+        201: {"description": "Resource created"},
+        400: {"description": "Validation failed, or an unusable file"},
+        413: {"description": "A file exceeds the upload ceiling"},
+        **_RESPONSES,
+    },
+)
+def create(
+    data: str = Form(..., description="JSON document describing the resource"),
+    files: list[UploadFile] = File(default_factory=list),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Create a resource, with its files.
+
+    Multipart, because it carries uploads: the resource itself travels as a
+    JSON string in ``data``.
+
+    Files are stored only once the metadata validates — otherwise a rejected
+    form would leave orphaned bytes on disk every time someone saved an
+    incomplete one.
+    """
+    try:
+        body = _parse_data(data)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"msg": str(exc)})
+
+    return _write_response(
+        lambda: write.create(body, current_user.username, _incoming(files, body))
+    )
+
+
+@router.delete(
+    "",
+    responses={200: {"description": "Resources moved to the recycle bin"}, **_RESPONSES},
+)
+def delete_by_id(
+    body: list = Body(...),
+    current_user: CurrentUser = Depends(require_editor),
+) -> JSONResponse:
+    """Move resources, and everything filed below them, to the recycle bin.
+
+    Nothing is destroyed. Permission is checked for **every** id before
+    anything is written — the legacy version deleted its way down the list and
+    stopped at the first refusal, leaving the batch half-applied.
+    """
+    return _respond(write.delete(body, current_user.username))
+
+
+@router.post(
+    "/restore",
+    responses={200: {"description": "Resources restored"}, **_RESPONSES},
+)
+def restore_by_id(
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(require_editor),
+) -> JSONResponse:
+    """Bring resources back out of the recycle bin.
+
+    Restored as **drafts**, never straight to published: something withdrawn
+    from the catalogue should not silently reappear in the public one.
+    """
+    return _respond(
+        write.restore(
+            body.get("ids"), current_user.username, bool(body.get("recursive", False))
+        )
+    )
 
 
 @router.post(
@@ -315,6 +442,37 @@ def add_article_block_comment(
     meaningful against the version of the article the client was looking at.
     """
     return _respond(article.add_block_comment(resource_id, body, current_user.username))
+
+
+@router.put(
+    "/{resource_id}",
+    responses={
+        200: {"description": "Resource updated"},
+        400: {"description": "Validation failed, or an unusable file"},
+        413: {"description": "A file exceeds the upload ceiling"},
+        **_RESPONSES,
+    },
+)
+def update_by_id(
+    resource_id: str,
+    data: str = Form(..., description="JSON document describing the resource"),
+    files: list[UploadFile] = File(default_factory=list),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Replace a resource's metadata, parents and file set.
+
+    ``deletedFiles`` removes attachments and ``updatedFiles`` repositions them;
+    both travel inside ``data``. Moving the resource in the tree rewrites the
+    stored ancestry of everything below it.
+    """
+    try:
+        body = _parse_data(data)
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"msg": str(exc)})
+
+    return _write_response(
+        lambda: write.update(resource_id, body, current_user.username, _incoming(files, body))
+    )
 
 
 @router.get(

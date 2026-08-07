@@ -208,6 +208,7 @@ def _register_routers(app: FastAPI) -> None:
     from archihub.api.forms.router import router as forms_router
     from archihub.api.lists.router import router as lists_router
     from archihub.api.logs.router import router as logs_router
+    from archihub.api.records.router import router as records_router
     from archihub.api.resources.router import router as resources_router
     from archihub.api.system.router import router as system_router
     from archihub.api.tasks.router import router as tasks_router
@@ -227,6 +228,7 @@ def _register_routers(app: FastAPI) -> None:
     include_router(app, tasks_router)
     include_router(app, usertasks_router)
     include_router(app, resources_router)
+    include_router(app, records_router)
 
     # Always mounted, exactly like the legacy blueprint. These routes exist on
     # every instance; it is the per-request dependency that 404s them when the
