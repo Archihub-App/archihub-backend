@@ -3,11 +3,22 @@
 Port of ``app/utils/FernetAuth.py``.
 
 These are long-lived API keys, distinct from the short-lived session JWTs in
-``jwt.py``. A key is a JWT that has then been encrypted with a Fernet symmetric
-key, and the *encrypted string itself* is stored on the user document. So
-validation is: decrypt, decode, then check the presented string equals the one
-on record - which means a key can be revoked by overwriting that field, and a
-correctly-signed JWT that is not the current key is refused.
+``jwt.py``.
+
+TWO SCHEMES LIVE HERE, AND THE ORDER MATTERS.
+
+**Current** - ``core/security/api_keys.py``. Keys look like
+``ahk_<key_id>_<secret>``; the server stores only a hash, so nothing readable
+from the database can be presented to the API. This is what new keys use, and it
+is tried first.
+
+**Legacy** - a JWT encrypted with a Fernet key, the ciphertext stored verbatim on
+the user document and compared against the presented string. That means the
+stored value *is* the credential: a database read yields working keys. It is
+retained ONLY so that any credential already in circulation keeps working, and
+nothing issues new ones. Once no deployment has a populated ``token`` /
+``adminToken`` / ``nodeToken`` / ``vizToken`` field left, this path and those
+fields should be deleted.
 
 THE THREE VARIANTS ARE NOT INTERCHANGEABLE. They look like copy-paste in the
 original, but they check different fields, and getting that wrong would let an
@@ -131,6 +142,13 @@ def _is_admin(username: str) -> bool:
     return has_role(username, "admin")
 
 
+def _extract_presented(authorization: str | None) -> str:
+    if not authorization:
+        raise AuthenticationError(_(MSG_NO_TOKEN))
+    parts = authorization.split()
+    return parts[1] if len(parts) == 2 else parts[0]
+
+
 def _authenticate(
     authorization: str | None,
     *,
@@ -138,7 +156,19 @@ def _authenticate(
     user_field: str,
     admin_only: bool = False,
     count_requests: bool = True,
+    scope: str | None = None,
 ) -> FernetIdentity:
+    # Current scheme first. Keys are `ahk_<key_id>_<secret>`, verified against a
+    # stored hash - see core/security/api_keys.py.
+    presented = _extract_presented(authorization)
+    identity = _verify_api_key(presented, scope=scope, admin_only=admin_only)
+    if identity is not None:
+        if count_requests and not identity.is_admin:
+            _count_request(identity.username)
+        return identity
+
+    # Fall back to the previous scheme for credentials issued before it, so a
+    # key that works today keeps working. New keys are never issued this way.
     raw_key, username = _decrypt_and_decode(authorization)
     user = _load_user(username)
     is_admin = _is_admin(username)
@@ -157,9 +187,26 @@ def _authenticate(
     return FernetIdentity(username=username, is_admin=is_admin)
 
 
+def _verify_api_key(presented: str, *, scope: str | None, admin_only: bool) -> FernetIdentity | None:
+    """Try the current API-key scheme. None means "not one of ours"."""
+    from archihub.core.security import api_keys
+
+    result = api_keys.verify_key(presented, required_scope=scope)
+    if result is None:
+        return None
+
+    is_admin = _is_admin(result.username)
+    if admin_only and not is_admin:
+        raise AuthenticationError(_(MSG_NO_PERMISSION))
+
+    return FernetIdentity(username=result.username, is_admin=is_admin)
+
+
 def fernet_authenticate(authorization: str | None = None) -> FernetIdentity:
     """Admin API keys: admins present ``adminToken``, everyone else ``token``."""
-    return _authenticate(authorization, admin_field="adminToken", user_field="token")
+    return _authenticate(
+        authorization, admin_field="adminToken", user_field="token", scope=None
+    )
 
 
 def public_fernet_authenticate(authorization: str | None = None) -> FernetIdentity:
@@ -168,7 +215,15 @@ def public_fernet_authenticate(authorization: str | None = None) -> FernetIdenti
     The admin branch checking ``token`` rather than ``adminToken`` is NOT a
     typo carried over - see the module docstring.
     """
-    return _authenticate(authorization, admin_field="token", user_field="token")
+    return _authenticate(
+        authorization, admin_field="token", user_field="token", scope=api_key_scope_public()
+    )
+
+
+def api_key_scope_public() -> str:
+    from archihub.core.security import api_keys
+
+    return api_keys.SCOPE_PUBLIC
 
 
 def node_fernet_authenticate(authorization: str | None = None) -> FernetIdentity:
@@ -183,6 +238,7 @@ def node_fernet_authenticate(authorization: str | None = None) -> FernetIdentity
         user_field="nodeToken",
         admin_only=True,
         count_requests=False,
+        scope="node",
     )
 
 

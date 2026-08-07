@@ -37,7 +37,7 @@ BeautifulSoup4
 PyExifTool
 pypdf
 pytesseract
-ldap3
+python-ldap
 geopandas
 topojson
 pyvips

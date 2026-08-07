@@ -214,6 +214,25 @@ INDEXES: list[IndexSpec] = [
         name="ix_snaps_user_type_created",
         reason="A user's snaps of a given type, newest first - exactly the listing query.",
     ),
+    # ------------------------------------------------------------- api_keys
+    IndexSpec(
+        collection="api_keys",
+        keys=[("key_id", ASC)],
+        name="ix_api_keys_key_id",
+        unique=True,
+        tolerate_failure=True,
+        reason=(
+            "Every API-authenticated request verifies a key by its public "
+            "lookup handle. Unique because the handle identifies exactly one key."
+        ),
+    ),
+    IndexSpec(
+        collection="api_keys",
+        keys=[("user", ASC), ("created_at", DESC)],
+        name="ix_api_keys_user_created",
+        reason="Listing a user's own keys, newest first.",
+    ),
+
     # ------------------------------------------ lookup / definition tables
     # Small collections, but read constantly and always by slug.
     IndexSpec(

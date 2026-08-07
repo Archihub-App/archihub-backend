@@ -216,3 +216,204 @@ def add_request(username: str) -> None:
         {"username": username},
         {"requests": requests, "lastRequest": datetime.datetime.now()},
     )
+
+
+# ---------------------------------------------------------------------------
+# Listing and profile
+# ---------------------------------------------------------------------------
+
+# Fields a client may filter the user list by. Anything else is dropped before
+# the value reaches a query: a client-supplied filter document that is passed
+# through unchecked lets the caller express arbitrary query operators.
+ALLOWED_USER_FILTER_FIELDS = frozenset({"username", "name"})
+
+# Fields never returned by the listing. Credentials and API keys are the point,
+# but `compromise` and `photo` are simply not needed and are large.
+_LIST_PROJECTION = {
+    "password": 0, "status": 0, "photo": 0, "compromise": 0,
+    "token": 0, "adminToken": 0, "nodeToken": 0, "vizToken": 0,
+    "requests": 0, "lastRequest": 0, "favorites": 0,
+}
+
+PAGE_SIZE = 20
+
+
+def sanitize_user_filters(filters) -> dict:
+    """Reduce a client filter document to allowed string equality only."""
+    if not isinstance(filters, dict):
+        return {}
+    return {
+        key: value
+        for key, value in filters.items()
+        if key in ALLOWED_USER_FILTER_FIELDS and isinstance(value, str)
+    }
+
+
+def get_all(body: dict, current_user: str) -> tuple[list | dict, int]:
+    """Paginated user listing, with role/right ids resolved to display terms."""
+    try:
+        from archihub.core.roles import get_access_rights, get_roles
+
+        mongo = _mongo()
+        page = int(body.get("page") or 0)
+        filters = sanitize_user_filters(body.get("filters"))
+
+        users = list(
+            mongo.get_all_records(
+                "users", filters, limit=PAGE_SIZE, skip=page * PAGE_SIZE,
+                fields=_LIST_PROJECTION, sort=[("name", 1)],
+            )
+        )
+        total = mongo.count("users", filters)
+
+        rights = {r.get("id"): r.get("term") for r in (get_access_rights().get("options") or [])}
+        roles = {r.get("id"): r.get("term") for r in (get_roles().get("options") or [])}
+
+        for user in users:
+            user["id"] = str(user.pop("_id"))
+            user["total"] = total
+            # Unrecognised ids are dropped rather than shown raw - a stale id is
+            # not a term and would render as noise.
+            user["accessRights"] = [rights[r] for r in (user.get("accessRights") or []) if r in rights]
+            user["roles"] = [roles[r] for r in (user.get("roles") or []) if r in roles]
+
+        return users, 200
+    except Exception as exc:
+        logger.exception("Could not list users")
+        return {"msg": str(exc)}, 500
+
+
+def get_profile(username: str) -> tuple[dict, int]:
+    """The caller's own profile, without the password hash.
+
+    The existence check comes before any use of the record. The legacy handler
+    called `user.pop('password')` on the line above its own `if not user` check,
+    so an absent account raised AttributeError and surfaced as a 500 where 400
+    was documented.
+    """
+    user = get_user(username)
+    if not user:
+        return {"msg": _("User does not exist")}, 400
+
+    user.pop("password", None)
+    return user, 200
+
+
+def get_requests(username: str) -> tuple[dict, int]:
+    """The caller's weekly public-API quota usage."""
+    user = _mongo().get_record("users", {"username": username}, fields={"requests": 1})
+    if not user:
+        return {"msg": _("User does not exist")}, 400
+    return {"requests": user.get("requests", 0), "limit": MAX_REQUESTS_PER_WEEK}, 200
+
+
+# ---------------------------------------------------------------------------
+# Favourites
+# ---------------------------------------------------------------------------
+#
+# `type` selects the MongoDB collection to read, so it is constrained to a fixed
+# allowlist. The check lives here as well as in the request schema because these
+# functions are importable and a future caller may not come through the router.
+
+FAVORITE_COLLECTIONS = frozenset({"resources", "records", "snaps"})
+
+
+def _favorite_collection(type_name: str) -> str:
+    if type_name not in FAVORITE_COLLECTIONS:
+        raise ValueError(_("Invalid favorite type"))
+    return type_name
+
+
+def set_favorite(username: str, body: dict) -> tuple[dict, int]:
+    from bson.objectid import ObjectId
+
+    try:
+        collection = _favorite_collection(body.get("type"))
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    try:
+        object_id = ObjectId(body.get("id"))
+    except Exception:
+        return {"msg": _("Resource not found")}, 404
+
+    mongo = _mongo()
+    target = mongo.get_record(collection, {"_id": object_id}, {"_id": 1, "status": 1})
+    if not target:
+        return {"msg": _("Resource not found")}, 404
+
+    # Only published resources may be favourited. `.get` rather than `[...]`:
+    # collections other than `resources` have no status field, and the legacy
+    # subscript raised KeyError for them.
+    if collection == "resources" and target.get("status") != "published":
+        return {"msg": _("Resource not published")}, 400
+
+    mongo.update_record_operator(
+        "users",
+        {"username": username},
+        {"$addToSet": {"favorites": {"type": body["type"], "id": body["id"], "view": body.get("view")}}},
+    )
+    return {"msg": _("Favorite added successfully")}, 200
+
+
+def delete_favorite(username: str, body: dict) -> tuple[dict, int]:
+    try:
+        _favorite_collection(body.get("type"))
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    _mongo().update_record_operator(
+        "users",
+        {"username": username},
+        {"$pull": {"favorites": {"type": body["type"], "id": body.get("id")}}},
+    )
+    return {"msg": _("Favorite removed successfully")}, 200
+
+
+def get_favorites(username: str, body: dict) -> tuple[dict | list, int]:
+    """The caller's favourites of one type, resolved to display fields."""
+    from bson.objectid import ObjectId
+
+    try:
+        collection = _favorite_collection(body.get("type"))
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    mongo = _mongo()
+    page = int(body.get("page") or 0)
+
+    user = mongo.get_record("users", {"username": username}, fields={"favorites": 1})
+    favorites = [f for f in ((user or {}).get("favorites") or []) if f.get("type") == body["type"]]
+    total = len(favorites)
+
+    object_ids = []
+    for favorite in favorites:
+        try:
+            object_ids.append(ObjectId(favorite.get("id")))
+        except Exception:
+            continue
+
+    if collection == "resources":
+        fields = {"metadata.firstLevel.title": 1}
+        sort = [("metadata.firstLevel.title", 1)]
+        filters = {"_id": {"$in": object_ids}, "status": "published"}
+    else:
+        fields = {"name": 1, "displayName": 1}
+        sort = [("name", 1)]
+        filters = {"_id": {"$in": object_ids}}
+
+    records = list(
+        mongo.get_all_records(
+            collection, filters, limit=PAGE_SIZE, skip=page * PAGE_SIZE, fields=fields, sort=sort
+        )
+    )
+
+    by_id = {str(f.get("id")): f for f in favorites}
+    resolved = []
+    for record in records:
+        record_id = str(record.pop("_id"))
+        record["id"] = record_id
+        record["view"] = (by_id.get(record_id) or {}).get("view")
+        resolved.append(record)
+
+    return {"total": total, "resources": resolved}, 200

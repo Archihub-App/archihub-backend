@@ -9,6 +9,13 @@ RUN apt-get update && apt-get install -y \
     libvips-dev \
     libreoffice \
     libimage-exiftool-perl \
+    # Build dependencies for python-ldap, which is a C extension rather than a
+    # pure-Python package and will not install without these headers. Required
+    # by the LDAP login path (app/api/auth does `import ldap`). Note that
+    # `ldap3` - a different, pure-Python library with an incompatible API - is
+    # NOT a substitute for it.
+    libldap2-dev \
+    libsasl2-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --upgrade pip
