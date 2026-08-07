@@ -1,0 +1,125 @@
+[project]
+name = "archihub-backend"
+version = "1.4.1b0"
+description = "ArchiHUB: a comprehensive tool for organizing and connecting information"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "BITSOL", email = "contact@bit-sol.com.co" }]
+
+# NOTE ON PINNING (see PLAN_FASTAPI.md section 9)
+# ----------------------------------------------
+# The previous requirements.txt had ZERO version constraints on ANY package, so
+# two deployments building on different days could end up on different versions
+# of everything. Reproducibility here comes from `uv.lock` (exact, hash-pinned,
+# committed), while this file declares the compatible ranges uv resolves within.
+#
+# To (re)generate the lockfile:      uv lock
+# To install exactly the lockfile:   uv sync --frozen
+#
+# Before the first `uv lock`, run the baseline capture described in
+# PLAN_FASTAPI.md section 9 (`pip install -r requirements.txt && pip freeze`
+# inside a python:3.11 container matching the Dockerfile) so the ranges below
+# can be tightened to what production is *actually* running today, rather than
+# to whatever resolves newest.
+dependencies = [
+    # --- Web framework (new: FastAPI stack) ---
+    # FastAPI is pre-1.0 and still ships breaking-ish changes in minor releases,
+    # so the range is wide and `uv.lock` is what actually pins it.
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.32,<1.0",
+    "gunicorn>=23.0,<24.0",           # was installed ad hoc in the Dockerfile, never declared
+    "python-multipart>=0.0.18,<0.1",  # REQUIRED by FastAPI for Form()/File() multipart parsing
+    "pydantic>=2.9,<3.0",
+    "pydantic-settings>=2.6,<3.0",    # BaseSettings moved out of pydantic core in v2
+
+    # --- Auth ---
+    "PyJWT>=2.9,<3.0",
+    "cryptography>=43.0",
+    "bcrypt>=4.2,<6.0",
+    # LDAP: the old requirements.txt declared `ldap3`, but app/api/auth/services.py
+    # does `import ldap`, which is python-ldap - a different package with a
+    # different API. python-ldap additionally needs libldap2-dev/libsasl2-dev at
+    # build time (added to the Dockerfile). See PLAN_FASTAPI.md decision 1.
+    "python-ldap>=3.4,<4.0",
+
+    # --- Datastores / infra ---
+    "pymongo>=4.9,<5.0",
+    "redis>=5.0,<7.0",
+    "python-redis-cache>=4.0,<5.0",
+    "qdrant-client>=1.12,<2.0",
+    "Celery>=5.4,<6.0",
+    "requests>=2.32,<3.0",
+    "python-dotenv>=1.0,<2.0",
+
+    # --- Media / document processing (filesProcessing, liquidText, massiveUpdater) ---
+    "pandas>=2.2,<3.0",
+    "numpy>=1.26,<3.0",
+    "openpyxl>=3.1,<4.0",
+    "pillow>=10.4",
+    "opencv-python>=4.10",
+    "ffmpeg-python>=0.2,<0.3",
+    "ffprobe3>=0.1,<0.2",
+    "pyvips>=2.2,<3.0",
+    "PyExifTool>=0.5,<0.6",
+    "pdf2image>=1.17,<2.0",
+    "pypdf>=5.0,<7.0",
+    "pytesseract>=0.3,<0.4",
+    "python-magic>=0.4,<0.5",
+    "python-docx>=1.1,<2.0",
+    "python-dateutil>=2.9,<3.0",
+    "BeautifulSoup4>=4.12,<5.0",
+    "StringGenerator>=0.4,<0.5",
+
+    # --- Geo ---
+    "shapely>=2.0,<3.0",
+    "geopandas>=1.0,<2.0",
+    "topojson>=1.9,<2.0",
+
+    # --- AI / LLM ---
+    "openai>=1.50",
+    "aisuite[openai]>=0.1",
+    "tiktoken>=0.8",
+    "transformers>=4.44",
+    "tokenizers>=0.20",
+    "sentence-transformers>=3.0",
+
+    # --- i18n ---
+    # Babel provides the .po/.mo tooling (compile_translations.sh). The runtime
+    # translator is stdlib `gettext` via archihub/core/i18n.py, so flask-babel is NOT
+    # needed by the FastAPI stack - only by the legacy Flask app below.
+    "Babel>=2.16,<3.0",
+
+    # --- LEGACY: Flask stack, removed at Phase 7 cutover ---
+    # These keep the old app runnable side-by-side with the new one so the
+    # diff harness (tools/diff_harness.py) has a reference implementation to
+    # compare against. Delete this whole block once every domain is ported.
+    "flask>=2.2,<4.0",
+    "flask_cors>=4.0,<7.0",
+    "flask-jwt-extended>=4.6,<5.0",
+    "flask-babel>=4.0,<5.0",
+    "flasgger>=0.9.7,<0.10",
+    "Werkzeug>=2.2,<4.0",
+    # `flask_restful` was in requirements.txt but is imported nowhere
+    # (grep -rn flask_restful app/ -> 0 matches). Deliberately dropped.
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9.0",
+    "pytest-asyncio>=0.24,<2.0",
+    "httpx>=0.27,<0.29",           # TestClient + the diff harness
+    "deepdiff>=8.0,<9.0",          # response-body field-by-field diffing
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["archihub"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"

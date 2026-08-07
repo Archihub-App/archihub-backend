@@ -1,0 +1,114 @@
+{
+  "_comment": [
+    "Cases for tools/diff_harness.py - each is fired at both the legacy Flask",
+    "backend and the FastAPI rewrite, and the status code plus the full response",
+    "body are compared field by field.",
+    "",
+    "Grow this file as each domain is ported (PLAN_FASTAPI.md section 2, Phase 3).",
+    "A domain is not 'done' until its cases here are identical on both stacks.",
+    "",
+    "Case keys:",
+    "  name          required, shown in the report",
+    "  method        default GET",
+    "  path          required",
+    "  query         dict of query-string params",
+    "  body          JSON request body",
+    "  form          form-encoded body (use instead of `body` for multipart/form routes)",
+    "  headers       extra headers",
+    "  auth          default true; set false to send no Authorization header",
+    "  ignore        DeepDiff paths to skip, e.g. \"root['checks']['celery']\"",
+    "",
+    "Volatile values (_id, createdAt, token, task_id, ...) are already replaced",
+    "with a type marker globally, so they never cause false failures."
+  ],
+
+  "cases": [
+    {
+      "name": "health: liveness",
+      "path": "/health/live",
+      "auth": false
+    },
+    {
+      "name": "health: readiness",
+      "path": "/health/ready",
+      "auth": false,
+      "ignore": [
+        "root['checks']['celery']",
+        "root['checks']['elasticsearch']['error']",
+        "root['checks']['qdrant']['error']",
+        "root['checks']['mongo']['error']",
+        "root['checks']['redis']['error']"
+      ],
+      "_note": [
+        "Error strings are driver-specific text and the two stacks reach the same",
+        "services through different client wrappers, so the wording can differ",
+        "legitimately. The status ('ok'/'error'/'disabled') IS compared - that is",
+        "the part ArchiHUBTestRunner and the Docker healthcheck depend on.",
+        "Celery is excluded entirely because worker ping timing is racy."
+      ]
+    },
+
+    {
+      "_comment_next": [
+        "Below: templates for the domains ported in Phase 3, in the order the plan",
+        "sequences them. Commented out via the leading underscore until the",
+        "corresponding router exists on the FastAPI side - a case fired before its",
+        "route is ported just reports a 404-vs-200 status difference and adds noise.",
+        "Remove the underscore prefix from the key name to activate one."
+      ]
+    },
+    {
+      "name": "_types: list all",
+      "path": "/types",
+      "auth": true
+    },
+    {
+      "name": "_lists: list all",
+      "path": "/lists",
+      "auth": true
+    },
+    {
+      "name": "_forms: list all",
+      "path": "/forms",
+      "auth": true
+    },
+    {
+      "name": "_users: list all",
+      "method": "POST",
+      "path": "/users",
+      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "auth": true
+    },
+    {
+      "name": "_auth: login with unknown user returns 401, byte-identical to wrong password",
+      "method": "POST",
+      "path": "/auth/login",
+      "body": { "username": "definitely-not-a-real-user@example.invalid", "password": "wrong" },
+      "auth": false,
+      "_note": [
+        "Guards the account-enumeration fix: an unknown username and a wrong",
+        "password must produce identical responses. ArchiHUBTestRunner asserts",
+        "this too; do not 'fix' either side to return 404."
+      ]
+    },
+    {
+      "name": "_system: settings",
+      "path": "/system/settings",
+      "auth": true
+    },
+    {
+      "name": "_records: get by filters",
+      "method": "POST",
+      "path": "/records/filters",
+      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "auth": true
+    },
+    {
+      "name": "_resources: list",
+      "method": "POST",
+      "path": "/resources",
+      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "auth": true
+    }
+  ]
+}
