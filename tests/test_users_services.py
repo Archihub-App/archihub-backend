@@ -1,15 +1,13 @@
 """Auth-facing user helpers.
 
 The headline case is ``test_has_role_returns_a_real_bool_for_unknown_user``.
-The legacy tree carries two implementations of ``has_role``/``has_right``: the
-correct one in ``app/api/users/services.py``, and a copy in
-``app/utils/functions.py`` that returns ``jsonify({'msg': ...}), 400`` for an
-unknown user. That is a non-empty tuple, so it is TRUTHY - and every caller
-writes ``if not has_role(...): deny``. Against that copy, a nonexistent user
-passes the check.
 
-``app/api/records/services.py`` imports from the broken copy, so the whole
-records domain runs on it today.
+Authorisation helpers must return a real ``bool`` on every path, including the
+"user does not exist" one. Callers write ``if not has_role(...): deny``, so a
+helper that returns a response-shaped value there (a tuple, a dict) inverts the
+guard - a non-empty tuple is truthy. These tests assert the bool contract
+directly so a future refactor cannot quietly reintroduce a variant that returns
+something else.
 """
 
 from __future__ import annotations

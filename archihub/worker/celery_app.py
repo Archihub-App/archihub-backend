@@ -25,9 +25,11 @@ Run with::
 
 from __future__ import annotations
 
+import logging
 import sys
 
 from celery import Celery
+from celery.signals import worker_process_init
 
 from archihub.core.settings import get_settings
 
@@ -60,7 +62,41 @@ if _worker_pool:
     celery_app.conf.worker_pool = _worker_pool
 celery_app.conf.worker_concurrency = 1 if _worker_pool == "solo" else settings.celeryd_concurrency
 
-# NOTE: task modules and the Mongo-backed beat scheduler are wired in Phase 2/4
-# (see PLAN_FASTAPI.md section 2). Until then this app intentionally has an
-# empty task registry - enough for `celery ... worker` to boot and answer the
-# control-plane ping that /health/ready issues.
+# Hot-reloading beat scheduler: re-reads plugin schedules from MongoDB so a
+# settings change takes effect without restarting beat. See worker/scheduler.py.
+celery_app.conf.beat_scheduler = "archihub.worker.scheduler:MongoPluginScheduler"
+
+# Task modules. Bodies for the in-scope plugins arrive in Phase 4; listing the
+# package now means a newly added module is picked up without touching this file.
+celery_app.autodiscover_tasks(["archihub.worker.tasks"], force=False)
+
+
+@worker_process_init.connect
+def _init_worker_process(**_kwargs) -> None:
+    """Prepare a freshly forked worker process.
+
+    Two jobs, both consequences of removing Flask:
+
+    1. Enforce the unported-plugin guard here as well as in the web process. A
+       worker that started while the web process refused would execute tasks
+       against an instance whose configuration the application has rejected.
+    2. Configure logging. Each worker is a separate forked process, so the
+       handlers installed by the ASGI app factory do not exist here - without
+       this, task log output would fall back to Celery's default and lose the
+       structured format and correlation ids.
+    """
+    from archihub.core.logging import configure_logging
+
+    configure_logging(level="DEBUG" if settings.is_dev else "INFO", json_output=not settings.is_dev)
+
+    try:
+        from archihub.plugins.framework.discovery import assert_active_plugins_are_ported
+
+        assert_active_plugins_are_ported()
+    except Exception:
+        # Log before re-raising: Celery's own startup error reporting is terse,
+        # and the guard's message is the actionable part.
+        logging.getLogger(__name__).critical(
+            "Worker refusing to start - see the plugin guard message below", exc_info=True
+        )
+        raise

@@ -109,11 +109,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
 
+    # Fail closed BEFORE building the route table. An instance whose active
+    # plugins are not all ported must not come up half-working: the routes and
+    # scheduled tasks those plugins provide would simply be absent, which looks
+    # like data loss to a user and is hard to attribute. See
+    # archihub/plugins/framework/ported_registry.py (PLAN_FASTAPI.md decision 5).
+    #
+    # During the migration itself this is expected to trip - set
+    # ARCHIHUB_ALLOW_UNPORTED_PLUGINS=true against a disposable instance to work
+    # on the not-yet-ported parts of the stack.
+    _check_plugin_readiness()
+
     _register_middleware(app, settings)
     register_exception_handlers(app)
     _register_routers(app)
 
     return app
+
+
+def _check_plugin_readiness() -> None:
+    from archihub.plugins.framework.discovery import assert_active_plugins_are_ported
+
+    try:
+        assert_active_plugins_are_ported()
+    except Exception as exc:
+        # Reformat onto the log rather than letting a bare traceback carry it:
+        # the message is a set of instructions for an operator, and a traceback
+        # buries them.
+        for line in str(exc).splitlines():
+            logger.critical("%s", line)
+        raise
 
 
 def _register_middleware(app: FastAPI, settings: Settings) -> None:

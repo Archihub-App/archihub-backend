@@ -23,6 +23,12 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key")
 os.environ.setdefault("FERNET_KEY", "kC5s3s1ZQ0dGmZ6l8Xh9Yq2vN4bP7tR0uW1xA3cE5gI=")
 
+# Building the app runs the unported-plugin guard, which would otherwise refuse
+# to start (correctly - the plugins genuinely are not ported yet) and would need
+# a database to make that decision. The guard itself is tested directly in
+# tests/test_plugin_guard.py.
+os.environ.setdefault("ARCHIHUB_ALLOW_UNPORTED_PLUGINS", "true")
+
 
 @pytest.fixture
 def settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
