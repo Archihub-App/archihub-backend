@@ -69,6 +69,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # That is precisely the division of labour between a liveness and a
     # readiness probe.
 
+    if settings.auto_create_indexes:
+        _ensure_indexes_safely()
+
     yield
 
     from archihub.infra.mongo import reset_mongo
@@ -125,6 +128,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     _register_routers(app)
 
     return app
+
+
+def _ensure_indexes_safely() -> None:
+    """Create missing MongoDB indexes, without ever blocking startup.
+
+    Builds are backgrounded and idempotent, so this is cheap when the indexes
+    already exist and safe on a populated production collection.
+
+    Deliberately non-fatal: a missing index makes queries slow, while refusing to
+    start denies service outright. It is logged loudly instead. Set
+    AUTO_CREATE_INDEXES=false to manage indexes as an explicit migration step
+    with tools/create_indexes.py.
+    """
+    try:
+        from archihub.infra.indexes import ensure_indexes
+
+        result = ensure_indexes()
+        if result["created"]:
+            logger.info("Created %d missing MongoDB index(es)", len(result["created"]))
+        if result["failed"]:
+            logger.error(
+                "%d MongoDB index(es) could not be created; those queries will be "
+                "unindexed until resolved: %s",
+                len(result["failed"]),
+                ", ".join(result["failed"]),
+            )
+    except Exception:
+        logger.exception("Index check failed; continuing without it")
 
 
 def _check_plugin_readiness() -> None:

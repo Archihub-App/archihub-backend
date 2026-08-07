@@ -98,6 +98,11 @@ class Settings(BaseSettings):
     mongo_server_selection_timeout_ms: int = Field(
         default=10000, validation_alias="MONGO_SERVER_SELECTION_TIMEOUT_MS"
     )
+    # Create the declared indexes at startup. On by default so a fresh install
+    # is correct without an extra manual step; set false where index changes are
+    # managed deliberately as a migration, and run tools/create_indexes.py
+    # instead. Index builds are backgrounded and idempotent either way.
+    auto_create_indexes: bool = Field(default=True, validation_alias="AUTO_CREATE_INDEXES")
 
     # ------------------------------------------------------------------
     # Redis / Celery
