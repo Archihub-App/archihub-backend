@@ -27,6 +27,8 @@ than reverse-engineering the wrapper.
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 
@@ -46,6 +48,19 @@ def include_router(app: FastAPI, router: APIRouter, **kwargs: object) -> None:
     setattr(app.state, _REGISTRY_ATTR, registry)
 
 
+#: Starlette path converters (`{id:path}`, `{n:int}`) are routing detail. The
+#: OpenAPI document names the parameter alone, so the inventory does too -
+#: otherwise the inventory-vs-spec diff reports drift for a route that is
+#: perfectly in sync. `ArchiHUBTestRunner`'s swagger-inventory suite asserts
+#: exactly this equality.
+_CONVERTER = re.compile(r"\{([^{}:]+):[^{}]+\}")
+
+
+def logical_path(path: str) -> str:
+    """A route path as the OpenAPI document names it, converters stripped."""
+    return _CONVERTER.sub(r"{\1}", path)
+
+
 def iter_api_routes(app: FastAPI) -> list[tuple[str, APIRoute]]:
     """Yield ``(full_path, route)`` for every documented route the app serves.
 
@@ -63,7 +78,7 @@ def iter_api_routes(app: FastAPI) -> list[tuple[str, APIRoute]]:
         # An APIRouter applies its own `prefix` when the route is declared, so
         # `route.path` already carries it; `extra_prefix` covers the case where
         # include_router() was additionally given prefix=...
-        full_path = f"{prefix}{route.path}"
+        full_path = logical_path(f"{prefix}{route.path}")
         key = (full_path, frozenset(route.methods or ()))
         if key in seen:
             return

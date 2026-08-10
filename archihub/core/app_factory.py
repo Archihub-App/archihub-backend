@@ -244,6 +244,7 @@ def _register_routers(app: FastAPI) -> None:
     from archihub.api.resources.public_router import router as resources_public_router
     from archihub.api.resources.router import router as resources_router
     from archihub.api.snaps.public_router import router as snaps_public_router
+    from archihub.api.aiservices.router import router as aiservices_router
     from archihub.api.geosystem.router import router as geosystem_router
     from archihub.api.views.public_router import router as views_public_router
     from archihub.api.views.router import router as views_router
@@ -281,6 +282,7 @@ def _register_routers(app: FastAPI) -> None:
     include_router(app, views_public_router)
     include_router(app, views_router)
     include_router(app, geosystem_router)
+    include_router(app, aiservices_router)
     _assert_public_routes_win(app)
 
     # Always mounted, exactly like the legacy blueprint. These routes exist on

@@ -100,6 +100,18 @@ class MongoClientWrapper:
     def update_record(self, collection: str, filters: dict, update_model: Any):
         return self.db[collection].update_one(filters, {"$set": _to_payload(update_model)})
 
+    def upsert_record(self, collection: str, filters: dict, update_model: Any):
+        """Write, creating the document if it is not there.
+
+        Distinct from ``update_record`` because "record this if absent" and
+        "change this if present" are different intentions, and silently
+        creating on a mistyped filter is a way to grow a collection of
+        near-duplicates.
+        """
+        return self.db[collection].update_one(
+            filters, {"$set": _to_payload(update_model)}, upsert=True
+        )
+
     def update_records(self, collection: str, filters: dict, update_fields: dict):
         return self.db[collection].update_many(filters, {"$set": update_fields})
 

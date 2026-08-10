@@ -167,3 +167,72 @@ msgstr "Debe especificar un nivel"
 # The port uses the English msgid; this supplies the Spanish.
 msgid "Shape not found"
 msgstr "Forma no encontrada"
+
+msgid " … [earlier message shortened to fit]"
+msgstr " … [mensaje anterior acortado para que quepa]"
+
+msgid "A provider with that name already exists"
+msgstr "Ya existe un proveedor con ese nombre"
+
+msgid "Conversation created"
+msgstr "Conversación creada"
+
+msgid "Conversation deleted"
+msgstr "Conversación eliminada"
+
+msgid "Conversation updated"
+msgstr "Conversación actualizada"
+
+msgid "Headers must be a map of text values"
+msgstr "Las cabeceras deben ser un mapa de valores de texto"
+
+msgid "Message content must be text or a list of parts"
+msgstr "El contenido del mensaje debe ser texto o una lista de partes"
+
+msgid "Provider created successfully"
+msgstr "Proveedor creado con éxito"
+
+msgid "Provider deleted successfully"
+msgstr "Proveedor eliminado con éxito"
+
+msgid "Provider not found"
+msgstr "Proveedor no encontrado"
+
+msgid "Provider updated successfully"
+msgstr "Proveedor actualizado con éxito"
+
+msgid "The \"{header}\" header cannot be set here"
+msgstr "La cabecera \"{header}\" no se puede definir aquí"
+
+msgid "The base URL must be an http or https address"
+msgstr "La URL base debe ser una dirección http o https"
+
+msgid "The conversation is too long for this model, even after shortening"
+msgstr "La conversación es demasiado larga para este modelo, incluso después de acortarla"
+
+msgid "The model \"{model}\" does not support: {missing}"
+msgstr "El modelo \"{model}\" no admite: {missing}"
+
+msgid "This dialect requires a base URL"
+msgstr "Este dialecto requiere una URL base"
+
+msgid "Unknown conversation type \"{type}\""
+msgstr "Tipo de conversación desconocido \"{type}\""
+
+msgid "Unknown dialect \"{dialect}\""
+msgstr "Dialecto desconocido \"{dialect}\""
+
+msgid "Unknown message role \"{role}\""
+msgstr "Rol de mensaje desconocido \"{role}\""
+
+msgid "You must specify a model"
+msgstr "Debe especificar un modelo"
+
+msgid "[image]"
+msgstr "[imagen]"
+
+msgid "enabled must be true or false"
+msgstr "enabled debe ser true o false"
+
+msgid "messages must be a list"
+msgstr "messages debe ser una lista"
