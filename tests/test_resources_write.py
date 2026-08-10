@@ -101,6 +101,10 @@ def mongo(monkeypatch):
     for module in (
         write, write.access, write.hierarchy, write.validation,
         "archihub.api.records.storage",
+        # `hierarchy.validate_parent` asks `types.services.is_hierarchical`,
+        # which holds its own `_mongo`. Missing it sent the parent check to a
+        # real database.
+        "archihub.api.types.services",
     ):
         if isinstance(module, str):
             monkeypatch.setattr(module + "._mongo", lambda: fake)

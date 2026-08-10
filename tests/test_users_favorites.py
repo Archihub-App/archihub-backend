@@ -40,6 +40,15 @@ class FakeMongo:
 def mongo(monkeypatch):
     fake = FakeMongo()
     monkeypatch.setattr(services, "_mongo", lambda: fake)
+
+    # `get_all` resolves role and access-right ids to display terms through
+    # `core.roles`, which reads the `system` collection with its own `_mongo`.
+    # Without these the test reaches a real database - it passed for a while
+    # only because one happened to be running, which is exactly what
+    # conftest.py says must never be true. Individual tests override them.
+    monkeypatch.setattr("archihub.core.roles._mongo", lambda: fake)
+    monkeypatch.setattr("archihub.core.roles.get_roles", lambda: {"options": []})
+    monkeypatch.setattr("archihub.core.roles.get_access_rights", lambda: {"options": []})
     return fake
 
 

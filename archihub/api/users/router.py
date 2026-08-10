@@ -151,6 +151,29 @@ def get_favorites(
     return _respond(services.get_favorites(current_user.username, body.model_dump()))
 
 
+@router.post(
+    "/snaps",
+    responses={
+        200: {"description": "One page of the caller's snaps of that type"},
+        400: {"description": "Unsupported snap type"},
+        **_ROLE_RESPONSES,
+    },
+)
+def get_snaps(
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """List the caller's own snaps of a given kind, newest first.
+
+    Lives under ``/users`` rather than ``/snaps`` because it is scoped to the
+    caller, which is where the legacy blueprint put it too. The implementation
+    is in the ``snaps`` domain, since that is what it reads.
+    """
+    from archihub.api.snaps import services as snap_services
+
+    return _respond(snap_services.list_for_user(current_user.username, body))
+
+
 # ---------------------------------------------------------------------------
 # Account lifecycle
 # ---------------------------------------------------------------------------

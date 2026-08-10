@@ -242,6 +242,8 @@ def _register_routers(app: FastAPI) -> None:
     from archihub.api.records.public_router import router as records_public_router
     from archihub.api.records.router import router as records_router
     from archihub.api.resources.router import router as resources_router
+    from archihub.api.snaps.public_router import router as snaps_public_router
+    from archihub.api.snaps.router import router as snaps_router
     from archihub.api.system.router import router as system_router
     from archihub.api.tasks.router import router as tasks_router
     from archihub.api.types.router import router as types_router
@@ -269,6 +271,8 @@ def _register_routers(app: FastAPI) -> None:
     # quietly turning every public route into an authenticated 401.
     include_router(app, records_public_router)
     include_router(app, records_router)
+    include_router(app, snaps_public_router)
+    include_router(app, snaps_router)
     _assert_public_routes_win(app)
 
     # Always mounted, exactly like the legacy blueprint. These routes exist on

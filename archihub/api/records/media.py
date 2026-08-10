@@ -13,6 +13,7 @@ is not underneath the media root.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from archihub.core import files as filestore
 from archihub.core.i18n import gettext as _
@@ -194,8 +195,200 @@ def download(record: dict, kind: str):
     return file_response(path, download_name=name, as_attachment=True)
 
 
+# ---------------------------------------------------------------------------
+# Fragment extraction
+# ---------------------------------------------------------------------------
+
+#: Longest fragment that will be transcoded, in seconds. There is no legitimate
+#: caller asking for more, and the request holds a threadpool worker for the
+#: whole transcode.
+MAX_FRAGMENT_SECONDS = 2 * 60 * 60
+
+#: Wall-clock ceiling on the ffmpeg process. The legacy code had none, so a
+#: transcode that hung held its worker until the process was killed by hand.
+FFMPEG_TIMEOUT_SECONDS = 300
+
+#: Output settings per media kind, as the originals had them.
+FRAGMENT_OUTPUT = {
+    "video": (
+        ".mp4",
+        [
+            "-c:v", "libx264",
+            "-c:a", "aac",
+            "-movflags", "faststart",
+            "-avoid_negative_ts", "make_zero",
+            "-fflags", "+genpts",
+        ],
+    ),
+    "audio": (".mp3", ["-c:a", "libmp3lame"]),
+}
+
+
+#: Prefix every generated fragment carries, so the sweep below can recognise its
+#: own output and never touch anything else in the temporal directory.
+FRAGMENT_PREFIX = "fragment-"
+
+#: How long a fragment may sit unclaimed before the next extraction removes it.
+STALE_FRAGMENT_SECONDS = 60 * 60
+
+
+class FragmentFailed(Exception):
+    """ffmpeg did not produce a usable fragment."""
+
+
+def sweep_stale_fragments(directory) -> int:
+    """Delete fragments left behind by requests that never completed.
+
+    A fragment is normally removed once its response has been written
+    (``delete_after``). That does not happen if the client disconnects mid-
+    stream or the process dies between transcoding and sending, so without this
+    the temporal directory grows without bound - the legacy code had the same
+    gap with its ``call_on_close`` callback and no sweep at all.
+
+    Runs on the extraction path because that is the only moment anything is
+    known to be looking at this directory, and it costs one ``listdir``. Only
+    files this module generated are considered.
+    """
+    import time
+
+    cutoff = time.time() - STALE_FRAGMENT_SECONDS
+    removed = 0
+
+    try:
+        entries = list(Path(directory).iterdir())
+    except OSError:
+        return 0
+
+    for entry in entries:
+        if not entry.name.startswith(FRAGMENT_PREFIX):
+            continue
+        try:
+            if entry.is_file() and entry.stat().st_mtime < cutoff:
+                entry.unlink()
+                removed += 1
+        except OSError:
+            logger.debug("Could not remove a stale fragment: %s", entry, exc_info=True)
+
+    if removed:
+        logger.info("Removed %d stale media fragment(s)", removed)
+    return removed
+
+
+def fragment_command(source, destination, start: float, duration: float, kind: str) -> list[str]:
+    """The ffmpeg argument list, built as a list and never a shell string.
+
+    ``-ss``/``-t`` are placed **after** ``-i``, as the originals had them: that
+    is the slow but frame-accurate seek, and a snap of a spoken phrase that
+    starts a keyframe early is a wrong snap.
+
+    Split out from the runner so the arguments can be asserted in tests without
+    a transcode - and so it is obvious at a glance that nothing here is
+    interpolated into a shell.
+    """
+    _suffix, codec_args = FRAGMENT_OUTPUT[kind]
+    return [
+        "ffmpeg", "-nostdin", "-loglevel", "error", "-y",
+        "-i", str(source),
+        "-ss", f"{start:.3f}",
+        "-t", f"{duration:.3f}",
+        *codec_args,
+        str(destination),
+    ]
+
+
+def extract_fragment(source, start: float, end: float, kind: str):
+    """Transcode ``[start, end)`` of a media file to a temp file, and return it.
+
+    The caller is responsible for having the response delete it - see
+    :func:`stream_fragment`.
+    """
+    import subprocess
+    import uuid
+
+    if kind not in FRAGMENT_OUTPUT:
+        raise NotStreamable(_("Record is not audio, video, or image"))
+
+    duration = end - start
+    if duration > MAX_FRAGMENT_SECONDS:
+        raise FragmentFailed(_("The requested fragment is too long"))
+
+    suffix, _codec_args = FRAGMENT_OUTPUT[kind]
+    temporal = get_settings().temporal_files_path
+    if not temporal:
+        raise FragmentFailed(_("Temporal path is not configured"))
+
+    directory = Path(temporal)
+    directory.mkdir(parents=True, exist_ok=True)
+    sweep_stale_fragments(directory)
+
+    # A fresh name every time. The original built it from the record id and the
+    # requested offsets and reused whatever it found there, so a fragment left
+    # behind by a failed run was served as if it were the real thing.
+    destination = directory / f"{FRAGMENT_PREFIX}{uuid.uuid4().hex}{suffix}"
+
+    try:
+        result = subprocess.run(
+            fragment_command(source, destination, start, duration, kind),
+            capture_output=True,
+            timeout=FFMPEG_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        filestore.remove_quietly(destination)
+        logger.warning("ffmpeg timed out extracting a fragment from %s", source)
+        raise FragmentFailed(_("The fragment could not be extracted")) from None
+    except FileNotFoundError:
+        filestore.remove_quietly(destination)
+        logger.error("ffmpeg is not installed; fragment extraction is unavailable")
+        raise FragmentFailed(_("The fragment could not be extracted")) from None
+
+    if result.returncode != 0 or not destination.is_file() or destination.stat().st_size == 0:
+        filestore.remove_quietly(destination)
+        # ffmpeg's stderr names paths on the server and is logged, never
+        # returned - the original put it straight in the response body.
+        logger.warning(
+            "ffmpeg failed (%s) extracting a fragment: %s",
+            result.returncode,
+            result.stderr.decode("utf-8", errors="replace")[:2000],
+        )
+        raise FragmentFailed(_("The fragment could not be extracted"))
+
+    return destination
+
+
+def stream_fragment(record: dict, bounds: tuple[float, float], size: str = "large"):
+    """A response serving just part of a recording.
+
+    The temp file is deleted once the response has been written, which is what
+    ``delete_after`` is for - the original attached a Flask ``call_on_close``
+    callback to do the same thing.
+    """
+    path, kind = derivative_of(record, size)
+    if not path.is_file():
+        raise NotStreamable(_("Record has not been processed"))
+    if kind not in FRAGMENT_OUTPUT:
+        raise NotStreamable(_("Record is not audio, video, or image"))
+
+    start, end = bounds
+    fragment = extract_fragment(path, start, end, kind)
+
+    from archihub.core.responses import guess_media_type
+
+    return file_response(
+        fragment,
+        as_attachment=True,
+        media_type=guess_media_type(fragment.name),
+        delete_after=True,
+    )
+
+
 def parse_fragment_bounds(start_ms, end_ms) -> tuple[float, float] | None:
     """Validate a requested time range, or ``None`` if none was asked for.
+
+    THE UNIT IS SECONDS, despite the parameter names. The legacy code passed
+    these straight to ffmpeg's ``-ss``/``-t``, which take seconds, and the
+    frontend fills them from an HTML media element's ``currentTime``, which is
+    also seconds. Its own Swagger says "in seconds" too. The names are wrong and
+    are kept only because they are the wire contract.
 
     Raises ``ValueError`` for a range that was asked for but does not make
     sense, so the caller can answer 400 rather than serving the whole file and

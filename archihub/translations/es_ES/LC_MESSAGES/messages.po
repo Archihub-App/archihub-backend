@@ -86,3 +86,27 @@ msgstr "speaker y oldSpeaker son obligatorios"
 
 msgid "{field} is missing"
 msgstr "{field} está faltando"
+
+msgid "A resource of type \"{child}\" cannot be filed under \"{parent}\""
+msgstr "Un recurso de tipo \"{child}\" no puede estar bajo \"{parent}\""
+
+msgid "The fragment could not be extracted"
+msgstr "No se pudo extraer el fragmento"
+
+msgid "The requested fragment is too long"
+msgstr "El fragmento solicitado es demasiado largo"
+
+msgid "The resource does not satisfy the new post type"
+msgstr "El recurso no cumple con el nuevo tipo de contenido"
+
+msgid "Unsupported snap type"
+msgstr "Tipo de snap no soportado"
+
+msgid "You must specify a post type"
+msgstr "Debe especificar un tipo de contenido"
+
+msgid "bbox is outside the image"
+msgstr "bbox está fuera de la imagen"
+
+msgid "data is missing"
+msgstr "data está faltando"

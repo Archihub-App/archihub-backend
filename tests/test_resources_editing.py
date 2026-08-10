@@ -425,29 +425,176 @@ def test_a_hook_returning_a_non_string_is_a_400_not_a_500(granular, monkeypatch)
 # ---------------------------------------------------------------------------
 
 
-def test_change_post_type_verifies_permission_and_changes_nothing(mongo):
-    """Ported as the stub it is - see BACKEND_FINDINGS F25."""
+@pytest.fixture
+def reclassify(mongo, monkeypatch):
+    """A resource with no hierarchy constraints and a permissive target form."""
     mongo.resources[VALID_ID] = resource()
-    mongo.type = {"editRoles": [], "viewRoles": []}
+    mongo.resources[VALID_ID]["post_type"] = "serie"
+    mongo.type = {"editRoles": [], "viewRoles": [], "_id": "t"}
+    monkeypatch.setattr("archihub.api.types.services.get_metadata", lambda slug: {"fields": []})
+    monkeypatch.setattr("archihub.api.resources.hierarchy.direct_children", lambda rid: [])
+    monkeypatch.setattr("archihub.api.resources.hierarchy.parent_type_allowed", lambda c, p: True)
+    return mongo
 
-    _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "otro"}, "alice")
+
+def test_a_resource_is_reclassified_and_written(reclassify):
+    """The legacy service returned success having written nothing - F25."""
+    payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
 
     assert status == 200
-    assert mongo.writes == []
+    _filters, update = reclassify.writes[0]
+    assert update["post_type"] == "fondo"
+    assert update["updatedBy"] == "alice"
 
 
-def test_change_post_type_refuses_without_the_edit_role(mongo):
-    mongo.resources[VALID_ID] = resource()
-    mongo.type = {"editRoles": ["curator"], "viewRoles": []}
+def test_reclassifying_to_the_same_type_writes_nothing(reclassify):
+    payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "serie"}, "alice")
 
+    assert status == 200
+    assert reclassify.writes == []
+
+
+def test_a_missing_target_type_is_refused(reclassify):
     _payload, status = editing.change_post_type({"id": VALID_ID}, "alice")
+
+    assert status == 400
+    assert reclassify.writes == []
+
+
+def test_a_target_type_that_does_not_exist_is_404(reclassify, monkeypatch):
+    reclassify.type = None
+
+    _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "ghost"}, "alice")
+
+    assert status == 404
+    assert reclassify.writes == []
+
+
+def test_the_edit_role_is_required_on_the_target_type_too(reclassify, monkeypatch):
+    """Reclassifying moves a resource into another editorial domain.
+
+    Checking only the current type would let someone file a resource into a
+    type they have no business filling.
+    """
+    calls = []
+
+    def holds(user, post_type, is_admin):
+        calls.append(post_type)
+        return post_type != "fondo"
+
+    monkeypatch.setattr(editing.access, "holds_edit_role", holds)
+
+    _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
+
     assert status == editing.LEGACY_ROLE_FAILURE_STATUS
+    assert "fondo" in calls
+    assert reclassify.writes == []
+
+
+def test_a_caller_who_cannot_see_the_resource_may_not_reclassify_it(reclassify, monkeypatch):
+    monkeypatch.setattr(editing.access, "may_view_resource", lambda u, r, a: False)
+
+    _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
+
+    assert status == editing.LEGACY_ROLE_FAILURE_STATUS
+    assert reclassify.writes == []
+
+
+def test_a_parent_that_would_not_accept_the_new_type_refuses_the_change(reclassify, monkeypatch):
+    """The resource is not moving, so its existing parents must still accept it."""
+    reclassify.resources[VALID_ID]["parent"] = [{"id": PARENT_A}]
+    monkeypatch.setattr("archihub.api.resources.hierarchy._post_type_of", lambda rid: "caja")
+    monkeypatch.setattr(
+        "archihub.api.resources.hierarchy.parent_type_allowed", lambda c, p: False
+    )
+
+    _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
+
+    assert status == 400
+    assert reclassify.writes == []
+
+
+def test_a_child_that_would_not_accept_the_new_type_refuses_the_change(reclassify, monkeypatch):
+    """Both directions matter: children must still accept it as their parent."""
+    monkeypatch.setattr(
+        "archihub.api.resources.hierarchy.direct_children",
+        lambda rid: [{"id": PARENT_B, "post_type": "item"}],
+    )
+    monkeypatch.setattr(
+        "archihub.api.resources.hierarchy.parent_type_allowed", lambda c, p: c != "item"
+    )
+
+    _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
+
+    assert status == 400
+    assert reclassify.writes == []
+
+
+def test_a_published_resource_missing_a_required_field_is_refused(reclassify, monkeypatch):
+    """Reclassification must not leave a published record invalid."""
+    reclassify.resources[VALID_ID]["status"] = "published"
+    reclassify.resources[VALID_ID]["metadata"] = {"firstLevel": {"title": "A series"}}
+    monkeypatch.setattr(
+        "archihub.api.types.services.get_metadata",
+        lambda slug: {
+            "fields": [
+                {"destiny": "firstLevel.title", "type": "text", "required": True},
+                {"destiny": "firstLevel.scope", "type": "text", "required": True},
+            ]
+        },
+    )
+
+    payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
+
+    assert status == 400
+    assert "errors" in payload
+    assert reclassify.writes == []
+
+
+def test_a_draft_missing_a_required_field_is_allowed(reclassify, monkeypatch):
+    """Incompleteness is what a draft is for - same rule as validate_fields."""
+    reclassify.resources[VALID_ID]["status"] = "draft"
+    reclassify.resources[VALID_ID]["metadata"] = {"firstLevel": {"title": "A series"}}
+    monkeypatch.setattr(
+        "archihub.api.types.services.get_metadata",
+        lambda slug: {
+            "fields": [
+                {"destiny": "firstLevel.title", "type": "text", "required": True},
+                {"destiny": "firstLevel.scope", "type": "text", "required": True},
+            ]
+        },
+    )
+
+    _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
+
+    assert status == 200
+
+
+def test_fields_the_new_form_does_not_declare_are_kept_and_reported(reclassify, monkeypatch):
+    """An archive must not lose description because someone reclassified.
+
+    The values stay; the caller is told which ones the new form will not render.
+    """
+    reclassify.resources[VALID_ID]["metadata"] = {
+        "firstLevel": {"title": "A series", "legacyNote": "keep me"}
+    }
+    monkeypatch.setattr(
+        "archihub.api.types.services.get_metadata",
+        lambda slug: {"fields": [{"destiny": "firstLevel.title", "type": "text"}]},
+    )
+
+    payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
+
+    assert status == 200
+    assert payload["undeclaredFields"] == ["legacyNote", "title"]
+    _filters, update = reclassify.writes[0]
+    assert "metadata" not in update
 
 
 def test_change_post_type_on_a_missing_resource_is_404(mongo):
     """The original raised a KeyError for a missing id and 500'd for a
     nonexistent resource; both are documented in its own Swagger."""
-    _payload, status = editing.change_post_type({"id": VALID_ID}, "alice")
+    _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "x"}, "alice")
     assert status == 404
 
 

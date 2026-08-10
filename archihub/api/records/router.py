@@ -191,39 +191,41 @@ def favcount(record_id: str) -> JSONResponse:
 def get_stream_by_id(
     record_id: str,
     size: str = Query("large", description="Image derivative size: small, medium or large"),
-    startMs: float | None = Query(None, description="Fragment start, milliseconds"),
-    endMs: float | None = Query(None, description="Fragment end, milliseconds"),
+    start_ms: float | None = Query(
+        None, alias="start_ms", description="Fragment start, in SECONDS despite the name"
+    ),
+    end_ms: float | None = Query(
+        None, alias="end_ms", description="Fragment end, in SECONDS despite the name"
+    ),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> Response:
-    """Serve a record's web-optimised derivative.
+    """Serve a record's web-optimised derivative, whole or in part.
 
     Inline and Range-capable, because this is what the audio and video elements
     fetch and seek within. The archival master is never served here.
 
-    Fragment extraction (``startMs``/``endMs``) is not yet ported - it shells
-    out to ffmpeg and lands with the rest of the media pipeline. An explicit
-    501 is returned rather than silently serving the whole file, which would
-    look to the caller like seeking that does not work.
+    ``start_ms``/``end_ms`` cut a fragment out of an audio or video recording.
+    The names say milliseconds and the values are **seconds** - the legacy route
+    passed them to ffmpeg's ``-ss``/``-t``, and its own Swagger documents them
+    as seconds. Kept because they are the wire contract.
     """
     record, error = services.load_visible(record_id, current_user.username)
     if error is not None:
         return _respond(error)
 
     try:
-        bounds = media.parse_fragment_bounds(startMs, endMs)
+        bounds = media.parse_fragment_bounds(start_ms, end_ms)
     except ValueError as exc:
         return JSONResponse(status_code=400, content={"msg": str(exc)})
 
-    if bounds is not None:
-        return JSONResponse(
-            status_code=501,
-            content={"msg": _("Fragment extraction is not available yet")},
-        )
-
     try:
+        if bounds is not None:
+            return media.stream_fragment(record, bounds, size)
         return media.stream(record, size)
     except media.NotStreamable as exc:
         return JSONResponse(status_code=400, content={"msg": str(exc)})
+    except media.FragmentFailed as exc:
+        return JSONResponse(status_code=500, content={"msg": str(exc)})
     except FileNotFoundError:
         return JSONResponse(status_code=404, content={"msg": _("Record does not exist")})
 

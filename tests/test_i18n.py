@@ -13,7 +13,14 @@ from archihub.core import i18n
 
 
 @pytest.fixture(autouse=True)
-def _clear_locale_cache():
+def _clear_locale_cache(monkeypatch):
+    """Restore the real resolver: this module is what tests it.
+
+    `conftest.pinned_locale` replaces `get_locale` for the rest of the suite so
+    no test can reach a live database for a translation. Here the resolver is
+    the subject, driven against a fake Mongo, so the original is put back.
+    """
+    monkeypatch.setattr(i18n, "get_locale", i18n._real_get_locale)
     i18n.reset_locale_cache()
     yield
     i18n.reset_locale_cache()

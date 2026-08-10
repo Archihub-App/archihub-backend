@@ -40,8 +40,13 @@ def settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_settings.cache_clear()
 
 
+#: Where `pinned_locale` stashes the real resolver, so `tests/test_i18n.py` -
+#: which tests that resolver itself, against a fake Mongo - can put it back.
+REAL_GET_LOCALE_ATTR = "archihub.core.i18n._real_get_locale"
+
+
 @pytest.fixture(autouse=True)
-def pinned_locale() -> Iterator[None]:
+def pinned_locale(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Pin the translation locale to English for every test.
 
     User-facing strings go through ``_()``, so assertions that compare against
@@ -54,11 +59,27 @@ def pinned_locale() -> Iterator[None]:
 
     ``tests/test_i18n.py`` clears this in its own autouse fixture, which runs
     after this one, so translation itself is still tested properly.
+
+    Pinning the *cache* is not enough on its own. Any code path that calls
+    ``reset_locale_cache`` - ``system.services.update_settings`` does, through
+    ``clear_system_cache`` - drops the pinned value, and the next ``_()`` then
+    resolves the locale from MongoDB for real. With no database running that is
+    a 10-second connection timeout per test; with one running it is a silent
+    dependency on live infrastructure. So the resolver itself is replaced, and
+    the cache is pinned as well for anything reading it directly.
     """
     import time
 
     from archihub.core import i18n
 
     i18n._locale_cache = ("en", time.monotonic())
+
+    # The replacement still reads the pinned cache, so the several tests that
+    # switch locale by assigning `_locale_cache` keep working unchanged. What it
+    # does not do is fall through to MongoDB when the cache is empty.
+    monkeypatch.setattr(REAL_GET_LOCALE_ATTR, i18n.get_locale, raising=False)
+    monkeypatch.setattr(
+        i18n, "get_locale", lambda: (i18n._locale_cache or (i18n.DEFAULT_LOCALE,))[0]
+    )
     yield
     i18n.reset_locale_cache()
