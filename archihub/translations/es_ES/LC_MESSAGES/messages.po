@@ -281,3 +281,129 @@ msgstr "No se pudo completar la búsqueda"
 
 msgid "You must specify a post type"
 msgstr "Debe especificar un tipo de contenido"
+
+msgid "Not Found"
+msgstr "No encontrado"
+
+msgid "Plugin endpoints are not available in this build yet"
+msgstr "Los endpoints de plugins aún no están disponibles en esta versión"
+
+msgid "You must supply at least one of: {fields}"
+msgstr "Debe indicar al menos uno de: {fields}"
+
+msgid "A root is required"
+msgstr "Se requiere una raíz"
+
+msgid "API key not found"
+msgstr "Clave de API no encontrada"
+
+msgid "API key revoked"
+msgstr "Clave de API revocada"
+
+msgid "An unexpected error occurred"
+msgstr "Ocurrió un error inesperado"
+
+msgid "Cache cleared successfully"
+msgstr "Caché limpiada con éxito"
+
+msgid "Could not create the administrator"
+msgstr "No se pudo crear el administrador"
+
+msgid "Could not generate a unique slug for {name}"
+msgstr "No se pudo generar un slug único para {name}"
+
+msgid "Error: the field with destiny equal to "
+msgstr "Error: el campo con destiny igual a "
+
+msgid "Error: the field {field} has two different types"
+msgstr "Error: el campo {field} tiene dos tipos diferentes"
+
+msgid "Error: the form must have a field with destiny equal to "
+msgstr "Error: el formulario debe tener un campo con destiny igual a "
+
+msgid "Error: the subfield must have a {key}"
+msgstr "Error: el subcampo debe tener un {key}"
+
+msgid "Favorite removed successfully"
+msgstr "Favorito eliminado con éxito"
+
+msgid "Form updated successfully. If new fields were added or the type of any "
+msgstr "Formulario actualizado con éxito. Si se agregaron campos nuevos o cambió el tipo de alguno "
+
+msgid "Hello,"
+msgstr "Hola,"
+
+msgid "If an account exists for this username, a password recovery email has been sent"
+msgstr "Si existe una cuenta con ese usuario, se ha enviado un correo de recuperación de contraseña"
+
+msgid "If you did not request a password reset, please ignore this email."
+msgstr "Si no solicitó restablecer su contraseña, ignore este correo."
+
+msgid "Invalid favorite type"
+msgstr "Tipo de favorito inválido"
+
+msgid "Invalid file path"
+msgstr "Ruta de archivo inválida"
+
+msgid "Invalid or expired token"
+msgstr "Token inválido o expirado"
+
+msgid "Invalid plugin"
+msgstr "Plugin inválido"
+
+msgid "Plugin updated successfully. Restart the application to apply the change"
+msgstr "Plugin actualizado con éxito. Reinicie la aplicación para aplicar el cambio"
+
+msgid "Reset password"
+msgstr "Restablecer contraseña"
+
+msgid "Settings updated successfully"
+msgstr "Ajustes actualizados con éxito"
+
+msgid "Store this key now - it will not be shown again"
+msgstr "Guarde esta clave ahora: no se volverá a mostrar"
+
+msgid "System configured successfully"
+msgstr "Sistema configurado con éxito"
+
+msgid "Thank you for registering, click on the following link to verify your account:"
+msgstr "Gracias por registrarse, haga clic en el siguiente enlace para verificar su cuenta:"
+
+msgid "The access right {right} does not exist"
+msgstr "El derecho de acceso {right} no existe"
+
+msgid "The content type is required"
+msgstr "El tipo de contenido es obligatorio"
+
+msgid "The field {label} has an invalid author"
+msgstr "El campo {label} tiene un autor inválido"
+
+msgid "The file exceeds the maximum allowed size"
+msgstr "El archivo supera el tamaño máximo permitido"
+
+msgid "The file has no name"
+msgstr "El archivo no tiene nombre"
+
+msgid "The request could not be processed. Check the submitted fields."
+msgstr "No se pudo procesar la petición. Revise los campos enviados."
+
+msgid "The resource cannot have one of its descendants as parent"
+msgstr "El recurso no puede tener uno de sus descendientes como padre"
+
+msgid "This plugin is not supported by this backend yet and cannot be activated"
+msgstr "Este plugin aún no es compatible con este backend y no se puede activar"
+
+msgid "Unknown status"
+msgstr "Estado desconocido"
+
+msgid "Unknown view"
+msgstr "Vista desconocida"
+
+msgid "User created successfully"
+msgstr "Usuario creado con éxito"
+
+msgid "Verify account"
+msgstr "Verificar cuenta"
+
+msgid "You have one day to reset your password, click on the following link:"
+msgstr "Tiene un día para restablecer su contraseña, haga clic en el siguiente enlace:"

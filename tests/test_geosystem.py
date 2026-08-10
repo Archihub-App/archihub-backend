@@ -2,7 +2,7 @@
 
 Both routes are unauthenticated, so the tests concentrate on what an anonymous
 caller can make the server do: BACKEND_FINDINGS S27 (request values became Mongo
-operators) and P3 (unbounded results, and a disk cache keyed on a client float).
+operators) and P10 (unbounded results, and a disk cache keyed on a client float).
 """
 
 from __future__ import annotations
