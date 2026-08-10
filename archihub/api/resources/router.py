@@ -22,7 +22,7 @@ import json
 from fastapi import File, Form, UploadFile
 
 from archihub.api.records.storage import IncomingFile, UnsupportedFileType
-from archihub.api.resources import article, editing, hierarchy, services, write
+from archihub.api.resources import article, editing, files, hierarchy, services, write
 from archihub.core.files import UnsupportedFile, UploadTooLarge
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
@@ -475,6 +475,94 @@ def update_by_id(
     )
 
 
+@router.post(
+    "/download_records",
+    responses={
+        200: {"description": "The files, as an archive or a single attachment"},
+        400: {"description": "Downloads are disabled, or an unsupported type"},
+        **_RESPONSES,
+    },
+)
+def download_records(
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Download everything attached to a resource that this caller may have.
+
+    Declared before ``/{resource_id}`` so the literal segment wins the match.
+
+    A file the caller cannot see is **left out** of the archive rather than
+    included under a placeholder name, and the archive's own filename is derived
+    from a digest of its contents - the original built it from the request's
+    ``type``, which wrote wherever the caller pointed it.
+    """
+    resource_id = body.get("id")
+    if not resource_id:
+        return JSONResponse(status_code=400, content={"msg": _("id is missing")})
+
+    resource, error = services.load_visible(
+        resource_id, current_user.username, fields={"filesObj": 1}
+    )
+    if error is not None:
+        return _respond(error)
+
+    try:
+        return files.bulk_download(
+            resource, body.get("type") or "original", current_user.username
+        )
+    except files.DownloadRefused as exc:
+        return JSONResponse(status_code=exc.status_code, content={"msg": str(exc)})
+
+
+@router.post(
+    "/{resource_id}/records",
+    responses={200: {"description": "One page of the resource's files"}, **_RESPONSES},
+)
+def get_records(
+    resource_id: str,
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """The files attached to a resource, in the curator's display order.
+
+    A file whose access right this caller does not hold is listed without its id
+    or hash, so the interface can show that something is there without it being
+    fetchable.
+    """
+    resource, error = services.load_visible(
+        resource_id, current_user.username, fields={"filesObj": 1}
+    )
+    if error is not None:
+        return _respond(error)
+
+    return _respond(
+        files.list_files(
+            resource,
+            current_user.username,
+            body.get("page") or 0,
+            bool(body.get("groupImages")),
+        )
+    )
+
+
+@router.get(
+    "/{resource_id}/imgs",
+    responses={200: {"description": "How many images the resource holds"}, **_RESPONSES},
+)
+def get_images(
+    resource_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """The image count backing the gallery viewer's pagination."""
+    resource, error = services.load_visible(
+        resource_id, current_user.username, fields={"filesObj": 1}
+    )
+    if error is not None:
+        return _respond(error)
+
+    return _respond(files.count_images(resource))
+
+
 @router.get(
     "/{resource_id}",
     responses={
@@ -491,5 +579,25 @@ def get_by_id(
 
     A resource the caller may not see returns 404 rather than 403 - a distinct
     status would confirm that it exists.
+    """
+    return _respond(services.get_by_id(resource_id, current_user.username))
+
+
+@router.post(
+    "/{resource_id}",
+    responses={
+        200: {"description": "The resource"},
+        404: {"description": "Not found, or not visible to this caller"},
+        **_RESPONSES,
+    },
+)
+def get_by_id_post(
+    resource_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Identical to ``GET /resources/{id}``.
+
+    A POST variant that reads no body, kept because it is in the wire contract.
+    The legacy handler accepted one and ignored it.
     """
     return _respond(services.get_by_id(resource_id, current_user.username))

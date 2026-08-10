@@ -25,7 +25,7 @@ from datetime import datetime
 from bson import json_util
 from bson.objectid import ObjectId
 
-from archihub.api.resources import access
+from archihub.api.resources import access, presentation
 from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
@@ -269,6 +269,10 @@ def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
             logger.info("Denied %s access to resource %s", user, resource_id)
             return {"msg": _("Resource does not exist")}, 404
 
+        # The detail screen renders a resolved `fields` array plus navigation
+        # furniture, not the raw document - and the same component renders the
+        # public response, so both go through the same describer.
+        resource = presentation.describe(resource, user)
         resource["id"] = str(resource.pop("_id"))
         return parse_result(resource), 200
     except Exception as exc:

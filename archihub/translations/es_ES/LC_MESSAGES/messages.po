@@ -110,3 +110,18 @@ msgstr "bbox está fuera de la imagen"
 
 msgid "data is missing"
 msgstr "data está faltando"
+
+msgid "Image gallery"
+msgstr "Galería de imágenes"
+
+msgid "Resource does not have files"
+msgstr "El recurso no tiene archivos"
+
+msgid "The download could not be prepared"
+msgstr "No se pudo preparar la descarga"
+
+msgid "You must specify a view"
+msgstr "Debe especificar una vista"
+
+msgid "{count} images"
+msgstr "{count} imágenes"

@@ -241,6 +241,7 @@ def _register_routers(app: FastAPI) -> None:
     from archihub.api.logs.router import router as logs_router
     from archihub.api.records.public_router import router as records_public_router
     from archihub.api.records.router import router as records_router
+    from archihub.api.resources.public_router import router as resources_public_router
     from archihub.api.resources.router import router as resources_router
     from archihub.api.snaps.public_router import router as snaps_public_router
     from archihub.api.snaps.router import router as snaps_router
@@ -261,6 +262,7 @@ def _register_routers(app: FastAPI) -> None:
     include_router(app, logs_router)
     include_router(app, tasks_router)
     include_router(app, usertasks_router)
+    include_router(app, resources_public_router)
     include_router(app, resources_router)
 
     # ORDER MATTERS, and not only for readability. The public record routes all
