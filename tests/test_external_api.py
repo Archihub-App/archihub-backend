@@ -252,6 +252,64 @@ def test_a_switched_off_api_is_indistinguishable_from_a_missing_route(monkeypatc
     assert response.status_code == 404
 
 
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/adminApi/get_system_info"),
+        ("POST", "/adminApi/get_id"),
+        ("GET", "/publicApi/types"),
+        ("POST", "/publicApi"),
+    ],
+)
+def test_a_switched_off_api_answers_404_before_it_looks_at_the_token(
+    monkeypatch, method, path
+):
+    """Through the real app, with NO credential - which is the case that broke.
+
+    The test above calls the handler function directly and so never resolves
+    the dependencies. That is exactly where the bug lived: the activation check
+    sat in the handler body, the identity dependency ran first, and a caller
+    with no token got **401 from an API that was switched off**. The legacy
+    backend did not register the blueprint at all, so it answered 404 and gave
+    away nothing - and that is the property an external integration relies on
+    to tell "turned off" from "wrong credential".
+
+    Found by the diff harness; invisible to a direct-call test.
+    """
+    from fastapi.testclient import TestClient
+
+    from archihub.api.external import router
+    from main import app
+
+    monkeypatch.setattr(router, "_enabled", lambda entry: False)
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.request(method, path, json={})
+
+    assert response.status_code == 404
+    # And no hint that authentication was even considered.
+    assert "token" not in response.text.lower()
+
+    # Byte-identical to a path that genuinely does not exist. A *translated*
+    # "not found" here would still give the prober their answer.
+    assert response.json() == client.get("/no-such-route-at-all").json()
+
+
+def test_a_switched_off_api_is_404_even_with_a_well_formed_token(monkeypatch):
+    """Otherwise a valid credential still distinguishes off from missing."""
+    from fastapi.testclient import TestClient
+
+    from archihub.api.external import router
+    from main import app
+
+    monkeypatch.setattr(router, "_enabled", lambda entry: False)
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.get("/adminApi/get_system_info", headers={"Authorization": "Bearer x"})
+
+    assert response.status_code == 404
+
+
 def test_the_plugin_proxy_refuses_rather_than_reaching_a_route_that_is_not_there(monkeypatch):
     """The legacy proxy assembled its target as a string from a path converter,
     so `..` segments in it resolved to any route in the application."""

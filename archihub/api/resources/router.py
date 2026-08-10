@@ -31,6 +31,7 @@ from archihub.core.security.jwt import (
     get_current_user,
     require_role_any,
 )
+from archihub.core.responses import json_response
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,13 @@ _RESPONSES = {401: {"description": "Missing/invalid token, or insufficient acces
 
 
 def _respond(result) -> JSONResponse:
+    """Render a service's ``(payload, status)`` result.
+
+    Through ``core.responses`` rather than ``JSONResponse`` directly: a
+    payload carrying a ``datetime`` or an ``ObjectId`` must not 500.
+    """
     payload, status_code = result
-    return JSONResponse(status_code=status_code, content=payload)
+    return json_response(payload, status_code)
 
 
 # The editorial routes are gated twice: coarsely here, so a reader never reaches

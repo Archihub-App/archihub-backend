@@ -35,19 +35,34 @@ from archihub.core.security.jwt import (
     get_current_user,
     require_role_any,
 )
+from archihub.core.responses import json_response
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/system", tags=["System settings"])
 
 require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
+require_admin_or_editor = require_role_any(
+    "admin", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS
+)
+#: The plugins listing is what the processing screens read to build themselves,
+#: so it admits `processing` as well as `admin` - narrowing it to admin alone
+#: leaves an operator holding only `processing` with an empty page.
+require_admin_or_processing = require_role_any(
+    "admin", "processing", status_code=LEGACY_ROLE_FAILURE_STATUS
+)
 
 _ROLE_RESPONSES = {401: {"description": "Missing/invalid token, or the admin role is required"}}
 
 
 def _respond(result) -> JSONResponse:
+    """Render a service's ``(payload, status)`` result.
+
+    Through ``core.responses`` rather than ``JSONResponse`` directly: a
+    payload carrying a ``datetime`` or an ``ObjectId`` must not 500.
+    """
     payload, status_code = result
-    return JSONResponse(status_code=status_code, content=payload)
+    return json_response(payload, status_code)
 
 
 # ---------------------------------------------------------------------------
@@ -114,28 +129,42 @@ def update(
 def get_default_cataloging_type(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> JSONResponse:
-    """The content type new resources default to."""
+    """The content type new resources default to.
+
+    The key is ``value``, which reads oddly next to the setting's own name -
+    but it is the wire contract: `SystemService.getDefaultCatType` navigates to
+    ``"/cataloging/" + response.value``, so a rename sends the cataloguing
+    screen to ``/cataloging/undefined`` with a 200 and no error anywhere.
+    """
     value = services.get_setting_value("post_types_settings", "default_type", 0)
-    return JSONResponse(status_code=200, content={"default_type": value})
+    return json_response({"value": value}, 200)
 
 
 @router.get(
     "/access-rights",
     responses={200: {"description": "Configured access rights"}, **_ROLE_RESPONSES},
 )
-def get_access_rights(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
-    """The access-rights vocabulary."""
-    from archihub.core.roles import get_access_rights as _get
+def get_access_rights(
+    current_user: CurrentUser = Depends(require_admin_or_editor),
+) -> JSONResponse:
+    """The access-rights vocabulary, as the stored list document.
 
-    return JSONResponse(status_code=200, content=_get())
+    Returns the whole list - ``name`` and ``description`` alongside
+    ``options`` - because that is what the legacy route returned. The frontend
+    reads only ``options``, but this is also the shape an operator's own
+    tooling sees.
+    """
+    from archihub.core.roles import access_rights_document
+
+    return json_response(access_rights_document(), 200)
 
 
 @router.get("/roles", responses={200: {"description": "Configured roles"}, **_ROLE_RESPONSES})
-def get_roles(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
+def get_roles(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
     """The roles vocabulary."""
     from archihub.core.roles import get_roles as _get
 
-    return JSONResponse(status_code=200, content=_get())
+    return json_response(_get(), 200)
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +173,13 @@ def get_roles(current_user: CurrentUser = Depends(get_current_user)) -> JSONResp
 
 
 @router.get("/plugins", responses={200: {"description": "Installed plugins"}, **_ROLE_RESPONSES})
-def get_plugins(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
-    """List plugins, with whether each is active and whether it is supported."""
+def get_plugins(current_user: CurrentUser = Depends(require_admin_or_processing)) -> JSONResponse:
+    """List plugins, with whether each is active and whether it is supported.
+
+    Wrapped in ``{"plugins": [...]}``, not returned as a bare array: both
+    callers - the processing screen and the admin plugins table - read
+    ``response.plugins``, so a bare array is a ``TypeError`` on a 200.
+    """
     return _respond(services.get_plugins())
 
 

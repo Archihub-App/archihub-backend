@@ -40,6 +40,7 @@ from archihub.core.security.jwt import (
     get_current_user,
     require_role_any,
 )
+from archihub.core.responses import json_response
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +64,8 @@ def _respond(result) -> JSONResponse:
     """
     if isinstance(result, tuple) and len(result) == 2:
         payload, status_code = result
-        return JSONResponse(status_code=status_code, content=payload)
-    return JSONResponse(status_code=200, content=result)
+        return json_response(payload, status_code)
+    return json_response(result, 200)
 
 
 @router.get(

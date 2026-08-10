@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse, Response
 from archihub.api.records import services as record_services
 from archihub.api.snaps import render, services
 from archihub.core.security.jwt import CurrentUser, get_current_user
+from archihub.core.responses import json_response
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +33,13 @@ _RESPONSES = {
 
 
 def _respond(result) -> JSONResponse:
+    """Render a service's ``(payload, status)`` result.
+
+    Through ``core.responses`` rather than ``JSONResponse`` directly: a
+    payload carrying a ``datetime`` or an ``ObjectId`` must not 500.
+    """
     payload, status_code = result
-    return JSONResponse(status_code=status_code, content=payload)
+    return json_response(payload, status_code)
 
 
 @router.post(

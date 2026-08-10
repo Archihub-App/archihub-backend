@@ -106,10 +106,16 @@ def describe_parents(parents: list) -> list:
         return []
 
     object_ids = [oid for oid in (_object_id(p["id"]) for p in wanted) if oid is not None]
-    rows = _mongo().get_all_records(
-        COLLECTION,
-        {"_id": {"$in": object_ids}},
-        fields={"metadata.firstLevel.title": 1, "post_type": 1},
+    # `list(...)`: this is a cursor and it is read twice below. An unmaterialised
+    # cursor is exhausted by the first pass, so the icon lookup receives an empty
+    # set and every ancestor comes back with `"icon": None`. The same mistake was
+    # live in `records.services.describe_parents`.
+    rows = list(
+        _mongo().get_all_records(
+            COLLECTION,
+            {"_id": {"$in": object_ids}},
+            fields={"metadata.firstLevel.title": 1, "post_type": 1},
+        )
     )
     by_id = {str(row["_id"]): row for row in rows}
     icons = _icons_for({row.get("post_type") for row in rows if row.get("post_type")})

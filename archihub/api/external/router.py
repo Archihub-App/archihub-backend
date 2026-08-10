@@ -44,6 +44,7 @@ from archihub.core.security.fernet import (
     fernet_authenticate,
     public_fernet_authenticate,
 )
+from archihub.core.responses import json_response
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +56,13 @@ PUBLIC_SETTING = "api_activation_public"
 
 
 def _respond(result) -> JSONResponse:
+    """Render a service's ``(payload, status)`` result.
+
+    Through ``core.responses`` rather than ``JSONResponse`` directly: a
+    payload carrying a ``datetime`` or an ``ObjectId`` must not 500.
+    """
     payload, status_code = result
-    return JSONResponse(status_code=status_code, content=payload)
+    return json_response(payload, status_code)
 
 
 def _enabled(entry_id: str) -> bool:
@@ -79,7 +85,43 @@ def _unavailable() -> JSONResponse:
 # ---------------------------------------------------------------------------
 
 
-def admin_identity(authorization: str | None = Header(default=None)) -> FernetIdentity:
+def _refuse_if_switched_off(entry_id: str) -> None:
+    """The activation gate, run BEFORE the token is looked at.
+
+    This check used to sit at the top of each handler body, which reads as
+    though it comes first and does not: FastAPI resolves the ``Depends`` in the
+    signature before it calls the handler, so a caller with no token got a
+    **401 from an API that was switched off** - confirming the route exists,
+    where the legacy backend (which never registered the blueprint at all)
+    returned a plain 404.
+
+    Making it a dependency *of* the identity dependencies puts the ordering in
+    the structure rather than in a convention someone has to remember.
+    """
+    if not _enabled(entry_id):
+        from starlette.exceptions import HTTPException as StarletteHTTPException
+
+        # Raised the way an unrouted path raises it, so the response is
+        # byte-identical to one. NOT a translated `NotFoundError`: that renders
+        # "No encontrado" where a genuinely missing route renders "Not Found",
+        # and that single difference tells a prober the route is really there
+        # and was deliberately refused - which is the whole thing this is
+        # supposed to hide.
+        raise StarletteHTTPException(status_code=404)
+
+
+def _require_admin_api() -> None:
+    _refuse_if_switched_off(ADMIN_SETTING)
+
+
+def _require_public_api() -> None:
+    _refuse_if_switched_off(PUBLIC_SETTING)
+
+
+def admin_identity(
+    _gate: None = Depends(_require_admin_api),
+    authorization: str | None = Header(default=None),
+) -> FernetIdentity:
     """An admin API token, and it must belong to an administrator."""
     identity = fernet_authenticate(authorization)
     if not identity.is_admin:
@@ -89,7 +131,10 @@ def admin_identity(authorization: str | None = Header(default=None)) -> FernetId
     return identity
 
 
-def public_identity(authorization: str | None = Header(default=None)) -> FernetIdentity:
+def public_identity(
+    _gate: None = Depends(_require_public_api),
+    authorization: str | None = Header(default=None),
+) -> FernetIdentity:
     return public_fernet_authenticate(authorization)
 
 

@@ -34,26 +34,85 @@ Exits non-zero if any case differs, so it can gate a phase in CI.
 
 Options worth knowing:
 
+  --mint-token USER       authenticate as USER without a password (see below)
   --only users            run only cases whose name or path contains this string
   --reset                 reset+reseed through the LEGACY backend before running
   --show-equal            print passing cases too, not just failures
   --update-baseline FILE  record current responses for later comparison
 
+WHAT IT ACTUALLY NEEDS
+----------------------
+Two running backends pointed at the same MongoDB. **Nothing has to be installed
+into this environment** - the legacy stack is queried over HTTP, never imported.
+An earlier note in PLAN_FASTAPI.md concluded the harness was blocked behind a
+multi-gigabyte ``torch`` install because ``import torch`` is line 1 of
+``app/__init__.py``; that only matters if you import the legacy app, which this
+does not do.
+
 AUTHENTICATION
 --------------
 Both stacks share ``JWT_SECRET_KEY``, so a token minted by either is accepted by
 the other - which is itself a property worth checking, and is what makes an
-in-place cutover possible without logging every user out. The harness logs in
-once against the legacy backend and reuses that token for both, so a difference
-in response bodies is never just a difference in identity.
+in-place cutover possible without logging every user out.
+
+``--mint-token USERNAME`` exploits that: it signs a token locally from the
+configured secret, so **no account password is needed** and no real credential
+ends up on a command line or in shell history. ``--username``/``--password``
+still work, logging in against the legacy backend.
+
+Either way one token is used for both backends, so a difference in response
+bodies is never just a difference in identity.
+
+TWO KINDS OF CASE
+-----------------
+**Parity cases** fire at both backends and diff the result. That is the right
+gate wherever the port intends to match what it replaces.
+
+**Contract cases** (any of ``expect_status``, ``expect_absent``,
+``expect_present``) assert the port directly and never query legacy. They exist
+because parity is the wrong gate in two places:
+
+  - ``aiservices`` was rewritten rather than ported. Diffing it against legacy
+    reports the rewrite itself as a wall of failures, burying anything real.
+  - the security fixes are exactly where legacy is **wrong**. ``filepath``
+    leaving the records API, drafts in a public search, a provider's API key in
+    a response - demanding parity there demands the bug back. ``expect_absent``
+    states the invariant instead, and keeps stating it after legacy is deleted
+    at cutover, when parity cases stop being runnable at all.
+
+FIXTURES, AND WHY A HARDCODED id IS WORSE THAN NO CASE
+------------------------------------------------------
+Most interesting routes need a real identifier - a resource, a record, a view.
+Writing one into the case file makes the case silently useless the moment the
+database changes, and this harness has a ``--reset`` flag that changes it on
+purpose: after a reseed the id is gone, both backends answer 404, the bodies
+match, and the case **passes** while exercising nothing. Green, and meaningless.
+
+So ids are discovered at run time. ``diff_cases.json`` carries a ``fixtures``
+list - each one a request fired at the legacy backend plus an ``extract`` path
+naming the value to pull out of the response - and cases refer to the results as
+``${resource_id}``. A fixture that does not resolve does not fall back to
+anything: every case referring to it is reported as **SKIPPED**, counted apart
+from passes, and named in the summary. Coverage you do not have is stated rather
+than implied.
+
+EXPECTED DIFFERENCES
+--------------------
+Not every difference is a regression. ``diff_cases.json`` carries an
+``_expected_differences`` block listing the ones that are deliberate - places
+where the legacy backend returns 500 or a wrongly-200 body and the port returns
+the correct code, fields removed on purpose, and one case whose result depends
+on run order because the port rate-limits logins and the legacy does not. Read
+that before treating a failure as news.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -107,7 +166,30 @@ class Case:
     auth: bool = True
     # Extra dotted paths to ignore for this case only, e.g. "root['checks']['celery']".
     ignore: list[str] = field(default_factory=list)
+
+    # -- contract cases -------------------------------------------------
+    # Setting any of the three below turns this into a CONTRACT case: the port
+    # is asserted against a stated expectation and the legacy backend is not
+    # queried at all.
+    #
+    # Parity is the right gate only where the port intends to match. It is the
+    # wrong gate in two places, and both need covering:
+    #   - `aiservices` was rewritten rather than ported, so a diff against
+    #     legacy reports the rewrite as a wall of failures and hides anything
+    #     real inside it.
+    #   - the security fixes are precisely where legacy is WRONG. `filepath`
+    #     leaving the records API, drafts in a public search, a provider's API
+    #     key in a response - a parity assertion there would demand the bug
+    #     back. `expect_absent` states the invariant directly instead.
     expect_status: int | None = None
+    #: Key names that must appear nowhere in the response, at any depth.
+    expect_absent: list[str] = field(default_factory=list)
+    #: Key names that must appear somewhere in the response.
+    expect_present: list[str] = field(default_factory=list)
+
+    @property
+    def is_contract(self) -> bool:
+        return bool(self.expect_status or self.expect_absent or self.expect_present)
 
     @classmethod
     def from_dict(cls, raw: dict) -> Case:
@@ -122,15 +204,116 @@ class Case:
 
 
 @dataclass
+class Fixture:
+    """A value discovered from the running instance, not written into the file.
+
+    Fired at the legacy backend - both stacks share one database, so the id it
+    returns is equally valid against the port, and reading it from the stack
+    being *replaced* keeps the port out of its own test setup.
+    """
+
+    name: str
+    path: str
+    extract: str
+    method: str = "GET"
+    body: Any = None
+    query: dict | None = None
+    auth: bool = True
+    #: What is untestable without it, printed when it fails to resolve.
+    covers: str = ""
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> Fixture:
+        payload = {key: value for key, value in raw.items() if not key.startswith("_")}
+        unknown = set(payload) - set(cls.__dataclass_fields__)
+        if unknown:
+            raise ValueError(f"Unknown keys in fixture {raw.get('name')!r}: {sorted(unknown)}")
+        return cls(**payload)
+
+
+def extract_path(payload: Any, path: str) -> Any:
+    """Pull ``a.0.b`` out of a parsed response, or return None.
+
+    Deliberately total: a fixture that cannot be resolved is an ordinary
+    outcome on an instance without that kind of data, and it is reported as a
+    skip rather than crashing the run.
+    """
+    current = payload
+    for segment in path.split("."):
+        if isinstance(current, list):
+            if not segment.isdigit() or int(segment) >= len(current):
+                return None
+            current = current[int(segment)]
+        elif isinstance(current, dict):
+            if segment not in current:
+                return None
+            current = current[segment]
+        else:
+            return None
+    return current
+
+
+#: ``${name}`` rather than ``{name}``: a request body may legitimately contain
+#: braces, and an unresolvable token must be an error rather than a guess.
+PLACEHOLDER = re.compile(r"\$\{([a-zA-Z0-9_]+)\}")
+
+
+def placeholders_in(value: Any) -> set[str]:
+    if isinstance(value, str):
+        return set(PLACEHOLDER.findall(value))
+    if isinstance(value, dict):
+        return set().union(*(placeholders_in(v) for v in value.values())) if value else set()
+    if isinstance(value, list):
+        return set().union(*(placeholders_in(v) for v in value)) if value else set()
+    return set()
+
+
+def keys_in(value: Any) -> set[str]:
+    """Every key name appearing anywhere in a parsed body, at any depth.
+
+    Depth matters for what this is used for: ``filepath`` nested three levels
+    inside a record's parent list has still left the API.
+    """
+    found: set[str] = set()
+    if isinstance(value, dict):
+        for key, inner in value.items():
+            found.add(key)
+            found |= keys_in(inner)
+    elif isinstance(value, list):
+        for item in value:
+            found |= keys_in(item)
+    return found
+
+
+def substitute(value: Any, bindings: dict[str, Any]) -> Any:
+    if isinstance(value, str):
+        # A lone "${x}" keeps the bound value's type - an int stays an int in a
+        # JSON body - while text around it forces a string, as in a URL path.
+        whole = PLACEHOLDER.fullmatch(value)
+        if whole:
+            return bindings[whole.group(1)]
+        return PLACEHOLDER.sub(lambda m: str(bindings[m.group(1)]), value)
+    if isinstance(value, dict):
+        return {key: substitute(item, bindings) for key, item in value.items()}
+    if isinstance(value, list):
+        return [substitute(item, bindings) for item in value]
+    return value
+
+
+@dataclass
 class Result:
     case: Case
     legacy_status: int
     next_status: int
     diff: dict | None
     error: str | None = None
+    #: Set when the case never ran, e.g. an unresolved fixture. Never a pass.
+    skipped: str | None = None
 
     @property
     def ok(self) -> bool:
+        if self.skipped:
+            return False
         return self.error is None and self.legacy_status == self.next_status and not self.diff
 
 
@@ -180,6 +363,7 @@ class DiffHarness:
         self.test_secret = test_secret
         self.client = httpx.Client(timeout=timeout, follow_redirects=False)
         self.token: str | None = None
+        self.bindings: dict[str, Any] = {}
 
     # -- setup ----------------------------------------------------------
     def use_token(self, token: str) -> None:
@@ -237,6 +421,57 @@ class DiffHarness:
             raise SystemExit(f"Reset failed: {response.status_code} {response.text[:300]}")
         print(f"  reset accepted ({response.status_code})")
 
+    # -- fixtures -------------------------------------------------------
+    def resolve_fixtures(self, fixtures: list[Fixture]) -> list[tuple[Fixture, str]]:
+        """Bind what the instance actually has. Returns the ones that failed.
+
+        Each is fired at the legacy backend only. Anything already bound - by
+        ``--bind`` on the command line - is left alone, so an operator can pin a
+        specific document without editing the case file.
+        """
+        unresolved: list[tuple[Fixture, str]] = []
+
+        for fixture in fixtures:
+            if fixture.name in self.bindings:
+                print(f"  {fixture.name} = {self.bindings[fixture.name]} (given)")
+                continue
+
+            headers = {}
+            if fixture.auth and self.token:
+                headers["Authorization"] = f"Bearer {self.token}"
+
+            try:
+                response = self.client.request(
+                    fixture.method.upper(),
+                    f"{self.legacy_url}{fixture.path}",
+                    headers=headers,
+                    params=fixture.query,
+                    json=fixture.body,
+                )
+            except httpx.RequestError as exc:
+                unresolved.append((fixture, f"request failed: {exc}"))
+                continue
+
+            if response.status_code != 200:
+                unresolved.append((fixture, f"{fixture.method} {fixture.path} -> {response.status_code}"))
+                continue
+
+            try:
+                payload = response.json()
+            except ValueError:
+                unresolved.append((fixture, "response was not JSON"))
+                continue
+
+            value = extract_path(payload, fixture.extract)
+            if value is None or value == "":
+                unresolved.append((fixture, f"no {fixture.extract!r} in the response - the instance has none"))
+                continue
+
+            self.bindings[fixture.name] = value
+            print(f"  {fixture.name} = {value}")
+
+        return unresolved
+
     # -- execution ------------------------------------------------------
     def _request(self, base_url: str, case: Case) -> httpx.Response:
         headers = dict(case.headers)
@@ -252,6 +487,26 @@ class DiffHarness:
         return self.client.request(case.method.upper(), f"{base_url}{case.path}", **kwargs)
 
     def run_case(self, case: Case) -> Result:
+        needed = placeholders_in([case.path, case.body, case.form, case.query])
+        missing = sorted(needed - set(self.bindings))
+        if missing:
+            # Firing it anyway would put a literal "${resource_id}" in the URL,
+            # 404 on both backends and report a pass. Say nothing rather than
+            # something false.
+            return Result(case, 0, 0, None, skipped=f"unresolved fixture(s): {', '.join(missing)}")
+
+        if needed:
+            case = replace(
+                case,
+                path=substitute(case.path, self.bindings),
+                body=substitute(case.body, self.bindings),
+                form=substitute(case.form, self.bindings),
+                query=substitute(case.query, self.bindings),
+            )
+
+        if case.is_contract:
+            return self._run_contract(case)
+
         try:
             legacy = self._request(self.legacy_url, case)
             nxt = self._request(self.next_url, case)
@@ -270,9 +525,38 @@ class DiffHarness:
         )
         return Result(case, legacy.status_code, nxt.status_code, diff.to_dict() or None)
 
+    def _run_contract(self, case: Case) -> Result:
+        """Assert the port against a stated expectation, ignoring legacy."""
+        try:
+            response = self._request(self.next_url, case)
+        except httpx.RequestError as exc:
+            return Result(case, 0, 0, None, error=f"request failed: {exc}")
 
-def load_cases(path: Path) -> list[Case]:
-    """Load enabled cases.
+        body = _parse_body(response)
+        problems: list[str] = []
+
+        if case.expect_status and response.status_code != case.expect_status:
+            problems.append(f"expected status {case.expect_status}, got {response.status_code}")
+
+        present = keys_in(body)
+        for key in case.expect_absent:
+            if key in present:
+                problems.append(f"{key!r} must not appear in this response, and does")
+        for key in case.expect_present:
+            if key not in present:
+                problems.append(f"{key!r} must appear in this response, and does not")
+
+        return Result(
+            case,
+            case.expect_status or response.status_code,
+            response.status_code,
+            None,
+            error="; ".join(problems) or None,
+        )
+
+
+def load_cases(path: Path) -> tuple[list[Case], list[Fixture]]:
+    """Load enabled cases and the fixtures they draw identifiers from.
 
     Entries with no ``name``, or whose name starts with ``_``, are inactive
     templates for domains not yet ported - firing those before their route
@@ -280,24 +564,38 @@ def load_cases(path: Path) -> list[Case]:
     """
     raw = json.loads(path.read_text(encoding="utf-8"))
     entries = raw["cases"] if isinstance(raw, dict) else raw
-    return [
+    cases = [
         Case.from_dict(entry)
         for entry in entries
         if entry.get("name") and not entry["name"].startswith("_")
     ]
+    fixtures = [
+        Fixture.from_dict(entry)
+        for entry in (raw.get("fixtures") or [] if isinstance(raw, dict) else [])
+        if entry.get("name") and not entry["name"].startswith("_")
+    ]
+    return cases, fixtures
 
 
 def report(results: list[Result], *, show_equal: bool) -> int:
-    failures = [r for r in results if not r.ok]
+    skipped = [r for r in results if r.skipped]
+    failures = [r for r in results if not r.ok and not r.skipped]
 
     for result in results:
+        if result.skipped:
+            continue
         if result.ok and not show_equal:
             continue
         marker = "PASS" if result.ok else "FAIL"
-        print(f"\n[{marker}] {result.case.name}  ({result.case.method} {result.case.path})")
+        kind = "contract" if result.case.is_contract else "parity"
+        print(f"\n[{marker}] {result.case.name}  ({result.case.method} {result.case.path}) [{kind}]")
 
         if result.error:
-            print(f"    error: {result.error}")
+            print(f"    {result.error}")
+            continue
+
+        if result.case.is_contract:
+            print(f"    status: {result.next_status} (as required)")
             continue
 
         if result.legacy_status != result.next_status:
@@ -311,9 +609,16 @@ def report(results: list[Result], *, show_equal: bool) -> int:
                 rendered = rendered[:4000] + "\n      ... (truncated)"
             print(f"    body diff (legacy -> next):\n{rendered}")
 
-    total = len(results)
+    ran = [r for r in results if not r.skipped]
+    parity = [r for r in ran if not r.case.is_contract]
+    contract = [r for r in ran if r.case.is_contract]
+
     print(f"\n{'=' * 60}")
-    print(f"{total - len(failures)}/{total} cases identical")
+    print(f"{sum(r.ok for r in parity)}/{len(parity)} parity cases identical to legacy")
+    print(f"{sum(r.ok for r in contract)}/{len(contract)} contract cases met (port asserted directly)")
+    if skipped:
+        print(f"{len(skipped)} skipped")
+
     if failures:
         print("\nDiffering cases:")
         for result in failures:
@@ -321,6 +626,14 @@ def report(results: list[Result], *, show_equal: bool) -> int:
                 "status" if result.legacy_status != result.next_status else "body"
             )
             print(f"  - {result.case.name} ({reason})")
+
+    if skipped:
+        # Named rather than merely counted: a skip is missing coverage, and the
+        # reason usually says exactly what the instance would need to have.
+        print("\nSkipped (NOT passes - these routes went untested):")
+        for result in skipped:
+            print(f"  - {result.case.name}: {result.skipped}")
+
     return 1 if failures else 0
 
 
@@ -345,9 +658,21 @@ def main() -> int:
     parser.add_argument("--test-secret", help="X-ArchiHUB-Test-Secret, needed by --reset")
     parser.add_argument("--reset", action="store_true", help="Reset+reseed via the legacy backend first")
     parser.add_argument("--show-equal", action="store_true", help="Also print passing cases")
+    parser.add_argument(
+        "--bind",
+        action="append",
+        metavar="NAME=VALUE",
+        default=[],
+        help="Pin a fixture instead of discovering it, e.g. --bind resource_id=6a70b833...",
+    )
+    parser.add_argument(
+        "--strict-fixtures",
+        action="store_true",
+        help="Fail the run if any fixture does not resolve, instead of skipping its cases",
+    )
     args = parser.parse_args()
 
-    cases = load_cases(args.cases)
+    cases, fixtures = load_cases(args.cases)
     if args.only:
         needle = args.only.lower()
         cases = [c for c in cases if needle in c.name.lower() or needle in c.path.lower()]
@@ -377,6 +702,27 @@ def main() -> int:
         print("  authenticated (token minted on legacy, used against both)")
     elif any(c.auth for c in cases):
         print("  no credentials given - authenticated cases will run unauthenticated")
+
+    for binding in args.bind:
+        name, _, value = binding.partition("=")
+        if not value:
+            raise SystemExit(f"--bind expects NAME=VALUE, got {binding!r}")
+        harness.bindings[name] = value
+
+    # Only resolve what the selected cases actually refer to: --only records
+    # should not fail on a view that this instance happens not to have.
+    wanted = set().union(*(placeholders_in([c.path, c.body, c.form, c.query]) for c in cases))
+    needed = [f for f in fixtures if f.name in wanted]
+
+    if needed:
+        print(f"\nResolving {len(needed)} fixture(s) against the legacy backend...")
+        unresolved = harness.resolve_fixtures(needed)
+        for fixture, reason in unresolved:
+            print(f"  {fixture.name}: UNRESOLVED - {reason}")
+            if fixture.covers:
+                print(f"      leaves untested: {fixture.covers}")
+        if unresolved and args.strict_fixtures:
+            return 2
 
     print(f"\nRunning {len(cases)} case(s)...")
     results = [harness.run_case(case) for case in cases]

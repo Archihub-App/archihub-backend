@@ -6,10 +6,15 @@ A user task assigns review work on one resource or record to one editor. Exactly
 one may be open per target at a time, which is what stops two editors being
 asked to review the same thing.
 
-ERROR KEY: this domain answers with ``{"error": ...}`` rather than the
-``{"msg": ...}`` every other domain uses. That is a legacy inconsistency, and it
-is preserved - the frontend reads `error` here, so unifying it would be a wire
-change with no behavioural benefit. Recorded so it reads as deliberate.
+ERROR KEY: this domain mostly answers with ``{"error": ...}`` rather than the
+``{"msg": ...}`` every other domain uses - **except** the two "there are no
+tasks" 404s, which the legacy service returns under ``msg``. So the legacy is
+inconsistent with itself, not merely with its neighbours.
+
+That is preserved exactly, both parts. Unifying the two would be a wire change
+with no behavioural benefit, and the harness diffs the body key by key, so the
+inconsistency is easier to keep than to notice. Do not tidy it without a paired
+frontend change.
 """
 
 from __future__ import annotations
@@ -68,7 +73,9 @@ def process_comments(comments) -> str:
 def get_resource_tasks(resource_id: str) -> tuple[dict, int]:
     task = _mongo().get_record(COLLECTION, {"resourceId": resource_id, "status": STATUS_PENDING})
     if not task:
-        return {"error": _("There are no tasks for this resource")}, 404
+        # `msg`, not `error`: the legacy service uses `msg` for exactly
+        # these two and `error` for everything else in this module.
+        return {"msg": _("There are no tasks for this resource")}, 404
 
     task["_id"] = str(task["_id"])
     task["createdAt"] = _iso(task.get("createdAt"))
@@ -78,7 +85,9 @@ def get_resource_tasks(resource_id: str) -> tuple[dict, int]:
 def get_record_tasks(record_id: str) -> tuple[dict, int]:
     task = _mongo().get_record(COLLECTION, {"recordId": record_id, "status": STATUS_PENDING})
     if not task:
-        return {"error": _("There are no tasks for this record")}, 404
+        # `msg`, not `error`: the legacy service uses `msg` for exactly
+        # these two and `error` for everything else in this module.
+        return {"msg": _("There are no tasks for this record")}, 404
 
     task["_id"] = str(task["_id"])
     task["createdAt"] = _iso(task.get("createdAt"))
@@ -122,7 +131,15 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
 
 
 def get_editors() -> tuple[list | dict, int]:
-    """Users who can be assigned review work."""
+    """Users who can be assigned review work, as select options.
+
+    ``{"label": name, "value": username}``, which is the shape the picker in
+    `CustomAlert.tsx` is built for. Returning ``{"name", "username"}`` instead
+    looks harmless and is not: `normalizeSelectOption` falls back through
+    ``value ?? id ?? term ?? name``, so it would submit the display *name* as
+    the assignee where the assignment needs the username. Identical for an
+    account whose name is its username, wrong for every other one.
+    """
     try:
         editors = list(
             _mongo().get_all_records(
@@ -131,7 +148,11 @@ def get_editors() -> tuple[list | dict, int]:
                 fields={"name": 1, "username": 1, "_id": 0},
             )
         )
-        return editors, 200
+        options = [
+            {"label": editor.get("name", editor.get("username")), "value": editor.get("username")}
+            for editor in editors
+        ]
+        return options, 200
     except Exception as exc:
         logger.exception("Could not list editors")
         return {"error": str(exc)}, 500

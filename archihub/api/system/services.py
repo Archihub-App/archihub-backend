@@ -215,12 +215,18 @@ def get_system_settings() -> tuple[dict, int]:
     except Exception:
         logger.warning("Could not collect plugin capabilities", exc_info=True)
 
+    # `language`, `capabilities`, `version` - and nothing else, which is what
+    # the legacy route returns.
+    #
+    # THIS ENDPOINT IS UNAUTHENTICATED: the login screen reads it before anyone
+    # has signed in. So every field is public, and a field is worth adding only
+    # if something reads it. An earlier revision also returned `first_time`,
+    # `indexing` and `vector`; none has a consumer (`providers.tsx` coerces
+    # `!!data.first_time`, so absent behaves exactly as false) and the last two
+    # restate what `capabilities` already carries.
     return {
-        "first_time": False,
         "version": __version__,
         "language": get_setting_value("user_management", "user_languages", 2) or "en",
-        "indexing": bool(get_setting_value("index_management", "index_activation", 0)),
-        "vector": bool(get_setting_value("index_management", "vector_activation", 1)),
         "capabilities": sorted(set(capabilities)),
     }, 200
 
@@ -274,7 +280,7 @@ def set_first_time(body: dict) -> tuple[dict, int]:
 # ---------------------------------------------------------------------------
 
 
-def get_plugins() -> tuple[list | dict, int]:
+def get_plugins() -> tuple[dict, int]:
     """Installed plugins and whether each is active."""
     try:
         from archihub.plugins.framework.discovery import get_active_plugin_slugs, get_plugin_info
@@ -298,7 +304,9 @@ def get_plugins() -> tuple[list | dict, int]:
                     "supported": slug in PORTED_PLUGINS,
                 }
             )
-        return plugins, 200
+        # Wrapped, not bare: `SystemService.getListPlugins`'s two callers both
+        # read `response.plugins`.
+        return {"plugins": plugins}, 200
     except Exception as exc:
         logger.exception("Could not list plugins")
         return {"msg": str(exc)}, 500

@@ -17,6 +17,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 from archihub.api.views import services
+from archihub.core.responses import json_response
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,13 @@ router = APIRouter(prefix="/views", tags=["Views (public)"])
 
 
 def _respond(result) -> JSONResponse:
+    """Render a service's ``(payload, status)`` result.
+
+    Through ``core.responses`` rather than ``JSONResponse`` directly: a
+    payload carrying a ``datetime`` or an ``ObjectId`` must not 500.
+    """
     payload, status_code = result
-    return JSONResponse(status_code=status_code, content=payload)
+    return json_response(payload, status_code)
 
 
 @router.get(

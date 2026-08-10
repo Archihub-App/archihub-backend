@@ -24,6 +24,7 @@ from fastapi import APIRouter, Body
 from fastapi.responses import JSONResponse
 
 from archihub.api.geosystem import services
+from archihub.core.responses import json_response
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,13 @@ _RESPONSES = {400: {"description": "The request does not describe a shape query"
 
 
 def _respond(result) -> JSONResponse:
+    """Render a service's ``(payload, status)`` result.
+
+    Through ``core.responses`` rather than ``JSONResponse`` directly: a
+    payload carrying a ``datetime`` or an ``ObjectId`` must not 500.
+    """
     payload, status_code = result
-    return JSONResponse(status_code=status_code, content=payload)
+    return json_response(payload, status_code)
 
 
 @router.post(

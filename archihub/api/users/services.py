@@ -38,6 +38,20 @@ from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
 
+
+def serialise(result):
+    """Mongo types (``ObjectId``, ``datetime``) into their JSON forms.
+
+    The same ``json_util`` pass every other domain applies, so an ``_id`` is
+    ``{"$oid": ...}`` here as it is everywhere else, and a stray ``datetime``
+    cannot reach the encoder and 500 the route.
+    """
+    import json
+
+    from bson import json_util
+
+    return json.loads(json_util.dumps(result))
+
 # Weekly quota for Fernet-authenticated (public API) callers.
 MAX_REQUESTS_PER_WEEK = 2000
 
@@ -291,13 +305,21 @@ def get_profile(username: str) -> tuple[dict, int]:
     so an absent account raised AttributeError and surfaced as a 500 where 400
     was documented.
     """
-    # NOT `get_user`: that is the *authentication* projection, which strips
-    # `requests`/`lastRequest` because the login path has no use for them. The
-    # profile does - `KeysMain.tsx` displays the weekly quota from this
-    # response - so reusing the auth projection silently dropped a field the
-    # interface renders. Found by the diff harness against the legacy backend.
+    # `requests`/`lastRequest` are projected out, matching the projection the
+    # legacy route reaches through `get_user`. The quota the profile screen
+    # shows does NOT come from here: `KeysMain.tsx`'s counter calls
+    # `UsersService.getRequests()` -> `/users/requests`, and its only read of
+    # `requests` off this response is guarded by `if (response.requests)`, so
+    # the field has always been absent and nothing renders from it.
+    #
+    # An earlier revision widened this projection to include them, on the
+    # strength of a harness diff that had been misread. It also made the route
+    # 500: `lastRequest` is a raw `datetime`, which does not survive JSON
+    # encoding. Keep the projection narrow.
     user = _mongo().get_record(
-        "users", {"username": username}, fields={"password": 0, "status": 0, "photo": 0}
+        "users",
+        {"username": username},
+        fields={"password": 0, "status": 0, "photo": 0, "requests": 0, "lastRequest": 0},
     )
     if not user:
         return {"msg": _("User does not exist")}, 400
@@ -311,8 +333,9 @@ def get_profile(username: str) -> tuple[dict, int]:
     # `verified` is absent on accounts created before the flag existed, and
     # absent means verified - the same reading `get_user` applies.
     user.setdefault("verified", True)
-    user["_id"] = {"$oid": str(user["_id"])}
-    return user, 200
+    # `{"$oid": ...}`, not a bare string: the legacy route serialises through
+    # json_util and every other endpoint returns the wrapped form.
+    return serialise(user), 200
 
 
 def get_requests(username: str) -> tuple[dict, int]:

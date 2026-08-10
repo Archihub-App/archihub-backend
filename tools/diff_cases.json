@@ -1,26 +1,94 @@
 {
   "_comment": [
-    "Cases for tools/diff_harness.py - each is fired at both the legacy Flask",
-    "backend and the FastAPI rewrite, and the status code plus the full response",
-    "body are compared field by field.",
+    "Cases for tools/diff_harness.py.",
     "",
-    "Grow this file as each domain is ported (PLAN_FASTAPI.md section 2, Phase 3).",
-    "A domain is not 'done' until its cases here are identical on both stacks.",
+    "TWO KINDS OF CASE:",
+    "  parity    - fired at BOTH backends, status + full body diffed field by",
+    "              field. The gate wherever the port intends to match legacy.",
+    "  contract  - any of expect_status/expect_absent/expect_present is set.",
+    "              Fired at the PORT ONLY and asserted against the expectation.",
+    "              For `aiservices` (rewritten, not ported) and for the security",
+    "              invariants, where legacy is wrong and parity would demand the",
+    "              bug back. These keep working after legacy is deleted.",
+    "",
+    "SAFETY: these fire at two backends sharing ONE database. Every case here is",
+    "read-only or is rejected before it writes. Do not add a case that creates,",
+    "updates or deletes: it would be applied twice and mutate a real instance.",
+    "",
+    "IDENTIFIERS: never hardcode one. Use ${resource_id} etc. and declare it in",
+    "`fixtures` below - a hardcoded id survives a --reset as a 404-vs-404 PASS",
+    "that tests nothing. An unresolved fixture SKIPS its cases; it never falls",
+    "back to a literal.",
     "",
     "Case keys:",
-    "  name          required, shown in the report",
-    "  method        default GET",
-    "  path          required",
-    "  query         dict of query-string params",
-    "  body          JSON request body",
-    "  form          form-encoded body (use instead of `body` for multipart/form routes)",
-    "  headers       extra headers",
-    "  auth          default true; set false to send no Authorization header",
-    "  ignore        DeepDiff paths to skip, e.g. \"root['checks']['celery']\"",
+    "  name/method/path/query/body/form/headers/auth/ignore  as before",
+    "  expect_status    contract: the status the PORT must return",
+    "  expect_absent    contract: key names that must appear NOWHERE, any depth",
+    "  expect_present   contract: key names that must appear somewhere",
     "",
-    "Volatile values (_id, createdAt, token, task_id, ...) are already replaced",
-    "with a type marker globally, so they never cause false failures."
+    "Volatile values (_id, createdAt, token, task_id, ...) are replaced with a",
+    "type marker globally, so they never cause false failures."
   ],
+
+  "fixtures": [
+    {
+      "name": "resource_id",
+      "method": "POST",
+      "path": "/resources/getall",
+      "body": { "post_type": ["carpeta", "test"], "page": 0 },
+      "extract": "resources.0.id",
+      "covers": "every resource detail, article, images, child-record and public-mirror case"
+    },
+    {
+      "name": "record_id",
+      "method": "POST",
+      "path": "/records",
+      "body": { "filters": {}, "page": 0, "limit": 1 },
+      "extract": "0.id",
+      "covers": "record detail, viewers, transcription, metadata and the public record mirror"
+    },
+    {
+      "name": "list_id",
+      "path": "/lists",
+      "extract": "0.id",
+      "covers": "reading a single list"
+    },
+    {
+      "name": "form_slug",
+      "path": "/forms",
+      "extract": "0.slug",
+      "covers": "reading a single form"
+    },
+    {
+      "name": "type_slug",
+      "path": "/types",
+      "extract": "0.slug",
+      "covers": "reading a single content type"
+    },
+    {
+      "name": "user_id",
+      "method": "POST",
+      "path": "/users",
+      "body": { "filters": {}, "page": 0, "limit": 1 },
+      "extract": "0.id",
+      "covers": "reading a single user"
+    },
+    {
+      "name": "view_id",
+      "path": "/views",
+      "extract": "0.id",
+      "auth": false,
+      "covers": "view detail and its file counts - an instance with no views cannot exercise these"
+    },
+    {
+      "name": "view_slug",
+      "path": "/views",
+      "extract": "0.slug",
+      "auth": false,
+      "covers": "the public view-info route"
+    }
+  ],
+
   "cases": [
     {
       "name": "health: liveness",
@@ -46,15 +114,7 @@
         "Celery is excluded entirely because worker ping timing is racy."
       ]
     },
-    {
-      "_comment_next": [
-        "Below: templates for the domains ported in Phase 3, in the order the plan",
-        "sequences them. Commented out via the leading underscore until the",
-        "corresponding router exists on the FastAPI side - a case fired before its",
-        "route is ported just reports a 404-vs-200 status difference and adds noise.",
-        "Remove the underscore prefix from the key name to activate one."
-      ]
-    },
+
     {
       "name": "types: list all",
       "path": "/types",
@@ -62,9 +122,8 @@
     },
     {
       "name": "types: get one by slug",
-      "path": "/types/carpeta",
-      "auth": true,
-      "_note": "Adjust the slug to one that exists on the instance under test."
+      "path": "/types/${type_slug}",
+      "auth": true
     },
     {
       "name": "types: unknown slug is 404",
@@ -76,76 +135,29 @@
       "path": "/types",
       "auth": false
     },
-    {
-      "name": "users: list all",
-      "method": "POST",
-      "path": "/users",
-      "body": {
-        "filters": {},
-        "page": 0,
-        "limit": 20
-      },
-      "auth": true
-    },
-    {
-      "name": "auth: unknown user is byte-identical to wrong password",
-      "method": "POST",
-      "path": "/auth/login",
-      "body": {
-        "username": "definitely-not-a-real-user@example.invalid",
-        "password": "wrong"
-      },
-      "auth": false,
-      "_note": [
-        "Guards the account-enumeration fix: an unknown username and a wrong",
-        "password must produce identical responses. ArchiHUBTestRunner asserts",
-        "this too; do not 'fix' either side to return 404."
-      ]
-    },
-    {
-      "name": "system: settings",
-      "path": "/system",
-      "auth": true,
-      "method": "GET"
-    },
-    {
-      "name": "records: get by filters",
-      "method": "POST",
-      "path": "/records",
-      "body": {
-        "filters": {},
-        "page": 0,
-        "limit": 20
-      },
-      "auth": true
-    },
-    {
-      "name": "resources: list",
-      "method": "POST",
-      "path": "/resources",
-      "body": {
-        "filters": {},
-        "page": 0,
-        "limit": 20
-      },
-      "auth": true
-    },
+
     {
       "name": "lists: list all",
       "path": "/lists",
       "auth": true
     },
     {
+      "name": "lists: get one by id",
+      "path": "/lists/${list_id}",
+      "auth": true
+    },
+    {
       "name": "lists: unknown id",
       "path": "/lists/000000000000000000000000",
       "auth": true,
-      "_note": "Legacy returns 200 with an array body here; the port returns 404. Expected to differ - see BACKEND_FINDINGS F13."
+      "_note": "Legacy returns 200 with an array body here; the port returns 404. Expected - see BACKEND_FINDINGS F13."
     },
     {
       "name": "lists: unauthenticated is 401",
       "path": "/lists",
       "auth": false
     },
+
     {
       "name": "forms: list all",
       "path": "/forms",
@@ -159,7 +171,7 @@
     {
       "name": "forms: get one (POST, not GET)",
       "method": "POST",
-      "path": "/forms/formulario",
+      "path": "/forms/${form_slug}",
       "auth": true,
       "_note": "Retrieving a form is a POST - FormService.getForm sends POST and expects 200."
     },
@@ -170,19 +182,170 @@
       "auth": true
     },
     {
-      "name": "users: me",
-      "path": "/users/me",
+      "name": "forms: unauthenticated is 401",
+      "path": "/forms",
+      "auth": false
+    },
+
+    {
+      "name": "auth: unknown user is byte-identical to wrong password",
+      "method": "POST",
+      "path": "/auth/login",
+      "body": {
+        "username": "definitely-not-a-real-user@example.invalid",
+        "password": "wrong"
+      },
+      "auth": false,
+      "_note": [
+        "Guards the account-enumeration fix: an unknown username and a wrong",
+        "password must produce identical responses. ArchiHUBTestRunner asserts",
+        "this too; do not 'fix' either side to return 404.",
+        "ORDER-DEPENDENT - see _expected_differences."
+      ]
+    },
+
+    {
+      "name": "users: list all",
+      "method": "POST",
+      "path": "/users",
+      "body": { "filters": {}, "page": 0, "limit": 20 },
       "auth": true
     },
+    {
+      "name": "users: me",
+      "path": "/users/me",
+      "auth": true,
+      "_note": "F37: this route lost `requests` to the authentication projection. Diffed here so it cannot happen again."
+    },
+    {
+      "name": "users: me never returns the password hash",
+      "path": "/users/me",
+      "auth": true,
+      "expect_status": 200,
+      "expect_absent": ["password", "lastRequest"],
+      "_note": [
+        "`lastRequest` is asserted ABSENT, not present. An earlier revision of",
+        "the port added it and `requests` here on a misread harness diff; the",
+        "legacy route reaches this through `get_user`, whose projection excludes",
+        "both. Adding `lastRequest` also 500'd the route - it is a raw datetime.",
+        "The profile screen's quota comes from `/users/requests`; KeysMain.tsx's",
+        "only read of `requests` off this response is guarded by `if (...)` and",
+        "has always seen it absent."
+      ]
+    },
+    {
+      "name": "users: get one by id",
+      "path": "/users/${user_id}",
+      "auth": true
+    },
+    {
+      "name": "users: unknown id",
+      "path": "/users/definitely-not-a-user@example.invalid",
+      "auth": true
+    },
+    {
+      "name": "users: request quota",
+      "path": "/users/requests",
+      "auth": true
+    },
+    {
+      "name": "users: compromise text",
+      "path": "/users/compromise",
+      "auth": true
+    },
+    {
+      "name": "users: favorites list",
+      "method": "POST",
+      "path": "/users/favorites_list",
+      "body": { "page": 0 },
+      "auth": true
+    },
+    {
+      "name": "users: unauthenticated /me is 401",
+      "path": "/users/me",
+      "auth": false
+    },
+    {
+      "name": "users: api keys never return the key itself",
+      "path": "/users/api-keys",
+      "auth": true,
+      "expect_status": 200,
+      "expect_absent": ["key", "secret", "token", "hash"],
+      "_note": [
+        "New in the port - there is no legacy route to diff against. Keys are",
+        "hashed at rest and shown once at creation; a listing that could return",
+        "one would defeat the redesign. See API_KEYS_FRONTEND_NOTES.md."
+      ]
+    },
+
+    {
+      "name": "system: settings",
+      "method": "GET",
+      "path": "/system",
+      "auth": true
+    },
+    {
+      "name": "system: get-settings",
+      "path": "/system/get-settings",
+      "auth": true
+    },
+    {
+      "name": "system: roles",
+      "path": "/system/roles",
+      "auth": true
+    },
+    {
+      "name": "system: access rights",
+      "path": "/system/access-rights",
+      "auth": true
+    },
+    {
+      "name": "system: default cataloging type",
+      "path": "/system/default-cataloging-type",
+      "auth": true
+    },
+    {
+      "name": "system: plugins",
+      "path": "/system/plugins",
+      "auth": true
+    },
+    {
+      "name": "system: the bootstrap settings are deliberately anonymous",
+      "path": "/system/get-settings",
+      "auth": false,
+      "_note": [
+        "NOT a 401 case. The login screen reads this before anyone has signed",
+        "in, to choose between a login form and the onboarding wizard, so it",
+        "has no guard in either stack. It is diffed because every field on it",
+        "is public by construction."
+      ]
+    },
+    {
+      "name": "system: settings requires a session",
+      "path": "/system",
+      "auth": false
+    },
+
     {
       "name": "logs: list",
       "method": "POST",
       "path": "/logs",
-      "body": {
-        "page": 0
-      },
+      "body": { "page": 0 },
       "auth": true
     },
+    {
+      "name": "logs: actions",
+      "path": "/logs/actions",
+      "auth": true
+    },
+    {
+      "name": "logs: for a resource",
+      "method": "POST",
+      "path": "/logs/resource/${resource_id}",
+      "body": { "page": 0 },
+      "auth": true
+    },
+
     {
       "name": "tasks: list",
       "method": "GET",
@@ -190,58 +353,144 @@
       "auth": true
     },
     {
-      "name": "usertasks: list",
+      "name": "tasks: total for a user",
+      "path": "/tasks/total/admin@test.com",
+      "auth": true
+    },
+
+    {
+      "name": "usertasks: missing both ids is refused",
       "method": "POST",
       "path": "/usertasks",
-      "body": {
-        "page": 0
-      },
+      "body": { "page": 0 },
       "auth": true
     },
     {
-      "name": "views: public listing",
-      "path": "/views",
-      "auth": false
+      "name": "usertasks: editors",
+      "path": "/usertasks/editors",
+      "auth": true
     },
     {
-      "name": "geosystem: level 0",
-      "method": "POST",
-      "path": "/geosystem/level",
-      "body": {
-        "level": 0
-      },
-      "auth": false
+      "name": "usertasks: for a resource",
+      "path": "/usertasks/${resource_id}",
+      "auth": true
     },
     {
-      "name": "geosystem: polygon needs a level",
+      "name": "usertasks: for a record",
+      "path": "/usertasks/record/${record_id}",
+      "auth": true
+    },
+
+    {
+      "name": "resources: listing",
       "method": "POST",
-      "path": "/geosystem/polygon",
-      "body": {
-        "ident": "05"
-      },
-      "auth": false
+      "path": "/resources/getall",
+      "body": { "post_type": ["carpeta", "test"], "page": 0 },
+      "auth": true,
+      "_note": "F37: this listing lost metadata.firstLevel.title from its projection. Diffed so it cannot recur."
+    },
+    {
+      "name": "resources: listing keeps the title the browse screen renders",
+      "method": "POST",
+      "path": "/resources/getall",
+      "body": { "post_type": ["carpeta", "test"], "page": 0 },
+      "auth": true,
+      "expect_status": 200,
+      "expect_present": ["title"],
+      "_note": "F37 as a contract, so it outlives legacy."
+    },
+    {
+      "name": "resources: wrong-shaped listing body",
+      "method": "POST",
+      "path": "/resources",
+      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "auth": true,
+      "_note": "POST /resources is the multipart CREATE route. A JSON body is a client error; legacy 500s on KeyError 'data', the port answers 422."
     },
     {
       "name": "resources: tree",
       "method": "POST",
       "path": "/resources/tree",
-      "body": {
-        "view": "tree",
-        "root": "all",
-        "tree": []
-      },
+      "body": { "view": "tree", "root": "all", "tree": [] },
+      "auth": true
+    },
+    {
+      "name": "resources: public tree",
+      "method": "POST",
+      "path": "/resources/public/tree",
+      "body": { "view": "tree", "root": "all", "tree": [] },
+      "auth": false
+    },
+    {
+      "name": "resources: detail",
+      "path": "/resources/${resource_id}",
+      "auth": true,
+      "_note": [
+        "The detail response is not the document - both detail routes build the",
+        "same rendered shape (fields/icon/children/named ancestors). An earlier",
+        "version of the port returned the raw document here, which breaks the",
+        "detail screen on selectedResource.children.find(...)."
+      ]
+    },
+    {
+      "name": "resources: detail is the rendered shape, not the raw document",
+      "path": "/resources/${resource_id}",
+      "auth": true,
+      "expect_status": 200,
+      "expect_present": ["fields", "icon", "children"]
+    },
+    {
+      "name": "resources: public detail",
+      "path": "/resources/public/${resource_id}",
+      "auth": false
+    },
+    {
+      "name": "resources: public detail is rendered the same way",
+      "path": "/resources/public/${resource_id}",
+      "auth": false,
+      "expect_status": 200,
+      "expect_present": ["fields", "icon", "children"],
+      "_note": "ResourcesService.getOne renders both routes with one component, so both must carry these."
+    },
+    {
+      "name": "resources: images",
+      "path": "/resources/${resource_id}/imgs",
+      "auth": true
+    },
+    {
+      "name": "resources: public images",
+      "path": "/resources/public/${resource_id}/imgs",
+      "auth": false
+    },
+    {
+      "name": "resources: child records",
+      "method": "POST",
+      "path": "/resources/${resource_id}/records",
+      "body": { "page": 0 },
+      "auth": true
+    },
+    {
+      "name": "resources: public child records",
+      "method": "POST",
+      "path": "/resources/public/${resource_id}/records",
+      "body": { "page": 0 },
+      "auth": false
+    },
+    {
+      "name": "resources: article",
+      "path": "/resources/${resource_id}/article",
+      "auth": true
+    },
+    {
+      "name": "resources: favcount",
+      "path": "/resources/favcount/${resource_id}",
       "auth": true
     },
     {
       "name": "resources: public listing",
       "method": "POST",
       "path": "/resources/getall/public",
-      "body": {
-        "post_type": [
-          "carpeta"
-        ],
-        "page": 0
-      },
+      "body": { "post_type": ["carpeta"], "page": 0 },
       "auth": false
     },
     {
@@ -250,8 +499,142 @@
       "auth": true
     },
     {
-      "name": "records: unknown id is 404",
-      "path": "/records/000000000000000000000000",
+      "name": "resources: public unknown id is 404, not 401",
+      "path": "/resources/public/000000000000000000000000",
+      "auth": false,
+      "expect_status": 404,
+      "_note": [
+        "A public route answers 404 for 'not public', byte-identical to 'does",
+        "not exist' - an anonymous caller must not have an id confirmed. 401",
+        "here would also mean the public router lost its registration-order",
+        "precedence to /resources/{resource_id}, which app_factory asserts."
+      ]
+    },
+
+    {
+      "name": "records: get by filters",
+      "method": "POST",
+      "path": "/records",
+      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "auth": true,
+      "_note": "`filepath` no longer returned - see _expected_differences."
+    },
+    {
+      "name": "records: the listing does not disclose server paths",
+      "method": "POST",
+      "path": "/records",
+      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "auth": true,
+      "expect_status": 200,
+      "expect_absent": ["filepath"],
+      "_note": "Two things never leave the records API: filepath and the raw processing block."
+    },
+    {
+      "name": "records: detail",
+      "path": "/records/${record_id}",
+      "auth": true
+    },
+    {
+      "name": "records: detail does not disclose server paths",
+      "path": "/records/${record_id}",
+      "auth": true,
+      "expect_status": 200,
+      "expect_absent": ["filepath"]
+    },
+    {
+      "name": "records: public detail",
+      "path": "/records/public/${record_id}",
+      "auth": false
+    },
+    {
+      "name": "records: public detail does not disclose server paths",
+      "path": "/records/public/${record_id}",
+      "auth": false,
+      "expect_status": 200,
+      "expect_absent": ["filepath"]
+    },
+    {
+      "name": "records: document info",
+      "path": "/records/${record_id}/document",
+      "auth": true
+    },
+    {
+      "name": "records: page images",
+      "method": "POST",
+      "path": "/records/${record_id}/pages",
+      "body": { "pages": [0], "size": "small" },
+      "auth": true
+    },
+    {
+      "name": "records: public page images",
+      "method": "POST",
+      "path": "/records/public/${record_id}/pages",
+      "body": { "pages": [0], "size": "small" },
+      "auth": false
+    },
+    {
+      "name": "records: a viewer size outside the allowlist is refused",
+      "method": "POST",
+      "path": "/records/${record_id}/pages",
+      "body": { "pages": [0], "size": "../../../../etc" },
+      "auth": true,
+      "expect_status": 400,
+      "_note": [
+        "BACKEND_FINDINGS S18 - arbitrary file read for any authenticated user,",
+        "verified resolving to /etc on the legacy stack. `size` indexes a fixed",
+        "map and anything not in it is refused before a path is built. A parity",
+        "case here would assert the vulnerability."
+      ]
+    },
+    {
+      "name": "records: a public viewer size outside the allowlist is refused",
+      "method": "POST",
+      "path": "/records/public/${record_id}/pages",
+      "body": { "pages": [0], "size": "../../../../etc" },
+      "auth": false,
+      "expect_status": 400,
+      "_note": "S18 again - the public mirror was equally exposed and unauthenticated."
+    },
+    {
+      "name": "records: a negative page index is refused",
+      "method": "POST",
+      "path": "/records/${record_id}/pages",
+      "body": { "pages": [-1], "size": "small" },
+      "auth": true,
+      "expect_status": 400,
+      "_note": "A negative index must not count back from the end of a document."
+    },
+    {
+      "name": "records: transcription",
+      "method": "POST",
+      "path": "/records/${record_id}/transcription",
+      "body": {},
+      "auth": true
+    },
+    {
+      "name": "records: public transcription",
+      "method": "POST",
+      "path": "/records/public/${record_id}/transcription",
+      "body": {},
+      "auth": false
+    },
+    {
+      "name": "records: gallery info",
+      "method": "POST",
+      "path": "/records/galleryinfo",
+      "body": { "resource": "${resource_id}", "page": 0 },
+      "auth": true
+    },
+    {
+      "name": "records: public gallery info",
+      "method": "POST",
+      "path": "/records/public/galleryinfo",
+      "body": { "resource": "${resource_id}", "page": 0 },
+      "auth": false
+    },
+    {
+      "name": "records: favcount",
+      "path": "/records/favcount/${record_id}",
       "auth": true
     },
     {
@@ -259,6 +642,47 @@
       "path": "/records/favcount/000000000000000000000000",
       "auth": true
     },
+    {
+      "name": "records: unknown id is 404",
+      "path": "/records/000000000000000000000000",
+      "auth": true
+    },
+    {
+      "name": "records: public unknown id is 404, not 401",
+      "path": "/records/public/000000000000000000000000",
+      "auth": false,
+      "expect_status": 404,
+      "_note": "Also proves the public router still mounts before /records/{record_id}."
+    },
+
+    {
+      "name": "views: public listing",
+      "path": "/views",
+      "auth": false
+    },
+    {
+      "name": "views: detail",
+      "path": "/views/${view_id}",
+      "auth": true
+    },
+    {
+      "name": "views: public info by slug",
+      "path": "/views/info/${view_slug}",
+      "auth": false
+    },
+    {
+      "name": "views: the listing never publishes an arbitrary thumbnail",
+      "path": "/views",
+      "auth": false,
+      "expect_status": 200,
+      "expect_absent": ["filesObj", "filepath"],
+      "_note": [
+        "S25 - the legacy models declared filesObj, so editing one field could",
+        "publish any image in the archive. GET /views is unauthenticated, so",
+        "this is an anonymous exposure. filesObj is absent from CLIENT_FIELDS."
+      ]
+    },
+
     {
       "name": "snaps: unknown snap is 404",
       "path": "/snaps/000000000000000000000000",
@@ -268,23 +692,258 @@
       "name": "snaps: public unknown snap",
       "path": "/snaps/public/000000000000000000000000",
       "auth": false
+    },
+
+    {
+      "name": "geosystem: level 0",
+      "method": "POST",
+      "path": "/geosystem/level",
+      "body": { "level": 0 },
+      "auth": false
+    },
+    {
+      "name": "geosystem: polygon needs a level",
+      "method": "POST",
+      "path": "/geosystem/polygon",
+      "body": { "ident": "05" },
+      "auth": false
+    },
+    {
+      "name": "geosystem: an object where a string belongs is refused",
+      "method": "POST",
+      "path": "/geosystem/polygon",
+      "body": { "level": 1, "ident": { "$ne": null } },
+      "auth": false,
+      "expect_status": 400,
+      "_note": [
+        "S27 - both geosystem routes are unauthenticated by design (the explore",
+        "map draws before anyone signs in), so the input check IS the injection",
+        "defence. Legacy assigned ident into the filter as-is."
+      ]
+    },
+    {
+      "name": "geosystem: an out-of-range level is refused",
+      "method": "POST",
+      "path": "/geosystem/level",
+      "body": { "level": 99999 },
+      "auth": false,
+      "expect_status": 400
+    },
+
+    {
+      "name": "search: authenticated",
+      "method": "POST",
+      "path": "/search",
+      "body": { "post_type": ["carpeta"], "page": 0 },
+      "auth": true,
+      "_note": "Legacy 404s when indexing is off (blueprint never registered); the port answers 503. See _expected_differences."
+    },
+    {
+      "name": "search: availability is answered per request, not at construction",
+      "method": "POST",
+      "path": "/search",
+      "body": { "post_type": ["carpeta"], "page": 0 },
+      "auth": true,
+      "expect_status": 503,
+      "_note": [
+        "ONLY VALID WHILE INDEXING IS OFF on the instance under test - change to",
+        "200 once it is on. The point: the route exists either way. Legacy",
+        "registered the blueprint at construction, so switching indexing on",
+        "meant restarting every worker and the OpenAPI document differed",
+        "between instances of the same build."
+      ]
+    },
+    {
+      "name": "search: a public caller cannot ask for drafts",
+      "method": "POST",
+      "path": "/search/public",
+      "body": { "post_type": ["carpeta"], "status": "draft", "page": 0 },
+      "auth": false,
+      "expect_status": 503,
+      "_note": [
+        "S28 - DEMONSTRATED on the legacy stack: 16 real drafts returned to an",
+        "anonymous caller, because the builder read body['status'] and the",
+        "indexer indexes every resource whatever its state. The port decides the",
+        "publication state from who is asking and no request field can influence",
+        "it. This asserts 503 only because indexing is off on this instance;",
+        "with indexing ON, change to 200 and add expect_absent for draft rows.",
+        "HOTFIX_S28_legacy.patch is ready for the legacy stack."
+      ]
+    },
+    {
+      "name": "search: public rss",
+      "path": "/search/public/rss",
+      "auth": false
+    },
+
+    {
+      "name": "aiservices: dialects are code, not configuration",
+      "path": "/aiservices/dialects",
+      "auth": true,
+      "expect_status": 200,
+      "_note": [
+        "aiservices was REWRITTEN, not ported - there is no legacy equivalent to",
+        "diff against. A dialect is a wire protocol (a handful exist, they change",
+        "over years); a provider is a row in llm_models. This route did not exist",
+        "before."
+      ]
+    },
+    {
+      "name": "aiservices: a provider listing cannot leak a credential",
+      "path": "/aiservices/providers",
+      "auth": true,
+      "expect_status": 200,
+      "expect_absent": ["key", "api_key", "apiKey", "credential", "password"],
+      "_note": [
+        "providers.present() is the only serialiser and cannot emit the key - it",
+        "returns has_key and a key_fingerprint so two keys can be told apart",
+        "without either being seen. The legacy listing shape was a hardcoded",
+        "array of vendor names."
+      ]
+    },
+    {
+      "name": "aiservices: skills listing",
+      "path": "/aiservices/skills",
+      "auth": true,
+      "expect_status": 200
+    },
+    {
+      "name": "aiservices: a skill path cannot escape the skills directory",
+      "path": "/aiservices/skills/..%2F..%2F..%2F..%2Fetc%2Fpasswd",
+      "auth": true,
+      "expect_status": 400,
+      "_note": [
+        "A skill path arrives in a URL and becomes a file that is written, read",
+        "and deleted. The legacy check reasoned about the text",
+        "(normalized.startswith('..')), which says nothing about symlinks. Every",
+        "path goes through core.files.resolve_within instead."
+      ]
+    },
+    {
+      "name": "aiservices: an absolute skill path is refused, not reinterpreted",
+      "path": "/aiservices/skills/%2Fetc%2Fpasswd",
+      "auth": true,
+      "expect_status": 400
+    },
+
+    {
+      "name": "adminApi: system info without a Fernet token",
+      "path": "/adminApi/get_system_info",
+      "auth": false
+    },
+    {
+      "name": "adminApi: lookup without a Fernet token",
+      "method": "POST",
+      "path": "/adminApi/get_id",
+      "body": { "ident": "AH-001" },
+      "auth": false
+    },
+    {
+      "name": "adminApi: a Mongo operator in the lookup body never executes",
+      "method": "POST",
+      "path": "/adminApi/get_id",
+      "body": { "$where": "sleep(5000)" },
+      "auth": false,
+      "expect_status": 404,
+      "_note": [
+        "S29 - the legacy lookup was get_record('resources', body), so this ran",
+        "server-side JavaScript. It is an allowlist now (ident, post_type,",
+        "metadata.firstLevel.*, string equality only). The token gate answers",
+        "first, which is why this asserts 401: the point is that it does NOT",
+        "reach the database and does not hang. tests/test_external_api.py",
+        "asserts the allowlist itself directly, past the token gate."
+      ]
+    },
+    {
+      "name": "adminApi: the plugin proxy refuses rather than resolving a path",
+      "path": "/adminApi/plugins/x/..%2F..%2Fusers%2Fdelete",
+      "auth": false,
+      "expect_status": 404,
+      "_note": [
+        "S30 - the legacy proxy built its target as f'/{plugin}/{endpoint}' from",
+        "a path converter, so `..` reached any route in the application, then",
+        "re-entered the WSGI stack and copied the inner response's headers out",
+        "verbatim. It is an explicit 501 until Phase 5 resolves the target",
+        "against the plugin registry. Unauthenticated it is 401, as here."
+      ]
+    },
+    {
+      "name": "publicApi: listing without a Fernet token",
+      "method": "POST",
+      "path": "/publicApi",
+      "body": { "post_type": "carpeta", "page": 0 },
+      "auth": false
+    },
+    {
+      "name": "publicApi: types without a Fernet token",
+      "path": "/publicApi/types",
+      "auth": false
+    },
+    {
+      "name": "publicApi: resource without a Fernet token",
+      "path": "/publicApi/resources/${resource_id}",
+      "auth": false
     }
   ],
+
   "_expected_differences": [
-    "Cases that differ ON PURPOSE. Re-triaged 2026-08-10 against the running",
-    "legacy backend; each is a deliberate correction, not a regression:",
-    "  types: unknown slug        legacy 500 -> 404",
-    "  lists: unknown id          legacy 200 carrying a 500-shaped body -> 404",
-    "  logs: list                 legacy 500 -> 200",
-    "  geosystem: polygon         legacy 404 -> 400 with a reason",
-    "  records: favcount unknown  legacy 200 -> 404",
-    "  resources: list            wrong-shaped body: legacy 500 -> 422",
-    "  records: get by filters    `filepath` no longer returned (deliberate)",
-    "  resources: public listing  `post_type` added (additive, harmless)",
-    "  forms: unknown slug        same 404, different message text - see notes",
-    "  auth: byte-identical      ORDER-DEPENDENT. Passes alone; in a full run the",
-    "                            port's login throttle (S2, which legacy lacks)",
-    "                            trips and the statuses diverge. Run it with",
-    "                            --only byte-identical, or after a Redis flush."
+    "Parity cases that differ ON PURPOSE. Re-triaged 2026-08-10 against the",
+    "running legacy backend. 51/80 parity + 25/25 contract; every one of the 29",
+    "below was read and classified, none is unexplained.",
+    "",
+    "-- the port returns the right code where legacy faults --",
+    "  types: unknown slug            legacy 500 -> 404",
+    "  users: unknown id              legacy 500 (leaks the bson InvalidId text) -> 404",
+    "  users: favorites list          legacy 500 (KeyError 'type') -> 422",
+    "  lists: unknown id              legacy 200 carrying a 500-shaped body -> 404",
+    "  logs: list                     legacy 500 -> 200",
+    "  resources: wrong-shaped body   legacy 500 (KeyError 'data') -> 422",
+    "  resources: favcount            legacy 500 -> 200",
+    "  records: favcount (both)       legacy 500 / wrongly-200 -> 200 / 404",
+    "  records: transcription (both)  legacy 500 -> 400 naming the missing field",
+    "  geosystem: polygon             legacy 404 -> 400 with a reason",
+    "",
+    "-- legacy defects the harness surfaced, recorded in BACKEND_FINDINGS --",
+    "  users: compromise text         legacy returns the caller's OWN bcrypt hash.",
+    "                                 It calls get_user() (whose projection keeps",
+    "                                 `password`) and, unlike /users/me, never pops",
+    "                                 it. The port drops it. Patch prepared.",
+    "  records: public page images    legacy 500s unconditionally - it calls",
+    "                                 public_services.get_document_pages, which does",
+    "                                 not exist. The public document viewer has never",
+    "                                 worked. The port returns the pages.",
+    "",
+    "-- deliberate shape changes --",
+    "  records: get by filters        `filepath` no longer returned",
+    "  records: detail (both)         adds `mime`/`status`; drops a parent's",
+    "                                 `accessRights: null` (absent vs null)",
+    "  resources: public listing      `post_type` added (additive, harmless)",
+    "  users: request quota           legacy returned the raw document (`_id`,",
+    "                                 `lastRequest`); the port returns",
+    "                                 {requests, limit}, which is what the counter",
+    "                                 reads plus the ceiling it draws against",
+    "  forms: unknown slug            same 404, different message text",
+    "  records: public gallery info   same 400, different message text",
+    "",
+    "-- availability is answered per request, not at construction --",
+    "  search: *                      legacy 404 (blueprint never registered while",
+    "                                 indexing is off) -> 503",
+    "  adminApi/publicApi: *          STATUS NOW MATCHES (404). Only the body",
+    "                                 differs: legacy serves Werkzeug's HTML 404,",
+    "                                 the port serves JSON - byte-identical to its",
+    "                                 own unrouted-path 404, which is the property",
+    "                                 that matters.",
+    "",
+    "-- environmental, resolves at Phase 5 --",
+    "  system: plugins                the port runs with ARCHIHUB_ALLOW_UNPORTED_",
+    "                                 PLUGINS, so the 4 unported plugins have no",
+    "                                 metadata to report. The container shape",
+    "                                 ({\"plugins\": [...]}) does match.",
+    "",
+    "-- order-dependent --",
+    "  auth: byte-identical           passes alone; in a full run the port's login",
+    "                                 throttle (S2, which legacy lacks) trips and",
+    "                                 the statuses diverge. Run it with",
+    "                                 --only byte-identical, or after a Redis flush."
   ]
 }

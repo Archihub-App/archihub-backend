@@ -1,4 +1,4 @@
-"""Serving stored files.
+"""Serving stored files, and rendering JSON the way the frontend already reads it.
 
 Replaces Flask's ``send_file`` at the ~20 sites that use it. The question
 PLAN_FASTAPI.md section 6 raised was whether Starlette preserves the Range
@@ -25,7 +25,7 @@ import mimetypes
 import os
 from pathlib import Path
 
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette.background import BackgroundTask
 
 from archihub.core.files import remove_quietly
@@ -33,6 +33,73 @@ from archihub.core.files import remove_quietly
 logger = logging.getLogger(__name__)
 
 DEFAULT_MEDIA_TYPE = "application/octet-stream"
+
+
+# ---------------------------------------------------------------------------
+# JSON
+# ---------------------------------------------------------------------------
+
+
+def _flask_default(value):
+    """Render what ``json.dumps`` refuses, the way Flask's ``jsonify`` did.
+
+    Two conventions for dates exist in the legacy responses, and both are wire
+    contract:
+
+    * a route that ran its document through ``json_util`` (``parse_result``)
+      emitted ``{"$date": ...}``. The ported services call ``serialise()`` for
+      exactly those, so the conversion happens before the encoder sees it and
+      this function is never reached.
+    * a route that returned a raw Mongo document through ``jsonify`` emitted an
+      **HTTP date** - ``"Mon, 10 Aug 2026 14:12:34 GMT"``. ``GET /users/{id}``
+      is one. That is what this reproduces.
+
+    So the two paths keep the shapes their callers already produce, and the
+    difference is a deliberate property of which one a route uses rather than an
+    accident of what happened to be in the document.
+    """
+    import datetime as _datetime
+    from email.utils import format_datetime
+
+    if isinstance(value, _datetime.datetime):
+        # A naive datetime is UTC, the reading Werkzeug's `http_date` applies.
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=_datetime.timezone.utc)
+        return format_datetime(value, usegmt=True)
+    if isinstance(value, _datetime.date):
+        return value.isoformat()
+
+    from bson import json_util
+
+    # ObjectId, Decimal128, Binary, ... - json_util knows every BSON type, and
+    # produces the same `{"$oid": ...}` form the rest of the API returns.
+    return json_util.default(value)
+
+
+class ArchiJSONResponse(JSONResponse):
+    """``JSONResponse`` that cannot 500 on an unencodable value.
+
+    Starlette's renders with a bare ``json.dumps``, so one ``datetime`` left in
+    a payload takes a working route to a 500 - and only for the documents that
+    happen to carry the field, which is why such a bug survives both a unit
+    test and a live smoke test and only shows up against real data.
+    """
+
+    def render(self, content) -> bytes:
+        import json
+
+        return json.dumps(
+            content,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+            default=_flask_default,
+        ).encode("utf-8")
+
+
+def json_response(payload, status_code: int = 200) -> ArchiJSONResponse:
+    """The single place a ``(payload, status)`` service result becomes a response."""
+    return ArchiJSONResponse(status_code=status_code, content=payload)
 
 
 def file_response(

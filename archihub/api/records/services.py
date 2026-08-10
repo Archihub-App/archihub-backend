@@ -185,10 +185,16 @@ def _describe_parents(parents: list) -> list[dict]:
         return []
 
     object_ids = [oid for oid in (_to_object_id(p["id"]) for p in wanted) if oid is not None]
-    rows = _mongo().get_all_records(
-        "resources",
-        {"_id": {"$in": object_ids}},
-        fields={"metadata.firstLevel.title": 1, "post_type": 1, "status": 1},
+    # `list(...)`, because this is a cursor and it is read twice. Without it the
+    # second pass sees an exhausted cursor, the icon set comes back empty, and
+    # every parent gets `"icon": None` - a 200 with a missing icon, which is
+    # invisible until someone looks at the breadcrumb.
+    rows = list(
+        _mongo().get_all_records(
+            "resources",
+            {"_id": {"$in": object_ids}},
+            fields={"metadata.firstLevel.title": 1, "post_type": 1, "status": 1},
+        )
     )
     by_id = {str(row["_id"]): row for row in rows}
 

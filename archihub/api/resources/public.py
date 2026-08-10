@@ -148,12 +148,15 @@ def get_by_id(resource_id: str) -> tuple[dict, int]:
     resource.pop("updatedAt", None)
     resource.pop("updatedBy", None)
     resource = presentation.describe(resource, None, public=True)
-    resource["id"] = str(resource.pop("_id"))
+    # `_id`, kept as a string - see the note on the authenticated detail route.
+    # The same component renders both responses, so a key that exists on one and
+    # not the other is a bug on whichever screen reads it.
+    resource["_id"] = str(resource["_id"])
 
     if _is_article(resource.get("post_type")):
         resource["articleBody"] = hydrate_article(resource.get("articleBody") or [])
 
-    return services.parse_result(resource), 200
+    return resource, 200
 
 
 def _is_article(post_type: str | None) -> bool:

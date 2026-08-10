@@ -120,6 +120,27 @@ def get_access_rights() -> dict:
     return {"options": _list_options(get_access_rights_id())}
 
 
+def access_rights_document() -> dict:
+    """The stored list document, ``name`` and ``description`` included.
+
+    ``get_access_rights`` above is the internal view - callers inside the
+    backend want the options and nothing else. The HTTP route returns the whole
+    document, which is what the legacy route returned; the two are kept apart so
+    widening one does not quietly widen the other.
+    """
+    list_id = get_access_rights_id()
+    if not list_id:
+        return {"options": []}
+
+    from archihub.api.lists.services import get_by_id
+
+    payload, status = get_by_id(str(list_id))
+    if status != 200:
+        logger.warning("Could not resolve the access-rights vocabulary %s", list_id)
+        return {"options": []}
+    return payload
+
+
 def verify_roles_exist(compare: list) -> list[str]:
     """Validate role references and reduce them to their ids.
 

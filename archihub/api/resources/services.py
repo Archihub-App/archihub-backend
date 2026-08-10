@@ -269,7 +269,16 @@ def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
     try:
         from archihub.api.users.services import has_role
 
-        resource = _mongo().get_record(COLLECTION, {"_id": object_id})
+        # `updatedAt`/`updatedBy`/`articleBody` are projected out, as the legacy
+        # detail route projects them out. `articleBody` especially: the detail
+        # screen renders `selectedResource.articleBody &&  ...`, so returning it
+        # here makes an article block appear on a screen that has never shown
+        # one. It has its own route.
+        resource = _mongo().get_record(
+            COLLECTION,
+            {"_id": object_id},
+            fields={"updatedAt": 0, "updatedBy": 0, "articleBody": 0},
+        )
         if not resource:
             return {"msg": _("Resource does not exist")}, 404
 
@@ -281,8 +290,18 @@ def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
         # furniture, not the raw document - and the same component renders the
         # public response, so both go through the same describer.
         resource = presentation.describe(resource, user)
-        resource["id"] = str(resource.pop("_id"))
-        return parse_result(resource), 200
+
+        # `_id` as a plain string, NOT renamed to `id` and NOT run through
+        # `parse_result`. Both matter:
+        #   - `HistoryDetails` gates its whole effect on `props.data?._id`, so
+        #     renaming the key leaves the history tab permanently empty with no
+        #     error to notice.
+        #   - `parse_result` would render `createdAt` as `{"$date": ...}` where
+        #     the legacy route emitted an HTTP-date string.
+        # Anything else unencodable is handled by the response encoder, which
+        # renders datetimes exactly as Flask's `jsonify` did.
+        resource["_id"] = str(resource["_id"])
+        return resource, 200
     except Exception as exc:
         logger.exception("Could not load resource %s", resource_id)
         return {"msg": str(exc)}, 500
