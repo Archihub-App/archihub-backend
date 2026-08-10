@@ -17,7 +17,7 @@ import logging
 from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import JSONResponse, Response
 
-from archihub.api.aiservices import catalogue, chat, conversations, providers, streaming
+from archihub.api.aiservices import catalogue, chat, conversations, providers, skills, streaming
 from archihub.api.aiservices import errors as ai_errors
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
@@ -283,6 +283,125 @@ def send_chat(
         return JSONResponse(status_code=400, content={"msg": str(exc)})
     except ai_errors.ProviderError as exc:
         return _provider_error(exc)
+
+
+# ---------------------------------------------------------------------------
+# Skills
+# ---------------------------------------------------------------------------
+
+
+def _skill_error(exc: skills.SkillError) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"msg": str(exc)})
+
+
+@router.get(
+    "/skills",
+    dependencies=[Depends(require_reader)],
+    responses={200: {"description": "The available skills, flat or as a folder tree"}},
+)
+def list_skills(
+    query: str | None = Query(None, description="Filter by path, name, title or command"),
+    include_content: bool = Query(False, description="Include each skill's Markdown"),
+    tree: bool = Query(False, description="Group into the folder structure"),
+) -> JSONResponse:
+    """List the skills an author can invoke.
+
+    ``query`` is escaped before it reaches Mongo: a search box is not a place to
+    accept a regular expression, and one pathological pattern in it is a denial
+    of service.
+    """
+    return JSONResponse(
+        status_code=200,
+        content=skills.list_skills(query, include_content=include_content, tree=tree),
+    )
+
+
+@router.post(
+    "/skills/sync",
+    responses={200: {"description": "What was reconciled"}, **_RESPONSES},
+)
+def sync_skills(current_user: CurrentUser = Depends(require_operator)) -> JSONResponse:
+    """Reconcile the skills directory with the collection.
+
+    Declared before ``/skills/{skill_path}`` so the literal segment wins.
+
+    Per file the newer side wins, so an operator can edit with a text editor or
+    a git checkout and have it picked up. One unreadable file no longer aborts
+    the whole run — the legacy version let the exception escape, leaving every
+    other skill unsynchronised.
+    """
+    synced = skills.sync()
+    return JSONResponse(status_code=200, content={"skills": synced, "count": len(synced)})
+
+
+@router.post(
+    "/skills",
+    status_code=201,
+    responses={
+        201: {"description": "Skill created"},
+        400: {"description": "A path that leaves the skills directory, or empty content"},
+        413: {"description": "The skill is too large"},
+        **_RESPONSES,
+    },
+)
+def create_skill(
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(require_operator),
+) -> JSONResponse:
+    """Create a skill from a path and its Markdown."""
+    try:
+        skill = skills.save_skill(
+            body.get("path") or body.get("id"), body.get("content"), current_user.username
+        )
+    except skills.SkillError as exc:
+        return _skill_error(exc)
+    return JSONResponse(status_code=201, content=skill)
+
+
+@router.get(
+    "/skills/{skill_path:path}",
+    dependencies=[Depends(require_reader)],
+    responses={200: {"description": "The skill, with its content"}, 404: {"description": "No such skill"}},
+)
+def get_skill(skill_path: str) -> JSONResponse:
+    """One skill. Paths contain slashes, hence the path converter."""
+    try:
+        return JSONResponse(status_code=200, content=skills.get_skill(skill_path))
+    except skills.SkillError as exc:
+        return _skill_error(exc)
+
+
+@router.put(
+    "/skills/{skill_path:path}",
+    responses={200: {"description": "Skill saved"}, **_RESPONSES},
+)
+def update_skill(
+    skill_path: str,
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(require_operator),
+) -> JSONResponse:
+    """Replace a skill's content."""
+    try:
+        skill = skills.save_skill(skill_path, body.get("content"), current_user.username)
+    except skills.SkillError as exc:
+        return _skill_error(exc)
+    return JSONResponse(status_code=200, content=skill)
+
+
+@router.delete(
+    "/skills/{skill_path:path}",
+    responses={200: {"description": "Skill deleted"}, **_RESPONSES},
+)
+def delete_skill(
+    skill_path: str,
+    current_user: CurrentUser = Depends(require_operator),
+) -> JSONResponse:
+    """Remove a skill and retire its record."""
+    try:
+        skills.delete_skill(skill_path, current_user.username)
+    except skills.SkillError as exc:
+        return _skill_error(exc)
+    return JSONResponse(status_code=200, content={"msg": _("Skill deleted successfully")})
 
 
 # ---------------------------------------------------------------------------

@@ -149,6 +149,11 @@ class Settings(BaseSettings):
     original_files_path: str = Field(default="", validation_alias="ORIGINAL_FILES_PATH")
     temporal_files_path: str = Field(default="", validation_alias="TEMPORAL_FILES_PATH")
 
+    # Where skill Markdown files live. The legacy SkillManager derived this from
+    # the module's own location when unset (`<repo>/skills`), which breaks the
+    # moment the package is installed rather than run from a checkout.
+    llm_skills_path: str = Field(default="skills", validation_alias="LLM_SKILLS_PATH")
+
     # Upload ceiling. Flask had no MAX_CONTENT_LENGTH at all, so uploads were
     # effectively unbounded; inheriting "unbounded" by accident is worse than
     # choosing a number. See PLAN_FASTAPI.md section 6.

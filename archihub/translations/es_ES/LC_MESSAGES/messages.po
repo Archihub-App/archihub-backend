@@ -236,3 +236,30 @@ msgstr "enabled debe ser true o false"
 
 msgid "messages must be a list"
 msgstr "messages debe ser una lista"
+
+msgid "Skill content is required"
+msgstr "El contenido de la habilidad es obligatorio"
+
+msgid "Skill deleted successfully"
+msgstr "Habilidad eliminada con éxito"
+
+msgid "Skill not found"
+msgstr "Habilidad no encontrada"
+
+msgid "Skill path is required"
+msgstr "La ruta de la habilidad es obligatoria"
+
+msgid "Skill path must be relative to the skills directory"
+msgstr "La ruta de la habilidad debe ser relativa al directorio de habilidades"
+
+msgid "Skill path must stay inside the skills directory"
+msgstr "La ruta de la habilidad debe permanecer dentro del directorio de habilidades"
+
+msgid "The skill could not be deleted"
+msgstr "No se pudo eliminar la habilidad"
+
+msgid "The skill could not be saved"
+msgstr "No se pudo guardar la habilidad"
+
+msgid "The skill is too large"
+msgstr "La habilidad es demasiado grande"
