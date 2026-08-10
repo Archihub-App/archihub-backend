@@ -149,3 +149,21 @@ msgstr "Solo se permiten imágenes para las vistas de consulta"
 
 msgid "A view can only have one file"
 msgstr "Una vista de consulta solo puede tener un archivo"
+
+msgid "\"{field}\" must be a text value"
+msgstr "\"{field}\" debe ser un valor de texto"
+
+msgid "Invalid area threshold"
+msgstr "Umbral de área inválido"
+
+msgid "Invalid bounds"
+msgstr "Límites geográficos inválidos"
+
+msgid "You must specify a level"
+msgstr "Debe especificar un nivel"
+
+# The legacy code used a Spanish string as the msgid here, which made it
+# untranslatable and inconsistent with every other message in the catalogue.
+# The port uses the English msgid; this supplies the Spanish.
+msgid "Shape not found"
+msgstr "Forma no encontrada"
