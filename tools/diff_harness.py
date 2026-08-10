@@ -182,6 +182,18 @@ class DiffHarness:
         self.token: str | None = None
 
     # -- setup ----------------------------------------------------------
+    def use_token(self, token: str) -> None:
+        """Use a token minted elsewhere, against both backends.
+
+        Both stacks read the same ``JWT_SECRET_KEY``, so a token signed by
+        either is accepted by both - the property that makes an in-place cutover
+        possible without logging every user out. That means the harness does not
+        actually need an account password to exercise authenticated routes: a
+        token minted directly from the configured secret does the job, and
+        avoids putting a real credential on a command line.
+        """
+        self.token = token
+
     def login(self, username: str, password: str) -> None:
         """Mint a token on the legacy backend and use it against both."""
         response = self.client.post(
@@ -320,6 +332,16 @@ def main() -> int:
     parser.add_argument("--only", help="Run only cases whose name or path contains this substring")
     parser.add_argument("--username", help="Username to log in with (enables authenticated cases)")
     parser.add_argument("--password", help="Password to log in with")
+    parser.add_argument(
+        "--token",
+        help="Use this JWT instead of logging in. Both stacks share JWT_SECRET_KEY, "
+             "so a locally minted token works against both and no password is needed.",
+    )
+    parser.add_argument(
+        "--mint-token",
+        metavar="USERNAME",
+        help="Mint a token for USERNAME from the configured JWT_SECRET_KEY and use it.",
+    )
     parser.add_argument("--test-secret", help="X-ArchiHUB-Test-Secret, needed by --reset")
     parser.add_argument("--reset", action="store_true", help="Reset+reseed via the legacy backend first")
     parser.add_argument("--show-equal", action="store_true", help="Also print passing cases")
@@ -342,7 +364,15 @@ def main() -> int:
         print("\nResetting instance via legacy backend...")
         harness.reset()
 
-    if args.username and args.password:
+    if args.mint_token:
+        from archihub.core.security.tokens import create_access_token
+
+        harness.use_token(create_access_token(args.mint_token))
+        print(f"  authenticated as {args.mint_token} (token minted from JWT_SECRET_KEY)")
+    elif args.token:
+        harness.use_token(args.token)
+        print("  authenticated (token supplied)")
+    elif args.username and args.password:
         harness.login(args.username, args.password)
         print("  authenticated (token minted on legacy, used against both)")
     elif any(c.auth for c in cases):

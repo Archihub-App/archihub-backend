@@ -179,7 +179,15 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
         if error:
             return {"msg": _("You don't have the required authorization")}, 401
 
-        fields = {"accessRights": 1, "filesObj": 1, "ident": 1, "post_type": 1, "createdAt": 1}
+        # `metadata.firstLevel.title` is in the base projection because the
+        # listing renders a title for every row whether or not the caller asked
+        # for a column. Dropping it produced a browse screen of untitled rows -
+        # caught by the diff harness against the legacy backend, not by any
+        # test, because no test asserted on a field nobody had thought to name.
+        fields = {
+            "accessRights": 1, "filesObj": 1, "ident": 1, "post_type": 1,
+            "createdAt": 1, "metadata.firstLevel.title": 1,
+        }
         for column in active_columns:
             fields[column] = 1
             declared = next((f for f in metadata_fields if f["destiny"] == column), None)

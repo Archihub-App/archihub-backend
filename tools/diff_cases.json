@@ -77,7 +77,7 @@
       "auth": false
     },
     {
-      "name": "_users: list all",
+      "name": "users: list all",
       "method": "POST",
       "path": "/users",
       "body": {
@@ -88,7 +88,7 @@
       "auth": true
     },
     {
-      "name": "_auth: login with unknown user returns 401, byte-identical to wrong password",
+      "name": "auth: unknown user is byte-identical to wrong password",
       "method": "POST",
       "path": "/auth/login",
       "body": {
@@ -103,14 +103,15 @@
       ]
     },
     {
-      "name": "_system: settings",
-      "path": "/system/settings",
-      "auth": true
+      "name": "system: settings",
+      "path": "/system",
+      "auth": true,
+      "method": "GET"
     },
     {
-      "name": "_records: get by filters",
+      "name": "records: get by filters",
       "method": "POST",
-      "path": "/records/filters",
+      "path": "/records",
       "body": {
         "filters": {},
         "page": 0,
@@ -119,7 +120,7 @@
       "auth": true
     },
     {
-      "name": "_resources: list",
+      "name": "resources: list",
       "method": "POST",
       "path": "/resources",
       "body": {
@@ -167,6 +168,123 @@
       "method": "POST",
       "path": "/forms/definitely-not-a-form",
       "auth": true
+    },
+    {
+      "name": "users: me",
+      "path": "/users/me",
+      "auth": true
+    },
+    {
+      "name": "logs: list",
+      "method": "POST",
+      "path": "/logs",
+      "body": {
+        "page": 0
+      },
+      "auth": true
+    },
+    {
+      "name": "tasks: list",
+      "method": "GET",
+      "path": "/tasks",
+      "auth": true
+    },
+    {
+      "name": "usertasks: list",
+      "method": "POST",
+      "path": "/usertasks",
+      "body": {
+        "page": 0
+      },
+      "auth": true
+    },
+    {
+      "name": "views: public listing",
+      "path": "/views",
+      "auth": false
+    },
+    {
+      "name": "geosystem: level 0",
+      "method": "POST",
+      "path": "/geosystem/level",
+      "body": {
+        "level": 0
+      },
+      "auth": false
+    },
+    {
+      "name": "geosystem: polygon needs a level",
+      "method": "POST",
+      "path": "/geosystem/polygon",
+      "body": {
+        "ident": "05"
+      },
+      "auth": false
+    },
+    {
+      "name": "resources: tree",
+      "method": "POST",
+      "path": "/resources/tree",
+      "body": {
+        "view": "tree",
+        "root": "all",
+        "tree": []
+      },
+      "auth": true
+    },
+    {
+      "name": "resources: public listing",
+      "method": "POST",
+      "path": "/resources/getall/public",
+      "body": {
+        "post_type": [
+          "carpeta"
+        ],
+        "page": 0
+      },
+      "auth": false
+    },
+    {
+      "name": "resources: unknown id is 404",
+      "path": "/resources/000000000000000000000000",
+      "auth": true
+    },
+    {
+      "name": "records: unknown id is 404",
+      "path": "/records/000000000000000000000000",
+      "auth": true
+    },
+    {
+      "name": "records: favcount of an unknown record",
+      "path": "/records/favcount/000000000000000000000000",
+      "auth": true
+    },
+    {
+      "name": "snaps: unknown snap is 404",
+      "path": "/snaps/000000000000000000000000",
+      "auth": true
+    },
+    {
+      "name": "snaps: public unknown snap",
+      "path": "/snaps/public/000000000000000000000000",
+      "auth": false
     }
+  ],
+  "_expected_differences": [
+    "Cases that differ ON PURPOSE. Re-triaged 2026-08-10 against the running",
+    "legacy backend; each is a deliberate correction, not a regression:",
+    "  types: unknown slug        legacy 500 -> 404",
+    "  lists: unknown id          legacy 200 carrying a 500-shaped body -> 404",
+    "  logs: list                 legacy 500 -> 200",
+    "  geosystem: polygon         legacy 404 -> 400 with a reason",
+    "  records: favcount unknown  legacy 200 -> 404",
+    "  resources: list            wrong-shaped body: legacy 500 -> 422",
+    "  records: get by filters    `filepath` no longer returned (deliberate)",
+    "  resources: public listing  `post_type` added (additive, harmless)",
+    "  forms: unknown slug        same 404, different message text - see notes",
+    "  auth: byte-identical      ORDER-DEPENDENT. Passes alone; in a full run the",
+    "                            port's login throttle (S2, which legacy lacks)",
+    "                            trips and the statuses diverge. Run it with",
+    "                            --only byte-identical, or after a Redis flush."
   ]
 }

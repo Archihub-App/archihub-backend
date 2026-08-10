@@ -291,11 +291,27 @@ def get_profile(username: str) -> tuple[dict, int]:
     so an absent account raised AttributeError and surfaced as a 500 where 400
     was documented.
     """
-    user = get_user(username)
+    # NOT `get_user`: that is the *authentication* projection, which strips
+    # `requests`/`lastRequest` because the login path has no use for them. The
+    # profile does - `KeysMain.tsx` displays the weekly quota from this
+    # response - so reusing the auth projection silently dropped a field the
+    # interface renders. Found by the diff harness against the legacy backend.
+    user = _mongo().get_record(
+        "users", {"username": username}, fields={"password": 0, "status": 0, "photo": 0}
+    )
     if not user:
         return {"msg": _("User does not exist")}, 400
 
+    # Projected out above *and* removed here. Relying on the projection alone
+    # means one edit to that dict leaks the password hash, and this is the
+    # response a user sees; the redundancy costs nothing.
     user.pop("password", None)
+
+    user.setdefault("favorites", [])
+    # `verified` is absent on accounts created before the flag existed, and
+    # absent means verified - the same reading `get_user` applies.
+    user.setdefault("verified", True)
+    user["_id"] = {"$oid": str(user["_id"])}
     return user, 200
 
 
