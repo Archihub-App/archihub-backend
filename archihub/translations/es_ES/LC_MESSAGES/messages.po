@@ -102,9 +102,6 @@ msgstr "El recurso no cumple con el nuevo tipo de contenido"
 msgid "Unsupported snap type"
 msgstr "Tipo de snap no soportado"
 
-msgid "You must specify a post type"
-msgstr "Debe especificar un tipo de contenido"
-
 msgid "bbox is outside the image"
 msgstr "bbox está fuera de la imagen"
 
@@ -263,3 +260,24 @@ msgstr "No se pudo guardar la habilidad"
 
 msgid "The skill is too large"
 msgstr "La habilidad es demasiado grande"
+
+msgid "\"{field}\" must be a list of text values"
+msgstr "\"{field}\" debe ser una lista de valores de texto"
+
+msgid "\"{field}\" must be a number"
+msgstr "\"{field}\" debe ser un número"
+
+msgid "Search is not enabled on this instance"
+msgstr "La búsqueda no está habilitada en esta instancia"
+
+msgid "That page is beyond the searchable range; narrow the search instead"
+msgstr "Esa página está fuera del rango consultable; refine la búsqueda"
+
+msgid "The request body must be an object"
+msgstr "El cuerpo de la petición debe ser un objeto"
+
+msgid "The search could not be completed"
+msgstr "No se pudo completar la búsqueda"
+
+msgid "You must specify a post type"
+msgstr "Debe especificar un tipo de contenido"

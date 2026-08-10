@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 30
 
 
+class SearchUnavailable(Exception):
+    """Elasticsearch refused the query, or could not be reached."""
+
+
 class SearchClient:
     """Minimal Elasticsearch HTTP client.
 
@@ -58,6 +62,37 @@ class SearchClient:
 
     def cluster_health(self) -> dict:
         return self._get("/_cluster/health").json()
+
+    def search(self, index: str, query: dict) -> dict:
+        """Run a query against an index, or raise with what the cluster said.
+
+        The legacy handler returned the error body as an ordinary result, so a
+        malformed query or a missing index came back as an empty search rather
+        than a failure - which is why a stray bracket in a search box looked
+        like "no results" in some paths and a 500 in others.
+        """
+        response = requests.post(
+            f"{self.base_url}/{index}/_search",
+            json=query,
+            auth=self._auth,
+            verify=self._verify,
+            timeout=DEFAULT_TIMEOUT,
+        )
+        if response.status_code >= 400:
+            detail = ""
+            try:
+                body = response.json()
+                detail = (body.get("error") or {}).get("reason") or ""
+            except ValueError:
+                detail = response.text[:300]
+            logger.warning("Elasticsearch refused a query on %s: %s", index, detail)
+            raise SearchUnavailable(detail or f"HTTP {response.status_code}")
+
+        return response.json()
+
+    def resolve_index(self, suffix: str) -> str:
+        """The alias for one of this instance's indices."""
+        return f"{self.index_prefix}-{suffix}"
 
     def ping(self) -> None:
         """Raise if the cluster is unreachable. Used by /health/ready."""
