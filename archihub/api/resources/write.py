@@ -566,28 +566,14 @@ def _detach_records(resource: dict, resource_id: str, user: str) -> None:
     a resource left its records pointing at it, still ``uploaded``, invisible to
     the recycle bin and to any cleanup. See BACKEND_FINDINGS F28.
     """
-    from archihub.api.records import storage
+    from archihub.api.records.storage import detach_from_parent
 
     for entry in resource.get("filesObj") or []:
         if not isinstance(entry, dict) or not entry.get("id"):
             continue
-
-        record = _mongo().get_record("records", {"_id": _to_object_id(entry["id"])})
-        if not record:
-            continue
-
-        remaining = [
-            p for p in (record.get("parent") or [])
-            if isinstance(p, dict) and p.get("id") != resource_id
-        ]
-
-        update = {"parent": remaining, "updatedAt": _now(), "updatedBy": user or "system"}
         # A file held by another resource stays alive there; only the last
-        # reference going away retires it.
-        if not remaining:
-            update["status"] = storage.STATUS_DELETED
-
-        _mongo().update_record("records", {"_id": record["_id"]}, update)
+        # reference going away retires it. That rule lives in `storage`.
+        detach_from_parent(entry["id"], resource_id, user)
 
 
 def restore(ids, user: str, recursive: bool = False) -> tuple[dict, int]:

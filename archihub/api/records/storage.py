@@ -312,6 +312,48 @@ def _merge_by_id(*groups) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Detaching
+# ---------------------------------------------------------------------------
+
+
+def detach_from_parent(record_id: str, parent_id: str, user: str | None) -> bool:
+    """Unhook a record from one parent, retiring it if that was the last one.
+
+    Deduplication means one record can hang off several resources, so removing
+    a parent is not the same as deleting the file. It is retired only when
+    nothing holds it any more.
+
+    Lives here rather than in either caller because both the resource delete
+    path and the view thumbnail replacement need exactly this, and the legacy
+    code had two different partial versions of it (see BACKEND_FINDINGS F28 for
+    the one that never ran at all).
+    """
+    object_id = None
+    try:
+        object_id = ObjectId(record_id)
+    except Exception:
+        return False
+
+    record = _mongo().get_record(COLLECTION, {"_id": object_id}, fields={"parent": 1, "status": 1})
+    if not record:
+        return False
+
+    remaining = [
+        parent
+        for parent in (record.get("parent") or [])
+        if isinstance(parent, dict) and str(parent.get("id")) != str(parent_id)
+    ]
+
+    update = {"parent": remaining, "updatedAt": _now(), "updatedBy": user or "system"}
+    if not remaining:
+        update["status"] = STATUS_DELETED
+
+    _mongo().update_record(COLLECTION, {"_id": object_id}, update)
+    _call_hook("record_update_parent", {**update, "_id": record_id})
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Shared
 # ---------------------------------------------------------------------------
 

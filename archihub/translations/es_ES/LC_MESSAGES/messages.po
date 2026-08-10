@@ -125,3 +125,27 @@ msgstr "Debe especificar una vista"
 
 msgid "{count} images"
 msgstr "{count} imágenes"
+
+msgid "A view with that slug already exists"
+msgstr "Ya existe una vista de consulta con ese slug"
+
+msgid "The data field is not valid JSON"
+msgstr "El campo data no es un JSON válido"
+
+msgid "The data field must be an object"
+msgstr "El campo data debe ser un objeto"
+
+msgid "The file has no content"
+msgstr "El archivo no tiene contenido"
+
+msgid "visible must be a list of content types"
+msgstr "visible debe ser una lista de tipos de contenido"
+
+# Present in the legacy catalogue but with an empty msgstr, so it was never
+# translated there and msgfmt omits it from the compiled .mo - which lets this
+# fallback catalogue supply it.
+msgid "Only image files are allowed for views"
+msgstr "Solo se permiten imágenes para las vistas de consulta"
+
+msgid "A view can only have one file"
+msgstr "Una vista de consulta solo puede tener un archivo"
