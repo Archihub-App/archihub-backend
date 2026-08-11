@@ -381,6 +381,123 @@ def clear_cache() -> tuple[dict, int]:
     return {"msg": _("Cache cleared successfully")}, 200
 
 
+# ---------------------------------------------------------------------------
+# Index maintenance
+# ---------------------------------------------------------------------------
+# These four queue the long-running jobs in `archihub/worker/tasks/`. Each
+# returns as soon as the message is on the broker; the admin screen then follows
+# it through `/tasks`. The work itself, and what changed in it, is documented in
+# those task modules - not here.
+
+
+def _queue(task, user: str, name: str, message: str, *args) -> tuple[dict, int]:
+    """Queue a task, record it against ``user``, and report it as accepted.
+
+    A broker that is down answers 503 rather than 200. The legacy version had
+    no such branch: ``.delay()`` raised, the surrounding ``except Exception``
+    turned it into ``{'msg': str(e)}, 500``, and an operator saw a connection
+    error where a queue outage was the actual news.
+    """
+    try:
+        queued = task.delay(*args)
+    except Exception:
+        logger.exception("Could not queue %s", name)
+        return {"msg": _("The task queue is unavailable")}, 503
+
+    try:
+        from archihub.api.tasks.services import add_task
+
+        add_task(queued.id, name, user, "msg")
+    except Exception:
+        # The job is already queued. Failing the request now would tell the
+        # operator it had not started when it had, and they would start it again.
+        logger.warning("Task %s queued but not recorded", queued.id)
+
+    return {"msg": message}, 200
+
+
+def _require_indexing(missing_msg: str, disabled_msg: str) -> tuple[dict, int] | None:
+    """``None`` when indexing is on; the refusal to return otherwise."""
+    record = get_setting("index_management")
+    if not record:
+        return {"msg": missing_msg}, 404
+    if not get_setting_value("index_management", "index_activation", 0):
+        return {"msg": disabled_msg}, 400
+    return None
+
+
+def regenerate_index(user: str) -> tuple[dict, int]:
+    """Queue a rebuild of the resources index under the current schema."""
+    from archihub.api.search.mapping import build_resources_mapping
+    from archihub.worker.tasks.indexing import regenerate_index_task
+
+    refusal = _require_indexing(
+        _("The field for the index management doesn't exists in the system"),
+        _("Indexing is deactivated"),
+    )
+    if refusal:
+        return refusal
+
+    schema = get_setting("resources-schema")
+    if not schema:
+        # The legacy code subscripted this straight away, so a missing schema
+        # was a TypeError reported as a 500 with the raw message.
+        return {"msg": _("The field for the index management doesn't exists in the system")}, 404
+
+    mapping = build_resources_mapping(schema.get("data") or {})
+
+    return _queue(
+        regenerate_index_task,
+        user,
+        "system.regenerate_index",
+        _("The process has been added to the processing queue"),
+        mapping,
+        user,
+    )
+
+
+def index_resources(user: str) -> tuple[dict, int]:
+    """Queue a full reindex of every resource."""
+    from archihub.worker.tasks.indexing import index_resources_task
+
+    refusal = _require_indexing(
+        _("The index_management record does not exist"), _("Indexing is not enabled")
+    )
+    if refusal:
+        return refusal
+
+    return _queue(
+        index_resources_task,
+        user,
+        "system.index_resources",
+        _("The full content indexing task was added to the processing queue"),
+    )
+
+
+def regenerate_index_geometries(user: str) -> tuple[dict, int]:
+    """Queue a rebuild of the geometry index.
+
+    Deliberately NOT gated on `index_activation`, matching the legacy route:
+    the boundary layer is drawn from Elasticsearch whether or not resource
+    search is switched on.
+    """
+    from archihub.worker.tasks.geometries import regenerate_index_shapes
+
+    return _queue(
+        regenerate_index_shapes,
+        user,
+        "geosystem.regenerate_index_shapes",
+        _("Geometry regeneration started"),
+    )
+
+
+def index_geometries(user: str) -> tuple[dict, int]:
+    """Queue an indexing pass over the stored boundary shapes."""
+    from archihub.worker.tasks.geometries import index_shapes
+
+    return _queue(index_shapes, user, "geosystem.index_shapes", _("Geometry indexing started"))
+
+
 def _register_log(user: str, action_key: str, metadata: dict) -> None:
     try:
         from archihub.api.logs.services import register_log

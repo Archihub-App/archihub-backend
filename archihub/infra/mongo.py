@@ -97,6 +97,18 @@ class MongoClientWrapper:
     def insert_record(self, collection: str, record: Any):
         return self.db[collection].insert_one(_to_payload(record))
 
+    def insert_records(self, collection: str, records: list[Any]):
+        """Insert many documents in one round trip.
+
+        ``ordered=False`` so one rejected document does not abandon the rest of
+        the batch - the caller gets a ``BulkWriteError`` naming the failures and
+        everything else is written. Used by the boundary loader, which inserts
+        tens of thousands of polygons and was doing so one at a time.
+        """
+        if not records:
+            return None
+        return self.db[collection].insert_many([_to_payload(r) for r in records], ordered=False)
+
     def update_record(self, collection: str, filters: dict, update_model: Any):
         return self.db[collection].update_one(filters, {"$set": _to_payload(update_model)})
 

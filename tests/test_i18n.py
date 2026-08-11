@@ -130,6 +130,34 @@ def test_bad_interpolation_does_not_raise(monkeypatch):
     assert i18n.gettext("Needs {missing}") == "Needs {missing}"
 
 
+def test_a_legacy_printf_msgid_is_interpolated_too(monkeypatch):
+    """BOTH placeholder styles are live and must stay so until the catalogues
+    merge at cutover: the legacy catalogue is written for flask_babel's `%`
+    interpolation, the port's own for `str.format`. The standing convention is
+    to REUSE a legacy msgid rather than add a near-duplicate, so ported code
+    passes strings of the first kind through here routinely - and supporting
+    only `.format` rendered them with the placeholder still in them, which is
+    a message that is wrong without being broken."""
+    _patch_mongo(monkeypatch, {"data": [{"id": i18n.LOCALE_SETTING_ID, "value": "en"}]})
+
+    assert i18n.gettext("Indexing finished for %(count)s resources", count=42) == (
+        "Indexing finished for 42 resources"
+    )
+
+
+def test_a_message_with_no_placeholder_is_left_alone(monkeypatch):
+    _patch_mongo(monkeypatch, {"data": [{"id": i18n.LOCALE_SETTING_ID, "value": "en"}]})
+
+    assert i18n.gettext("Cache cleared successfully") == "Cache cleared successfully"
+
+
+def test_a_stray_brace_in_a_translation_does_not_raise(monkeypatch):
+    """A translator writing `{` for emphasis must not turn into a 500."""
+    _patch_mongo(monkeypatch, {"data": [{"id": i18n.LOCALE_SETTING_ID, "value": "en"}]})
+
+    assert i18n.gettext("Use { like this", label="x") == "Use { like this"
+
+
 def test_translation_directories_include_core_catalog():
     directories = i18n.translation_directories()
     assert any(d.name == "translations" for d in directories)

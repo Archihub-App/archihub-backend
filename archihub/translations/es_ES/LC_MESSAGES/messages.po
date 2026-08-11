@@ -18,158 +18,35 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "DZI file not found"
-msgstr "No se encontró el archivo DZI"
-
-msgid "Filters are required"
-msgstr "Los filtros son obligatorios"
-
-msgid "Filter operator \"{op}\" is not allowed"
-msgstr "El operador de filtro \"{op}\" no está permitido"
-
-msgid "Fragment extraction is not available yet"
-msgstr "La extracción de fragmentos aún no está disponible"
-
-msgid "Image index out of range"
-msgstr "Índice de imagen fuera de rango"
-
-msgid "Invalid block index"
-msgstr "Índice de bloque inválido"
-
-msgid "Invalid dzi_payload type, expected xml or tile"
-msgstr "Tipo de dzi_payload inválido, se esperaba xml o tile"
-
-msgid "Invalid page number"
-msgstr "Número de página inválido"
-
-msgid "Invalid segment index"
-msgstr "Índice de segmento inválido"
-
-msgid "Nothing to update"
-msgstr "No hay nada que actualizar"
-
-msgid "This processing result cannot be edited"
-msgstr "Este resultado de procesamiento no se puede editar"
-
-msgid "Tile not found"
-msgstr "No se encontró el mosaico"
-
-msgid "Unknown size \"{size}\""
-msgstr "Tamaño desconocido \"{size}\""
-
-msgid "Unsupported block type"
-msgstr "Tipo de bloque no soportado"
-
-msgid "Unsupported download type"
-msgstr "Tipo de descarga no soportado"
-
-msgid "Untitled"
-msgstr "Sin título"
-
-msgid "bbox is missing"
-msgstr "bbox está faltando"
-
-msgid "id_doc is missing"
-msgstr "id_doc está faltando"
-
-msgid "level, col, and row are required for tile requests"
-msgstr "level, col y row son obligatorios para las solicitudes de mosaico"
-
-msgid "level, col, and row must be integers"
-msgstr "level, col y row deben ser números enteros"
-
-msgid "slug is missing"
-msgstr "slug está faltando"
-
-msgid "speaker and oldSpeaker are required"
-msgstr "speaker y oldSpeaker son obligatorios"
-
-msgid "{field} is missing"
-msgstr "{field} está faltando"
-
-msgid "A resource of type \"{child}\" cannot be filed under \"{parent}\""
-msgstr "Un recurso de tipo \"{child}\" no puede estar bajo \"{parent}\""
-
-msgid "The fragment could not be extracted"
-msgstr "No se pudo extraer el fragmento"
-
-msgid "The requested fragment is too long"
-msgstr "El fragmento solicitado es demasiado largo"
-
-msgid "The resource does not satisfy the new post type"
-msgstr "El recurso no cumple con el nuevo tipo de contenido"
-
-msgid "Unsupported snap type"
-msgstr "Tipo de snap no soportado"
-
-msgid "bbox is outside the image"
-msgstr "bbox está fuera de la imagen"
-
-msgid "data is missing"
-msgstr "data está faltando"
-
-msgid "Image gallery"
-msgstr "Galería de imágenes"
-
-msgid "Resource does not have files"
-msgstr "El recurso no tiene archivos"
-
-msgid "The download could not be prepared"
-msgstr "No se pudo preparar la descarga"
-
-msgid "You must specify a view"
-msgstr "Debe especificar una vista"
-
-msgid "{count} images"
-msgstr "{count} imágenes"
-
-msgid "A view with that slug already exists"
-msgstr "Ya existe una vista de consulta con ese slug"
-
-msgid "The data field is not valid JSON"
-msgstr "El campo data no es un JSON válido"
-
-msgid "The data field must be an object"
-msgstr "El campo data debe ser un objeto"
-
-msgid "The file has no content"
-msgstr "El archivo no tiene contenido"
-
-msgid "visible must be a list of content types"
-msgstr "visible debe ser una lista de tipos de contenido"
-
-# Present in the legacy catalogue but with an empty msgstr, so it was never
-# translated there and msgfmt omits it from the compiled .mo - which lets this
-# fallback catalogue supply it.
-msgid "Only image files are allowed for views"
-msgstr "Solo se permiten imágenes para las vistas de consulta"
-
-msgid "A view can only have one file"
-msgstr "Una vista de consulta solo puede tener un archivo"
-
-msgid "\"{field}\" must be a text value"
-msgstr "\"{field}\" debe ser un valor de texto"
-
-msgid "Invalid area threshold"
-msgstr "Umbral de área inválido"
-
-msgid "Invalid bounds"
-msgstr "Límites geográficos inválidos"
-
-msgid "You must specify a level"
-msgstr "Debe especificar un nivel"
-
-# The legacy code used a Spanish string as the msgid here, which made it
-# untranslatable and inconsistent with every other message in the catalogue.
-# The port uses the English msgid; this supplies the Spanish.
-msgid "Shape not found"
-msgstr "Forma no encontrada"
-
 msgid " … [earlier message shortened to fit]"
 msgstr " … [mensaje anterior acortado para que quepa]"
 
 msgid "A provider with that name already exists"
 msgstr "Ya existe un proveedor con ese nombre"
+
+msgid "A resource of type \"{child}\" cannot be filed under \"{parent}\""
+msgstr "Un recurso de tipo \"{child}\" no puede estar bajo \"{parent}\""
+
+msgid "A root is required"
+msgstr "Se requiere una raíz"
+
+msgid "A view can only have one file"
+msgstr "Una vista de consulta solo puede tener un archivo"
+
+msgid "A view with that slug already exists"
+msgstr "Ya existe una vista de consulta con ese slug"
+
+msgid "API key not found"
+msgstr "Clave de API no encontrada"
+
+msgid "API key revoked"
+msgstr "Clave de API revocada"
+
+msgid "An unexpected error occurred"
+msgstr "Ocurrió un error inesperado"
+
+msgid "Cache cleared successfully"
+msgstr "Caché limpiada con éxito"
 
 msgid "Conversation created"
 msgstr "Conversación creada"
@@ -180,11 +57,116 @@ msgstr "Conversación eliminada"
 msgid "Conversation updated"
 msgstr "Conversación actualizada"
 
+msgid "Could not create the administrator"
+msgstr "No se pudo crear el administrador"
+
+msgid "Could not generate a unique slug for {name}"
+msgstr "No se pudo generar un slug único para {name}"
+
+msgid "DZI file not found"
+msgstr "No se encontró el archivo DZI"
+
+msgid "Error deleting the files"
+msgstr "Error al eliminar los archivos"
+
+msgid "Error updating the polygons"
+msgstr "Error al actualizar los polígonos"
+
+msgid "Error: the field with destiny equal to "
+msgstr "Error: el campo con destiny igual a "
+
+msgid "Error: the field {field} has two different types"
+msgstr "Error: el campo {field} tiene dos tipos diferentes"
+
+msgid "Error: the form must have a field with destiny equal to "
+msgstr "Error: el formulario debe tener un campo con destiny igual a "
+
+msgid "Error: the subfield must have a {key}"
+msgstr "Error: el subcampo debe tener un {key}"
+
+msgid "Favorite removed successfully"
+msgstr "Favorito eliminado con éxito"
+
+msgid "Filter operator \"{op}\" is not allowed"
+msgstr "El operador de filtro \"{op}\" no está permitido"
+
+msgid "Filters are required"
+msgstr "Los filtros son obligatorios"
+
+msgid "Form updated successfully. If new fields were added or the type of any "
+msgstr "Formulario actualizado con éxito. Si se agregaron campos nuevos o cambió el tipo de alguno "
+
+msgid "Fragment extraction is not available yet"
+msgstr "La extracción de fragmentos aún no está disponible"
+
 msgid "Headers must be a map of text values"
 msgstr "Las cabeceras deben ser un mapa de valores de texto"
 
+msgid "Hello,"
+msgstr "Hola,"
+
+msgid "If an account exists for this username, a password recovery email has been sent"
+msgstr "Si existe una cuenta con ese usuario, se ha enviado un correo de recuperación de contraseña"
+
+msgid "If you did not request a password reset, please ignore this email."
+msgstr "Si no solicitó restablecer su contraseña, ignore este correo."
+
+msgid "Image gallery"
+msgstr "Galería de imágenes"
+
+msgid "Image index out of range"
+msgstr "Índice de imagen fuera de rango"
+
+msgid "Invalid area threshold"
+msgstr "Umbral de área inválido"
+
+msgid "Invalid block index"
+msgstr "Índice de bloque inválido"
+
+msgid "Invalid bounds"
+msgstr "Límites geográficos inválidos"
+
+msgid "Invalid dzi_payload type, expected xml or tile"
+msgstr "Tipo de dzi_payload inválido, se esperaba xml o tile"
+
+msgid "Invalid favorite type"
+msgstr "Tipo de favorito inválido"
+
+msgid "Invalid file path"
+msgstr "Ruta de archivo inválida"
+
+msgid "Invalid or expired token"
+msgstr "Token inválido o expirado"
+
+msgid "Invalid page number"
+msgstr "Número de página inválido"
+
+msgid "Invalid plugin"
+msgstr "Plugin inválido"
+
+msgid "Invalid segment index"
+msgstr "Índice de segmento inválido"
+
 msgid "Message content must be text or a list of parts"
 msgstr "El contenido del mensaje debe ser texto o una lista de partes"
+
+msgid "Not Found"
+msgstr "No encontrado"
+
+msgid "Nothing to update"
+msgstr "No hay nada que actualizar"
+
+# Present in the legacy catalogue but with an empty msgstr, so it was never
+# translated there and msgfmt omits it from the compiled .mo - which lets this
+# fallback catalogue supply it.
+msgid "Only image files are allowed for views"
+msgstr "Solo se permiten imágenes para las vistas de consulta"
+
+msgid "Plugin endpoints are not available in this build yet"
+msgstr "Los endpoints de plugins aún no están disponibles en esta versión"
+
+msgid "Plugin updated successfully. Restart the application to apply the change"
+msgstr "Plugin actualizado con éxito. Reinicie la aplicación para aplicar el cambio"
 
 msgid "Provider created successfully"
 msgstr "Proveedor creado con éxito"
@@ -198,41 +180,23 @@ msgstr "Proveedor no encontrado"
 msgid "Provider updated successfully"
 msgstr "Proveedor actualizado con éxito"
 
-msgid "The \"{header}\" header cannot be set here"
-msgstr "La cabecera \"{header}\" no se puede definir aquí"
+msgid "Reset password"
+msgstr "Restablecer contraseña"
 
-msgid "The base URL must be an http or https address"
-msgstr "La URL base debe ser una dirección http o https"
+msgid "Resource does not have files"
+msgstr "El recurso no tiene archivos"
 
-msgid "The conversation is too long for this model, even after shortening"
-msgstr "La conversación es demasiado larga para este modelo, incluso después de acortarla"
+msgid "Search is not enabled on this instance"
+msgstr "La búsqueda no está habilitada en esta instancia"
 
-msgid "The model \"{model}\" does not support: {missing}"
-msgstr "El modelo \"{model}\" no admite: {missing}"
+msgid "Settings updated successfully"
+msgstr "Ajustes actualizados con éxito"
 
-msgid "This dialect requires a base URL"
-msgstr "Este dialecto requiere una URL base"
-
-msgid "Unknown conversation type \"{type}\""
-msgstr "Tipo de conversación desconocido \"{type}\""
-
-msgid "Unknown dialect \"{dialect}\""
-msgstr "Dialecto desconocido \"{dialect}\""
-
-msgid "Unknown message role \"{role}\""
-msgstr "Rol de mensaje desconocido \"{role}\""
-
-msgid "You must specify a model"
-msgstr "Debe especificar un modelo"
-
-msgid "[image]"
-msgstr "[imagen]"
-
-msgid "enabled must be true or false"
-msgstr "enabled debe ser true o false"
-
-msgid "messages must be a list"
-msgstr "messages debe ser una lista"
+# The legacy code used a Spanish string as the msgid here, which made it
+# untranslatable and inconsistent with every other message in the catalogue.
+# The port uses the English msgid; this supplies the Spanish.
+msgid "Shape not found"
+msgstr "Forma no encontrada"
 
 msgid "Skill content is required"
 msgstr "El contenido de la habilidad es obligatorio"
@@ -252,114 +216,6 @@ msgstr "La ruta de la habilidad debe ser relativa al directorio de habilidades"
 msgid "Skill path must stay inside the skills directory"
 msgstr "La ruta de la habilidad debe permanecer dentro del directorio de habilidades"
 
-msgid "The skill could not be deleted"
-msgstr "No se pudo eliminar la habilidad"
-
-msgid "The skill could not be saved"
-msgstr "No se pudo guardar la habilidad"
-
-msgid "The skill is too large"
-msgstr "La habilidad es demasiado grande"
-
-msgid "\"{field}\" must be a list of text values"
-msgstr "\"{field}\" debe ser una lista de valores de texto"
-
-msgid "\"{field}\" must be a number"
-msgstr "\"{field}\" debe ser un número"
-
-msgid "Search is not enabled on this instance"
-msgstr "La búsqueda no está habilitada en esta instancia"
-
-msgid "That page is beyond the searchable range; narrow the search instead"
-msgstr "Esa página está fuera del rango consultable; refine la búsqueda"
-
-msgid "The request body must be an object"
-msgstr "El cuerpo de la petición debe ser un objeto"
-
-msgid "The search could not be completed"
-msgstr "No se pudo completar la búsqueda"
-
-msgid "You must specify a post type"
-msgstr "Debe especificar un tipo de contenido"
-
-msgid "Not Found"
-msgstr "No encontrado"
-
-msgid "Plugin endpoints are not available in this build yet"
-msgstr "Los endpoints de plugins aún no están disponibles en esta versión"
-
-msgid "You must supply at least one of: {fields}"
-msgstr "Debe indicar al menos uno de: {fields}"
-
-msgid "A root is required"
-msgstr "Se requiere una raíz"
-
-msgid "API key not found"
-msgstr "Clave de API no encontrada"
-
-msgid "API key revoked"
-msgstr "Clave de API revocada"
-
-msgid "An unexpected error occurred"
-msgstr "Ocurrió un error inesperado"
-
-msgid "Cache cleared successfully"
-msgstr "Caché limpiada con éxito"
-
-msgid "Could not create the administrator"
-msgstr "No se pudo crear el administrador"
-
-msgid "Could not generate a unique slug for {name}"
-msgstr "No se pudo generar un slug único para {name}"
-
-msgid "Error: the field with destiny equal to "
-msgstr "Error: el campo con destiny igual a "
-
-msgid "Error: the field {field} has two different types"
-msgstr "Error: el campo {field} tiene dos tipos diferentes"
-
-msgid "Error: the form must have a field with destiny equal to "
-msgstr "Error: el formulario debe tener un campo con destiny igual a "
-
-msgid "Error: the subfield must have a {key}"
-msgstr "Error: el subcampo debe tener un {key}"
-
-msgid "Favorite removed successfully"
-msgstr "Favorito eliminado con éxito"
-
-msgid "Form updated successfully. If new fields were added or the type of any "
-msgstr "Formulario actualizado con éxito. Si se agregaron campos nuevos o cambió el tipo de alguno "
-
-msgid "Hello,"
-msgstr "Hola,"
-
-msgid "If an account exists for this username, a password recovery email has been sent"
-msgstr "Si existe una cuenta con ese usuario, se ha enviado un correo de recuperación de contraseña"
-
-msgid "If you did not request a password reset, please ignore this email."
-msgstr "Si no solicitó restablecer su contraseña, ignore este correo."
-
-msgid "Invalid favorite type"
-msgstr "Tipo de favorito inválido"
-
-msgid "Invalid file path"
-msgstr "Ruta de archivo inválida"
-
-msgid "Invalid or expired token"
-msgstr "Token inválido o expirado"
-
-msgid "Invalid plugin"
-msgstr "Plugin inválido"
-
-msgid "Plugin updated successfully. Restart the application to apply the change"
-msgstr "Plugin actualizado con éxito. Reinicie la aplicación para aplicar el cambio"
-
-msgid "Reset password"
-msgstr "Restablecer contraseña"
-
-msgid "Settings updated successfully"
-msgstr "Ajustes actualizados con éxito"
-
 msgid "Store this key now - it will not be shown again"
 msgstr "Guarde esta clave ahora: no se volverá a mostrar"
 
@@ -369,11 +225,32 @@ msgstr "Sistema configurado con éxito"
 msgid "Thank you for registering, click on the following link to verify your account:"
 msgstr "Gracias por registrarse, haga clic en el siguiente enlace para verificar su cuenta:"
 
+msgid "That page is beyond the searchable range; narrow the search instead"
+msgstr "Esa página está fuera del rango consultable; refine la búsqueda"
+
+msgid "The \"{header}\" header cannot be set here"
+msgstr "La cabecera \"{header}\" no se puede definir aquí"
+
 msgid "The access right {right} does not exist"
 msgstr "El derecho de acceso {right} no existe"
 
+msgid "The base URL must be an http or https address"
+msgstr "La URL base debe ser una dirección http o https"
+
 msgid "The content type is required"
 msgstr "El tipo de contenido es obligatorio"
+
+msgid "The conversation is too long for this model, even after shortening"
+msgstr "La conversación es demasiado larga para este modelo, incluso después de acortarla"
+
+msgid "The data field is not valid JSON"
+msgstr "El campo data no es un JSON válido"
+
+msgid "The data field must be an object"
+msgstr "El campo data debe ser un objeto"
+
+msgid "The download could not be prepared"
+msgstr "No se pudo preparar la descarga"
 
 msgid "The field {label} has an invalid author"
 msgstr "El campo {label} tiene un autor inválido"
@@ -381,23 +258,89 @@ msgstr "El campo {label} tiene un autor inválido"
 msgid "The file exceeds the maximum allowed size"
 msgstr "El archivo supera el tamaño máximo permitido"
 
+msgid "The file has no content"
+msgstr "El archivo no tiene contenido"
+
 msgid "The file has no name"
 msgstr "El archivo no tiene nombre"
+
+msgid "The fragment could not be extracted"
+msgstr "No se pudo extraer el fragmento"
+
+msgid "The model \"{model}\" does not support: {missing}"
+msgstr "El modelo \"{model}\" no admite: {missing}"
+
+msgid "The request body must be an object"
+msgstr "El cuerpo de la petición debe ser un objeto"
 
 msgid "The request could not be processed. Check the submitted fields."
 msgstr "No se pudo procesar la petición. Revise los campos enviados."
 
+msgid "The requested fragment is too long"
+msgstr "El fragmento solicitado es demasiado largo"
+
 msgid "The resource cannot have one of its descendants as parent"
 msgstr "El recurso no puede tener uno de sus descendientes como padre"
 
+msgid "The resource does not satisfy the new post type"
+msgstr "El recurso no cumple con el nuevo tipo de contenido"
+
+msgid "The search could not be completed"
+msgstr "No se pudo completar la búsqueda"
+
+msgid "The skill could not be deleted"
+msgstr "No se pudo eliminar la habilidad"
+
+msgid "The skill could not be saved"
+msgstr "No se pudo guardar la habilidad"
+
+msgid "The skill is too large"
+msgstr "La habilidad es demasiado grande"
+
+msgid "The task queue is unavailable"
+msgstr "La cola de tareas no está disponible"
+
+msgid "This dialect requires a base URL"
+msgstr "Este dialecto requiere una URL base"
+
 msgid "This plugin is not supported by this backend yet and cannot be activated"
 msgstr "Este plugin aún no es compatible con este backend y no se puede activar"
+
+msgid "This processing result cannot be edited"
+msgstr "Este resultado de procesamiento no se puede editar"
+
+msgid "Tile not found"
+msgstr "No se encontró el mosaico"
+
+msgid "Unknown conversation type \"{type}\""
+msgstr "Tipo de conversación desconocido \"{type}\""
+
+msgid "Unknown dialect \"{dialect}\""
+msgstr "Dialecto desconocido \"{dialect}\""
+
+msgid "Unknown message role \"{role}\""
+msgstr "Rol de mensaje desconocido \"{role}\""
+
+msgid "Unknown size \"{size}\""
+msgstr "Tamaño desconocido \"{size}\""
 
 msgid "Unknown status"
 msgstr "Estado desconocido"
 
 msgid "Unknown view"
 msgstr "Vista desconocida"
+
+msgid "Unsupported block type"
+msgstr "Tipo de bloque no soportado"
+
+msgid "Unsupported download type"
+msgstr "Tipo de descarga no soportado"
+
+msgid "Unsupported snap type"
+msgstr "Tipo de snap no soportado"
+
+msgid "Untitled"
+msgstr "Sin título"
 
 msgid "User created successfully"
 msgstr "Usuario creado con éxito"
@@ -407,3 +350,69 @@ msgstr "Verificar cuenta"
 
 msgid "You have one day to reset your password, click on the following link:"
 msgstr "Tiene un día para restablecer su contraseña, haga clic en el siguiente enlace:"
+
+msgid "You must specify a level"
+msgstr "Debe especificar un nivel"
+
+msgid "You must specify a model"
+msgstr "Debe especificar un modelo"
+
+msgid "You must specify a post type"
+msgstr "Debe especificar un tipo de contenido"
+
+msgid "You must specify a view"
+msgstr "Debe especificar una vista"
+
+msgid "You must supply at least one of: {fields}"
+msgstr "Debe indicar al menos uno de: {fields}"
+
+msgid "[image]"
+msgstr "[imagen]"
+
+msgid "\"{field}\" must be a list of text values"
+msgstr "\"{field}\" debe ser una lista de valores de texto"
+
+msgid "\"{field}\" must be a number"
+msgstr "\"{field}\" debe ser un número"
+
+msgid "\"{field}\" must be a text value"
+msgstr "\"{field}\" debe ser un valor de texto"
+
+msgid "bbox is missing"
+msgstr "bbox está faltando"
+
+msgid "bbox is outside the image"
+msgstr "bbox está fuera de la imagen"
+
+msgid "data is missing"
+msgstr "data está faltando"
+
+msgid "enabled must be true or false"
+msgstr "enabled debe ser true o false"
+
+msgid "id_doc is missing"
+msgstr "id_doc está faltando"
+
+msgid "level, col, and row are required for tile requests"
+msgstr "level, col y row son obligatorios para las solicitudes de mosaico"
+
+msgid "level, col, and row must be integers"
+msgstr "level, col y row deben ser números enteros"
+
+msgid "messages must be a list"
+msgstr "messages debe ser una lista"
+
+msgid "slug is missing"
+msgstr "slug está faltando"
+
+msgid "speaker and oldSpeaker are required"
+msgstr "speaker y oldSpeaker son obligatorios"
+
+msgid "visible must be a list of content types"
+msgstr "visible debe ser una lista de tipos de contenido"
+
+msgid "{count} images"
+msgstr "{count} imágenes"
+
+msgid "{field} is missing"
+msgstr "{field} está faltando"

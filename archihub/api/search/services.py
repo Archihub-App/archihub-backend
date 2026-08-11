@@ -166,7 +166,7 @@ def search(body: dict, user: str | None, *, public: bool) -> tuple[dict, int]:
 
     client = _client()
     try:
-        raw = client.search(client.resolve_index(RESOURCES_INDEX), built)
+        raw = client.search(RESOURCES_INDEX, built)
     except SearchUnavailable as exc:
         logger.warning("Search failed: %s", exc)
         # The cluster's own words are logged, not returned - they name indices

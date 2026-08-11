@@ -73,9 +73,12 @@ celery_app.conf.beat_scheduler = "archihub.worker.scheduler:MongoPluginScheduler
 # state query raises.
 celery_app.set_default()
 
-# Task modules. Bodies for the in-scope plugins arrive in Phase 4; listing the
-# package now means a newly added module is picked up without touching this file.
-celery_app.autodiscover_tasks(["archihub.worker.tasks"], force=False)
+# Task modules. `autodiscover_tasks` imports `<package>.<related_name>`, so this
+# resolves to `archihub.worker.tasks` - the package whose `__init__` imports each
+# task module and therefore runs every `@shared_task` decorator. Pointing it at
+# `archihub.worker.tasks` instead would look for a `tasks.tasks` submodule that
+# does not exist, and the worker would start with nothing registered.
+celery_app.autodiscover_tasks(["archihub.worker"], force=False)
 
 
 @worker_process_init.connect

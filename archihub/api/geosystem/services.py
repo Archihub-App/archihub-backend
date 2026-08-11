@@ -19,13 +19,16 @@ geometry pass over megabytes of coordinates, so:
 * **Retention is quantised** before it reaches the simplification cache; see
   ``simplify.normalise_retention``.
 
-The upload and Elasticsearch-indexing halves of the legacy module are not ported
-here: they have no routes, and `index_shapes` belongs with `search`.
+The Elasticsearch-indexing half of the legacy module lives in
+``archihub/worker/tasks/geometries.py`` — it is a Celery task, not a route. The
+loader (``upload_shapes``) stays here, because it is what produces the documents
+everything else in this module reads.
 """
 
 from __future__ import annotations
 
 import logging
+import re as _re
 
 from archihub.api.geosystem import simplify as simplifier
 from archihub.core.i18n import gettext as _
@@ -296,6 +299,230 @@ def get_shape(body: dict) -> tuple[list | dict, int]:
         document.pop("_id", None)
 
     return parse_result(_simplified(documents, retention)), 200
+
+
+def geo_data_directory():
+    """Where the bundled administrative boundary files live.
+
+    RESOLVED FROM THIS FILE, not from the working directory. The original did
+    ``os.path.abspath('app/utils/geo')``, which is only that directory when the
+    process happens to have been started from the repository root - under
+    gunicorn with a different working directory it resolved somewhere that does
+    not exist, and the route answered 500 with a bare ``FileNotFoundError``.
+
+    The data itself still sits under ``app/`` because it is 24MB of GeoJSON and
+    duplicating it during the migration helps nobody. It MOVES TO
+    ``archihub/data/geo`` AT PHASE 7 CUTOVER, when ``app/`` is deleted; this
+    function and the setting below are the only two places that changes.
+    """
+    from pathlib import Path
+
+    from archihub.core.settings import get_settings
+
+    configured = getattr(get_settings(), "geo_data_path", "") or ""
+    if configured:
+        return Path(configured)
+
+    # archihub/api/geosystem/services.py -> repository root
+    return Path(__file__).resolve().parents[3] / "app" / "utils" / "geo"
+
+
+#: ``admin_0``, ``admin_1``, ... Anything else in the directory is ignored.
+_ADMIN_DIRECTORY = _re.compile(r"^admin_(\d+)$")
+
+
+def _boundary_levels(directory) -> list[tuple[int, object]]:
+    """The bundled boundary directories, LOWEST ADMINISTRATIVE LEVEL FIRST.
+
+    Both properties matter and neither held before.
+
+    The original iterated ``os.listdir`` and did ``int(f.split('admin_')[1])``
+    on every entry. That directory also contains ``world.json``, a plain file,
+    for which the split yields a one-element list - so the loader raised
+    ``IndexError: list index out of range`` before reading anything, and
+    ``/system/geo-load`` returned 500 on the data the application ships with.
+    (BACKEND_FINDINGS F47.)
+
+    The order is the second half. Each level's shapes are matched to a parent by
+    intersecting them against the level above, which must therefore already be
+    in the database. ``os.listdir`` returns entries in filesystem order, so
+    whether that held was luck: processing ``admin_1`` before ``admin_0`` gave
+    every department a null parent, and the explore map's drill-down silently
+    stopped working one level down.
+    """
+    levels = []
+    for entry in sorted(directory.iterdir(), key=lambda p: p.name):
+        if not entry.is_dir():
+            continue
+        match = _ADMIN_DIRECTORY.match(entry.name)
+        if match:
+            levels.append((int(match.group(1)), entry))
+    return sorted(levels, key=lambda pair: pair[0])
+
+
+def upload_shapes() -> tuple[dict, int]:
+    """Load the bundled administrative boundaries into MongoDB.
+
+    Each level replaces itself: the existing shapes at that level are deleted
+    and the file's features inserted, with each feature matched to its parent at
+    the level above. Called synchronously from ``/system/geo-load`` — see the
+    note on that route about why it still is.
+    """
+    directory = geo_data_directory()
+    if not directory.is_dir():
+        logger.error("Boundary data directory not found: %s", directory)
+        return {"msg": _("Error updating the polygons")}, 500
+
+    try:
+        loaded = 0
+        for level, folder in _boundary_levels(directory):
+            for path in sorted(folder.iterdir()):
+                if path.suffix != ".json":
+                    continue
+                loaded += _load_boundary_file(path, level)
+
+        logger.info("Loaded %d boundary shapes", loaded)
+        return {"msg": _("Shapes uploaded successfully")}, 200
+    except Exception:
+        # The real reason names a file path on the server's disk.
+        logger.exception("Could not load boundary shapes")
+        return {"msg": _("Error updating the polygons")}, 500
+
+
+def _load_boundary_file(path, level: int) -> int:
+    """Replace one administrative level from one GeoJSON file."""
+    import json
+
+    import geopandas as gpd
+
+    from archihub.api.geosystem.models import Polygon
+
+    with path.open() as handle:
+        data = json.load(handle)
+
+    features = gpd.GeoDataFrame.from_features(data)
+    for required in ("ident", "name"):
+        if required not in features.columns:
+            raise ValueError(f"{path.name}: boundary features have no {required!r} property")
+
+    features["admin_level"] = level
+    features["name"] = features["name"].str.capitalize()
+    if features.crs is None:
+        features.crs = "EPSG:4326"
+
+    mongo = _mongo()
+    mongo.delete_records(COLLECTION, {"properties.admin_level": level})
+
+    if level > 0:
+        _attach_parents(features, level, gpd)
+
+    rows = json.loads(features.to_json())["features"]
+    documents = []
+    for feature in rows:
+        # Nulls are dropped rather than stored: a null `parent` is queried with
+        # `{'properties.parent': value}` elsewhere, and an absent key and a
+        # stored null do not behave the same way there.
+        feature["properties"] = {k: v for k, v in feature["properties"].items() if v is not None}
+        documents.append(Polygon(**feature))
+
+    mongo.insert_records(COLLECTION, documents)
+    return len(documents)
+
+
+def _attach_parents(features, level: int, gpd) -> None:
+    """Fill each feature's ``parent``/``parent_name`` from the level above."""
+    parents = list(
+        _mongo().get_all_records(
+            COLLECTION,
+            {"properties.admin_level": level - 1},
+            fields={"_id": 1, "geometry": 1, "properties.ident": 1, "properties.name": 1},
+        )
+    )
+    if not parents:
+        logger.warning("No level-%d boundaries stored; level %d will have no parents", level - 1, level)
+        features["parent"] = None
+        features["parent_name"] = None
+        return
+
+    parent_frame = gpd.GeoDataFrame.from_features(
+        [
+            {
+                "type": "Feature",
+                "geometry": parent["geometry"],
+                "properties": {
+                    "parent_ident": parent["properties"]["ident"],
+                    "parent_name": parent["properties"]["name"],
+                },
+            }
+            for parent in parents
+        ]
+    )
+    if parent_frame.crs is None:
+        parent_frame.crs = "EPSG:4326"
+
+    # Match on centroids first: a child lies within exactly one parent, so this
+    # gives one answer per shape.
+    centroids = features.copy()
+    centroids.geometry = centroids.centroid
+    joined = gpd.sjoin(centroids, parent_frame, how="left", predicate="within")
+
+    # Anything whose centroid fell outside every parent - which simplified
+    # borders and coastal shapes routinely do - is matched by intersection
+    # instead, keeping the first parent it overlaps.
+    missing = joined["parent_ident"].isna()
+    if missing.any():
+        overlap = gpd.sjoin(features[missing], parent_frame, how="inner", predicate="intersects")
+        overlap = overlap[~overlap.index.duplicated(keep="first")]
+        joined.loc[overlap.index, "parent_ident"] = overlap["parent_ident"]
+        joined.loc[overlap.index, "parent_name"] = overlap["parent_name"]
+
+    features["parent"] = joined["parent_ident"].where(joined["parent_ident"].notna(), None)
+    features["parent_name"] = joined["parent_name"].where(joined["parent_name"].notna(), None)
+
+
+def get_shape_centroid(ident: str, parent: str | None, level: int) -> list[dict] | None:
+    """The centre point(s) of a named administrative boundary, as GeoJSON.
+
+    Used by the search indexer: a resource whose location is recorded as
+    "this municipality" is indexed at the municipality's centroid, so it can be
+    found by a map query. A MultiPolygon yields one point PER PART rather than
+    one for the whole - an archipelago's overall centroid can fall in open
+    water, hundreds of kilometres from any of its land.
+
+    Returns ``None`` when the boundary is not stored. The original raised
+    ``Exception(f'Error al obtener el centroide ...')`` for any failure
+    including a simple miss, and that exception propagated into the indexing
+    loop's swallow-everything handler - so a resource referring to a boundary
+    this instance has not loaded silently disappeared from the search index.
+    """
+    if not ident:
+        return None
+
+    from shapely.geometry import mapping, shape
+
+    filters: dict = {"properties.admin_level": level, "properties.ident": ident}
+    if parent:
+        filters["properties.parent"] = parent
+
+    document = _mongo().get_record(
+        "shapes",
+        filters,
+        fields={"geometry": 1, "properties.name": 1, "properties.ident": 1},
+    )
+    if not document or not document.get("geometry"):
+        return None
+
+    geometry = document["geometry"]
+    try:
+        if geometry.get("type") == "MultiPolygon":
+            return [
+                mapping(shape({"type": "Polygon", "coordinates": part}).centroid)
+                for part in geometry.get("coordinates") or []
+            ]
+        return [mapping(shape(geometry).centroid)]
+    except Exception:
+        logger.warning("Could not compute a centroid for boundary %r", ident)
+        return None
 
 
 def _simplified(documents: list[dict], retention: float) -> list[dict]:

@@ -149,6 +149,12 @@ class Settings(BaseSettings):
     original_files_path: str = Field(default="", validation_alias="ORIGINAL_FILES_PATH")
     temporal_files_path: str = Field(default="", validation_alias="TEMPORAL_FILES_PATH")
 
+    # The bundled administrative-boundary GeoJSON. Unset means "the directory
+    # shipped with this checkout" - see geosystem.services.geo_data_directory,
+    # which resolves it relative to the package rather than to the working
+    # directory. An operator only sets this to point at their own boundary set.
+    geo_data_path: str = Field(default="", validation_alias="GEO_DATA_PATH")
+
     # Where skill Markdown files live. The legacy SkillManager derived this from
     # the module's own location when unset (`<repo>/skills`), which breaks the
     # moment the package is installed rather than run from a checkout.

@@ -28,6 +28,7 @@ from __future__ import annotations
 import gettext as _gettext
 import logging
 import os
+import re as _re
 import time
 from pathlib import Path
 
@@ -154,20 +155,47 @@ def _get_translations(locale: str) -> _gettext.NullTranslations:
     return result
 
 
+#: ``%(name)s`` - the placeholder style used by every msgid in the LEGACY
+#: catalogue, because that is what ``flask_babel`` interpolates with.
+_PRINTF_PLACEHOLDER = _re.compile(r"%\(\w+\)[sdifr]")
+
+
+def interpolate(translated: str, variables: dict) -> str:
+    """Fill a translated string's placeholders, in whichever style it uses.
+
+    BOTH STYLES ARE LIVE, and that is not an accident to be tidied away:
+
+    * The legacy catalogue is written for ``flask_babel``, which interpolates
+      with ``%``. Its msgids look like ``"Indexing finished for %(count)s
+      resources"``.
+    * The port's own catalogue uses ``str.format`` - ``"{field} is missing"``.
+
+    The standing convention is to REUSE a legacy msgid wherever one exists
+    rather than add a near-duplicate, so ported code routinely passes strings of
+    the first kind through this. Supporting only ``.format`` made those render
+    with the placeholder still in them - a message reading "Indexing finished
+    for %(count)s resources" to the operator, with no error anywhere, which is
+    exactly what a task result looks like when it is wrong but not broken.
+    The two catalogues merge at Phase 7 cutover; until then both must work.
+    """
+    if not variables:
+        return translated
+    try:
+        if _PRINTF_PLACEHOLDER.search(translated):
+            return translated % variables
+        return translated.format(**variables)
+    except (KeyError, IndexError, ValueError, TypeError):
+        logger.warning("Bad interpolation for message %r", translated)
+        return translated
+
+
 def gettext(message: str, **variables: object) -> str:
     """Translate ``message`` into the instance locale.
 
-    Mirrors ``flask_babel.gettext``: the msgid is the English source string, and
-    keyword arguments are interpolated with ``str.format``.
+    Mirrors ``flask_babel.gettext``. Keyword arguments are interpolated in
+    whichever placeholder style the message uses - see ``interpolate``.
     """
-    translated = _get_translations(get_locale()).gettext(message)
-    if variables:
-        try:
-            return translated.format(**variables)
-        except (KeyError, IndexError):
-            logger.warning("Bad interpolation for message %r", message)
-            return translated
-    return translated
+    return interpolate(_get_translations(get_locale()).gettext(message), variables)
 
 
 # Conventional alias, matching `from flask_babel import gettext as _`.
@@ -176,12 +204,7 @@ _ = gettext
 
 def ngettext(singular: str, plural: str, n: int, **variables: object) -> str:
     translated = _get_translations(get_locale()).ngettext(singular, plural, n)
-    if variables:
-        try:
-            return translated.format(**variables, n=n)
-        except (KeyError, IndexError):
-            return translated
-    return translated
+    return interpolate(translated, {**variables, "n": n})
 
 
 if os.environ.get("ARCHIHUB_I18N_DEBUG"):  # pragma: no cover - manual diagnostics

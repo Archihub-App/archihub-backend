@@ -139,15 +139,65 @@ def test_route_inventory_matches_openapi_spec():
     assert len(live) >= 6
 
 
-def test_reset_is_honest_about_not_being_ported():
-    """Reset must not silently no-op.
+def test_starting_a_reset_queues_it_and_returns_something_to_poll(monkeypatch):
+    from archihub.api.health import testcontrol_services
+    from archihub.worker.tasks import testcontrol as task_module
 
-    A test-control reset that appeared to succeed while doing nothing would
-    leave suites running against stale data and reporting green - a far worse
-    failure than an explicit 503.
-    """
-    from archihub.api.health.testcontrol_services import poll_reset, start_reset
+    queued = {}
 
-    for payload, status_code in (start_reset(), poll_reset("some-task-id")):
-        assert status_code == 503
-        assert "not available" in payload["msg"]
+    class Queued:
+        id = "task-1"
+
+    def fake_delay(run_id):
+        queued["run_id"] = run_id
+        return Queued()
+
+    monkeypatch.setattr(task_module.reset_task, "delay", fake_delay)
+    monkeypatch.setattr(
+        "archihub.api.tasks.services.add_task", lambda *args, **kwargs: None
+    )
+
+    payload, status_code = testcontrol_services.start_reset()
+
+    assert status_code == 202
+    assert payload["task_id"] == "task-1"
+    # The run id is generated here and handed to the task, so the caller can
+    # correlate the result it eventually reads with the reset it asked for.
+    assert payload["run_id"] == queued["run_id"]
+
+
+def test_a_reset_that_cannot_be_queued_says_so_rather_than_returning_an_id(monkeypatch):
+    """A task id that will never resolve makes a runner wait for its timeout."""
+    from archihub.api.health import testcontrol_services
+    from archihub.worker.tasks import testcontrol as task_module
+
+    def explode(run_id):
+        raise ConnectionError("broker down")
+
+    monkeypatch.setattr(task_module.reset_task, "delay", explode)
+
+    payload, status_code = testcontrol_services.start_reset()
+
+    assert status_code == 503
+    assert "task_id" not in payload
+
+
+def test_a_reset_still_starts_when_its_bookkeeping_row_cannot_be_written(monkeypatch):
+    """The destructive part is already queued; failing the request now would
+    tell the caller it had not started, and they would start it again."""
+    from archihub.api.health import testcontrol_services
+    from archihub.worker.tasks import testcontrol as task_module
+
+    class Queued:
+        id = "task-2"
+
+    monkeypatch.setattr(task_module.reset_task, "delay", lambda run_id: Queued())
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("mongo down")
+
+    monkeypatch.setattr("archihub.api.tasks.services.add_task", explode)
+
+    payload, status_code = testcontrol_services.start_reset()
+
+    assert (status_code, payload["task_id"]) == (202, "task-2")

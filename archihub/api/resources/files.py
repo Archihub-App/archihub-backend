@@ -434,3 +434,50 @@ def sweep_stale_archives(directory) -> int:
     if removed:
         logger.info("Removed %d stale download archive(s)", removed)
     return removed
+
+
+#: Directories under WEB_FILES_PATH holding files this application generated and
+#: can regenerate. An administrator may empty either from the settings screen.
+#: An ALLOWLIST, not a parameter: the value reaches a filesystem path, and the
+#: legacy routes took no argument precisely because there was nothing safe to
+#: pass. Adding a directory here is a deliberate act.
+GENERATED_DIRECTORIES = {
+    "zipfiles": "Zip files deleted",
+    "inventoryMaker": "Inventory files deleted",
+}
+
+
+def delete_generated(directory: str) -> tuple[dict, int]:
+    """Empty one of the generated-file directories.
+
+    Only regular files are removed, and only directly inside it: the originals,
+    the web derivatives and the users' own uploads live elsewhere under the same
+    root, and a symlink placed here must not become a way to delete them. The
+    legacy version called ``os.remove`` on every entry, which raised on the
+    first subdirectory and left the rest in place - reported as a 500.
+    """
+    from archihub.core.i18n import gettext as _
+    from archihub.core.settings import get_settings
+
+    message = GENERATED_DIRECTORIES.get(directory)
+    if message is None:
+        raise ValueError(f"Not a generated-file directory: {directory!r}")
+
+    try:
+        path = filestore.resolve_within(get_settings().web_files_path, directory)
+        path.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        logger.exception("Could not open the %s directory", directory)
+        return {"msg": _("Error deleting the files")}, 500
+
+    removed = 0
+    for entry in path.iterdir():
+        try:
+            if entry.is_symlink() or entry.is_file():
+                entry.unlink()
+                removed += 1
+        except OSError:
+            logger.warning("Could not remove %s", entry)
+
+    logger.info("Removed %d file(s) from %s", removed, directory)
+    return {"msg": _(message)}, 200

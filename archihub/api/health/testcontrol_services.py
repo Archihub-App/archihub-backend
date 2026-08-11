@@ -60,29 +60,65 @@ def get_routes(app: FastAPI) -> tuple[dict, int]:
 # ---------------------------------------------------------------------------
 # Reset / reseed
 # ---------------------------------------------------------------------------
-# NOT YET PORTED. The reset flow wipes Mongo/Elasticsearch/Qdrant/Redis and then
-# reseeds through the onboarding path (`set_system_setting` + `set_first_time`
-# in app/api/system/services.py). Both of those live in the `system` domain,
-# which is ported in Phase 3 step 3, and the wipe runs as a Celery task, wired
-# in Phase 4.
-#
-# Until then these return 503 rather than silently appearing to work: a
-# test-control reset that no-ops would leave a suite running against stale data
-# and reporting green. During Phase 0-2 the diff harness seeds state through the
-# LEGACY backend's reset endpoint instead - both stacks share one database, so
-# that is sufficient. See tools/diff_harness.py.
-
-_NOT_PORTED_MSG = (
-    "Reset is not available on the FastAPI backend yet (ported in Phase 3/4). "
-    "Use the legacy backend's /health/test-control/reset against the same database."
-)
+# The work itself is `archihub/worker/tasks/testcontrol.py` - read that module
+# before changing anything here. These two functions only queue it and report on
+# it; the destructive part runs in a worker and re-checks the disposability gate
+# for itself, because a queued message outlives the request that created it.
 
 
 def start_reset() -> tuple[dict, int]:
-    logger.warning("test-control reset requested but not yet ported")
-    return {"msg": _NOT_PORTED_MSG}, 503
+    """Queue a wipe-and-reseed, returning the id to poll.
+
+    202, not 200: the reset has been accepted, not performed. Everything the
+    caller needs to follow it - and, later, the generated administrator
+    credentials - comes back through ``poll_reset``.
+    """
+    import uuid
+
+    from archihub.api.tasks import services as tasks_services
+    from archihub.worker.tasks.testcontrol import reset_task
+
+    run_id = str(uuid.uuid4())
+
+    try:
+        task = reset_task.delay(run_id)
+    except Exception:
+        # The broker is down. Saying so is better than a task id that will
+        # never resolve, which a runner would wait on until it timed out.
+        logger.exception("Could not queue a test-control reset")
+        return {"msg": "Could not queue the reset: the task queue is unavailable"}, 503
+
+    try:
+        tasks_services.add_task(task.id, "testcontrol.reset", "automatic", "msg")
+    except Exception:
+        # Bookkeeping only - the reset itself is already queued, and failing the
+        # request here would leave it running with the caller told it had not.
+        logger.warning("Reset %s queued but not recorded in the tasks collection", task.id)
+
+    return {"task_id": task.id, "run_id": run_id}, 202
 
 
 def poll_reset(task_id: str) -> tuple[dict, int]:
-    logger.warning("test-control reset poll requested but not yet ported")
-    return {"msg": _NOT_PORTED_MSG}, 503
+    """Whether a queued reset has finished, and what it produced.
+
+    Always 200 - the *request* succeeded; the reset's own outcome is in the
+    body's ``status``. That is the legacy contract and what the runner reads.
+    """
+    from archihub.api.tasks.services import _result
+
+    result = _result(task_id)
+
+    if result.state in ("PENDING", "STARTED", "RETRY"):
+        return {"status": "pending"}, 200
+
+    if result.state == "FAILURE":
+        # The reset's failure reason IS returned here, unlike everywhere else in
+        # this codebase. This endpoint exists only on an instance already marked
+        # disposable, and a runner that cannot see why a reset failed cannot
+        # report anything useful about the run that followed it.
+        return {"status": "failed", "error": str(result.result)}, 200
+
+    if result.successful():
+        return {"status": "completed", "result": result.result}, 200
+
+    return {"status": result.state.lower()}, 200

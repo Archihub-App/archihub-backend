@@ -11,11 +11,10 @@ TWO ROUTES ARE UNAUTHENTICATED, and both are deliberate:
   is nobody to authenticate as. Its guard is that the instance has no users, and
   that is re-checked inside the service rather than trusted from a prior call.
 
-NOT PORTED HERE: the maintenance routes that rebuild search indexes or load
-geometry (`regenerate-index`, `index-resources`, `index-geometries`,
-`regenerate-index-geometries`, `geo-load`, `zip-files-delete`,
-`inventory_files_delete`). They drive handlers owned by the `search` and
-`geosystem` domains and land with those.
+STILL NOT PORTED HERE: `/plugins/{name}` and `/get-actions`, which read a
+mounted plugin's own settings and actions, and `/restart`, which drives the
+SIGHUP supervisor. The first two need the plugin framework (Phase 5); the third
+needs the process model to be settled (Phase 7).
 
 Role failures keep the legacy 401 pending the coordinated frontend flip.
 """
@@ -217,6 +216,109 @@ def activate_plugin(
 def clear_cache(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
     """Flush the shared cache."""
     return _respond(services.clear_cache())
+
+
+# ---------------------------------------------------------------------------
+# Maintenance
+# ---------------------------------------------------------------------------
+# Every route in this section is administrator-only and queues, or performs, an
+# operation over the whole archive. They return as soon as the work is accepted;
+# progress is followed through `/tasks`.
+
+_MAINTENANCE_RESPONSES = {
+    200: {"description": "Queued"},
+    503: {"description": "The task queue is unavailable"},
+    **_ROLE_RESPONSES,
+}
+
+
+@router.get(
+    "/regenerate-index",
+    responses={
+        400: {"description": "Indexing is switched off"},
+        404: {"description": "No index settings are stored"},
+        **_MAINTENANCE_RESPONSES,
+    },
+)
+def regenerate_index(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """Rebuild the resources index under the current metadata schema.
+
+    Needed after a form gains or changes a field: Elasticsearch cannot alter an
+    existing field's type in place, so the index is recreated and the contents
+    copied across. This only rebuilds the *structure* - run `/index-resources`
+    afterwards to repopulate it from MongoDB.
+    """
+    return _respond(services.regenerate_index(current_user.username))
+
+
+@router.get(
+    "/index-resources",
+    responses={
+        400: {"description": "Indexing is switched off"},
+        404: {"description": "No index settings are stored"},
+        **_MAINTENANCE_RESPONSES,
+    },
+)
+def index_resources(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """Reindex every resource. Empties the index first."""
+    return _respond(services.index_resources(current_user.username))
+
+
+@router.get("/index-geometries", responses=_MAINTENANCE_RESPONSES)
+def index_geometries(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """Index the stored administrative boundaries for the explore map."""
+    return _respond(services.index_geometries(current_user.username))
+
+
+@router.get("/regenerate-index-geometries", responses=_MAINTENANCE_RESPONSES)
+def regenerate_index_geometries(
+    current_user: CurrentUser = Depends(require_admin),
+) -> JSONResponse:
+    """Rebuild the geometry index's structure."""
+    return _respond(services.regenerate_index_geometries(current_user.username))
+
+
+@router.get(
+    "/geo-load",
+    responses={
+        200: {"description": "Boundaries loaded"},
+        500: {"description": "The bundled boundary data could not be read"},
+        **_ROLE_RESPONSES,
+    },
+)
+def geo_load(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """Load the bundled administrative boundaries into MongoDB.
+
+    SYNCHRONOUS, and it should not be: it reads every bundled boundary file and
+    computes a spatial join per level, which on a full national dataset is
+    minutes. The legacy route was synchronous too and the frontend waits on it,
+    so the contract is preserved here rather than quietly changed to a queued
+    task - recorded as BACKEND_FINDINGS P13.
+    """
+    from archihub.api.geosystem import services as geo_services
+
+    return _respond(geo_services.upload_shapes())
+
+
+@router.get("/zip-files-delete", responses={200: {"description": "Removed"}, **_ROLE_RESPONSES})
+def zip_files_delete(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """Delete the cached bulk-download archives."""
+    from archihub.api.resources import files as resource_files
+
+    return _respond(resource_files.delete_generated("zipfiles"))
+
+
+@router.get(
+    "/inventory_files_delete", responses={200: {"description": "Removed"}, **_ROLE_RESPONSES}
+)
+def inventory_files_delete(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """Delete the generated inventory spreadsheets.
+
+    The path keeps its underscore - it is the URL an existing frontend calls.
+    """
+    from archihub.api.resources import files as resource_files
+
+    return _respond(resource_files.delete_generated("inventoryMaker"))
 
 
 @router.get(

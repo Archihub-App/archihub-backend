@@ -29,13 +29,18 @@
     "Volatile values (_id, createdAt, token, task_id, ...) are replaced with a",
     "type marker globally, so they never cause false failures."
   ],
-
   "fixtures": [
     {
       "name": "resource_id",
       "method": "POST",
       "path": "/resources/getall",
-      "body": { "post_type": ["carpeta", "test"], "page": 0 },
+      "body": {
+        "post_type": [
+          "carpeta",
+          "test"
+        ],
+        "page": 0
+      },
       "extract": "resources.0.id",
       "covers": "every resource detail, article, images, child-record and public-mirror case"
     },
@@ -43,7 +48,11 @@
       "name": "record_id",
       "method": "POST",
       "path": "/records",
-      "body": { "filters": {}, "page": 0, "limit": 1 },
+      "body": {
+        "filters": {},
+        "page": 0,
+        "limit": 1
+      },
       "extract": "0.id",
       "covers": "record detail, viewers, transcription, metadata and the public record mirror"
     },
@@ -69,7 +78,11 @@
       "name": "user_id",
       "method": "POST",
       "path": "/users",
-      "body": { "filters": {}, "page": 0, "limit": 1 },
+      "body": {
+        "filters": {},
+        "page": 0,
+        "limit": 1
+      },
       "extract": "0.id",
       "covers": "reading a single user"
     },
@@ -88,7 +101,6 @@
       "covers": "the public view-info route"
     }
   ],
-
   "cases": [
     {
       "name": "health: liveness",
@@ -114,7 +126,6 @@
         "Celery is excluded entirely because worker ping timing is racy."
       ]
     },
-
     {
       "name": "types: list all",
       "path": "/types",
@@ -135,7 +146,6 @@
       "path": "/types",
       "auth": false
     },
-
     {
       "name": "lists: list all",
       "path": "/lists",
@@ -157,7 +167,6 @@
       "path": "/lists",
       "auth": false
     },
-
     {
       "name": "forms: list all",
       "path": "/forms",
@@ -186,7 +195,6 @@
       "path": "/forms",
       "auth": false
     },
-
     {
       "name": "auth: unknown user is byte-identical to wrong password",
       "method": "POST",
@@ -203,12 +211,15 @@
         "ORDER-DEPENDENT - see _expected_differences."
       ]
     },
-
     {
       "name": "users: list all",
       "method": "POST",
       "path": "/users",
-      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "body": {
+        "filters": {},
+        "page": 0,
+        "limit": 20
+      },
       "auth": true
     },
     {
@@ -222,7 +233,10 @@
       "path": "/users/me",
       "auth": true,
       "expect_status": 200,
-      "expect_absent": ["password", "lastRequest"],
+      "expect_absent": [
+        "password",
+        "lastRequest"
+      ],
       "_note": [
         "`lastRequest` is asserted ABSENT, not present. An earlier revision of",
         "the port added it and `requests` here on a misread harness diff; the",
@@ -257,7 +271,9 @@
       "name": "users: favorites list",
       "method": "POST",
       "path": "/users/favorites_list",
-      "body": { "page": 0 },
+      "body": {
+        "page": 0
+      },
       "auth": true
     },
     {
@@ -270,14 +286,18 @@
       "path": "/users/api-keys",
       "auth": true,
       "expect_status": 200,
-      "expect_absent": ["key", "secret", "token", "hash"],
+      "expect_absent": [
+        "key",
+        "secret",
+        "token",
+        "hash"
+      ],
       "_note": [
         "New in the port - there is no legacy route to diff against. Keys are",
         "hashed at rest and shown once at creation; a listing that could return",
         "one would defeat the redesign. See API_KEYS_FRONTEND_NOTES.md."
       ]
     },
-
     {
       "name": "system: settings",
       "method": "GET",
@@ -325,12 +345,13 @@
       "path": "/system",
       "auth": false
     },
-
     {
       "name": "logs: list",
       "method": "POST",
       "path": "/logs",
-      "body": { "page": 0 },
+      "body": {
+        "page": 0
+      },
       "auth": true
     },
     {
@@ -342,10 +363,11 @@
       "name": "logs: for a resource",
       "method": "POST",
       "path": "/logs/resource/${resource_id}",
-      "body": { "page": 0 },
+      "body": {
+        "page": 0
+      },
       "auth": true
     },
-
     {
       "name": "tasks: list",
       "method": "GET",
@@ -357,12 +379,13 @@
       "path": "/tasks/total/admin@test.com",
       "auth": true
     },
-
     {
       "name": "usertasks: missing both ids is refused",
       "method": "POST",
       "path": "/usertasks",
-      "body": { "page": 0 },
+      "body": {
+        "page": 0
+      },
       "auth": true
     },
     {
@@ -380,12 +403,17 @@
       "path": "/usertasks/record/${record_id}",
       "auth": true
     },
-
     {
       "name": "resources: listing",
       "method": "POST",
       "path": "/resources/getall",
-      "body": { "post_type": ["carpeta", "test"], "page": 0 },
+      "body": {
+        "post_type": [
+          "carpeta",
+          "test"
+        ],
+        "page": 0
+      },
       "auth": true,
       "_note": "F37: this listing lost metadata.firstLevel.title from its projection. Diffed so it cannot recur."
     },
@@ -393,17 +421,29 @@
       "name": "resources: listing keeps the title the browse screen renders",
       "method": "POST",
       "path": "/resources/getall",
-      "body": { "post_type": ["carpeta", "test"], "page": 0 },
+      "body": {
+        "post_type": [
+          "carpeta",
+          "test"
+        ],
+        "page": 0
+      },
       "auth": true,
       "expect_status": 200,
-      "expect_present": ["title"],
+      "expect_present": [
+        "title"
+      ],
       "_note": "F37 as a contract, so it outlives legacy."
     },
     {
       "name": "resources: wrong-shaped listing body",
       "method": "POST",
       "path": "/resources",
-      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "body": {
+        "filters": {},
+        "page": 0,
+        "limit": 20
+      },
       "auth": true,
       "_note": "POST /resources is the multipart CREATE route. A JSON body is a client error; legacy 500s on KeyError 'data', the port answers 422."
     },
@@ -411,14 +451,22 @@
       "name": "resources: tree",
       "method": "POST",
       "path": "/resources/tree",
-      "body": { "view": "tree", "root": "all", "tree": [] },
+      "body": {
+        "view": "tree",
+        "root": "all",
+        "tree": []
+      },
       "auth": true
     },
     {
       "name": "resources: public tree",
       "method": "POST",
       "path": "/resources/public/tree",
-      "body": { "view": "tree", "root": "all", "tree": [] },
+      "body": {
+        "view": "tree",
+        "root": "all",
+        "tree": []
+      },
       "auth": false
     },
     {
@@ -437,7 +485,11 @@
       "path": "/resources/${resource_id}",
       "auth": true,
       "expect_status": 200,
-      "expect_present": ["fields", "icon", "children"]
+      "expect_present": [
+        "fields",
+        "icon",
+        "children"
+      ]
     },
     {
       "name": "resources: public detail",
@@ -449,7 +501,11 @@
       "path": "/resources/public/${resource_id}",
       "auth": false,
       "expect_status": 200,
-      "expect_present": ["fields", "icon", "children"],
+      "expect_present": [
+        "fields",
+        "icon",
+        "children"
+      ],
       "_note": "ResourcesService.getOne renders both routes with one component, so both must carry these."
     },
     {
@@ -466,14 +522,18 @@
       "name": "resources: child records",
       "method": "POST",
       "path": "/resources/${resource_id}/records",
-      "body": { "page": 0 },
+      "body": {
+        "page": 0
+      },
       "auth": true
     },
     {
       "name": "resources: public child records",
       "method": "POST",
       "path": "/resources/public/${resource_id}/records",
-      "body": { "page": 0 },
+      "body": {
+        "page": 0
+      },
       "auth": false
     },
     {
@@ -490,7 +550,12 @@
       "name": "resources: public listing",
       "method": "POST",
       "path": "/resources/getall/public",
-      "body": { "post_type": ["carpeta"], "page": 0 },
+      "body": {
+        "post_type": [
+          "carpeta"
+        ],
+        "page": 0
+      },
       "auth": false
     },
     {
@@ -510,12 +575,15 @@
         "precedence to /resources/{resource_id}, which app_factory asserts."
       ]
     },
-
     {
       "name": "records: get by filters",
       "method": "POST",
       "path": "/records",
-      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "body": {
+        "filters": {},
+        "page": 0,
+        "limit": 20
+      },
       "auth": true,
       "_note": "`filepath` no longer returned - see _expected_differences."
     },
@@ -523,10 +591,16 @@
       "name": "records: the listing does not disclose server paths",
       "method": "POST",
       "path": "/records",
-      "body": { "filters": {}, "page": 0, "limit": 20 },
+      "body": {
+        "filters": {},
+        "page": 0,
+        "limit": 20
+      },
       "auth": true,
       "expect_status": 200,
-      "expect_absent": ["filepath"],
+      "expect_absent": [
+        "filepath"
+      ],
       "_note": "Two things never leave the records API: filepath and the raw processing block."
     },
     {
@@ -539,7 +613,9 @@
       "path": "/records/${record_id}",
       "auth": true,
       "expect_status": 200,
-      "expect_absent": ["filepath"]
+      "expect_absent": [
+        "filepath"
+      ]
     },
     {
       "name": "records: public detail",
@@ -551,7 +627,9 @@
       "path": "/records/public/${record_id}",
       "auth": false,
       "expect_status": 200,
-      "expect_absent": ["filepath"]
+      "expect_absent": [
+        "filepath"
+      ]
     },
     {
       "name": "records: document info",
@@ -562,21 +640,36 @@
       "name": "records: page images",
       "method": "POST",
       "path": "/records/${record_id}/pages",
-      "body": { "pages": [0], "size": "small" },
+      "body": {
+        "pages": [
+          0
+        ],
+        "size": "small"
+      },
       "auth": true
     },
     {
       "name": "records: public page images",
       "method": "POST",
       "path": "/records/public/${record_id}/pages",
-      "body": { "pages": [0], "size": "small" },
+      "body": {
+        "pages": [
+          0
+        ],
+        "size": "small"
+      },
       "auth": false
     },
     {
       "name": "records: a viewer size outside the allowlist is refused",
       "method": "POST",
       "path": "/records/${record_id}/pages",
-      "body": { "pages": [0], "size": "../../../../etc" },
+      "body": {
+        "pages": [
+          0
+        ],
+        "size": "../../../../etc"
+      },
       "auth": true,
       "expect_status": 400,
       "_note": [
@@ -590,7 +683,12 @@
       "name": "records: a public viewer size outside the allowlist is refused",
       "method": "POST",
       "path": "/records/public/${record_id}/pages",
-      "body": { "pages": [0], "size": "../../../../etc" },
+      "body": {
+        "pages": [
+          0
+        ],
+        "size": "../../../../etc"
+      },
       "auth": false,
       "expect_status": 400,
       "_note": "S18 again - the public mirror was equally exposed and unauthenticated."
@@ -599,7 +697,12 @@
       "name": "records: a negative page index is refused",
       "method": "POST",
       "path": "/records/${record_id}/pages",
-      "body": { "pages": [-1], "size": "small" },
+      "body": {
+        "pages": [
+          -1
+        ],
+        "size": "small"
+      },
       "auth": true,
       "expect_status": 400,
       "_note": "A negative index must not count back from the end of a document."
@@ -622,14 +725,20 @@
       "name": "records: gallery info",
       "method": "POST",
       "path": "/records/galleryinfo",
-      "body": { "resource": "${resource_id}", "page": 0 },
+      "body": {
+        "resource": "${resource_id}",
+        "page": 0
+      },
       "auth": true
     },
     {
       "name": "records: public gallery info",
       "method": "POST",
       "path": "/records/public/galleryinfo",
-      "body": { "resource": "${resource_id}", "page": 0 },
+      "body": {
+        "resource": "${resource_id}",
+        "page": 0
+      },
       "auth": false
     },
     {
@@ -654,7 +763,6 @@
       "expect_status": 404,
       "_note": "Also proves the public router still mounts before /records/{record_id}."
     },
-
     {
       "name": "views: public listing",
       "path": "/views",
@@ -675,14 +783,16 @@
       "path": "/views",
       "auth": false,
       "expect_status": 200,
-      "expect_absent": ["filesObj", "filepath"],
+      "expect_absent": [
+        "filesObj",
+        "filepath"
+      ],
       "_note": [
         "S25 - the legacy models declared filesObj, so editing one field could",
         "publish any image in the archive. GET /views is unauthenticated, so",
         "this is an anonymous exposure. filesObj is absent from CLIENT_FIELDS."
       ]
     },
-
     {
       "name": "snaps: unknown snap is 404",
       "path": "/snaps/000000000000000000000000",
@@ -693,26 +803,34 @@
       "path": "/snaps/public/000000000000000000000000",
       "auth": false
     },
-
     {
       "name": "geosystem: level 0",
       "method": "POST",
       "path": "/geosystem/level",
-      "body": { "level": 0 },
+      "body": {
+        "level": 0
+      },
       "auth": false
     },
     {
       "name": "geosystem: polygon needs a level",
       "method": "POST",
       "path": "/geosystem/polygon",
-      "body": { "ident": "05" },
+      "body": {
+        "ident": "05"
+      },
       "auth": false
     },
     {
       "name": "geosystem: an object where a string belongs is refused",
       "method": "POST",
       "path": "/geosystem/polygon",
-      "body": { "level": 1, "ident": { "$ne": null } },
+      "body": {
+        "level": 1,
+        "ident": {
+          "$ne": null
+        }
+      },
       "auth": false,
       "expect_status": 400,
       "_note": [
@@ -725,16 +843,22 @@
       "name": "geosystem: an out-of-range level is refused",
       "method": "POST",
       "path": "/geosystem/level",
-      "body": { "level": 99999 },
+      "body": {
+        "level": 99999
+      },
       "auth": false,
       "expect_status": 400
     },
-
     {
       "name": "search: authenticated",
       "method": "POST",
       "path": "/search",
-      "body": { "post_type": ["carpeta"], "page": 0 },
+      "body": {
+        "post_type": [
+          "carpeta"
+        ],
+        "page": 0
+      },
       "auth": true,
       "_note": "Legacy 404s when indexing is off (blueprint never registered); the port answers 503. See _expected_differences."
     },
@@ -742,7 +866,12 @@
       "name": "search: availability is answered per request, not at construction",
       "method": "POST",
       "path": "/search",
-      "body": { "post_type": ["carpeta"], "page": 0 },
+      "body": {
+        "post_type": [
+          "carpeta"
+        ],
+        "page": 0
+      },
       "auth": true,
       "expect_status": 503,
       "_note": [
@@ -757,7 +886,13 @@
       "name": "search: a public caller cannot ask for drafts",
       "method": "POST",
       "path": "/search/public",
-      "body": { "post_type": ["carpeta"], "status": "draft", "page": 0 },
+      "body": {
+        "post_type": [
+          "carpeta"
+        ],
+        "status": "draft",
+        "page": 0
+      },
       "auth": false,
       "expect_status": 503,
       "_note": [
@@ -775,7 +910,6 @@
       "path": "/search/public/rss",
       "auth": false
     },
-
     {
       "name": "aiservices: dialects are code, not configuration",
       "path": "/aiservices/dialects",
@@ -793,7 +927,13 @@
       "path": "/aiservices/providers",
       "auth": true,
       "expect_status": 200,
-      "expect_absent": ["key", "api_key", "apiKey", "credential", "password"],
+      "expect_absent": [
+        "key",
+        "api_key",
+        "apiKey",
+        "credential",
+        "password"
+      ],
       "_note": [
         "providers.present() is the only serialiser and cannot emit the key - it",
         "returns has_key and a key_fingerprint so two keys can be told apart",
@@ -825,7 +965,6 @@
       "auth": true,
       "expect_status": 400
     },
-
     {
       "name": "adminApi: system info without a Fernet token",
       "path": "/adminApi/get_system_info",
@@ -835,14 +974,18 @@
       "name": "adminApi: lookup without a Fernet token",
       "method": "POST",
       "path": "/adminApi/get_id",
-      "body": { "ident": "AH-001" },
+      "body": {
+        "ident": "AH-001"
+      },
       "auth": false
     },
     {
       "name": "adminApi: a Mongo operator in the lookup body never executes",
       "method": "POST",
       "path": "/adminApi/get_id",
-      "body": { "$where": "sleep(5000)" },
+      "body": {
+        "$where": "sleep(5000)"
+      },
       "auth": false,
       "expect_status": 404,
       "_note": [
@@ -871,7 +1014,10 @@
       "name": "publicApi: listing without a Fernet token",
       "method": "POST",
       "path": "/publicApi",
-      "body": { "post_type": "carpeta", "page": 0 },
+      "body": {
+        "post_type": "carpeta",
+        "page": 0
+      },
       "auth": false
     },
     {
@@ -883,9 +1029,67 @@
       "name": "publicApi: resource without a Fernet token",
       "path": "/publicApi/resources/${resource_id}",
       "auth": false
+    },
+    {
+      "name": "system: index maintenance is administrator-only",
+      "path": "/system/index-resources",
+      "auth": false,
+      "expect_status": 401,
+      "_note": [
+        "CONTRACT, NOT PARITY, and deliberately the unauthenticated case: a",
+        "parity case here would QUEUE A FULL REINDEX on the shared database, and",
+        "an authenticated one would do it twice. What is checkable without",
+        "writing anything is that the route exists and refuses - which a route",
+        "inventory cannot tell you, because it does not see the guard.",
+        "Phase 4. The queued behaviour is covered by tests/test_worker_tasks.py."
+      ]
+    },
+    {
+      "name": "system: index regeneration is administrator-only",
+      "path": "/system/regenerate-index",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "system: geometry indexing is administrator-only",
+      "path": "/system/index-geometries",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "system: geometry regeneration is administrator-only",
+      "path": "/system/regenerate-index-geometries",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "system: boundary loading is administrator-only",
+      "path": "/system/geo-load",
+      "auth": false,
+      "expect_status": 401,
+      "_note": [
+        "Not fired with a token even at the port: the loader deletes and rewrites",
+        "every shape at every administrative level, which is a real write to the",
+        "shared database."
+      ]
+    },
+    {
+      "name": "system: generated-file cleanup is administrator-only",
+      "path": "/system/zip-files-delete",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "system: inventory cleanup keeps its underscore path",
+      "path": "/system/inventory_files_delete",
+      "auth": false,
+      "expect_status": 401,
+      "_note": [
+        "The path is inconsistent with every neighbour and is kept exactly:",
+        "it is the URL the existing frontend calls."
+      ]
     }
   ],
-
   "_expected_differences": [
     "Parity cases that differ ON PURPOSE. Re-triaged 2026-08-10 against the",
     "running legacy backend. 51/80 parity + 25/25 contract; every one of the 29",
