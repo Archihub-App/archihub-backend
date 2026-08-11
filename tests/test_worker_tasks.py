@@ -407,6 +407,69 @@ def test_every_expected_task_name_is_registered():
     assert REGISTERED_TASK_NAMES <= set(celery_app.tasks)
 
 
+def test_plugins_are_loaded_in_the_workers_parent_process():
+    """Celery's consumer runs in the MAIN process. It looks each message's task
+    name up in `app.tasks` and dispatches to a child only if it finds one; a
+    name the parent does not know is answered NotRegistered and the message is
+    DROPPED before any child sees it.
+
+    So plugin task registration has to happen on `celeryd_init` (parent, before
+    the consumer starts), not only on `worker_process_init` (per forked child).
+    An earlier revision of this port hooked only the latter: the worker reported
+    `ready`, looked healthy, and would have discarded every plugin job on
+    arrival. The visible tell was the startup banner listing six task names
+    instead of fifteen.
+    """
+    import weakref
+
+    from celery.signals import celeryd_init, worker_process_init
+
+    from archihub.worker import celery_app as module
+
+    def listeners(signal) -> set[str]:
+        # Receivers are held weakly, so an entry may be a weakref rather than
+        # the function itself.
+        names = set()
+        for _, receiver in signal.receivers:
+            if isinstance(receiver, weakref.ReferenceType):
+                receiver = receiver()
+            if receiver is not None and hasattr(receiver, "__name__"):
+                names.add(receiver.__name__)
+        return names
+
+    parent = listeners(celeryd_init)
+    child = listeners(worker_process_init)
+
+    assert "_init_worker" in parent, "nothing runs in the worker's parent process"
+    assert "_init_worker_process" in child
+
+    # And both paths must go through the same loader.
+    import inspect
+
+    assert "_load_plugins" in inspect.getsource(module._init_worker)
+    assert "_load_plugins" in inspect.getsource(module._init_worker_process)
+
+
+def test_loading_plugins_twice_is_harmless():
+    """It happens under prefork: once in the parent, once per forked child.
+    `mount_plugins` rebuilds its registry and `hooks.register` de-duplicates,
+    which is what makes the belt-and-braces safe."""
+    from archihub.core.hooks import get_hook_handler
+    from archihub.worker.celery_app import _load_plugins
+
+    hooks = get_hook_handler()
+    hooks.unregister_all()
+
+    _load_plugins()
+    after_first = {name: len(regs) for name, regs in hooks.hooks.items()}
+    _load_plugins()
+    after_second = {name: len(regs) for name, regs in hooks.hooks.items()}
+
+    assert after_first == after_second
+
+    hooks.unregister_all()
+
+
 def test_the_registered_names_are_the_legacy_ones():
     """These strings key queued Redis messages and every row already in the
     `tasks` collection. Changing one silently orphans both."""

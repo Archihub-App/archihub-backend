@@ -29,7 +29,7 @@ import logging
 import sys
 
 from celery import Celery
-from celery.signals import worker_process_init
+from celery.signals import celeryd_init, worker_process_init
 
 from archihub.core.settings import get_settings
 
@@ -81,19 +81,31 @@ celery_app.set_default()
 celery_app.autodiscover_tasks(["archihub.worker"], force=False)
 
 
-@worker_process_init.connect
-def _init_worker_process(**_kwargs) -> None:
-    """Prepare a freshly forked worker process.
+@celeryd_init.connect
+def _init_worker(**_kwargs) -> None:
+    """Prepare the worker's MAIN process, before it forks or consumes anything.
 
-    Two jobs, both consequences of removing Flask:
+    Three jobs, and the order is the point.
 
     1. Enforce the unported-plugin guard here as well as in the web process. A
        worker that started while the web process refused would execute tasks
        against an instance whose configuration the application has rejected.
-    2. Configure logging. Each worker is a separate forked process, so the
-       handlers installed by the ASGI app factory do not exist here - without
-       this, task log output would fall back to Celery's default and lose the
-       structured format and correlation ids.
+    2. Configure logging, so task output keeps the structured format and the
+       correlation ids rather than falling back to Celery's default.
+    3. **Build the plugins, which is what registers their Celery tasks.**
+
+    THE THIRD ONE MUST HAPPEN IN THE PARENT, and it is worth being explicit
+    about why. Celery's consumer runs in the main process: it looks each
+    incoming message's task name up in ``app.tasks`` and dispatches to a child
+    only if it finds one. A name the parent does not know is answered
+    ``NotRegistered`` and the message is dropped - **before any child sees it**.
+
+    An earlier version of this hooked ``worker_process_init``, which fires per
+    forked child. The nine plugin tasks were then absent from the parent's
+    registry, so every plugin job would have been discarded on arrival while the
+    worker looked perfectly healthy - it would even have reported ``ready``. The
+    symptom is the startup banner: ``[tasks]`` listed six names instead of
+    fifteen.
     """
     from archihub.core.logging import configure_logging
 
@@ -111,24 +123,43 @@ def _init_worker_process(**_kwargs) -> None:
         )
         raise
 
-    # Register the hooks that fire plugin tasks on resource and file events.
-    # WORKER PROCESS ONLY, and per forked process rather than once in the
-    # parent: hook registrations live in a module-level singleton, and a fork
-    # inherits whatever the parent had at fork time - which for a `spawn` start
-    # method is nothing at all.
+    _load_plugins()
+
+
+@worker_process_init.connect
+def _init_worker_process(**_kwargs) -> None:
+    """Prepare a freshly forked child.
+
+    Re-runs the plugin load rather than trusting inheritance. Under the default
+    prefork pool a child inherits the parent's module state and this is a no-op;
+    under a ``spawn`` start method it inherits nothing, and without this the
+    child would have no hook registrations - so automatic file processing would
+    silently never fire. Both ``mount_plugins`` and ``hooks.register`` are
+    idempotent, which is what makes running it twice safe.
+    """
+    _load_plugins()
+
+
+def _load_plugins() -> None:
+    """Build the active plugins and register their hooks. Never fatal.
+
+    Building is what imports each plugin module and therefore what runs its
+    ``@shared_task`` decorators. ``activate_settings`` then registers the hooks
+    that fire those tasks on resource and file events - worker-side only,
+    because registering them in the web process would dispatch the chains from
+    whichever process happened to serve the request.
+    """
     try:
         from archihub.plugins.framework.mounting import (
             activate_plugin_settings,
             mount_plugins,
         )
 
-        # Built without an app: a worker needs the plugin objects and their task
-        # registrations, not their routers.
         mount_plugins(_NoRouterApp())
         activate_plugin_settings()
     except Exception:
         logging.getLogger(__name__).exception(
-            "Could not activate plugin hooks; automatic processing will not run"
+            "Could not load plugins; their tasks and automatic processing will not run"
         )
 
 
