@@ -297,3 +297,30 @@ def _register_routers(app: FastAPI) -> None:
     # every instance; it is the per-request dependency that 404s them when the
     # instance is not disposable - not their absence from the routing table.
     include_router(app, test_control_router)
+
+    # Plugins LAST, so a plugin can never shadow a core route by declaring a
+    # colliding path. Their prefixes are their own slugs, which makes a
+    # collision unlikely rather than impossible - `views` is both a core domain
+    # and a plausible plugin name.
+    _mount_plugins(app)
+
+
+def _mount_plugins(app: FastAPI) -> None:
+    """Mount every active, ported plugin. Never fatal.
+
+    The decision that CAN refuse startup - an active plugin this backend does
+    not support at all - was already made in `_check_plugin_readiness`, before
+    any route was built. By the time we get here the remaining failure is a
+    plugin that is supported but broken, and taking the whole instance down for
+    that means one plugin's missing dependency denies access to the archive.
+    """
+    from archihub.plugins.framework.mounting import mount_plugins
+
+    try:
+        mounted = mount_plugins(app)
+    except Exception:
+        logger.exception("Plugin mounting failed; continuing without plugins")
+        return
+
+    if mounted:
+        logger.info("Mounted %d plugin(s): %s", len(mounted), ", ".join(sorted(mounted)))

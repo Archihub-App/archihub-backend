@@ -50,23 +50,33 @@ def test_unported_plugin_is_refused():
         check_active_plugins(["ocrProcessing"])
 
 
-def test_message_distinguishes_in_scope_from_out_of_scope():
-    """An operator needs to know whether to wait or to take action."""
+def test_message_distinguishes_in_scope_from_out_of_scope(monkeypatch):
+    """An operator needs to know whether to wait or to take action.
+
+    ``IN_SCOPE_PLUGINS`` is empty now that all five are ported, so the
+    distinction is exercised with a hypothetical entry - the message-building
+    code is what is under test, and it has to keep working for whichever plugin
+    is scheduled next.
+    """
+    from archihub.plugins.framework import ported_registry
+
+    monkeypatch.setattr(ported_registry, "IN_SCOPE_PLUGINS", frozenset({"transcribeWhisperX"}))
+
     with pytest.raises(UnportedPluginError) as exc:
-        check_active_plugins(["filesProcessing", "mqttHandler"])
+        check_active_plugins(["transcribeWhisperX", "mqttHandler"])
 
     message = str(exc.value)
     assert "Being ported in this migration" in message
     assert "Not part of this migration" in message
-    assert "filesProcessing" in message
+    assert "transcribeWhisperX" in message
     assert "mqttHandler" in message
     # and it must say what to actually do
     assert "active_plugins" in message
 
 
-def test_every_in_scope_plugin_is_named():
-    """Guards against a plugin silently dropping off the roadmap."""
-    assert IN_SCOPE_PLUGINS == {
+def test_the_five_in_scope_plugins_are_ported():
+    """Phase 5. Guards against one silently dropping off the roadmap."""
+    assert PORTED_PLUGINS == {
         "filesProcessing",
         "inventoryMaker",
         "liquidText",
@@ -75,9 +85,24 @@ def test_every_in_scope_plugin_is_named():
     }
 
 
-def test_ported_plugins_are_a_subset_of_reality():
-    """Anything marked ported must be either in scope or deliberately added."""
-    assert PORTED_PLUGINS <= IN_SCOPE_PLUGINS
+def test_nothing_is_marked_ported_that_cannot_be_imported():
+    """The registry is what decides whether an instance may boot at all.
+
+    A slug listed here that has no package means the guard passes and the mount
+    then fails - the instance comes up missing a feature, which is the exact
+    outcome the guard exists to prevent.
+    """
+    from archihub.plugins.framework.discovery import import_plugin
+
+    for slug in PORTED_PLUGINS:
+        module = import_plugin(slug)
+        assert callable(getattr(module, "build", None)), f"{slug} exposes no build()"
+        assert isinstance(getattr(module, "plugin_info", None), dict), f"{slug} has no plugin_info"
+
+
+def test_in_scope_and_ported_do_not_overlap():
+    """A plugin is one or the other; being in both makes the message contradict itself."""
+    assert not (PORTED_PLUGINS & IN_SCOPE_PLUGINS)
 
 
 # ---------------------------------------------------------------------------

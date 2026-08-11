@@ -322,7 +322,53 @@ def test_the_plugin_proxy_refuses_rather_than_reaching_a_route_that_is_not_there
 
     response = router.plugin_proxy("x", "../../users/delete", identity=Identity())
 
-    assert response.status_code == 501
+    # 404: no plugin named "x" is mounted, so there is nothing to resolve
+    # against - which is the answer whatever the endpoint string contained.
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "../../users/delete",
+        "..%2f..%2fusers",
+        "bulk/../../../system/clear-cache",
+        "settings/../../../../etc/passwd",
+        "",
+    ],
+)
+def test_a_traversal_string_resolves_to_nothing(monkeypatch, endpoint):
+    """S30. Resolution is against the plugin's OWN route list, so a traversal
+    string simply matches none of them - there is nothing to filter because the
+    only reachable values come from a table the application built."""
+    from archihub.api.external import router
+    from archihub.plugins.framework.mounting import _mounted
+    from archihub.plugins.liquidText import build
+
+    plugin = build()
+    plugin.build()
+    _mounted["liquidText"] = plugin
+    try:
+        assert router.resolve_plugin_route("liquidText", endpoint) is None
+    finally:
+        _mounted.clear()
+
+
+def test_a_real_plugin_endpoint_resolves():
+    """The counterpart: resolution has to actually work, or the 404 above would
+    be indistinguishable from the feature being broken."""
+    from archihub.api.external import router
+    from archihub.plugins.framework.mounting import _mounted
+    from archihub.plugins.liquidText import build
+
+    plugin = build()
+    plugin.build()
+    _mounted["liquidText"] = plugin
+    try:
+        assert router.resolve_plugin_route("liquidText", "bulk") == "/liquidText/bulk"
+        assert router.resolve_plugin_route("liquidText", "/bulk/") == "/liquidText/bulk"
+    finally:
+        _mounted.clear()
 
 
 def test_the_routes_keep_their_legacy_paths():

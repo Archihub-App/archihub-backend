@@ -354,6 +354,30 @@ def set_plugin_active(slug: str, active: bool, current_user: str) -> tuple[dict,
     }, 200
 
 
+def toggle_plugin(slug: str, current_user: str) -> tuple[dict, int]:
+    """Flip a plugin's activation, refusing an unknown slug.
+
+    The legacy version listed the ``app/plugins`` directory to decide whether a
+    plugin exists, so it accepted the name of any directory present on disk -
+    including one this backend cannot mount. It also toggled first and checked
+    afterwards in the activation direction.
+    """
+    from archihub.plugins.framework.discovery import _validate_slug
+    from archihub.plugins.framework.ported_registry import PORTED_PLUGINS
+
+    try:
+        _validate_slug(slug)
+    except Exception:
+        return {"msg": _("Plugin does not exist")}, 404
+
+    if slug not in PORTED_PLUGINS:
+        return {"msg": _("Plugin does not exist")}, 404
+
+    record = get_setting("active_plugins") or {}
+    currently_active = slug in (record.get("data") or [])
+    return set_plugin_active(slug, not currently_active, current_user)
+
+
 # ---------------------------------------------------------------------------
 # Cache
 # ---------------------------------------------------------------------------

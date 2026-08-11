@@ -1,0 +1,86 @@
+"""Capabilities one plugin provides to another.
+
+There is exactly one such dependency among the five in scope, and the legacy
+code expressed it as a direct import across plugin package boundaries:
+
+```python
+try:
+    from app.plugins.filesProcessing.utils.DocumentProcessing import convert_to_pdf_with_libreoffice
+except Exception as e:
+    raise Exception('Error al importar el módulo del plugin para el procesamiento de documentos: ' + str(e))
+```
+
+Three things are wrong with that, and only the third is obvious:
+
+1. It couples ``liquidText`` to ``filesProcessing``'s *internal file layout*.
+   Moving a helper inside filesProcessing breaks a different plugin.
+2. It bypasses activation entirely — the import succeeds whether or not
+   ``filesProcessing`` is active on this instance, so a deactivated plugin's
+   code still runs.
+3. The failure arrives from inside a Celery task as a sentence about a Python
+   import, which tells an operator nothing about what to do.
+
+A provider registers here; a consumer asks for the capability by name and gets a
+clear refusal naming the plugin to activate. Registration happens when the
+providing plugin is built, so it follows activation rather than the filesystem.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Callable
+
+logger = logging.getLogger(__name__)
+
+#: capability name -> (providing plugin slug, callable)
+_providers: dict[str, tuple[str, Callable]] = {}
+
+
+class CapabilityUnavailable(RuntimeError):
+    """No active plugin provides the requested capability."""
+
+
+def provide(capability: str, slug: str, func: Callable) -> None:
+    """Register ``func`` as this instance's provider of ``capability``."""
+    existing = _providers.get(capability)
+    if existing and existing[0] != slug:
+        logger.warning(
+            "Plugin %s is replacing %s as the provider of %s", slug, existing[0], capability
+        )
+    _providers[capability] = (slug, func)
+
+
+def get(capability: str, *, needed_by: str = "", provider_hint: str = "") -> Callable:
+    """The registered provider, or a refusal that says what to activate."""
+    entry = _providers.get(capability)
+    if entry is None:
+        hint = f" Activate the {provider_hint} plugin." if provider_hint else ""
+        context = f" ({needed_by} needs it.)" if needed_by else ""
+        raise CapabilityUnavailable(
+            f"No active plugin provides '{capability}'.{hint}{context}"
+        )
+    return entry[1]
+
+
+def has(capability: str) -> bool:
+    return capability in _providers
+
+
+def reset() -> None:
+    """Drop every registration. Used by tests and when remounting."""
+    _providers.clear()
+
+
+# ---------------------------------------------------------------------------
+# The capabilities themselves
+# ---------------------------------------------------------------------------
+
+PDF_CONVERSION = "document.to_pdf"
+
+
+def convert_to_pdf(source, destination) -> None:
+    """Convert a document to PDF using whichever plugin provides it."""
+    converter = get(
+        PDF_CONVERSION, needed_by="PDF export", provider_hint="filesProcessing"
+    )
+    converter(source, destination)

@@ -316,35 +316,70 @@ def plugin_proxy(
 ) -> JSONResponse:
     """Reach a plugin's endpoint with an admin API token instead of a JWT.
 
-    **Answers 501 until the plugin framework lands in Phase 5**, because there
-    are no plugin routes to reach yet and returning a 404 would be
-    indistinguishable from "that plugin endpoint does not exist".
+    THE TARGET IS RESOLVED, NEVER ASSEMBLED, and that is the whole design.
 
-    The legacy implementation is not reproduced and should not be. It built its
-    target as ``f"/{plugin}/{pluginEndpoint}"`` where ``pluginEndpoint`` is a
-    path converter — so ``..`` segments in it resolved to **any route in the
-    application**, not just a plugin's — then re-entered the WSGI stack through
-    ``current_app.test_client()`` with the caller's headers, stripped the
-    ``Authorization`` header, and copied the inner response's headers out
-    verbatim (including ``Content-Length`` and ``Transfer-Encoding``, which can
-    desynchronise the outer response).
+    The legacy implementation built it as ``f"/{plugin}/{pluginEndpoint}"``
+    where ``pluginEndpoint`` is a **path converter** — so ``..`` segments in it
+    resolved to any route in the application, not just a plugin's — then
+    re-entered the WSGI stack through ``current_app.test_client()`` with the
+    caller's headers, and copied the inner response's headers out verbatim
+    (``Content-Length`` included, which can desynchronise the outer response).
+    BACKEND_FINDINGS S30.
 
-    When this is implemented, the target must be resolved against the **plugin
-    registry** — the mounted routes of a named, active plugin — rather than
-    assembled from a string, so traversal is structurally impossible rather than
-    filtered.
+    Here the named plugin is looked up in the **mounted registry** — so it must
+    be active and ported — and the endpoint must match one of that plugin's own
+    declared route paths *exactly*. A traversal string does not match any of
+    them, which is why filtering `..` is unnecessary: there is nothing to filter
+    when the only reachable values come from a list the application built.
+
+    It still answers 501, and deliberately: resolution is implemented and
+    testable, but re-dispatching a request into the ASGI stack with a *different*
+    identity is a second, separate decision (the inner route's own
+    ``Depends(get_current_user)`` would reject a Fernet identity, so honouring
+    this means teaching those routes about a second principal). Nothing in
+    ``upgrade_front`` calls it; an outside integration that does gets an explicit
+    "not implemented" rather than a proxy with an authorisation model nobody has
+    reviewed.
     """
     if not _enabled(ADMIN_SETTING):
         return _unavailable()
 
-    logger.info(
-        "Plugin proxy called for %s/%s by %s; plugins are not ported yet",
-        plugin, plugin_endpoint, identity.username,
-    )
+    target = resolve_plugin_route(plugin, plugin_endpoint)
+    if target is None:
+        logger.info(
+            "Plugin proxy: no route %s/%s (asked for by %s)",
+            plugin, plugin_endpoint, identity.username,
+        )
+        # The same body as any path that does not exist - which, to an outside
+        # integration asking for an endpoint of a plugin this instance does not
+        # run, it does not.
+        return _unavailable()
+
+    logger.info("Plugin proxy resolved %s but dispatch is not implemented", target)
     return JSONResponse(
         status_code=501,
         content={"msg": _("Plugin endpoints are not available in this build yet")},
     )
+
+
+def resolve_plugin_route(plugin: str, plugin_endpoint: str) -> str | None:
+    """The full path of a mounted plugin's endpoint, or ``None``.
+
+    Returns a value drawn from the application's own route table, never one
+    built from the request. Separated from the handler so it can be tested
+    against traversal attempts without an app or a token.
+    """
+    from archihub.plugins.framework.mounting import get_plugin
+
+    mounted = get_plugin(plugin)
+    if mounted is None:
+        return None
+
+    wanted = f"/{plugin}/{plugin_endpoint.strip('/')}"
+    for route in mounted.router.routes:
+        if getattr(route, "path", None) == wanted:
+            return route.path
+    return None
 
 
 # ---------------------------------------------------------------------------

@@ -27,6 +27,7 @@ from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 
 from archihub.api.system import services
+from archihub.core.i18n import gettext as _
 from archihub.core.security.fernet import FernetIdentity, node_fernet_auth_dependency
 from archihub.core.security.jwt import (
     LEGACY_ROLE_FAILURE_STATUS,
@@ -205,6 +206,54 @@ def activate_plugin(
         return JSONResponse(status_code=400, content={"msg": "Missing plugin slug"})
 
     return _respond(services.set_plugin_active(slug, bool(body.get("active")), current_user.username))
+
+
+@router.get(
+    "/plugins/{plugin_name}",
+    responses={
+        200: {"description": "Activation toggled"},
+        404: {"description": "No such plugin"},
+        **_ROLE_RESPONSES,
+    },
+)
+def change_plugin_status(
+    plugin_name: str,
+    current_user: CurrentUser = Depends(require_admin),
+) -> JSONResponse:
+    """Toggle a plugin's activation.
+
+    A GET that changes state, which is wrong and is preserved: this is the URL
+    the admin plugins table calls. It is also why the route sits behind the
+    admin role rather than merely behind a session.
+    """
+    return _respond(services.toggle_plugin(plugin_name, current_user.username))
+
+
+@router.post(
+    "/get-actions",
+    responses={200: {"description": "Actions available at a UI placement"}, **_ROLE_RESPONSES},
+)
+def get_actions(
+    body: dict = Body(...),
+    current_user: CurrentUser = Depends(
+        require_role_any("admin", "processing", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS)
+    ),
+) -> JSONResponse:
+    """Which plugin actions to offer at one place in the interface.
+
+    Read from the plugins THIS PROCESS MOUNTED, not by re-importing every active
+    plugin package on each request as the legacy service did - which meant a
+    plugin that failed to import turned a menu into a 500.
+    """
+    from archihub.plugins.framework.mounting import system_actions
+
+    placement = body.get("placement")
+    if not isinstance(placement, str) or not placement:
+        # The original indexed `body['placement']` directly, so an absent one
+        # was a KeyError reported as a 500.
+        return json_response({"msg": _("You must specify a {field}", field="placement")}, 400)
+
+    return json_response({"actions": system_actions(placement)}, 200)
 
 
 # ---------------------------------------------------------------------------

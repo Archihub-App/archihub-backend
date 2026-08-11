@@ -1088,6 +1088,132 @@
         "The path is inconsistent with every neighbour and is kept exactly:",
         "it is the URL the existing frontend calls."
       ]
+    },
+    {
+      "name": "plugins: liquidText generation needs a role",
+      "method": "POST",
+      "path": "/liquidText/bulk",
+      "body": {},
+      "auth": false,
+      "expect_status": 401,
+      "_note": [
+        "CONTRACT, and the unauthenticated case throughout this group. A plugin",
+        "route with a token would queue real work against the shared database,",
+        "and firing it at both backends would queue it twice.",
+        "",
+        "What these DO establish is BACKEND_FINDINGS S32: the legacy framework's",
+        "validate_roles returned a refusal tuple that all eleven of its call",
+        "sites discarded, so those routes were guarded by nothing but a valid",
+        "session. In the port the role is a dependency - there is no return",
+        "value to drop - and that is what a 401 here demonstrates end to end."
+      ]
+    },
+    {
+      "name": "plugins: liquidText save needs a role",
+      "method": "POST",
+      "path": "/liquidText/save",
+      "body": {},
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: liquidText export needs a role",
+      "method": "POST",
+      "path": "/liquidText/download",
+      "body": {},
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: filesProcessing bulk needs a role",
+      "method": "POST",
+      "path": "/filesProcessing/bulk",
+      "body": {},
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: inventoryMaker bulk needs a role",
+      "method": "POST",
+      "path": "/inventoryMaker/bulk",
+      "body": {},
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: massiveUpdater launch needs a role",
+      "method": "POST",
+      "path": "/massiveUpdater/lunch",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: settings cannot be read without a role",
+      "path": "/filesProcessing/settings/all",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: settings cannot be written without a role",
+      "method": "POST",
+      "path": "/filesProcessing/settings",
+      "auth": false,
+      "expect_status": 401,
+      "_note": [
+        "The scheduleSystemTasks equivalent is the sharpest case in this group -",
+        "its settings ARE a task scheduler, so writing them makes the workers run",
+        "something repeatedly. It is not listed because that plugin is not active",
+        "on this instance; filesProcessing exercises the same shared route."
+      ]
+    },
+    {
+      "name": "plugins: the icon needs a role",
+      "path": "/liquidText/image",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: task results need a role",
+      "path": "/inventoryMaker/filedownload/whatever",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: the public inventory refuses a request naming no view",
+      "method": "POST",
+      "path": "/inventoryMaker/public/downloadInventory",
+      "body": {
+        "post_type": "*"
+      },
+      "auth": false,
+      "expect_status": 400,
+      "_note": [
+        "Deliberately malformed, so it is refused BEFORE anything is generated -",
+        "the route is unauthenticated and does write a workbook to the web files",
+        "volume when it succeeds.",
+        "",
+        "The behaviour that changed and is NOT covered here is S33: the legacy",
+        "filter was content type plus published status and nothing else, so a",
+        "resource under embargo appeared in an inventory anyone could download.",
+        "Verifying that needs an instance with a reserved resource in a public",
+        "view; tests/test_plugin_framework.py covers the rule itself."
+      ]
+    },
+    {
+      "name": "system: plugin activation needs administrator",
+      "path": "/system/plugins/liquidText",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "system: the actions menu needs a role",
+      "method": "POST",
+      "path": "/system/get-actions",
+      "body": {
+        "placement": "detail_record"
+      },
+      "auth": false,
+      "expect_status": 401
     }
   ],
   "_expected_differences": [

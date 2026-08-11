@@ -27,13 +27,8 @@ the difference between a controlled refusal and a production incident.
 
 from __future__ import annotations
 
-# Ported and verified against the FastAPI stack.
-PORTED_PLUGINS: frozenset[str] = frozenset()
-
-# In scope for this migration but not finished yet. Listed separately purely so
-# the error message can distinguish "coming in this project" from "not planned",
-# which tells an operator whether to wait or to deactivate.
-IN_SCOPE_PLUGINS: frozenset[str] = frozenset(
+# Ported and verified against the FastAPI stack (Phase 5).
+PORTED_PLUGINS: frozenset[str] = frozenset(
     {
         "filesProcessing",
         "inventoryMaker",
@@ -42,6 +37,13 @@ IN_SCOPE_PLUGINS: frozenset[str] = frozenset(
         "scheduleSystemTasks",
     }
 )
+
+# In scope for this migration but not finished yet. Listed separately purely so
+# the error message can distinguish "coming in this project" from "not planned",
+# which tells an operator whether to wait or to deactivate. Empty now that all
+# five are done; kept because the distinction is what the message is built on,
+# and the next plugin to be scheduled goes here first.
+IN_SCOPE_PLUGINS: frozenset[str] = frozenset()
 
 
 class UnportedPluginError(RuntimeError):

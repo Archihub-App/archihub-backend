@@ -110,3 +110,43 @@ def _init_worker_process(**_kwargs) -> None:
             "Worker refusing to start - see the plugin guard message below", exc_info=True
         )
         raise
+
+    # Register the hooks that fire plugin tasks on resource and file events.
+    # WORKER PROCESS ONLY, and per forked process rather than once in the
+    # parent: hook registrations live in a module-level singleton, and a fork
+    # inherits whatever the parent had at fork time - which for a `spawn` start
+    # method is nothing at all.
+    try:
+        from archihub.plugins.framework.mounting import (
+            activate_plugin_settings,
+            mount_plugins,
+        )
+
+        # Built without an app: a worker needs the plugin objects and their task
+        # registrations, not their routers.
+        mount_plugins(_NoRouterApp())
+        activate_plugin_settings()
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Could not activate plugin hooks; automatic processing will not run"
+        )
+
+
+class _NoRouterApp:
+    """Stands in for the FastAPI app when mounting inside a worker.
+
+    ``mount_plugins`` builds each plugin and then includes its router. A worker
+    has no router table, but building the plugin is what imports its module and
+    therefore what registers its Celery tasks - so the build has to happen, and
+    only the include is a no-op here.
+    """
+
+    def __init__(self) -> None:
+        from types import SimpleNamespace
+
+        self.routes: list = []
+        # `core.routing.include_router` records what it mounted on app.state.
+        self.state = SimpleNamespace()
+
+    def include_router(self, *args, **kwargs) -> None:
+        return None

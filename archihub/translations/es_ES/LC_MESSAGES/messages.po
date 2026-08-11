@@ -72,6 +72,9 @@ msgstr "Error al eliminar los archivos"
 msgid "Error updating the polygons"
 msgstr "Error al actualizar los polígonos"
 
+msgid "Error uploading the file"
+msgstr "Error al subir el archivo"
+
 msgid "Error: the field with destiny equal to "
 msgstr "Error: el campo con destiny igual a "
 
@@ -83,6 +86,9 @@ msgstr "Error: el formulario debe tener un campo con destiny igual a "
 
 msgid "Error: the subfield must have a {key}"
 msgstr "Error: el subcampo debe tener un {key}"
+
+msgid "Failed task"
+msgstr "Tarea fallida"
 
 msgid "Favorite removed successfully"
 msgstr "Favorito eliminado con éxito"
@@ -135,6 +141,9 @@ msgstr "Tipo de favorito inválido"
 msgid "Invalid file path"
 msgstr "Ruta de archivo inválida"
 
+msgid "Invalid identifier in {field}"
+msgstr "Identificador inválido en {field}"
+
 msgid "Invalid or expired token"
 msgstr "Token inválido o expirado"
 
@@ -147,8 +156,23 @@ msgstr "Plugin inválido"
 msgid "Invalid segment index"
 msgstr "Índice de segmento inválido"
 
+msgid "Invalid settings payload"
+msgstr "Los ajustes enviados no son válidos"
+
+msgid "Liquid text generated for {count} records"
+msgstr "Se generó texto líquido para {count} registros"
+
+msgid "Liquid text saved for {resource}"
+msgstr "Se ha guardado el texto líquido en el recurso {resource}"
+
 msgid "Message content must be text or a list of parts"
 msgstr "El contenido del mensaje debe ser texto o una lista de partes"
+
+msgid "No file was uploaded"
+msgstr "No se ha subido ningún archivo"
+
+msgid "No resources matched the filters"
+msgstr "No se encontraron recursos con los filtros especificados"
 
 msgid "Not Found"
 msgstr "No encontrado"
@@ -167,6 +191,9 @@ msgstr "Los endpoints de plugins aún no están disponibles en esta versión"
 
 msgid "Plugin updated successfully. Restart the application to apply the change"
 msgstr "Plugin actualizado con éxito. Reinicie la aplicación para aplicar el cambio"
+
+msgid "Processed {size} files"
+msgstr "Se procesaron {size} archivos"
 
 msgid "Provider created successfully"
 msgstr "Proveedor creado con éxito"
@@ -188,6 +215,9 @@ msgstr "El recurso no tiene archivos"
 
 msgid "Search is not enabled on this instance"
 msgstr "La búsqueda no está habilitada en esta instancia"
+
+msgid "Setting not found"
+msgstr "Ajuste no encontrado"
 
 msgid "Settings updated successfully"
 msgstr "Ajustes actualizados con éxito"
@@ -221,6 +251,15 @@ msgstr "Guarde esta clave ahora: no se volverá a mostrar"
 
 msgid "System configured successfully"
 msgstr "Sistema configurado con éxito"
+
+msgid "Task does not exist"
+msgstr "La tarea no existe"
+
+msgid "Task in process"
+msgstr "Tarea en proceso"
+
+msgid "Task is not of type file_download"
+msgstr "La tarea no es de tipo file_download"
 
 msgid "Thank you for registering, click on the following link to verify your account:"
 msgstr "Gracias por registrarse, haga clic en el siguiente enlace para verificar su cuenta:"
@@ -264,6 +303,12 @@ msgstr "El archivo no tiene contenido"
 msgid "The file has no name"
 msgstr "El archivo no tiene nombre"
 
+msgid "The file is too large"
+msgstr "El archivo es demasiado grande"
+
+msgid "The file was uploaded and the task added to the processing queue. You can check your profile when it has finished and download the report."
+msgstr "Se cargó el archivo y se agregó la tarea a la fila de procesamientos. Puedes revisar en tu perfil cuando haya terminado y descargar el reporte."
+
 msgid "The fragment could not be extracted"
 msgstr "No se pudo extraer el fragmento"
 
@@ -300,6 +345,9 @@ msgstr "La habilidad es demasiado grande"
 msgid "The task queue is unavailable"
 msgstr "La cola de tareas no está disponible"
 
+msgid "The task was added to the processing queue. You can check your profile when it has finished and download the inventory."
+msgstr "Se agregó la tarea a la fila de procesamientos. Puedes revisar en tu perfil cuando haya terminado y descargar el inventario."
+
 msgid "This dialect requires a base URL"
 msgstr "Este dialecto requiere una URL base"
 
@@ -327,6 +375,9 @@ msgstr "Tamaño desconocido \"{size}\""
 msgid "Unknown status"
 msgstr "Estado desconocido"
 
+msgid "Unknown task {task}"
+msgstr "Tarea desconocida {task}"
+
 msgid "Unknown view"
 msgstr "Vista desconocida"
 
@@ -335,6 +386,9 @@ msgstr "Tipo de bloque no soportado"
 
 msgid "Unsupported download type"
 msgstr "Tipo de descarga no soportado"
+
+msgid "Unsupported format"
+msgstr "Formato no soportado"
 
 msgid "Unsupported snap type"
 msgstr "Tipo de snap no soportado"
@@ -362,6 +416,9 @@ msgstr "Debe especificar un tipo de contenido"
 
 msgid "You must specify a view"
 msgstr "Debe especificar una vista"
+
+msgid "You must specify a {field}"
+msgstr "Debe especificar un {field}"
 
 msgid "You must supply at least one of: {fields}"
 msgstr "Debe indicar al menos uno de: {fields}"
