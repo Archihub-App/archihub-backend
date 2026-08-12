@@ -418,6 +418,28 @@
       "_note": "F37: this listing lost metadata.firstLevel.title from its projection. Diffed so it cannot recur."
     },
     {
+      "name": "resources: listing with the column set the browser actually sends",
+      "method": "POST",
+      "path": "/resources/getall",
+      "body": {
+        "post_type": [
+          "carpeta",
+          "test"
+        ],
+        "page": 0,
+        "sortBy": "createdAt",
+        "sortOrder": "desc",
+        "activeColumns": [
+          { "destiny": "", "label": "" },
+          { "destiny": "createdAt", "label": "Fecha de creación", "sortBy": "createdAt" },
+          { "destiny": "ident", "label": "Identificador" },
+          { "destiny": "metadata.firstLevel.title", "label": "Título", "sortBy": "metadata.firstLevel.title" }
+        ]
+      },
+      "auth": true,
+      "_note": "F53. activeColumns is a list of column DESCRIPTORS, not names - the label is what the table header renders. Every earlier listing case omitted the field entirely, so the whole column path went undiffed and the port read the descriptors as strings. Keep the real shape here: a case that sends bare strings agrees with a wrong implementation."
+    },
+    {
       "name": "resources: listing keeps the title the browse screen renders",
       "method": "POST",
       "path": "/resources/getall",

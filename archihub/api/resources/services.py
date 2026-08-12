@@ -38,6 +38,29 @@ PAGE_SIZE = 20
 _NON_METADATA_COLUMNS = {"", "createdAt", "ident", "files", "accessRights"}
 
 
+def _column_names(active_columns) -> list[str]:
+    """The metadata field paths a listing request asked to display.
+
+    `activeColumns` is a list of column *descriptors*, not names - the frontend
+    sends `{"destiny": ..., "label": ..., "sortBy": ...}` per column, because the
+    label is what the table header renders. Only `destiny` is a field path; the
+    rest is presentation and has no business reaching a Mongo projection.
+
+    A bare string is accepted as well so that a hand-written request (the diff
+    harness, a curl, another organisation's script) does not have to wrap every
+    column in an object to be understood.
+    """
+    names: list[str] = []
+    for column in active_columns or []:
+        destiny = column.get("destiny") if isinstance(column, dict) else column
+        if isinstance(destiny, str) and destiny not in _NON_METADATA_COLUMNS:
+            names.append(destiny)
+
+    # dict.fromkeys rather than set(): the projection order follows the caller's
+    # column order, so two identical requests produce identical responses.
+    return list(dict.fromkeys(names))
+
+
 def _mongo():
     from archihub.infra.mongo import get_mongo
 
@@ -127,26 +150,6 @@ def can_view_type(username: str, post_type: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _metadata_field_types(post_types: list[str], active_columns: list[str]) -> list[dict]:
-    """Resolve the declared type of each requested column, across the types asked for."""
-    from archihub.api.types.services import get_metadata
-
-    seen: dict[str, str] = {}
-    for post_type in post_types:
-        try:
-            metadata = get_metadata(post_type)
-        except Exception:
-            logger.warning("Could not resolve metadata for %s", post_type, exc_info=True)
-            continue
-
-        for field in (metadata or {}).get("fields", []) or []:
-            destiny = field.get("destiny")
-            if destiny in active_columns and destiny not in seen:
-                seen[destiny] = field.get("type")
-
-    return [{"destiny": d, "type": t} for d, t in seen.items()]
-
-
 def get_all(body: dict, user: str) -> tuple[dict, int]:
     """The paginated catalogue listing."""
     try:
@@ -160,8 +163,7 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
             if not can_view_type(user, post_type):
                 return {"msg": _("You don't have the required authorization")}, 401
 
-        active_columns = [c for c in (body.get("activeColumns") or []) if c not in _NON_METADATA_COLUMNS]
-        metadata_fields = _metadata_field_types(post_types, active_columns)
+        active_columns = _column_names(body.get("activeColumns"))
 
         base: dict = {"post_type": {"$in": post_types}}
         if body.get("parents"):
@@ -188,14 +190,13 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
             "accessRights": 1, "filesObj": 1, "ident": 1, "post_type": 1,
             "createdAt": 1, "metadata.firstLevel.title": 1,
         }
+        # Displaying a column widens the projection and nothing else. It must not
+        # narrow the result set: the catalogue browse screen offers a column
+        # picker, and a resource that simply has not filled that field in has to
+        # keep appearing in its own series. Filtering here would ALSO move the
+        # total, so the pager would silently disagree with the tree beside it.
         for column in active_columns:
             fields[column] = 1
-            declared = next((f for f in metadata_fields if f["destiny"] == column), None)
-            # A non-text column is only meaningful when present, so require it -
-            # otherwise the listing shows rows with an empty cell for the very
-            # column the caller asked to sort or filter by.
-            if declared and declared.get("type") != "text":
-                filters[column] = {"$exists": True, "$ne": None}
 
         page = int(body.get("page") or 0)
         sort_by = body.get("sortBy") or "createdAt"

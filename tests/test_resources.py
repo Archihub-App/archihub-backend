@@ -20,6 +20,7 @@ class FakeMongo:
         self.records: dict = {}
         self.rows: dict[str, list] = {}
         self.last_query: dict | None = None
+        self.last_fields: dict | None = None
 
     def get_record(self, collection, filters, fields=None):
         source = self.records.get(collection)
@@ -27,6 +28,7 @@ class FakeMongo:
 
     def get_all_records(self, collection, filters=None, sort=None, limit=0, skip=0, fields=None):
         self.last_query = filters
+        self.last_fields = fields
         return [dict(r) for r in self.rows.get(collection, [])]
 
     def count(self, collection, filters=None):
@@ -38,7 +40,6 @@ def mongo(monkeypatch):
     fake = FakeMongo()
     monkeypatch.setattr(services, "_mongo", lambda: fake)
     monkeypatch.setattr(services.access, "_mongo", lambda: fake)
-    monkeypatch.setattr(services, "_metadata_field_types", lambda pts, cols: [])
     monkeypatch.setattr(services, "_access_right_term", lambda v: v)
     return fake
 
@@ -267,34 +268,107 @@ def test_dates_are_serialised(mongo, as_admin, monkeypatch):
     assert payload["resources"][0]["createdAt"] == "2026-01-02T03:04:05"
 
 
-def test_non_text_columns_are_required_to_be_present(mongo, as_admin, monkeypatch):
-    """Otherwise the listing shows empty cells for the very column the caller
-    asked to display."""
+# ---------------------------------------------------------------------------
+# activeColumns
+#
+# The frontend sends column DESCRIPTORS - {destiny, label, sortBy} - not names.
+# Every test below passes that real shape, because an earlier version of these
+# tests passed bare strings, agreed with the implementation, and both were wrong
+# together: the live listing raised `TypeError: unhashable type: 'dict'` on the
+# first request the browser made.
+# ---------------------------------------------------------------------------
+
+
+def _columns(*destinies):
+    """A column list shaped the way `upgrade_front` actually sends it."""
+    return [{"destiny": d, "label": f"Label for {d}", "sortBy": d} for d in destinies]
+
+
+def test_a_column_descriptor_is_projected_by_its_destiny(mongo, as_admin, monkeypatch):
     monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
-    monkeypatch.setattr(
-        services, "_metadata_field_types",
-        lambda pts, cols: [{"destiny": "metadata.date", "type": "simple-date"}],
-    )
     mongo.rows["resources"] = []
 
     services.get_all(
-        {"post_type": ["x"], "activeColumns": ["metadata.date"]}, "admin"
+        {"post_type": ["x"], "activeColumns": _columns("metadata.firstLevel.date")}, "admin"
     )
 
-    assert mongo.last_query["metadata.date"] == {"$exists": True, "$ne": None}
+    assert mongo.last_fields["metadata.firstLevel.date"] == 1
+    # The label is presentation and must not reach the projection.
+    assert not any("Label" in key for key in mongo.last_fields)
 
 
-def test_a_text_column_is_not_required_to_be_present(mongo, as_admin, monkeypatch):
+def test_bare_strings_are_still_accepted(mongo, as_admin, monkeypatch):
+    """Hand-written callers - the diff harness, curl, another org's script."""
     monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
-    monkeypatch.setattr(
-        services, "_metadata_field_types",
-        lambda pts, cols: [{"destiny": "metadata.title", "type": "text"}],
-    )
     mongo.rows["resources"] = []
 
     services.get_all({"post_type": ["x"], "activeColumns": ["metadata.title"]}, "admin")
 
+    assert mongo.last_fields["metadata.title"] == 1
+
+
+def test_structural_columns_are_not_projected_as_metadata(mongo, as_admin, monkeypatch):
+    """`ident`/`createdAt`/`files`/`accessRights` are in the base projection
+    already, and the frontend sends an empty descriptor as the first column."""
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    mongo.rows["resources"] = []
+
+    services.get_all(
+        {"post_type": ["x"], "activeColumns": _columns("", "createdAt", "ident", "files")},
+        "admin",
+    )
+
+    assert "" not in mongo.last_fields
+    assert "filesObj" in mongo.last_fields  # the base projection still stands
+
+
+def test_displaying_a_column_does_not_narrow_the_result_set(mongo, as_admin, monkeypatch):
+    """A column picker changes what is shown, never which resources exist.
+
+    Requiring the field to be present would drop every resource that has not
+    filled it in - and move `total` with it, so the pager would disagree with
+    the tree beside it.
+    """
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    mongo.rows["resources"] = []
+
+    services.get_all(
+        {"post_type": ["x"], "activeColumns": _columns("metadata.date", "metadata.title")},
+        "admin",
+    )
+
+    assert "metadata.date" not in mongo.last_query
     assert "metadata.title" not in mongo.last_query
+
+
+def test_a_repeated_column_is_projected_once(mongo, as_admin, monkeypatch):
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    mongo.rows["resources"] = []
+
+    services.get_all(
+        {"post_type": ["x"], "activeColumns": _columns("metadata.title", "metadata.title")},
+        "admin",
+    )
+
+    assert list(mongo.last_fields).count("metadata.title") == 1
+
+
+def test_a_malformed_column_descriptor_is_ignored_not_fatal(mongo, as_admin, monkeypatch):
+    """The listing is the archive's highest-traffic read path; a stale value in
+    somebody's persisted Redux filters must not 500 it."""
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    mongo.rows["resources"] = []
+
+    payload, status = services.get_all(
+        {
+            "post_type": ["x"],
+            "activeColumns": [{"label": "no destiny"}, {"destiny": None}, None, 42],
+        },
+        "admin",
+    )
+
+    assert status == 200
+    assert payload["total"] == 0
 
 
 # ---------------------------------------------------------------------------
