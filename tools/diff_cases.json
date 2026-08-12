@@ -430,10 +430,24 @@
         "sortBy": "createdAt",
         "sortOrder": "desc",
         "activeColumns": [
-          { "destiny": "", "label": "" },
-          { "destiny": "createdAt", "label": "Fecha de creación", "sortBy": "createdAt" },
-          { "destiny": "ident", "label": "Identificador" },
-          { "destiny": "metadata.firstLevel.title", "label": "Título", "sortBy": "metadata.firstLevel.title" }
+          {
+            "destiny": "",
+            "label": ""
+          },
+          {
+            "destiny": "createdAt",
+            "label": "Fecha de creación",
+            "sortBy": "createdAt"
+          },
+          {
+            "destiny": "ident",
+            "label": "Identificador"
+          },
+          {
+            "destiny": "metadata.firstLevel.title",
+            "label": "Título",
+            "sortBy": "metadata.firstLevel.title"
+          }
         ]
       },
       "auth": true,
@@ -1236,6 +1250,51 @@
       },
       "auth": false,
       "expect_status": 401
+    },
+    {
+      "name": "types: info-panel timeCreated statistics",
+      "method": "POST",
+      "path": "/types/moreinfo",
+      "body": {
+        "slug": "carpeta",
+        "type": "timeCreated"
+      },
+      "auth": true,
+      "_note": "Read-only aggregation. Ported late (the route was missing from the port entirely, so Info.tsx got a 405); diffed against legacy because both stacks have it."
+    },
+    {
+      "name": "types: info-panel statusCount statistics",
+      "method": "POST",
+      "path": "/types/moreinfo",
+      "body": {
+        "slug": "carpeta",
+        "type": "statusCount"
+      },
+      "auth": true,
+      "_note": "Read-only aggregation. Ported late (the route was missing from the port entirely, so Info.tsx got a 405); diffed against legacy because both stacks have it."
+    },
+    {
+      "name": "types: info-panel authorCount statistics",
+      "method": "POST",
+      "path": "/types/moreinfo",
+      "body": {
+        "slug": "carpeta",
+        "type": "authorCount"
+      },
+      "auth": true,
+      "_note": "Read-only aggregation. Ported late (the route was missing from the port entirely, so Info.tsx got a 405); diffed against legacy because both stacks have it."
+    },
+    {
+      "name": "types: an unknown chart is answered ok, not an error",
+      "method": "POST",
+      "path": "/types/moreinfo",
+      "body": {
+        "slug": "carpeta",
+        "type": "notAChart"
+      },
+      "auth": true,
+      "expect_status": 200,
+      "_note": "The panel asks for several charts by name; one the backend does not recognise must not fail the screen."
     }
   ],
   "_expected_differences": [

@@ -27,6 +27,7 @@ from bson.objectid import ObjectId
 
 from archihub.api.resources import access, presentation
 from archihub.core.i18n import gettext as _
+from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +162,7 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
 
         for post_type in post_types:
             if not can_view_type(user, post_type):
-                return {"msg": _("You don't have the required authorization")}, 401
+                return {"msg": _("You don't have the required authorization")}, LEGACY_ROLE_FAILURE_STATUS
 
         active_columns = _column_names(body.get("activeColumns"))
 
@@ -179,7 +180,7 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
             status=body.get("status") or "published",
         )
         if error:
-            return {"msg": _("You don't have the required authorization")}, 401
+            return {"msg": _("You don't have the required authorization")}, LEGACY_ROLE_FAILURE_STATUS
 
         # `metadata.firstLevel.title` is in the base projection because the
         # listing renders a title for every row whether or not the caller asked

@@ -243,9 +243,13 @@ def _public_inventory(body: dict):
 
     for post_type in post_types:
         if post_type not in visible:
-            return json_response(
-                {"msg": _("You do not have sufficient permissions")}, 401
-            )
+            # Not a permission failure, despite the message the legacy helper
+            # would have produced here. This route is unauthenticated: there is
+            # no identity to grant, so an authorisation status tells the caller
+            # to go and get a credential that would change nothing. What
+            # happened is that the request named a content type this view does
+            # not publish - a bad request, like its two neighbours.
+            return json_response({"msg": _("The content type is required")}, 400)
 
     if not post_types:
         return json_response({"msg": _("No content type was specified")}, 400)

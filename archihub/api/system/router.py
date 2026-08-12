@@ -52,7 +52,8 @@ require_admin_or_processing = require_role_any(
     "admin", "processing", status_code=LEGACY_ROLE_FAILURE_STATUS
 )
 
-_ROLE_RESPONSES = {401: {"description": "Missing/invalid token, or the admin role is required"}}
+_ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
+        403: {"description": "The admin role is required"}}
 
 
 def _respond(result) -> JSONResponse:

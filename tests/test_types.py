@@ -54,6 +54,12 @@ class FakeMongo:
     def increment_record(self, *args, **kwargs):
         pass
 
+    def aggregate(self, collection, pipeline):
+        self.aggregated = (collection, pipeline)
+        return iter(self.aggregate_result)
+
+    aggregate_result: list = []
+
 
 @pytest.fixture
 def mongo(monkeypatch):
@@ -261,3 +267,68 @@ def test_update_missing_type_is_404(mongo):
     mongo.records["post_types"] = None
     payload, status = services.update_by_slug("nope", {"name": "x"}, "admin")
     assert status == 404
+
+
+# ---------------------------------------------------------------------------
+# Info-panel statistics
+#
+# `type` arrives in a request body and selects an aggregation. It indexes a fixed
+# table rather than describing a pipeline, because the alternative - assembling
+# stages from what the request contained - is the shortest path from a form field
+# to running arbitrary Mongo.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("viz_type", ["timeCreated", "statusCount", "authorCount"])
+def test_each_known_chart_aggregates_over_that_content_type(mongo, viz_type):
+    mongo.aggregate_result = [{"_id": "x", "count": 3}]
+
+    payload, status = services.get_type_viz("casos", viz_type)
+
+    assert status == 200
+    assert payload == [{"_id": "x", "count": 3}]
+
+    collection, pipeline = mongo.aggregated
+    assert collection == "resources"
+    # Always scoped to the requested type, and scoped FIRST.
+    assert pipeline[0] == {"$match": {"post_type": "casos"}}
+
+
+def test_an_unknown_chart_is_answered_ok_not_an_error(mongo):
+    """The panel asks for several charts by name; one it does not recognise must
+    not fail the screen. Legacy fell through to this same answer."""
+    payload, status = services.get_type_viz("casos", "somethingElse")
+
+    assert status == 200
+    assert payload == {"msg": "ok"}
+
+
+def test_an_unknown_chart_never_reaches_the_database(mongo):
+    mongo.aggregated = None
+
+    services.get_type_viz("casos", "$where")
+
+    assert mongo.aggregated is None
+
+
+def test_the_requested_type_cannot_inject_pipeline_stages(mongo):
+    """The only values that reach Mongo come from a table the application owns."""
+    mongo.aggregate_result = []
+
+    for hostile in ('{"$out": "resources"}', "../admin", "timeCreated;drop"):
+        mongo.aggregated = None
+        _payload, status = services.get_type_viz("casos", hostile)
+        assert status == 200
+        assert mongo.aggregated is None
+
+
+def test_a_failing_aggregation_is_reported_not_returned_as_data(mongo, monkeypatch):
+    def explode(*_a, **_k):
+        raise RuntimeError("no mongo")
+
+    monkeypatch.setattr(mongo, "aggregate", explode)
+
+    payload, status = services.get_type_viz("casos", "statusCount")
+
+    assert status == 500
+    assert "msg" in payload

@@ -473,3 +473,6 @@ msgstr "{count} imágenes"
 
 msgid "{field} is missing"
 msgstr "{field} está faltando"
+
+msgid "The statistics could not be calculated"
+msgstr "No se pudieron calcular las estadísticas"

@@ -6,13 +6,8 @@ metadata: prose moves to the handler docstring, ``tags`` to the router, and the
 rather than hand-declared, so a route can no longer enforce auth while forgetting
 to document it.
 
-WIRE CONTRACT IS PRESERVED EXACTLY, including two things that are arguably wrong:
+WIRE CONTRACT IS PRESERVED EXACTLY, including one thing that is arguably wrong:
 
-* Role failures return **401**, not 403. 403 is correct and is what new routes
-  use, but `upgrade_front` compares status codes exactly in ~187 places, so the
-  flip is a coordinated frontend change (PLAN_FASTAPI.md decision 2). Every such
-  route passes ``LEGACY_ROLE_FAILURE_STATUS`` explicitly - grep for it to find
-  what is awaiting the flip.
 * ``PUT`` and ``DELETE`` are guarded by ``admin`` OR ``editor``, while ``POST``
   requires ``admin``. So an editor can modify or delete a content type but not
   create one, which is a strange privilege shape. Reproduced as-is; changing it
@@ -48,7 +43,9 @@ router = APIRouter(prefix="/types", tags=["Content types"])
 
 MSG_UNAUTHORIZED = "You don't have the required authorization"
 
-# Ported routes keep the legacy 401-for-permission-denied contract.
+# `LEGACY_ROLE_FAILURE_STATUS` is 403 since the coordinated frontend flip; it is
+# still passed explicitly because it marks the routes whose status was chosen for
+# legacy-compatibility reasons. See its comment in core/security/jwt.py.
 require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
 require_admin_or_editor = require_role_any(
     "admin", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS
@@ -90,7 +87,8 @@ def get_all(current_user: CurrentUser = Depends(get_current_user)) -> JSONRespon
     responses={
         201: {"description": "Content type created"},
         400: {"description": "Name and slug are required, or the slug already exists"},
-        401: {"description": "Missing/invalid token, or the admin role is required"},
+        401: {"description": "Missing or invalid token"},
+        403: {"description": "The admin role is required"},
         500: {"description": "Error creating the content type"},
     },
 )
@@ -115,11 +113,45 @@ def create(
     return _respond(services.create(payload, current_user.username))
 
 
+@router.post(
+    "/moreinfo",
+    responses={
+        200: {"description": "Aggregated counts, or {'msg': 'ok'} for an unknown chart"},
+        400: {"description": "slug or type missing"},
+        403: {"description": "Insufficient role"},
+    },
+)
+def get_type_viz(
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(require_admin_or_editor),
+) -> JSONResponse:
+    """Counts for the charts on a content type's info panel.
+
+    Declared before `/{slug}` because Starlette matches in registration order and
+    a literal path must win over a parameterised one - though only `GET /{slug}`
+    exists today, so nothing currently shadows this.
+
+    `type` names one of a fixed table of aggregations rather than describing one;
+    an unrecognised name is answered `{"msg": "ok"}` with 200, as the legacy route
+    did, because the panel requests several charts by name and one it does not
+    know must not fail the screen.
+    """
+    slug = body.get("slug")
+    viz_type = body.get("type")
+    if not isinstance(slug, str) or not slug or not isinstance(viz_type, str) or not viz_type:
+        return JSONResponse(
+            status_code=400, content={"msg": _("You must specify the slug and the type")}
+        )
+
+    return _respond(services.get_type_viz(slug, viz_type))
+
+
 @router.get(
     "/{slug}",
     responses={
         200: {"description": "The content type, with its parent chain and metadata form"},
-        401: {"description": "Missing/invalid token, or insufficient role"},
+        401: {"description": "Missing or invalid token"},
+        403: {"description": "Insufficient role"},
         404: {"description": "Content type not found"},
         500: {"description": "Error retrieving the content type"},
     },
@@ -160,7 +192,8 @@ def get_by_slug(
     "/{slug}",
     responses={
         200: {"description": "Content type updated"},
-        401: {"description": "Missing/invalid token, or insufficient role"},
+        401: {"description": "Missing or invalid token"},
+        403: {"description": "Insufficient role"},
         404: {"description": "Content type not found"},
         500: {"description": "Error updating the content type"},
     },
@@ -180,7 +213,8 @@ def update_by_slug(
     "/{slug}",
     responses={
         200: {"description": "Content type deleted"},
-        401: {"description": "Missing/invalid token, or insufficient role"},
+        401: {"description": "Missing or invalid token"},
+        403: {"description": "Insufficient role"},
         404: {"description": "Content type not found"},
     },
 )
@@ -190,9 +224,9 @@ def delete_by_slug(
 ) -> JSONResponse:
     """Delete a content type and soft-delete every resource that used it.
 
-    Returns **200**, not 204. `TypesService.deleteType` in the frontend expects
-    204 and therefore takes its error path on success today - a known, already
-    documented mismatch. Preserved here so the behaviour does not change under
-    the frontend's feet; fixing it is a paired backend+frontend change.
+    Returns **200**, not 204, matching the legacy route. `TypesService.deleteType`
+    used to demand exactly 204 and so took its error path on success; it checks
+    `response.ok` now, so both are accepted and this status is free to stay as
+    the legacy contract had it.
     """
     return _respond(services.delete_by_slug(slug, current_user.username))

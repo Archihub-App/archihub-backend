@@ -53,7 +53,8 @@ require_admin_or_editor = require_role_any(
 require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
 require_visualizer = require_role_any("visualizer", status_code=LEGACY_ROLE_FAILURE_STATUS)
 
-_ROLE_RESPONSES = {401: {"description": "Missing/invalid token, or insufficient role"}}
+_ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
+        403: {"description": "Insufficient role"}}
 
 
 def _respond(result) -> JSONResponse:

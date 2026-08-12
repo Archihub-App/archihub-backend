@@ -97,17 +97,23 @@ def get_current_user(
 
 # The status code a role failure produces on routes ported from the legacy API.
 #
-# 403 is correct and is what new routes use. The legacy API answered 401 for
-# permission failures at ~223 sites, and `upgrade_front` performs exact
-# status-code equality checks at roughly 187 call sites - so flipping this
-# during a backend-only migration would break the frontend with no matching
-# change on the other side.
+# **FLIPPED TO 403 (2026-08-12), together with the frontend.** The legacy API
+# answered 401 for permission failures, which conflates "I do not know who you
+# are" with "I know who you are and you may not do this" - the first is fixable
+# by signing in, the second is not.
 #
-# Ported routes therefore pass `status_code=LEGACY_ROLE_FAILURE_STATUS`
-# explicitly. It is a marker as much as a value: grep for it to find every route
-# awaiting the coordinated flip, then delete the argument (not the constant's
-# value) once the frontend audit lands. See PLAN_FASTAPI.md decision 2.
-LEGACY_ROLE_FAILURE_STATUS = 401
+# The frontend audit that gated this found the risk was narrower than assumed:
+# `upgrade_front` has no global 401 handler and never signs a user out on one, so
+# a 403 is rejected exactly as a 401 was at the ~134 `status !== 200` sites. Only
+# three call sites enumerated status codes explicitly - the blob downloads in
+# `SystemService.tsx`, which listed 404/500/400/401 and would otherwise have read
+# a 403 refusal as a downloaded file. Those now check `response.ok`.
+#
+# The constant is kept, still passed explicitly, and still worth grepping for:
+# it marks every route whose status is set for legacy-compatibility reasons
+# rather than chosen freshly. Removing the now-redundant arguments is cosmetic
+# and can happen at Phase 7. See PLAN_FASTAPI.md decision 2.
+LEGACY_ROLE_FAILURE_STATUS = 403
 
 
 def require_role_any(*roles: str, status_code: int | None = None) -> Callable[..., CurrentUser]:

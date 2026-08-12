@@ -25,6 +25,7 @@ from datetime import datetime
 from bson.objectid import ObjectId
 
 from archihub.core.i18n import gettext as _
+from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +244,7 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
 
         if body.get("status") == STATUS_APPROVED:
             if not is_team_lead:
-                return {"error": _("You don't have the required authorization")}, 401
+                return {"error": _("You don't have the required authorization")}, LEGACY_ROLE_FAILURE_STATUS
             update["status"] = STATUS_APPROVED
             update["approvedBy"] = user
             update["approvedAt"] = datetime.now()

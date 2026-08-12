@@ -40,7 +40,8 @@ require_operator = require_role_any(
 )
 
 _RESPONSES = {
-    401: {"description": "Missing/invalid token, or insufficient role"},
+    401: {"description": "Missing or invalid token"},
+        403: {"description": "Insufficient role"},
     404: {"description": "No such provider"},
 }
 

@@ -33,6 +33,8 @@ from archihub.core.i18n import gettext as _
 logger = logging.getLogger(__name__)
 
 COLLECTION = "post_types"
+#: The collection the info-panel statistics aggregate over.
+COLLECTION_RESOURCES = "resources"
 
 # Upper bound on the -1, -2, ... suffix search when deriving a unique slug.
 # The loop is driven by what the database reports, so an existence query that
@@ -461,3 +463,55 @@ def invalidate_cache() -> None:
     keeps the call sites in place so they are not forgotten.
     """
     logger.debug("types cache invalidation requested (caching not yet enabled)")
+
+
+# ---------------------------------------------------------------------------
+# Statistics for the content-type info panel
+# ---------------------------------------------------------------------------
+
+#: The aggregations the info panel can ask for, keyed by the name the frontend
+#: sends. A fixed table rather than a client-built pipeline: `type` arrives in a
+#: request body and would otherwise become part of a Mongo aggregation, which is
+#: the shortest path from a form field to running arbitrary stages. Adding a
+#: chart means adding an entry here.
+_VIZ_PIPELINES: dict[str, list] = {
+    "timeCreated": [
+        {"$group": {
+            "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$createdAt"}},
+            "count": {"$sum": 1},
+        }},
+        {"$sort": {"_id": 1}},
+    ],
+    "statusCount": [
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ],
+    "authorCount": [
+        {"$group": {"_id": "$createdBy", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10},
+    ],
+}
+
+
+def get_type_viz(slug: str, viz_type: str) -> tuple[list | dict, int]:
+    """Aggregate counts over the resources of one content type.
+
+    An unknown ``viz_type`` returns ``{"msg": "ok"}`` with 200, reproducing the
+    legacy fall-through exactly: the panel renders several charts and asks for
+    each by name, so answering an error for one it does not recognise would turn
+    a missing chart into a failed screen.
+    """
+    pipeline = _VIZ_PIPELINES.get(viz_type)
+    if pipeline is None:
+        return {"msg": "ok"}, 200
+
+    try:
+        rows = list(_mongo().aggregate(COLLECTION_RESOURCES, [{"$match": {"post_type": slug}}, *pipeline]))
+    except Exception:
+        logger.exception("Could not aggregate %s for content type %s", viz_type, slug)
+        return {"msg": _("The statistics could not be calculated")}, 500
+
+    # `_id` is a grouping key here (a date string, a status, a username), not a
+    # document id, so it is returned as-is - which is what the chart plots.
+    return rows, 200

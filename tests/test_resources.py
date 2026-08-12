@@ -11,6 +11,7 @@ import pytest
 from bson.objectid import ObjectId
 
 from archihub.api.resources import services
+from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
 
 VALID_ID = "6a70b833497d4440325c94b1"
 
@@ -244,7 +245,7 @@ def test_a_hidden_content_type_is_refused(mongo, as_user, monkeypatch):
     monkeypatch.setattr(services, "can_view_type", lambda u, pt: False)
 
     _payload, status = services.get_all({"post_type": ["restricted"]}, "alice")
-    assert status == 401
+    assert status == LEGACY_ROLE_FAILURE_STATUS
 
 
 def test_the_listing_reports_a_file_count_not_the_files(mongo, as_admin, monkeypatch):

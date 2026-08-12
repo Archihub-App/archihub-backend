@@ -12,6 +12,7 @@ import pytest
 from bson.objectid import ObjectId
 
 from archihub.api.records import access, blocks
+from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
 
 RECORD_ID = "6a70b833497d4440325c94b1"
 RESERVED_SERIES = "6a70b833497d4440325c94c1"
@@ -104,7 +105,7 @@ def test_an_editor_may_not_edit_blocks_of_a_record_they_cannot_open(mongo, monke
         "ed", body(index=0, bbox=[0, 0, 1, 1], data={"text": "x"})
     )
 
-    assert status == 401
+    assert status == LEGACY_ROLE_FAILURE_STATUS
     assert mongo.updates == []
 
 
@@ -139,7 +140,7 @@ def test_a_caller_who_can_read_but_holds_no_editing_role_is_refused(mongo, monke
 
     payload, status = blocks.delete("reader", body(index=0))
 
-    assert status == 401
+    assert status == LEGACY_ROLE_FAILURE_STATUS
     assert mongo.updates == []
 
 
@@ -161,7 +162,7 @@ def test_a_reserved_series_is_inherited_from_an_ancestor(mongo, monkeypatch):
 
     payload, status = blocks.update("ed", body(index=0, bbox=[0, 0, 1, 1]))
 
-    assert status == 401
+    assert status == LEGACY_ROLE_FAILURE_STATUS
 
 
 # ---------------------------------------------------------------------------

@@ -37,7 +37,8 @@ router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
 require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
 
-_ROLE_RESPONSES = {401: {"description": "Missing/invalid token, or insufficient role"}}
+_ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
+        403: {"description": "Insufficient role"}}
 MSG_UNAUTHORIZED = "You don't have the required authorization"
 
 
