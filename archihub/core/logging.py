@@ -27,6 +27,7 @@ import json
 import logging
 import logging.config
 import sys
+import time
 import uuid
 from typing import Any
 
@@ -92,25 +93,88 @@ def configure_logging(*, level: str = "INFO", json_output: bool = True) -> None:
     root.addHandler(handler)
     root.setLevel(level.upper())
 
-    # These are chatty at INFO and drown out application logs.
+    # Uvicorn's own access log is silenced because `RequestIdMiddleware` emits a
+    # richer line in its place - same information plus the correlation id and the
+    # duration. Leaving both on prints every request twice.
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("pymongo").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
+access_logger = logging.getLogger("archihub.access")
+
+# Query keys whose value is never logged. Nothing in the API accepts a
+# credential in the query string today; this keeps that true by default if one
+# is ever added, because logs are shipped and retained far more widely than the
+# request that produced them.
+_REDACTED_QUERY_KEYS = frozenset({"key", "api_key", "apikey", "token", "secret", "password"})
+
+# Endpoints polled by container health checks and load balancers. Logged at
+# DEBUG so a probe every few seconds does not bury the traffic worth reading.
+_PROBE_PATHS = frozenset({"/health/live", "/health/ready"})
+
+
+def _safe_query(raw: str) -> str:
+    """The query string with any credential-shaped value replaced."""
+    from urllib.parse import parse_qsl, urlencode
+
+    pairs = parse_qsl(raw, keep_blank_values=True)
+    return urlencode(
+        [(k, "[redacted]" if k.lower() in _REDACTED_QUERY_KEYS else v) for k, v in pairs]
+    )
+
+
 class RequestIdMiddleware(BaseHTTPMiddleware):
-    """Bind a request id for the duration of each request and echo it back."""
+    """Bind a request id for each request, echo it back, and log the result.
+
+    The access line lives here rather than in uvicorn because uvicorn's is
+    written by the server, outside the contextvar's scope, so it cannot carry the
+    correlation id - which is the one field that ties it to the application lines
+    the same request produced. It also has no duration.
+
+    A request that raises is logged too, with the status the client will actually
+    receive, and the exception re-raised for the handlers above. A failure that
+    left no trace in the access log was the legacy behaviour and made "the screen
+    was blank at 14:03" unanswerable.
+    """
 
     async def dispatch(self, request: Request, call_next) -> Response:
         incoming = request.headers.get(REQUEST_ID_HEADER)
         request_id = incoming or uuid.uuid4().hex
         token = request_id_var.set(request_id)
+        started = time.perf_counter()
         try:
             response = await call_next(request)
+        except Exception:
+            # Logged while the contextvar is still bound, so the access line
+            # carries the same id as the traceback logged above it.
+            self._log(request, 500, started)
+            raise
+        else:
+            self._log(request, response.status_code, started)
         finally:
             request_id_var.reset(token)
+
         response.headers[REQUEST_ID_HEADER] = request_id
         return response
+
+    @staticmethod
+    def _log(request: Request, status: int, started: float) -> None:
+        path = request.url.path
+        query = _safe_query(request.url.query)
+        client = request.client.host if request.client else "-"
+        level = logging.DEBUG if path in _PROBE_PATHS else logging.INFO
+
+        access_logger.log(
+            level,
+            '%s "%s %s%s" %s %.1fms',
+            client,
+            request.method,
+            path,
+            f"?{query}" if query else "",
+            status,
+            (time.perf_counter() - started) * 1000,
+        )
 
 
 def bind_task_id(task_id: str | None) -> None:
