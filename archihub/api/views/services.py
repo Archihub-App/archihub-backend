@@ -336,6 +336,63 @@ def _one_image(incoming) -> tuple[object | None, str | None]:
 IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "tif", "tiff", "heic", "bmp", "webp"}
 
 
+def _derive_thumbnail(attached: list, user: str) -> str | None:
+    """Produce the uploaded thumbnail's web versions. Returns an error message.
+
+    **Attaching the file is not enough to make it visible.** `_thumbnail` serves
+    ``<web_files>/<path>_medium.jpg``, which only exists once the file has been
+    processed - so a view whose image was merely stored renders with no image at
+    all, silently, because the read path treats a missing derivative as "not
+    ready yet" rather than an error.
+
+    Done here and now rather than queued, which is deliberate and is what the
+    legacy service did too: the operator is looking at the form, and a thumbnail
+    that appears some seconds later - or not at all, if no worker is running -
+    reads as the upload having failed. Nothing else about a view is asynchronous.
+
+    The two automatic paths in `filesProcessing` cannot cover this: both select
+    *resources* by content type, and a view is not a resource.
+    """
+    from archihub.plugins.framework import interop
+
+    if not attached:
+        return None
+
+    record_id = attached[0].get("id")
+    record = _mongo().get_record(
+        RECORDS_COLLECTION,
+        {"_id": _to_object_id(str(record_id))},
+        fields={"mime": 1, "filepath": 1},
+    )
+    if not record:
+        return _("Record does not exist")
+
+    try:
+        interop.derive_web_versions(record)
+    except interop.CapabilityUnavailable as exc:
+        # An instance with filesProcessing switched off. Say so plainly: the
+        # view would otherwise be created with an image that can never render.
+        logger.warning("Cannot derive a view thumbnail: %s", exc)
+        return _("File processing failed for image")
+    except Exception:
+        logger.exception("Failed to derive the thumbnail for record %s", record_id)
+        return _("File processing failed for image")
+
+    # Re-read rather than trusting the return value: the contract that matters is
+    # what the read path will find, and only a stored `type == "image"` makes
+    # `_thumbnail` serve anything.
+    processed = _mongo().get_record(
+        RECORDS_COLLECTION,
+        {"_id": _to_object_id(str(record_id))},
+        fields={"processing.fileProcessing.type": 1},
+    )
+    kind = (((processed or {}).get("processing") or {}).get("fileProcessing") or {}).get("type")
+    if kind != "image":
+        return _("File processing failed for image")
+
+    return None
+
+
 def create(body: dict, user: str, incoming: list | None = None) -> tuple[dict, int]:
     """Create a view, optionally with its thumbnail."""
     from archihub.api.records import storage
@@ -372,6 +429,15 @@ def create(body: dict, user: str, incoming: list | None = None) -> tuple[dict, i
             # than being left behind empty.
             _mongo().delete_record(COLLECTION, {"_id": inserted.inserted_id})
             raise
+        message = _derive_thumbnail(attached, user)
+        if message:
+            # Undo the whole thing. A view carrying an image that can never
+            # render is worse than no view: the operator sees it succeed and
+            # only later notices a blank card, with nothing to act on.
+            storage.detach_from_parent(attached[0].get("id"), view_id, user)
+            _mongo().delete_record(COLLECTION, {"_id": inserted.inserted_id})
+            return {"msg": message}, 500
+
         _mongo().update_record(COLLECTION, {"_id": inserted.inserted_id}, {"filesObj": attached[:1]})
 
     _audit(user, "view_create", {"data": {"id": view_id, "name": payload.get("name")}})
@@ -412,6 +478,14 @@ def update(view_id: str, body: dict, user: str, incoming: list | None = None) ->
             user,
             resource={"_id": object_id, "post_type": VIEW_POST_TYPE, "parents": []},
         )
+        message = _derive_thumbnail(attached, user)
+        if message:
+            # The previous thumbnail was already detached, so there is nothing
+            # coherent to roll back to; refuse before writing the new reference
+            # rather than pointing the view at an image that cannot render.
+            storage.detach_from_parent(attached[0].get("id"), view_id, user)
+            return {"msg": message}, 500
+
         payload["filesObj"] = attached[:1]
 
     if not payload:

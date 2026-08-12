@@ -280,6 +280,23 @@ def set_first_time(body: dict) -> tuple[dict, int]:
 # ---------------------------------------------------------------------------
 
 
+def _screen_list(declared) -> list[str]:
+    """The screens a plugin declares, as a list of strings.
+
+    `plugin_info` is authored per plugin - including by third parties - so its
+    shape is not guaranteed. Only a list or tuple of strings is accepted; a bare
+    string is *not* iterated, because `list("bulk")` is `["b", "u", "l", "k"]`
+    and the frontend would render four buttons pointing at routes that do not
+    exist. Anything else becomes an empty list and the plugin renders without
+    buttons.
+    """
+    if isinstance(declared, str):
+        return [declared]
+    if isinstance(declared, (list, tuple)):
+        return [item for item in declared if isinstance(item, str)]
+    return []
+
+
 def get_plugins() -> tuple[dict, int]:
     """Installed plugins and whether each is active."""
     try:
@@ -299,6 +316,19 @@ def get_plugins() -> tuple[dict, int]:
                     "version": info.get("version"),
                     "author": info.get("author"),
                     "active": slug in active,
+                    # The screens this plugin offers - "settings", "bulk",
+                    # "lunch", "control". `/processing` renders one button per
+                    # entry and routes to `/processing/{type}/{slug}`, so a
+                    # plugin whose `type` is missing crashes that page on
+                    # `undefined.map`. Legacy returned the whole `plugin_info`,
+                    # which carried this incidentally; this payload is a chosen
+                    # subset, and the field was not chosen.
+                    #
+                    # Defaulted to `[]` rather than omitted: an installed plugin
+                    # that declares no screens is a real case (`liquidText`), and
+                    # the difference between "no screens" and "field absent" is
+                    # exactly what broke the page.
+                    "type": _screen_list(info.get("type")),
                     # Surfaced so an operator can see why a plugin cannot be
                     # activated on this backend.
                     "supported": slug in PORTED_PLUGINS,

@@ -1295,6 +1295,21 @@
       "auth": true,
       "expect_status": 200,
       "_note": "The panel asks for several charts by name; one the backend does not recognise must not fail the screen."
+    },
+    {
+      "name": "system: the plugin listing carries every field /processing renders",
+      "path": "/system/plugins",
+      "auth": true,
+      "expect_status": 200,
+      "expect_present": [
+        "plugins",
+        "slug",
+        "name",
+        "description",
+        "active",
+        "type"
+      ],
+      "_note": "Contract, not parity: legacy returns each plugin's whole `plugin_info`, the port a chosen subset. `type` is what /processing maps over to build its buttons and route to /processing/{type}/{slug}; omitting it crashed the page on undefined.map. `plugins` guards F38, where the payload was a bare array."
     }
   ],
   "_expected_differences": [

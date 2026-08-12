@@ -357,6 +357,11 @@ class FilesProcessing(ArchiPlugin):
         # Registered here rather than at import: a capability offered by a
         # plugin that is not active would be a plugin running while switched off.
         interop.provide(interop.PDF_CONVERSION, SLUG, media.convert_to_pdf)
+        # `views` uses this to make an uploaded thumbnail renderable. It is the
+        # same `process_record` the bulk and automatic tasks run; the difference
+        # is only that the caller wants it done before it answers, because a view
+        # whose image has not been derived shows no image at all.
+        interop.provide(interop.IMAGE_DERIVATIVES, SLUG, process_record)
         return super().build()
 
 

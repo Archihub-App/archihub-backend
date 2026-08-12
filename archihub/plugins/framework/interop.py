@@ -77,6 +77,12 @@ def reset() -> None:
 
 PDF_CONVERSION = "document.to_pdf"
 
+#: Derive the web-sized versions of a stored file and record the result on it.
+#: `views` needs this for a thumbnail: the image is stored as a record, but a
+#: record is only *renderable* once a derivative exists at
+#: ``<web_files>/<path>_medium.jpg``.
+IMAGE_DERIVATIVES = "file.derivatives"
+
 
 def convert_to_pdf(source, destination) -> None:
     """Convert a document to PDF using whichever plugin provides it."""
@@ -84,3 +90,23 @@ def convert_to_pdf(source, destination) -> None:
         PDF_CONVERSION, needed_by="PDF export", provider_hint="filesProcessing"
     )
     converter(source, destination)
+
+
+def derive_web_versions(record: dict) -> bool:
+    """Produce a stored file's web derivatives. Returns whether it did.
+
+    A **core** domain reaching for a plugin capability, which is worth being
+    explicit about. A view's thumbnail is not optional decoration: the image is
+    uploaded through the view form and is unrenderable until something turns it
+    into `_medium.jpg`. The legacy views service imported
+    ``app.plugins.filesProcessing`` directly for exactly this, which ran the
+    plugin's code whether or not it was active.
+
+    Going through the registry keeps that following activation, and gives an
+    instance with ``filesProcessing`` switched off a refusal naming what to turn
+    on rather than an ImportError.
+    """
+    processor = get(
+        IMAGE_DERIVATIVES, needed_by="the view thumbnail", provider_hint="filesProcessing"
+    )
+    return bool(processor(record))

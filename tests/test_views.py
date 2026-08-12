@@ -72,6 +72,18 @@ def mongo(monkeypatch):
 
 
 @pytest.fixture
+def derives(monkeypatch):
+    """A working `filesProcessing`: the thumbnail derives successfully.
+
+    Stubbed at `_derive_thumbnail` because the real one goes through the plugin
+    interop registry and then re-reads Mongo; the tests that use this are about
+    what `create`/`update` do with the *outcome*, not how it is produced. The
+    outcome itself is covered separately below.
+    """
+    monkeypatch.setattr(services, "_derive_thumbnail", lambda attached, user: None)
+
+
+@pytest.fixture
 def media_root(tmp_path, monkeypatch):
     web = tmp_path / "web" / "2024"
     web.mkdir(parents=True)
@@ -296,7 +308,7 @@ def test_more_than_one_thumbnail_is_refused(mongo):
     assert status == 400
 
 
-def test_an_image_thumbnail_is_attached_and_recorded(mongo, monkeypatch):
+def test_an_image_thumbnail_is_attached_and_recorded(mongo, derives, monkeypatch):
     attached = []
 
     def fake_attach(view_id, incoming, user, resource=None):
@@ -331,7 +343,7 @@ def test_a_failed_attachment_rolls_the_view_back(mongo, monkeypatch):
     assert mongo.deleted
 
 
-def test_replacing_a_thumbnail_detaches_the_old_one(mongo, monkeypatch):
+def test_replacing_a_thumbnail_detaches_the_old_one(mongo, derives, monkeypatch):
     detached = []
     monkeypatch.setattr(
         "archihub.api.records.storage.detach_from_parent",
@@ -461,3 +473,141 @@ def test_counts_are_ranked_with_the_commonest_first(mongo, types):
     payload, _status = services.get_view_info("photographs")
 
     assert [entry["_id"] for entry in payload["files"]["data"][:2]] == ["image", "document"]
+
+
+# ---------------------------------------------------------------------------
+# Deriving the thumbnail
+#
+# Attaching the file is NOT enough to make it visible. `_thumbnail` serves
+# `<web_files>/<path>_medium.jpg`, which exists only after processing - and it
+# treats a missing derivative as "not ready yet" and returns None. So a view
+# whose image was merely stored renders with no image, permanently, and nothing
+# anywhere reports a problem. That is what this section exists to prevent.
+#
+# The two automatic paths in `filesProcessing` cannot cover it: both select
+# RESOURCES by content type, and a view is not a resource.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def attaches(monkeypatch):
+    def fake_attach(view_id, incoming, user, resource=None):
+        return [{"id": OWN_RECORD, "tag": "thumbnail"}]
+
+    monkeypatch.setattr("archihub.api.records.storage.attach_files", fake_attach)
+    detached = []
+    monkeypatch.setattr(
+        "archihub.api.records.storage.detach_from_parent",
+        lambda record_id, parent_id, user: detached.append(record_id) or True,
+    )
+    return detached
+
+
+def _processing(kind):
+    """A records lookup answering with a given fileProcessing type."""
+    return {"processing": {"fileProcessing": {"type": kind, "path": "2024/thumb"}}}
+
+
+def test_the_upload_is_processed_before_the_view_is_reported_created(
+    mongo, attaches, monkeypatch
+):
+    called = []
+    monkeypatch.setattr(
+        "archihub.plugins.framework.interop.derive_web_versions",
+        lambda record: called.append(record) or True,
+    )
+    mongo.records[OWN_RECORD] = _processing("image") | {"mime": "image/jpeg", "filepath": "p"}
+
+    _payload, status = services.create(
+        {"name": "V", "slug": "v", "root": "fondo"}, "alice", [FakeUpload("cover.jpg")]
+    )
+
+    assert status == 201
+    assert called, "the thumbnail was stored but never made renderable"
+
+
+def test_a_view_whose_image_cannot_be_processed_is_not_created(mongo, attaches, monkeypatch):
+    """Better no view than one with a permanently blank card the operator was
+    told had saved."""
+    monkeypatch.setattr(
+        "archihub.plugins.framework.interop.derive_web_versions",
+        lambda record: True,
+    )
+    # Processing ran but produced something that is not an image.
+    mongo.records[OWN_RECORD] = _processing("document") | {"mime": "image/jpeg", "filepath": "p"}
+
+    payload, status = services.create(
+        {"name": "V", "slug": "v", "root": "fondo"}, "alice", [FakeUpload("cover.jpg")]
+    )
+
+    assert status == 500
+    assert payload["msg"] == services._("File processing failed for image")
+    assert mongo.deleted, "the half-made view was left behind"
+
+
+def test_an_inactive_files_processing_plugin_is_reported_not_crashed(
+    mongo, attaches, monkeypatch
+):
+    """The capability follows plugin activation, so this is a real deployment
+    state - not an internal error."""
+    from archihub.plugins.framework import interop
+
+    def unavailable(record):
+        raise interop.CapabilityUnavailable("no provider")
+
+    monkeypatch.setattr(interop, "derive_web_versions", unavailable)
+    mongo.records[OWN_RECORD] = {"mime": "image/jpeg", "filepath": "p"}
+
+    payload, status = services.create(
+        {"name": "V", "slug": "v", "root": "fondo"}, "alice", [FakeUpload("cover.jpg")]
+    )
+
+    assert status == 500
+    assert payload["msg"] == services._("File processing failed for image")
+
+
+def test_a_processing_crash_does_not_escape_as_a_500_traceback(mongo, attaches, monkeypatch):
+    monkeypatch.setattr(
+        "archihub.plugins.framework.interop.derive_web_versions",
+        lambda record: (_ for _ in ()).throw(RuntimeError("imagemagick died")),
+    )
+    mongo.records[OWN_RECORD] = {"mime": "image/jpeg", "filepath": "p"}
+
+    payload, status = services.create(
+        {"name": "V", "slug": "v", "root": "fondo"}, "alice", [FakeUpload("cover.jpg")]
+    )
+
+    assert status == 500
+    assert payload["msg"] == services._("File processing failed for image")
+
+
+def test_a_view_with_no_upload_needs_no_processing(mongo, monkeypatch):
+    """Only the image path touches the plugin; a plain view must not require
+    filesProcessing to be active at all."""
+    def explode(record):
+        raise AssertionError("processing must not be attempted without an upload")
+
+    monkeypatch.setattr("archihub.plugins.framework.interop.derive_web_versions", explode)
+
+    _payload, status = services.create(
+        {"name": "V", "slug": "v", "root": "fondo"}, "alice", None
+    )
+
+    assert status == 201
+
+
+def test_replacing_a_thumbnail_processes_the_new_one(mongo, attaches, monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        "archihub.plugins.framework.interop.derive_web_versions",
+        lambda record: called.append(record) or True,
+    )
+    mongo.views[VIEW_ID] = view()
+    mongo.records[OWN_RECORD] = _processing("image") | {"mime": "image/jpeg", "filepath": "p"}
+
+    _payload, status = services.update(
+        VIEW_ID, {"name": "V"}, "alice", [FakeUpload("cover.jpg")]
+    )
+
+    assert status == 200
+    assert called, "the replacement image was stored but never made renderable"
