@@ -180,9 +180,21 @@ def _register_middleware(app: FastAPI, settings: Settings) -> None:
     # Flask-CORS was configured per-path: /adminApi/* and /publicApi/* always
     # allowed any origin, while everything else was restricted to URL_FRONTEND.
     # Starlette's CORSMiddleware has no per-path configuration, so the two rules
-    # are unified to the *more permissive* of the pair only when the permissive
-    # APIs are actually mounted. Those two blueprints are not ported yet, so
-    # today this applies the restricted policy alone.
+    # collapse into one.
+    #
+    # WHAT THAT MEANS IN PRACTICE. Both external APIs are now ported and are
+    # registered on every instance (availability is a per-request question - see
+    # api/external/router.py), so the permissive half always applies to some
+    # route. With URL_FRONTEND unset this is `*` throughout, which is the legacy
+    # behaviour for those two paths and MORE permissive than the legacy default
+    # for the rest. Setting URL_FRONTEND restricts everything, including the two
+    # APIs that other organisations' scripts call - so an operator who sets it
+    # must add those callers' origins to it.
+    #
+    # Restoring the exact per-path split needs a small middleware of our own
+    # rather than Starlette's; recorded here rather than done, because narrowing
+    # CORS was tried once on the legacy stack and deliberately reverted (commit
+    # 4b3e25d).
     #
     # The wildcard on the public/admin APIs is INTENTIONAL - those endpoints are
     # consumed by other organisations' scripts, not just this repo's frontend.
