@@ -86,7 +86,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging(
         level="DEBUG" if settings.is_dev else "INFO",
         json_output=not settings.is_dev,
+        access_log=settings.access_log_enabled,
     )
+
+    # Bind the Celery application to this process before anything can dispatch.
+    #
+    # Task bodies are declared with `@shared_task`, which resolves the app at
+    # CALL time from Celery's process-global default slot. Importing this module
+    # is what fills that slot (`celery_app.set_default()`); until it is imported,
+    # Celery answers `current_app` with a throwaway default whose broker is
+    # `amqp://guest@localhost:5672//`.
+    #
+    # The web process never started a worker, so nothing else imported it - and
+    # the failure was not a missing task but a REFUSED CONNECTION to a RabbitMQ
+    # that this deployment does not run. Every job the API queued was lost:
+    # automatic file processing on upload, reindexing, every plugin bulk action.
+    # `tests/test_celery_binding.py` asserts the binding rather than trusting
+    # import order, because this fails silently the moment it regresses.
+    from archihub.worker.celery_app import celery_app  # noqa: F401
 
     app = FastAPI(
         title="ARCHIHUB: A comprehensive tool for organizing and connecting information",

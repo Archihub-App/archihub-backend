@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from archihub.api.forms import services
+from archihub.core.errors import ValidationError
 
 
 class FakeInsertResult:
@@ -98,24 +99,24 @@ def test_free_slug_is_used_unchanged(mongo):
 
 
 def test_form_must_have_a_title_field(mongo):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         services.validate_form({"fields": [{"label": "X", "type": "text", "destiny": "metadata.x"}]})
 
 
 def test_title_field_must_be_text(mongo):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         services.validate_form({"fields": [title_field(type="number")]})
 
 
 def test_field_needs_a_non_empty_label(mongo):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         services.validate_form({"fields": [{"type": "text", "destiny": "metadata.x"}]})
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         services.validate_form({"fields": [{"label": "", "type": "text", "destiny": "metadata.x"}]})
 
 
 def test_destiny_must_start_with_metadata(mongo):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         services.validate_form(
             {"fields": [title_field(), {"label": "X", "type": "text", "destiny": "somewhere"}]}
         )
@@ -130,12 +131,12 @@ def test_separator_and_file_are_exempt_from_the_destiny_rule(mongo, field_type):
 
 
 def test_ident_destiny_is_rejected(mongo):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         services.validate_form({"fields": [title_field(), {"label": "X", "type": "text", "destiny": "ident"}]})
 
 
 def test_file_field_requires_a_filetag(mongo):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         services.validate_form({"fields": [title_field(), {"label": "F", "type": "file"}]})
 
 
@@ -149,7 +150,7 @@ def test_file_field_requires_a_filetag(mongo):
     ],
 )
 def test_repeater_subfield_rules(mongo, repeater):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         services.validate_form({"fields": [title_field(), repeater]})
 
 
@@ -182,7 +183,7 @@ def test_condition_keys_survive_when_a_condition_is_set(mongo):
 
 def test_unknown_access_right_is_rejected(mongo):
     field = {"label": "X", "type": "text", "destiny": "metadata.x", "accessRights": ["nope"]}
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         services.validate_form({"fields": [title_field(), field]})
 
 
@@ -201,7 +202,7 @@ def test_conflicting_types_on_the_same_destiny_are_rejected(mongo):
     ]
     new_form = {"slug": "new", "fields": [{"destiny": "metadata.x", "type": "number"}]}
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         services.update_main_schema(new_form=new_form)
 
 
@@ -356,3 +357,91 @@ def test_field_types_are_copied_not_shared(mongo):
     assert FIELD_TYPES[0]["label"] != "MUTATED"
     second, _status = services.get_all_fields_types()
     assert second[0]["label"] != "MUTATED"
+
+
+# ---------------------------------------------------------------------------
+# A rejected form is an answer, not a server fault
+#
+# Everything validate_form and update_main_schema refuse is something a
+# cataloguer typed. Reporting it as 500 says "the server is broken" about a typo
+# the user can fix, and buries genuine faults among the typos.
+# ---------------------------------------------------------------------------
+
+
+def _conflicting_form():
+    return {
+        "name": "Test",
+        "slug": "test",
+        "fields": [
+            {"label": "A", "destiny": "metadata.firstLevel.dup", "type": "text"},
+            {"label": "B", "destiny": "metadata.firstLevel.dup", "type": "simple-date"},
+        ],
+    }
+
+
+def test_a_duplicated_destiny_is_a_client_error(mongo):
+    mongo.collections["forms"] = []
+
+    with pytest.raises(ValidationError) as raised:
+        services.update_main_schema(new_form=_conflicting_form())
+
+    assert raised.value.status_code == 400
+
+
+def test_the_refusal_names_the_offending_field(mongo):
+    """The message is what the form builder shows; without the destiny in it the
+    cataloguer cannot tell which of forty fields to fix."""
+    mongo.collections["forms"] = []
+
+    with pytest.raises(ValidationError) as raised:
+        services.update_main_schema(new_form=_conflicting_form())
+
+    assert "metadata.firstLevel.dup" in raised.value.message
+
+
+def test_create_does_not_convert_a_refusal_into_a_500(mongo):
+    """The blanket `except Exception` must not swallow it on the way out."""
+    mongo.collections["forms"] = []
+
+    with pytest.raises(ValidationError):
+        services.create(_conflicting_form(), "admin")
+
+    assert mongo.inserted == []
+
+
+def test_update_does_not_convert_a_refusal_into_a_500(mongo):
+    mongo.collections["forms"] = []
+    mongo.records["forms"] = {"slug": "test"}
+
+    with pytest.raises(ValidationError):
+        services.update_by_slug("test", _conflicting_form(), "admin")
+
+    assert mongo.updated == []
+
+
+def test_a_refusal_is_not_logged_as_an_unexpected_error(mongo, caplog):
+    """`logger.exception` at ERROR with a traceback is for faults nobody
+    anticipated. A traceback per typo is what makes a log unreadable."""
+    import logging
+
+    mongo.collections["forms"] = []
+
+    with caplog.at_level(logging.ERROR, logger="archihub.api.forms.services"):
+        with pytest.raises(ValidationError):
+            services.create(_conflicting_form(), "admin")
+
+    assert caplog.records == []
+
+
+def test_an_unexpected_failure_is_still_a_500_with_its_traceback(mongo, monkeypatch):
+    """The distinction only helps if genuine faults keep their loud treatment."""
+    mongo.collections["forms"] = []
+
+    def explode(*_args, **_kwargs):
+        raise RuntimeError("mongo is on fire")
+
+    monkeypatch.setattr(services, "validate_form", explode)
+
+    payload, status = services.create({"name": "Test", "fields": []}, "admin")
+
+    assert status == 500

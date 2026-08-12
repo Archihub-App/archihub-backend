@@ -69,7 +69,18 @@ class Settings(BaseSettings):
     environment: Literal["DEV", "PROD"] = Field(default="PROD", validation_alias="ENVIRONMENT")
     flask_env: str | None = Field(default=None, validation_alias="FLASK_ENV")
 
+    # NOT a mode switch. This names the *instance* - it is what the Mongo
+    # database (`archihub-<name>`) and the Elasticsearch index prefix are built
+    # from. Whether the backend is in DEV or PROD mode is ENVIRONMENT/FLASK_ENV
+    # above; keeping the two apart is what stops renaming a database from
+    # changing how the application logs.
     environment_name: str = Field(default="prod", validation_alias="ENVIRONMENT_NAME")
+
+    # Per-request access log. Unset follows the environment - on in DEV, off in
+    # PROD - which is what an operator expects without configuring anything.
+    # Set it explicitly to keep the lines in PROD, where they are the only record
+    # of which requests reached the application and what they were answered.
+    access_log: bool | None = Field(default=None, validation_alias="ACCESS_LOG")
 
     # Legacy name was FLASK_RUN_PORT (compose passes BACKEND_PORT_FLASK into it).
     backend_port: int = Field(default=5000, validation_alias="BACKEND_PORT")
@@ -204,6 +215,11 @@ class Settings(BaseSettings):
         if self.flask_env is not None and self.flask_env.upper() == "DEV":
             return True
         return self.environment == "DEV"
+
+    @property
+    def access_log_enabled(self) -> bool:
+        """Whether to emit one log line per request."""
+        return self.is_dev if self.access_log is None else self.access_log
 
     @property
     def effective_port(self) -> int:

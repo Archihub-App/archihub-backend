@@ -72,8 +72,15 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 
-def configure_logging(*, level: str = "INFO", json_output: bool = True) -> None:
-    """Install handlers. Safe to call more than once (idempotent per process)."""
+def configure_logging(
+    *, level: str = "INFO", json_output: bool = True, access_log: bool = True
+) -> None:
+    """Install handlers. Safe to call more than once (idempotent per process).
+
+    ``access_log`` gates only the per-request line. Everything else - business
+    errors, warnings, unhandled exceptions - is unaffected, because those are how
+    an operator finds out something is wrong and are not verbosity.
+    """
     formatter: logging.Formatter
     if json_output:
         formatter = JsonFormatter()
@@ -99,6 +106,14 @@ def configure_logging(*, level: str = "INFO", json_output: bool = True) -> None:
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("pymongo").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+    # WARNING rather than removing the middleware: the access line is emitted
+    # below every threshold this logger will pass, so nothing is computed and
+    # nothing is printed, and turning it back on is a level change rather than a
+    # different request path.
+    logging.getLogger("archihub.access").setLevel(
+        logging.NOTSET if access_log else logging.WARNING
+    )
 
 
 access_logger = logging.getLogger("archihub.access")

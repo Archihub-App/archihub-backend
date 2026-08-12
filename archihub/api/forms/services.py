@@ -7,6 +7,15 @@ A form defines the fields a content type catalogues. Each field declares a
 the instance contributes to one combined schema. Two forms may therefore not
 declare the same destiny with conflicting types, which is what
 :func:`update_main_schema` enforces before any write.
+
+**Rejecting a form is an answer, not a failure.** Everything :func:`validate_form`
+and :func:`update_main_schema` refuse is something a cataloguer typed into the
+form builder - a missing label, a destiny that does not start with ``metadata``,
+the same destiny declared twice with different types. Those raise
+``ValidationError`` so the caller gets a 400 carrying the reason, and the log
+gets one line. Raising a bare exception instead put a full traceback in the log
+at ERROR and told the client 500, which says "the server is broken" about a
+typo the user can fix - and buries the genuine faults among the typos.
 """
 
 from __future__ import annotations
@@ -16,6 +25,7 @@ import logging
 
 from bson import json_util
 
+from archihub.core.errors import BusinessError, ValidationError
 from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
@@ -209,22 +219,22 @@ def validate_form(form: dict) -> None:
 
     for field in form.get("fields") or []:
         if "label" not in field:
-            raise ValueError(_("Error: the field must have a label"))
+            raise ValidationError(_("Error: the field must have a label"))
         if field["label"] == "":
-            raise ValueError(_("Error: the field label cannot be empty"))
+            raise ValidationError(_("Error: the field label cannot be empty"))
 
         field_type = field.get("type")
 
         if "destiny" in field:
             destiny = field["destiny"]
             if destiny == "ident":
-                raise ValueError(_("Error: the field cannot have destiny equal to ident"))
+                raise ValidationError(_("Error: the field cannot have destiny equal to ident"))
             if not destiny.startswith("metadata") and field_type not in DESTINY_EXEMPT_TYPES:
-                raise ValueError(_("Error: the field destiny must start with metadata"))
+                raise ValidationError(_("Error: the field destiny must start with metadata"))
             if destiny == TITLE_DESTINY:
                 has_title = True
                 if field_type != "text":
-                    raise ValueError(
+                    raise ValidationError(
                         _(
                             "Error: the field with destiny equal to "
                             "metadata.firstLevel.title must be of type text"
@@ -232,22 +242,22 @@ def validate_form(form: dict) -> None:
                     )
 
         if field_type == "file" and "filetag" not in field:
-            raise ValueError(_("Error: the field with type file must have the filetag attribute"))
+            raise ValidationError(_("Error: the field with type file must have the filetag attribute"))
 
         if field_type == "repeater":
             subfields = field.get("subfields")
             if subfields is None:
-                raise ValueError(
+                raise ValidationError(
                     _("Error: the field with type repeater must have the subfields attribute")
                 )
             if not isinstance(subfields, list):
-                raise ValueError(_("Error: the subfields attribute must be a list"))
+                raise ValidationError(_("Error: the subfields attribute must be a list"))
             if not subfields:
-                raise ValueError(_("Error: the subfields attribute cannot be empty"))
+                raise ValidationError(_("Error: the subfields attribute cannot be empty"))
             for subfield in subfields:
                 for required in ("destiny", "name", "type"):
                     if required not in subfield:
-                        raise ValueError(_("Error: the subfield must have a {key}", key=required))
+                        raise ValidationError(_("Error: the subfield must have a {key}", key=required))
 
         # Normalise conditional fields: without a condition, the condition
         # parameters are meaningless and must not be persisted.
@@ -260,12 +270,12 @@ def validate_form(form: dict) -> None:
             valid = {option.get("id") for option in _get_access_rights().get("options", [])}
             for right in field["accessRights"]:
                 if right not in valid:
-                    raise ValueError(_("The value of the accessRights field is not valid"))
+                    raise ValidationError(_("The value of the accessRights field is not valid"))
 
         _call_hook("validate_form_field", field)
 
     if not has_title:
-        raise ValueError(
+        raise ValidationError(
             _(
                 "Error: the form must have a field with destiny equal to "
                 "metadata.firstLevel.title"
@@ -302,7 +312,7 @@ def update_main_schema(new_form: dict | None = None, updated_form: dict | None =
             elif existing != field_type and not (
                 field_type in INTERCHANGEABLE_TYPES and existing in INTERCHANGEABLE_TYPES
             ):
-                raise ValueError(
+                raise ValidationError(
                     _("Error: the field {field} has two different types", field=destiny)
                 )
 
@@ -337,6 +347,10 @@ def create(body: dict, user: str) -> tuple[dict, int]:
         _register_log(user, "form_create", {"form": {"name": form.name, "slug": form.slug}})
         _clear_cache()
         return {"msg": _("Form created successfully")}, 201
+    except BusinessError:
+        # A rejected form definition is the user's answer, not a server fault.
+        # Re-raised so the registered handler renders its own status and message.
+        raise
     except Exception as exc:
         logger.exception("Could not create form")
         return {"msg": str(exc)}, 500
@@ -370,6 +384,8 @@ def update_by_slug(slug: str, body: dict, user: str) -> tuple[dict, int]:
                 "the option in the system settings"
             )
         }, 200
+    except BusinessError:
+        raise
     except Exception as exc:
         logger.exception("Could not update form %s", slug)
         return {"msg": str(exc)}, 500
@@ -413,6 +429,10 @@ def duplicate_by_slug(slug: str, user: str) -> tuple[dict, int]:
         # Cleared so create() derives a fresh unique slug from the new name.
         form["slug"] = ""
         return create(form, user)
+    except BusinessError:
+        # `create` validates, so a copy of a form that is no longer valid under
+        # the current combined schema is refused with its own reason.
+        raise
     except Exception as exc:
         logger.exception("Could not duplicate form %s", slug)
         return {"msg": str(exc)}, 500
