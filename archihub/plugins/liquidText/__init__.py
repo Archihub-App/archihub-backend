@@ -143,7 +143,7 @@ class LiquidText(ArchiPlugin):
 
             return file_response(
                 result,
-                filename=os.path.basename(str(result)),
+                download_name=os.path.basename(str(result)),
                 as_attachment=True,
             )
 

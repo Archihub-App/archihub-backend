@@ -160,7 +160,7 @@ class InventoryMaker(ArchiPlugin):
             )
             if status_code != 200:
                 return json_response(result, status_code)
-            return file_response(result, filename=result.name, as_attachment=True)
+            return file_response(result, download_name=result.name, as_attachment=True)
 
 
 def _queue_export(task, task_name: str, body: dict, user: str) -> JSONResponse:
@@ -181,16 +181,18 @@ def _may_export(body: dict, user: str) -> tuple[dict, int] | None:
     refused anyone.
     """
     from archihub.api.resources.access import effective_access_right
+    from archihub.api.resources.services import can_view_type
     from archihub.api.users.services import has_right, has_role
-    from archihub.core.roles import type_roles
-
     from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
 
     is_admin = has_role(user, "admin")
 
+    # `can_view_type` rather than a fourth copy of "read viewRoles, admin
+    # bypasses". It is the same rule the catalogue listing and the resource
+    # detail route apply, so an export cannot drift into being more permissive
+    # than the screen the operator exported from.
     for slug in body.get("post_type") or []:
-        view_roles = (type_roles(slug) or {}).get("viewRoles") or []
-        if view_roles and not is_admin and not any(has_role(user, role) for role in view_roles):
+        if not can_view_type(user, slug):
             return {"msg": _("You do not have sufficient permissions")}, LEGACY_ROLE_FAILURE_STATUS
 
     parent = body.get("parent")
@@ -285,7 +287,7 @@ def _public_inventory(body: dict):
     if not target.is_file():
         export.write_workbook(directory, {"Recursos": rows}, name=name)
 
-    return file_response(target, filename=f"{view_slug}.xlsx", as_attachment=True)
+    return file_response(target, download_name=f"{view_slug}.xlsx", as_attachment=True)
 
 
 def _resource_rows(filters: dict) -> tuple[list[dict], list[dict]]:

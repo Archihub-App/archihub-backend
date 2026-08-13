@@ -181,7 +181,7 @@ class MassiveUpdater(ArchiPlugin):
             )
             if status_code != 200:
                 return json_response(result, status_code)
-            return file_response(result, filename=result.name, as_attachment=True)
+            return file_response(result, download_name=result.name, as_attachment=True)
 
 
 # ---------------------------------------------------------------------------
