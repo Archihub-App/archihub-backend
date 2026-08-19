@@ -377,6 +377,8 @@ def get_compromise():
 
     if not user:
         return jsonify({'msg': _('User does not exist')}), 400
+
+    user.pop('password', None)
     return user, 200
 
 # Nuevo endpoint para aceptar el compromise de un usuario
