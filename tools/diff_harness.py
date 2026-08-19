@@ -234,12 +234,35 @@ class Fixture:
 def extract_path(payload: Any, path: str) -> Any:
     """Pull ``a.0.b`` out of a parsed response, or return None.
 
+    A ``[]`` segment maps the rest of the path over a list instead of indexing
+    into it, so ``[].slug`` binds EVERY slug rather than one. That exists for
+    the same reason the fixtures themselves do: a case that names one content
+    type is pinned to one instance's seed data, and when that type is absent
+    the case does not fail loudly - the request 500s on legacy, the fixture
+    reading it goes unresolved, and every case depending on it is skipped.
+    Binding the whole set asks the instance what it has.
+
+    An empty result is None, not ``[]``. A bound empty list would make its
+    cases run against nothing and pass, which is the outcome the skip
+    accounting exists to prevent.
+
     Deliberately total: a fixture that cannot be resolved is an ordinary
     outcome on an instance without that kind of data, and it is reported as a
     skip rather than crashing the run.
     """
     current = payload
-    for segment in path.split("."):
+    segments = path.split(".")
+    for position, segment in enumerate(segments):
+        if segment == "[]":
+            if not isinstance(current, list):
+                return None
+            rest = ".".join(segments[position + 1 :])
+            collected = [
+                item
+                for item in (extract_path(entry, rest) if rest else entry for entry in current)
+                if item is not None
+            ]
+            return collected or None
         if isinstance(current, list):
             if not segment.isdigit() or int(segment) >= len(current):
                 return None
@@ -428,6 +451,16 @@ class DiffHarness:
         Each is fired at the legacy backend only. Anything already bound - by
         ``--bind`` on the command line - is left alone, so an operator can pin a
         specific document without editing the case file.
+
+        A fixture's own request is substituted against the bindings resolved
+        BEFORE it, so one fixture can be expressed in terms of another - the
+        resource listing has to name content types, and which types exist is
+        itself a question for the instance. Fixtures are resolved in file
+        order, so a fixture may only refer to one declared above it; a forward
+        reference leaves the placeholder unresolved and is reported as such
+        rather than being sent as the literal text ``${name}``, which reaches
+        the backend as a nonexistent value and comes back as somebody else's
+        error.
         """
         unresolved: list[tuple[Fixture, str]] = []
 
@@ -440,13 +473,25 @@ class DiffHarness:
             if fixture.auth and self.token:
                 headers["Authorization"] = f"Bearer {self.token}"
 
+            needed = (
+                placeholders_in(fixture.path)
+                | placeholders_in(fixture.body)
+                | placeholders_in(fixture.query)
+            )
+            missing = sorted(name for name in needed if name not in self.bindings)
+            if missing:
+                unresolved.append(
+                    (fixture, f"depends on unresolved fixture(s): {', '.join(missing)}")
+                )
+                continue
+
             try:
                 response = self.client.request(
                     fixture.method.upper(),
-                    f"{self.legacy_url}{fixture.path}",
+                    f"{self.legacy_url}{substitute(fixture.path, self.bindings)}",
                     headers=headers,
-                    params=fixture.query,
-                    json=fixture.body,
+                    params=substitute(fixture.query, self.bindings),
+                    json=substitute(fixture.body, self.bindings),
                 )
             except httpx.RequestError as exc:
                 unresolved.append((fixture, f"request failed: {exc}"))

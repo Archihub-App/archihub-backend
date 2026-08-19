@@ -41,6 +41,21 @@ from celery.result import AsyncResult
 logger = logging.getLogger(__name__)
 
 
+def serialise(result):
+    """Mongo types into the extended-JSON forms legacy's ``parse_result`` gave.
+
+    ``_id`` becomes ``{"$oid": ...}`` and a ``datetime`` becomes
+    ``{"$date": ...}``. Which of the two date conventions a route uses is a
+    decision rather than an accident - see ``core.responses._flask_default`` -
+    and the tasks panel reads this one.
+    """
+    import json
+
+    from bson import json_util
+
+    return json.loads(json_util.dumps(result))
+
+
 def _result(task_id: str) -> AsyncResult:
     """An AsyncResult bound to THIS application's broker and backend.
 
@@ -241,8 +256,13 @@ def get_tasks(user: str, body: dict) -> tuple[list | dict, int]:
         resolved = []
         for task in tasks:
             entry = dict(task)
-            entry["_id"] = str(entry.get("_id"))
-            entry["date"] = entry["date"].isoformat() if hasattr(entry.get("date"), "isoformat") else entry.get("date")
+            # `{"$date": ...}`, NOT an ISO string. `TasksResults.tsx` renders
+            # the column as `getSimpleDate(resource.date.$date)`, unguarded, so
+            # a bare string leaves `.$date` undefined and every row in the panel
+            # reads "Invalid Date" - a 200 with a full body and a wrong screen.
+            # Legacy reached the same shape by running the list through
+            # `parse_result`; `serialise` is this port's name for that pass.
+            entry = serialise(entry)
             # The stored status is a snapshot; Celery is the authority on
             # whether the work has since finished.
             if entry.get("status") == STATUS_PENDING and entry.get("taskId"):

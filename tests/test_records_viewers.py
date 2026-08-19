@@ -8,6 +8,7 @@ regression tests for BACKEND_FINDINGS S18 - keep them.
 from __future__ import annotations
 
 import base64
+import pathlib
 
 import pytest
 from bson.objectid import ObjectId
@@ -201,6 +202,93 @@ def test_document_detail_of_an_image_is_a_single_page(mongo, web_root):
     }
 
     assert viewers.document_detail(record) == {"pages": 1, "aspect_ratio": 2.0}
+
+
+# ---------------------------------------------------------------------------
+# The image reader, which shares the document reader's two calls
+# ---------------------------------------------------------------------------
+
+
+def _image(root, stored="2024/03/img", sizes=("small", "large")):
+    """An image record with its derivatives on disk."""
+    directory = root / pathlib.Path(stored).parent
+    directory.mkdir(parents=True, exist_ok=True)
+    for size in sizes:
+        (root / f"{stored}_{size}.jpg").write_bytes(f"{size} bytes".encode())
+    return {
+        "_id": ObjectId(RECORD_ID),
+        "processing": {"fileProcessing": {"type": "image", "path": stored}},
+    }
+
+
+def test_page_images_serves_an_image_record(mongo, web_root):
+    """`ImageViewer.tsx` reaches an image through the DOCUMENT reader's routes.
+
+    It calls the shared viewer's ``init`` with four arguments, so ``isDocument``
+    keeps its default and the request carries ``gallery: false``. Refusing here
+    while ``document_detail`` answers ``{"pages": 1}`` for the same record
+    leaves the reader knowing about a page it can never fetch - a 200 followed
+    by a 400, and an empty frame.
+    """
+    record = _image(web_root)
+
+    result = viewers.page_images(record, [0], "small")
+
+    assert len(result) == 1
+    assert result[0]["filename"] == "img_small.jpg"
+    assert base64.b64decode(result[0]["data"]) == b"small bytes"
+
+
+def test_an_image_page_carries_the_aspect_ratio(mongo, web_root):
+    """The reader draws the frame from it, and a document page has none."""
+    result = viewers.page_images(_image(web_root), [0], "small")
+
+    assert result[0]["aspect_ratio"] == 2.0
+
+
+def test_the_readers_two_calls_agree_about_an_image(mongo, web_root):
+    """The defect was the disagreement, not either call on its own."""
+    record = _image(web_root)
+
+    detail = viewers.document_detail(record)
+    pages = viewers.page_images(record, list(range(detail["pages"])), "small")
+
+    assert len(pages) == detail["pages"]
+
+
+def test_big_resolves_to_the_large_derivative(mongo, web_root):
+    """``big`` is the frontend's name for what processing writes as ``large``."""
+    result = viewers.page_images(_image(web_root), [0], "big")
+
+    assert result[0]["filename"] == "img_large.jpg"
+
+
+@pytest.mark.parametrize("size", ["../../../../etc", "..", "/etc", "small\x00", "nonsense"])
+def test_an_image_page_size_outside_the_map_is_refused(mongo, web_root, size):
+    """Same rule as the document pages: the string indexes a map, it is never a path."""
+    with pytest.raises(viewers.ViewerError) as exc:
+        viewers.page_images(_image(web_root), [0], size)
+
+    assert exc.value.status_code == 400
+
+
+def test_a_missing_image_derivative_is_404_not_a_traceback(mongo, web_root):
+    record = _image(web_root, sizes=())
+
+    with pytest.raises(viewers.ViewerError) as exc:
+        viewers.page_images(record, [0], "small")
+
+    assert exc.value.status_code == 404
+
+
+def test_a_record_of_an_unknown_kind_is_still_refused(mongo, web_root):
+    """Serving images must not turn the check into a pass-through."""
+    record = {"processing": {"fileProcessing": {"type": "video", "path": "2024/03/v"}}}
+
+    with pytest.raises(viewers.ViewerError) as exc:
+        viewers.page_images(record, [0], "small")
+
+    assert exc.value.status_code == 400
 
 
 def test_an_unprocessed_record_says_so_rather_than_raising_keyerror(mongo, web_root):

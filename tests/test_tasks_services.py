@@ -17,9 +17,14 @@ corrected behaviour.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
+from bson.objectid import ObjectId
 
 from archihub.api.tasks import services
+
+TASK_OID = "6a70b833497d4440325c94b1"
 
 
 class FakeMongo:
@@ -232,3 +237,61 @@ def test_non_serialisable_result_is_stringified(mongo, monkeypatch):
 
     services.has_task("alice", "plugin.job")
     assert mongo.updates[0][2]["result"] == "weird-object"
+
+
+# ---------------------------------------------------------------------------
+# get_tasks - the wire shape the panel reads
+# ---------------------------------------------------------------------------
+
+
+def listing_mongo(monkeypatch, rows):
+    """A FakeMongo whose `get_all_records` returns `rows`."""
+    fake = FakeMongo()
+    fake.get_all_records = lambda collection, filters=None, **kwargs: list(rows)
+    fake.count = lambda collection, filters=None: len(rows)
+    monkeypatch.setattr(services, "_mongo", lambda: fake)
+    return fake
+
+
+def test_a_task_date_is_extended_json_not_a_bare_string(monkeypatch):
+    """`TasksResults.tsx` renders `getSimpleDate(resource.date.$date)`.
+
+    The read is unguarded, so a bare string leaves `.$date` undefined and every
+    row in the panel reads "Invalid Date" - a 200, a full body, and a wrong
+    screen with nothing logged anywhere. Legacy reached this shape by running
+    the list through `parse_result`.
+    """
+    listing_mongo(
+        monkeypatch,
+        [{"_id": ObjectId(TASK_OID), "date": datetime(2026, 8, 19, 10, 30), "user": "alice"}],
+    )
+
+    rows, status = services.get_tasks("alice", {"page": 0})
+
+    assert status == 200
+    assert isinstance(rows[0]["date"], dict)
+    assert "$date" in rows[0]["date"]
+
+
+def test_a_task_id_is_extended_json_too(monkeypatch):
+    """The same `json_util` pass legacy applied, so `_id` keeps its `$oid` form."""
+    listing_mongo(
+        monkeypatch,
+        [{"_id": ObjectId(TASK_OID), "date": datetime(2026, 8, 19, 10, 30), "user": "alice"}],
+    )
+
+    rows, _status = services.get_tasks("alice", {"page": 0})
+
+    assert rows[0]["_id"] == {"$oid": TASK_OID}
+
+
+def test_the_listing_still_presents_automatic_as_the_system(monkeypatch):
+    """Serialising must not skip the presentation the panel depends on."""
+    listing_mongo(
+        monkeypatch,
+        [{"_id": ObjectId(TASK_OID), "date": datetime(2026, 8, 19, 10, 30), "user": "automatic"}],
+    )
+
+    rows, _status = services.get_tasks("alice", {"page": 0})
+
+    assert rows[0]["user"] == "system"

@@ -43,12 +43,22 @@ DETAIL_FIELDS = {
     "name": 1, "displayName": 1, "size": 1, "filepath": 1, "mime": 1, "status": 1,
 }
 
-#: EXIF keys worth surfacing. The full block routinely carries GPS coordinates,
-#: camera serial numbers and owner names.
+#: EXIF names worth surfacing, WITHOUT their group prefix. ExifTool writes every
+#: key as ``<group>:<name>`` - ``EXIF:Make``, ``File:ImageWidth``,
+#: ``Composite:Megapixels`` - and the same name appears under several groups, so
+#: the allowlist is matched against the name and the stored key is kept as-is.
+#:
+#: Everything unlisted is dropped rather than passed through. The full block
+#: routinely carries GPS coordinates, camera serial numbers and owner names, and
+#: `File:Directory`/`File:FileName` state where the file sits on the server -
+#: the one thing the records API goes out of its way never to return.
 IMPORTANT_EXIF = (
     "Make", "Model", "DateTimeOriginal", "ExposureTime", "FNumber", "ISO",
     "FocalLength", "LensModel", "Orientation", "XResolution", "YResolution",
-    "ImageWidth", "ImageHeight", "ColorSpace", "Software",
+    "ImageWidth", "ImageHeight", "ColorSpace", "Software", "ImageSize",
+    "Megapixels", "MIMEType", "FileType", "BitsPerSample",
+    # Media records carry these unprefixed, and the players show both.
+    "duration_ms", "bit_rate",
 )
 
 
@@ -165,7 +175,23 @@ def important_exif(metadata) -> dict:
     """
     if not isinstance(metadata, dict):
         return {}
-    return {key: metadata[key] for key in IMPORTANT_EXIF if key in metadata}
+    allowed = set(IMPORTANT_EXIF)
+    return {
+        key: value
+        for key, value in metadata.items()
+        if _exif_name(key) in allowed
+    }
+
+
+def _exif_name(key: str) -> str:
+    """An ExifTool key without its group prefix.
+
+    Matching the whole key was the defect: every stored key is
+    ``<group>:<name>``, so an allowlist of bare names matched nothing at all and
+    the panel came back empty - a 200 with a complete record and no metadata on
+    the screen, which reads as "this scan has none".
+    """
+    return key.rsplit(":", 1)[-1] if isinstance(key, str) else ""
 
 
 def _describe_parents(parents: list) -> list[dict]:

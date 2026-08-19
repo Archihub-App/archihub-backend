@@ -302,18 +302,84 @@ def test_the_dzi_descriptor_survives_because_the_viewer_needs_it(mongo):
     assert payload["processing"]["fileProcessing"]["cloud"] is True
 
 
+#: One record's block as ExifTool actually writes it. Every key is
+#: ``<group>:<name>``; an earlier version of this test invented bare names, so
+#: the test and the implementation agreed with each other and not with the
+#: database, and the filter matched nothing on any real record.
+STORED_EXIF = {
+    "SourceFile": "/srv/archihub/original/2025/10/95c300cf.jpg",
+    "File:Directory": "/srv/archihub/original/2025/10",
+    "File:FileName": "95c300cf.jpg",
+    "File:ImageWidth": 2304,
+    "File:MIMEType": "image/jpeg",
+    "EXIF:Make": "motorola",
+    "EXIF:Model": "moto g stylus (2022)",
+    "EXIF:ImageHeight": 1728,
+    "EXIF:GPSLatitude": "4 deg 36' 0.00\" N",
+    "EXIF:SerialNumber": "123456",
+    "EXIF:OwnerName": "Someone",
+    "Composite:Megapixels": 3.981312,
+    "XMP:CreatorTool": "Adobe Photoshop",
+}
+
+
 def test_exif_is_reduced_to_a_presentable_subset():
     """The full block routinely carries GPS coordinates, camera serial numbers
     and owner names - none of which an archive means to publish with a scan."""
-    kept = services.important_exif({
-        "Make": "Canon",
-        "GPSLatitude": "4.6097",
-        "GPSLongitude": "-74.0817",
-        "SerialNumber": "123456",
-        "OwnerName": "Someone",
-    })
+    kept = services.important_exif(STORED_EXIF)
 
-    assert kept == {"Make": "Canon"}
+    for key in (
+        "EXIF:GPSLatitude",
+        "EXIF:SerialNumber",
+        "EXIF:OwnerName",
+        "XMP:CreatorTool",
+    ):
+        assert key not in kept
+
+
+def test_the_filter_matches_the_keys_a_record_really_carries():
+    """The allowlist is matched against the name, not the whole prefixed key.
+
+    Comparing whole keys returned an EMPTY dict for every record in the
+    database - a 200 with the record intact and an empty metadata panel, which
+    reads as "this scan has no metadata" rather than as a fault.
+    """
+    kept = services.important_exif(STORED_EXIF)
+
+    assert kept, "the presentable subset came back empty"
+    assert kept["EXIF:Make"] == "motorola"
+    assert kept["EXIF:Model"] == "moto g stylus (2022)"
+    assert kept["Composite:Megapixels"] == 3.981312
+
+
+def test_no_server_path_survives_the_filter():
+    """`File:Directory`/`File:FileName`/`SourceFile` state where the file lives.
+
+    That is the one thing the records API goes out of its way never to return,
+    and it arrives through a second door here.
+    """
+    kept = services.important_exif(STORED_EXIF)
+
+    assert "File:Directory" not in kept
+    assert "File:FileName" not in kept
+    assert "SourceFile" not in kept
+    assert not any(
+        isinstance(value, str) and value.startswith("/") for value in kept.values()
+    )
+
+
+def test_a_stored_key_keeps_its_group_prefix():
+    """The prefix is only stripped to MATCH; the reply keeps what was stored."""
+    kept = services.important_exif({"EXIF:Make": "Canon"})
+
+    assert kept == {"EXIF:Make": "Canon"}
+
+
+def test_media_records_keep_their_unprefixed_basics():
+    """Duration and bitrate carry no prefix, and both players display them."""
+    kept = services.important_exif({"duration_ms": 4021, "bit_rate": 128000})
+
+    assert kept == {"duration_ms": 4021, "bit_rate": 128000}
 
 
 def test_exif_of_the_wrong_shape_is_dropped():

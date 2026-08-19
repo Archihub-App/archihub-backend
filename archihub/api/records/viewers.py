@@ -217,18 +217,57 @@ def document_detail(record: dict) -> dict:
 
 
 def page_images(record: dict, pages, size: str) -> list[dict]:
-    """Base64 renderings of the requested pages of a document."""
+    """Base64 renderings of the requested pages.
+
+    Serves ``image`` records as well as ``document`` ones, and that is not an
+    indulgence - it is what `ImageViewer.tsx` needs. The image reader is built
+    on the same two calls as the document reader: ``document_detail`` to size
+    the canvas, then this to fetch the page. It calls the viewer's ``init``
+    with four arguments, so ``isDocument`` keeps its default of ``true`` and
+    the request carries ``gallery: false``; there is no separate image route
+    for it to use. Refusing a non-document here while ``document_detail``
+    happily answers ``{"pages": 1}`` for one leaves the reader reporting a page
+    it can never fetch, and an image record renders as an empty frame.
+
+    An image has exactly one page, so every requested index resolves to the
+    same derivative and the reply is a single entry - what the original
+    returned, and what the reader draws.
+    """
     if not isinstance(pages, list):
         raise ViewerError(_("You must specify a page"), 400)
     if not pages:
         return []
 
     entry = file_processing_of(record)
-    if entry.get("type") != "document":
+    kind = entry.get("type")
+
+    if kind == "image":
+        return [_gallery_page(entry["path"], size)]
+
+    if kind != "document":
         raise ViewerError(_("Record is not a document"), 400)
 
     available = _sorted_pages(_page_directory(entry["path"], size))
     return [_encoded(available[_validate_index(page, len(available))]) for page in pages]
+
+
+def _gallery_page(stored_path: str, size: str) -> dict:
+    """One image record's derivative, with the aspect ratio the reader needs.
+
+    ``size`` indexes ``GALLERY_SUFFIXES`` and is refused if it is not a key, so
+    the caller's string never reaches the filesystem - the reader asks for
+    ``big``, which processing wrote as ``_large.jpg``.
+    """
+    suffix = GALLERY_SUFFIXES.get(size)
+    if suffix is None:
+        raise ViewerError(_('Unknown size "{size}"', size=str(size)[:40]), 400)
+
+    path = filestore.resolve_within(_web_root(), stored_path + suffix)
+    if not path.is_file():
+        raise ViewerError(_("File not found"), 404)
+
+    width, height = image_dimensions(path)
+    return {**_encoded(path), "aspect_ratio": (width / height) if height else 0}
 
 
 # ---------------------------------------------------------------------------

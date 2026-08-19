@@ -31,18 +31,52 @@
   ],
   "fixtures": [
     {
+      "name": "type_slugs",
+      "path": "/types",
+      "extract": "[].slug",
+      "covers": "every listing and search case - they must name content types this instance actually has"
+    },
+    {
+      "name": "type_slug",
+      "path": "/types",
+      "extract": "0.slug",
+      "covers": "reading a single content type"
+    },
+    {
       "name": "resource_id",
       "method": "POST",
       "path": "/resources/getall",
       "body": {
-        "post_type": [
-          "carpeta",
-          "test"
-        ],
+        "post_type": "${type_slugs}",
         "page": 0
       },
       "extract": "resources.0.id",
       "covers": "every resource detail, article, images, child-record and public-mirror case"
+    },
+    {
+      "name": "public_resource_id",
+      "method": "POST",
+      "path": "/resources/getall/public",
+      "body": {
+        "post_type": [
+          "${type_slug}"
+        ],
+        "page": 0
+      },
+      "auth": false,
+      "extract": "resources.0.id",
+      "covers": "every anonymous resource and record case - a resource the AUTHENTICATED listing returns is not necessarily public, and pointing an anonymous case at one tests refusal while looking like it tests the response"
+    },
+    {
+      "name": "public_record_id",
+      "method": "POST",
+      "path": "/resources/public/${public_resource_id}/records",
+      "body": {
+        "page": 0
+      },
+      "auth": false,
+      "extract": "data.0.id",
+      "covers": "the public record detail, page-viewer and transcription cases - the record is reached THROUGH a public resource, so its whole ancestry is public by construction"
     },
     {
       "name": "record_id",
@@ -57,6 +91,20 @@
       "covers": "record detail, viewers, transcription, metadata and the public record mirror"
     },
     {
+      "name": "image_record_id",
+      "method": "POST",
+      "path": "/records",
+      "body": {
+        "filters": {
+          "processing.fileProcessing.type": "image"
+        },
+        "page": 0,
+        "limit": 1
+      },
+      "extract": "0.id",
+      "covers": "the image reader - `ImageViewer.tsx` fetches an image through the DOCUMENT reader's two routes, so an image record must be servable by both"
+    },
+    {
       "name": "list_id",
       "path": "/lists",
       "extract": "0.id",
@@ -67,12 +115,6 @@
       "path": "/forms",
       "extract": "0.slug",
       "covers": "reading a single form"
-    },
-    {
-      "name": "type_slug",
-      "path": "/types",
-      "extract": "0.slug",
-      "covers": "reading a single content type"
     },
     {
       "name": "user_id",
@@ -408,10 +450,7 @@
       "method": "POST",
       "path": "/resources/getall",
       "body": {
-        "post_type": [
-          "carpeta",
-          "test"
-        ],
+        "post_type": "${type_slugs}",
         "page": 0
       },
       "auth": true,
@@ -422,10 +461,7 @@
       "method": "POST",
       "path": "/resources/getall",
       "body": {
-        "post_type": [
-          "carpeta",
-          "test"
-        ],
+        "post_type": "${type_slugs}",
         "page": 0,
         "sortBy": "createdAt",
         "sortOrder": "desc",
@@ -458,10 +494,7 @@
       "method": "POST",
       "path": "/resources/getall",
       "body": {
-        "post_type": [
-          "carpeta",
-          "test"
-        ],
+        "post_type": "${type_slugs}",
         "page": 0
       },
       "auth": true,
@@ -529,12 +562,12 @@
     },
     {
       "name": "resources: public detail",
-      "path": "/resources/public/${resource_id}",
+      "path": "/resources/public/${public_resource_id}",
       "auth": false
     },
     {
       "name": "resources: public detail is rendered the same way",
-      "path": "/resources/public/${resource_id}",
+      "path": "/resources/public/${public_resource_id}",
       "auth": false,
       "expect_status": 200,
       "expect_present": [
@@ -551,7 +584,7 @@
     },
     {
       "name": "resources: public images",
-      "path": "/resources/public/${resource_id}/imgs",
+      "path": "/resources/public/${public_resource_id}/imgs",
       "auth": false
     },
     {
@@ -566,7 +599,7 @@
     {
       "name": "resources: public child records",
       "method": "POST",
-      "path": "/resources/public/${resource_id}/records",
+      "path": "/resources/public/${public_resource_id}/records",
       "body": {
         "page": 0
       },
@@ -587,9 +620,7 @@
       "method": "POST",
       "path": "/resources/getall/public",
       "body": {
-        "post_type": [
-          "carpeta"
-        ],
+        "post_type": "${type_slugs}",
         "page": 0
       },
       "auth": false
@@ -655,12 +686,12 @@
     },
     {
       "name": "records: public detail",
-      "path": "/records/public/${record_id}",
+      "path": "/records/public/${public_record_id}",
       "auth": false
     },
     {
       "name": "records: public detail does not disclose server paths",
-      "path": "/records/public/${record_id}",
+      "path": "/records/public/${public_record_id}",
       "auth": false,
       "expect_status": 200,
       "expect_absent": [
@@ -687,7 +718,7 @@
     {
       "name": "records: public page images",
       "method": "POST",
-      "path": "/records/public/${record_id}/pages",
+      "path": "/records/public/${public_record_id}/pages",
       "body": {
         "pages": [
           0
@@ -718,7 +749,7 @@
     {
       "name": "records: a public viewer size outside the allowlist is refused",
       "method": "POST",
-      "path": "/records/public/${record_id}/pages",
+      "path": "/records/public/${public_record_id}/pages",
       "body": {
         "pages": [
           0
@@ -753,7 +784,7 @@
     {
       "name": "records: public transcription",
       "method": "POST",
-      "path": "/records/public/${record_id}/transcription",
+      "path": "/records/public/${public_record_id}/transcription",
       "body": {},
       "auth": false
     },
@@ -772,7 +803,7 @@
       "method": "POST",
       "path": "/records/public/galleryinfo",
       "body": {
-        "resource": "${resource_id}",
+        "resource": "${public_resource_id}",
         "page": 0
       },
       "auth": false
@@ -890,23 +921,59 @@
       "method": "POST",
       "path": "/search",
       "body": {
-        "post_type": [
-          "carpeta"
-        ],
-        "page": 0
+        "post_type": "${type_slugs}",
+        "page": 0,
+        "activeColumns": [
+          {
+            "destiny": "",
+            "label": ""
+          },
+          {
+            "destiny": "createdAt",
+            "label": "Fecha de creación",
+            "sortBy": "createdAt"
+          },
+          {
+            "destiny": "ident",
+            "label": "Identificador"
+          },
+          {
+            "destiny": "metadata.firstLevel.title",
+            "label": "Título",
+            "sortBy": "metadata.firstLevel.title"
+          }
+        ]
       },
       "auth": true,
-      "_note": "Legacy 404s when indexing is off (blueprint never registered); the port answers 503. See _expected_differences."
+      "_note": "Legacy 404s when indexing is off (blueprint never registered); the port answers 503. See _expected_differences. activeColumns carries the column set the browser really sends: `_source` is an allowlist derived from it, so a case that omits it asks for a narrower response than any client ever receives and reports the difference as a regression."
     },
     {
       "name": "search: availability is answered per request, not at construction",
       "method": "POST",
       "path": "/search",
       "body": {
-        "post_type": [
-          "carpeta"
-        ],
-        "page": 0
+        "post_type": "${type_slugs}",
+        "page": 0,
+        "activeColumns": [
+          {
+            "destiny": "",
+            "label": ""
+          },
+          {
+            "destiny": "createdAt",
+            "label": "Fecha de creación",
+            "sortBy": "createdAt"
+          },
+          {
+            "destiny": "ident",
+            "label": "Identificador"
+          },
+          {
+            "destiny": "metadata.firstLevel.title",
+            "label": "Título",
+            "sortBy": "metadata.firstLevel.title"
+          }
+        ]
       },
       "auth": true,
       "expect_status": 503,
@@ -915,7 +982,8 @@
         "200 once it is on. The point: the route exists either way. Legacy",
         "registered the blueprint at construction, so switching indexing on",
         "meant restarting every worker and the OpenAPI document differed",
-        "between instances of the same build."
+        "between instances of the same build.",
+        "activeColumns carries the column set the browser really sends: `_source` is an allowlist derived from it, so a case that omits it asks for a narrower response than any client ever receives and reports the difference as a regression."
       ]
     },
     {
@@ -923,11 +991,29 @@
       "method": "POST",
       "path": "/search/public",
       "body": {
-        "post_type": [
-          "carpeta"
-        ],
+        "post_type": "${type_slugs}",
         "status": "draft",
-        "page": 0
+        "page": 0,
+        "activeColumns": [
+          {
+            "destiny": "",
+            "label": ""
+          },
+          {
+            "destiny": "createdAt",
+            "label": "Fecha de creación",
+            "sortBy": "createdAt"
+          },
+          {
+            "destiny": "ident",
+            "label": "Identificador"
+          },
+          {
+            "destiny": "metadata.firstLevel.title",
+            "label": "Título",
+            "sortBy": "metadata.firstLevel.title"
+          }
+        ]
       },
       "auth": false,
       "expect_status": 503,
@@ -938,7 +1024,8 @@
         "publication state from who is asking and no request field can influence",
         "it. This asserts 503 only because indexing is off on this instance;",
         "with indexing ON, change to 200 and add expect_absent for draft rows.",
-        "HOTFIX_S28_legacy.patch is ready for the legacy stack."
+        "HOTFIX_S28_legacy.patch is ready for the legacy stack.",
+        "activeColumns carries the column set the browser really sends: `_source` is an allowlist derived from it, so a case that omits it asks for a narrower response than any client ever receives and reports the difference as a regression."
       ]
     },
     {
@@ -1051,7 +1138,7 @@
       "method": "POST",
       "path": "/publicApi",
       "body": {
-        "post_type": "carpeta",
+        "post_type": "${type_slug}",
         "page": 0
       },
       "auth": false
@@ -1063,7 +1150,7 @@
     },
     {
       "name": "publicApi: resource without a Fernet token",
-      "path": "/publicApi/resources/${resource_id}",
+      "path": "/publicApi/resources/${public_resource_id}",
       "auth": false
     },
     {
@@ -1256,7 +1343,7 @@
       "method": "POST",
       "path": "/types/moreinfo",
       "body": {
-        "slug": "carpeta",
+        "slug": "${type_slug}",
         "type": "timeCreated"
       },
       "auth": true,
@@ -1267,7 +1354,7 @@
       "method": "POST",
       "path": "/types/moreinfo",
       "body": {
-        "slug": "carpeta",
+        "slug": "${type_slug}",
         "type": "statusCount"
       },
       "auth": true,
@@ -1278,7 +1365,7 @@
       "method": "POST",
       "path": "/types/moreinfo",
       "body": {
-        "slug": "carpeta",
+        "slug": "${type_slug}",
         "type": "authorCount"
       },
       "auth": true,
@@ -1289,7 +1376,7 @@
       "method": "POST",
       "path": "/types/moreinfo",
       "body": {
-        "slug": "carpeta",
+        "slug": "${type_slug}",
         "type": "notAChart"
       },
       "auth": true,
@@ -1310,12 +1397,73 @@
         "type"
       ],
       "_note": "Contract, not parity: legacy returns each plugin's whole `plugin_info`, the port a chosen subset. `type` is what /processing maps over to build its buttons and route to /processing/{type}/{slug}; omitting it crashed the page on undefined.map. `plugins` guards F38, where the payload was a bare array."
+    },
+    {
+      "name": "records: an image record is servable by the document reader",
+      "method": "POST",
+      "path": "/records/${image_record_id}/pages",
+      "body": {
+        "pages": [
+          0
+        ],
+        "size": "small",
+        "gallery": false
+      },
+      "auth": true,
+      "expect_status": 200,
+      "_note": "`ImageViewer.tsx` calls the shared viewer's `init` with four arguments, so `isDocument` keeps its default and the body carries `gallery: false`. Refusing here while `/document` answers {\"pages\": 1} leaves the reader knowing about a page it can never fetch."
+    },
+    {
+      "name": "records: an image page carries the aspect ratio the reader draws from",
+      "method": "POST",
+      "path": "/records/${image_record_id}/pages",
+      "body": {
+        "pages": [
+          0
+        ],
+        "size": "small",
+        "gallery": false
+      },
+      "auth": true,
+      "expect_status": 200,
+      "expect_present": [
+        "aspect_ratio"
+      ]
+    },
+    {
+      "name": "records: a traversing size is refused on an image record too",
+      "method": "POST",
+      "path": "/records/${image_record_id}/pages",
+      "body": {
+        "pages": [
+          0
+        ],
+        "size": "../../../../etc",
+        "gallery": false
+      },
+      "auth": true,
+      "expect_status": 400,
+      "_note": "S18. Serving images from this route must not turn the size check into a pass-through."
+    },
+    {
+      "name": "records: EXIF never states where the file lives",
+      "path": "/records/${image_record_id}",
+      "auth": true,
+      "expect_status": 200,
+      "expect_absent": [
+        "filepath",
+        "File:Directory",
+        "File:FileName",
+        "SourceFile"
+      ],
+      "_note": "The presentable EXIF subset is an allowlist. `File:Directory`/`SourceFile` are the server's own paths arriving through a second door - the one thing this API goes out of its way never to return."
     }
   ],
   "_expected_differences": [
-    "Parity cases that differ ON PURPOSE. Re-triaged 2026-08-10 against the",
-    "running legacy backend. 51/80 parity + 25/25 contract; every one of the 29",
-    "below was read and classified, none is unexplained.",
+    "Parity cases that differ ON PURPOSE. Re-triaged 2026-08-19 against both",
+    "running backends, with the three legacy hotfixes (S18/S28/S31) applied and",
+    "every fixture resolving - so for the first time NOTHING is skipped and the",
+    "public routes are exercised against genuinely public data.",
     "",
     "-- the port returns the right code where legacy faults --",
     "  types: unknown slug            legacy 500 -> 404",
@@ -1323,6 +1471,8 @@
     "  users: favorites list          legacy 500 (KeyError 'type') -> 422",
     "  lists: unknown id              legacy 200 carrying a 500-shaped body -> 404",
     "  logs: list                     legacy 500 -> 200",
+    "  tasks: list                    legacy 500 (the handler returns None, which",
+    "                                 Flask reports as an invalid response) -> 200",
     "  resources: wrong-shaped body   legacy 500 (KeyError 'data') -> 422",
     "  resources: favcount            legacy 500 -> 200",
     "  records: favcount (both)       legacy 500 / wrongly-200 -> 200 / 404",
@@ -1330,41 +1480,93 @@
     "  geosystem: polygon             legacy 404 -> 400 with a reason",
     "",
     "-- legacy defects the harness surfaced, recorded in BACKEND_FINDINGS --",
-    "  users: compromise text         legacy returns the caller's OWN bcrypt hash.",
-    "                                 It calls get_user() (whose projection keeps",
-    "                                 `password`) and, unlike /users/me, never pops",
-    "                                 it. The port drops it. Patch prepared.",
     "  records: public page images    legacy 500s unconditionally - it calls",
     "                                 public_services.get_document_pages, which does",
     "                                 not exist. The public document viewer has never",
-    "                                 worked. The port returns the pages.",
+    "                                 worked. The port returns the pages. (F41)",
+    "  resources: public listing      legacy 401s the WHOLE request when any one of",
+    "                                 the requested types declares viewRoles, so the",
+    "                                 public explore screen is dead for any mixed",
+    "                                 selection. The port serves the types that are",
+    "                                 public and omits the rest.",
+    "",
+    "-- the public rule, applied where legacy over-discloses (S20) --",
+    "  Legacy serves a record to an anonymous caller on the strength of the record",
+    "  alone. The port requires the whole ancestry to be public: published,",
+    "  unrestricted after inheritance, and the content type declaring no viewRoles.",
+    "  Demonstrated live on this instance, not reasoned about - record",
+    "  69028a22334c67f3a123b145 is filed under three `casos` resources, TWO OF THEM",
+    "  DRAFTS, and `casos` declares viewRoles ['user']. Legacy answers 200 to a",
+    "  caller with no token; the port answers 404. The public cases now resolve",
+    "  their fixtures THROUGH the public listing so they exercise the response",
+    "  rather than the refusal - pointing them at an id from the authenticated",
+    "  listing tested the refusal while looking like it tested the document.",
     "",
     "-- deliberate shape changes --",
     "  records: get by filters        `filepath` no longer returned",
     "  records: detail (both)         adds `mime`/`status`; drops a parent's",
-    "                                 `accessRights: null` (absent vs null)",
-    "  resources: public listing      `post_type` added (additive, harmless)",
+    "                                 `accessRights: null` (absent vs null); EXIF is",
+    "                                 reduced to the presentable subset, which drops",
+    "                                 GPS, serial numbers, owner names AND",
+    "                                 `File:Directory`/`SourceFile` - the server's own",
+    "                                 paths, arriving through a second door",
+    "  views: detail                  adds `id` alongside `_id` (additive)",
+    "  search: * (authenticated)      adds `status` (additive). The port's `_source`",
+    "                                 is an allowlist, so a case must send the",
+    "                                 `activeColumns` a browser really sends or it",
+    "                                 asks for less than any client receives - the",
+    "                                 cases now do",
     "  users: request quota           legacy returned the raw document (`_id`,",
     "                                 `lastRequest`); the port returns",
-    "                                 {requests, limit}, which is what the counter",
-    "                                 reads plus the ceiling it draws against",
+    "                                 {requests, limit}",
+    "  users: list all                `createdAt` is an HTTP date where legacy",
+    "                                 emitted {\"$date\": ...}. No caller reads it -",
+    "                                 the admin users table does not render the",
+    "                                 column - and the two date conventions are both",
+    "                                 wire contract, chosen per route. Contrast",
+    "                                 `tasks`, where the panel DOES read `.$date` and",
+    "                                 the port was corrected to match.",
     "  forms: unknown slug            same 404, different message text",
     "  records: public gallery info   same 400, different message text",
+    "  search: public rss             same 400, different message text",
     "",
     "-- availability is answered per request, not at construction --",
-    "  search: *                      legacy 404 (blueprint never registered while",
-    "                                 indexing is off) -> 503",
-    "  adminApi/publicApi: *          STATUS NOW MATCHES (404). Only the body",
-    "                                 differs: legacy serves Werkzeug's HTML 404,",
-    "                                 the port serves JSON - byte-identical to its",
-    "                                 own unrouted-path 404, which is the property",
-    "                                 that matters.",
+    "  search: *                      legacy registers the blueprint only when",
+    "                                 indexing is on; the port always registers and",
+    "                                 answers 503 when it is off. Indexing is ON on",
+    "                                 this instance, so the two contract cases",
+    "                                 asserting 503 report 200/403 instead. They are",
+    "                                 asserting the OTHER configuration and are only",
+    "                                 meaningful on an instance without Elasticsearch.",
+    "  adminApi/publicApi: *          same, for `api_activation`. It is ON here, so",
+    "                                 the two adminApi contract cases expecting the",
+    "                                 switched-off 404 get 401 - the API is on and is",
+    "                                 asking who they are. Where both stacks do answer",
+    "                                 404, only the body differs: legacy serves",
+    "                                 Werkzeug's HTML, the port serves JSON that is",
+    "                                 byte-identical to its own unrouted-path 404,",
+    "                                 which is the property that matters.",
     "",
-    "-- environmental, resolves at Phase 5 --",
-    "  system: plugins                the port runs with ARCHIHUB_ALLOW_UNPORTED_",
-    "                                 PLUGINS, so the 4 unported plugins have no",
-    "                                 metadata to report. The container shape",
-    "                                 ({\"plugins\": [...]}) does match.",
+    "-- plugin scope, and a real cutover consequence --",
+    "  system: plugins                Legacy lists all 25 plugin directories present",
+    "                                 on this instance. The port lists the five in",
+    "                                 Phase 5's scope plus anything currently active,",
+    "                                 each marked `supported`. AFTER CUTOVER THE",
+    "                                 OTHER TWENTY DISAPPEAR FROM THE ADMIN SCREEN",
+    "                                 AND CANNOT BE ACTIVATED - activation is refused",
+    "                                 with an explicit message rather than failing",
+    "                                 obscurely. This belongs in the operator release",
+    "                                 notes. The fields the port drops (`settings`,",
+    "                                 `actions`, `capabilities`) are NOT read from",
+    "                                 this route by any caller - `PluginsResults.tsx`",
+    "                                 and `processing/page.tsx` use only slug, name,",
+    "                                 description and active; settings come from the",
+    "                                 plugin's own /settings route.",
+    "  plugins: liquidText *          liquidText is INACTIVE on this instance, so its",
+    "                                 routes are not mounted and answer 404 where the",
+    "                                 case expects the 401 of a mounted, guarded",
+    "                                 route. Environmental: activate it to exercise",
+    "                                 these.",
     "",
     "-- order-dependent --",
     "  auth: byte-identical           passes alone; in a full run the port's login",
