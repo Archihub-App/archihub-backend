@@ -26,9 +26,14 @@ WHAT EACH TYPE SHOWS THE MODEL
                    overlap-filtered, combined with the question into a single
                    user turn for the same reason.
 
-``image_gallery`` and ``atlas`` are not implemented and say so with a 501 —
-distinguishable from "this route does not exist", which is what the caller got
-before.
+``image_gallery``     the image at a position in a resource's gallery, as an
+                   ``image_url`` part. Only the NEWEST stored image is re-sent
+                   when a conversation resumes; earlier ones are named.
+
+``atlas`` is not implemented and says so with a 501, naming the type — which is
+distinguishable from "this route does not exist", what the caller got before. It
+cannot be ported: legacy imports ``app.plugins.atlas.services`` and there is no
+such package in this repository, so that branch fails there too.
 
 ACCESS IS THE RECORD'S, NOT THE CONVERSATION'S
 ----------------------------------------------
