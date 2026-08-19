@@ -29,7 +29,7 @@ def get_info(username, isAdmin):
             description: Error retrieving the system information
     """
     if not isAdmin:
-        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+        return jsonify({'msg': _("You don't have the required authorization")}), 401
 
     return services.get_system_info(username)
 
@@ -74,7 +74,7 @@ def new_resource(username, isAdmin):
             description: Error creating the resource (e.g. missing "data" field in the form)
     """
     if not isAdmin:
-        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+        return jsonify({'msg': _("You don't have the required authorization")}), 401
     # Get the request body
     body = request.form.to_dict()
     files = request.files.getlist('files')
@@ -125,7 +125,7 @@ def update_resource(username, isAdmin):
             description: Error updating the resource (e.g. missing "id" or "data" in the form)
     """
     if not isAdmin:
-        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+        return jsonify({'msg': _("You don't have the required authorization")}), 401
     # Get the request body
     body = request.form.to_dict()
     files = request.files.getlist('files')
@@ -167,7 +167,7 @@ def get_resource_id(username, isAdmin):
             description: Error retrieving the resource id
     """
     if not isAdmin:
-        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+        return jsonify({'msg': _("You don't have the required authorization")}), 401
     # Get the request body
     body = request.json
 
@@ -206,7 +206,7 @@ def get_opts_id(username, isAdmin):
             description: Error retrieving the option id (e.g. missing "term" in the body)
     """
     if not isAdmin:
-        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+        return jsonify({'msg': _("You don't have the required authorization")}), 401
     # Get the request body
     body = request.json
 
@@ -256,7 +256,7 @@ def create_type(username, isAdmin):
             description: Error creating the content type
     """
     if not isAdmin:
-        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+        return jsonify({'msg': _("You don't have the required authorization")}), 401
 
     # Get the request body
     body = request.json
@@ -309,7 +309,7 @@ def update_type(username, isAdmin):
             description: Error updating the content type (e.g. missing "slug" in the body)
     """
     if not isAdmin:
-        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+        return jsonify({'msg': _("You don't have the required authorization")}), 401
 
     # Get the request body
     body = request.json
@@ -346,7 +346,7 @@ def get_type(username, isAdmin, slug):
             description: Error retrieving the resource type
     """
     if not isAdmin:
-        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+        return jsonify({'msg': _("You don't have the required authorization")}), 401
 
     # Call the service to get the resource type
     return services.get_type(slug, username)
@@ -382,7 +382,7 @@ def map_plugin_endpoint(username, isAdmin, plugin, pluginEndpoint):
             description: Error mapping the request
     """
     if not isAdmin:
-        return jsonify({'msg': _('You don\'t have the required authorization')}), 401
+        return jsonify({'msg': _("You don't have the required authorization")}), 401
 
     from flask import current_app, request, Response
 
@@ -405,3 +405,22 @@ def map_plugin_endpoint(username, isAdmin, plugin, pluginEndpoint):
         return Response(resp.data, status=resp.status_code, headers=dict(resp.headers))
     except Exception as e:
         return jsonify({'msg': str(e)}), 500
+
+
+@bp.route('/lists/<id>', methods=['GET'])
+@fernetAuthenticate
+def get_list_by_id(username, isAdmin, id):
+    """
+    Get a list by its id for the admin interface
+    """
+    if not isAdmin:
+        return jsonify({'msg': _("You don't have the required authorization")}), 401
+    
+    from app.api.lists import services as list_services
+    resp = list_services.get_by_id(id)
+    
+    if 'msg' in resp:
+        if resp['msg'] == 'Listado no existe':
+            return jsonify(resp), 404
+            
+    return jsonify(resp), 200
