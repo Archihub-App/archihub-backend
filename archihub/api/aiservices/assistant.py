@@ -63,14 +63,21 @@ import datetime
 import json
 import logging
 
-from archihub.api.aiservices import chat, conversations, prompts, providers
+from archihub.api.aiservices import (
+    chat,
+    conversations,
+    prompts,
+    providers,
+    skill_context,
+    thinking,
+)
 from archihub.api.aiservices import errors as ai_errors
 from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
 
 #: Types this backend can answer, and the ones it deliberately cannot yet.
-IMPLEMENTED_TYPES = ("transcription", "document")
+IMPLEMENTED_TYPES = ("transcription", "document", "image_gallery")
 KNOWN_TYPES = ("transcription", "document", "image_gallery", "atlas")
 
 #: Legacy stores these snake_case. They are not new fields - 36 conversations on
@@ -192,6 +199,69 @@ def blocks_to_text(blocks: list) -> str:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# A document page as an image
+# ---------------------------------------------------------------------------
+
+#: A page image is base64'd into the request body, which inflates it by a third,
+#: and then counted against the model's context. A scan larger than this is
+#: refused rather than sent - the failure would otherwise arrive from the
+#: provider as an opaque size error, long after the user pressed send.
+MAX_IMAGE_BYTES = 12 * 1024 * 1024
+
+#: Which derivative directory a page image is read from. Fixed, because it
+#: becomes a path segment; `size` is not taken from the request.
+PAGE_IMAGE_SIZE = "big"
+
+
+def page_image_part(record: dict, page: int) -> dict:
+    """One rendered page of a document, as an ``image_url`` content part.
+
+    Legacy passed a private ``{"type": "image_path", "path": ...}`` part and let
+    each provider class open the file itself. The dialects here already convert
+    the standard ``image_url`` part - all four of them - so the file is read
+    once, at the edge, and every provider gets the same thing.
+
+    Every path component is either a fixed constant or comes out of the
+    database through ``resolve_within``; ``page`` selects from a sorted listing
+    by index and is range-checked, so it never becomes a path segment.
+    """
+    import base64
+    import mimetypes
+
+    from archihub.core import files as filestore
+    from archihub.core.settings import get_settings
+
+    processing = (record.get("processing") or {}).get("fileProcessing")
+    if not isinstance(processing, dict):
+        raise AssistantError(_("Record has not been processed"), 404)
+    if processing.get("type") != "document":
+        raise AssistantError(_("Record has not been processed"), 404)
+
+    stored = processing.get("path")
+    if not stored:
+        raise AssistantError(_("Record has not been processed"), 404)
+
+    directory = filestore.resolve_within(
+        get_settings().web_files_path, stored, "web", PAGE_IMAGE_SIZE
+    )
+    if not directory.is_dir():
+        raise AssistantError(_("Record has not been processed"), 404)
+
+    pages = sorted(entry for entry in directory.iterdir() if entry.is_file())
+    if page < 1 or page > len(pages):
+        raise AssistantError(_("Record does not have that many pages"), 404)
+
+    image = pages[page - 1]
+    size = image.stat().st_size
+    if size > MAX_IMAGE_BYTES:
+        raise AssistantError(_("The page image is too large to send"), 413)
+
+    media_type = mimetypes.guess_type(image.name)[0] or "image/jpeg"
+    encoded = base64.b64encode(image.read_bytes()).decode("ascii")
+    return {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{encoded}"}}
+
+
 def _transcription_context(record: dict, slug: str, message: str) -> list[dict]:
     from archihub.api.records import transcription
 
@@ -208,8 +278,44 @@ def _transcription_context(record: dict, slug: str, message: str) -> list[dict]:
     ]
 
 
-def _document_context(record: dict, slug: str, message: str, page: int) -> list[dict]:
+#: What the viewer's "Input mode" radio can be set to.
+DOCUMENT_INPUTS = ("document_ocr", "image")
+
+
+def _document_input(body: dict) -> str:
+    """Which of the two the caller asked for.
+
+    An unrecognised value falls back to the OCR text rather than being refused,
+    matching the legacy route: the setting is a display preference and losing
+    the answer over it would be worse than answering from the text.
+    """
+    requested = body.get("opt")
+    return requested if requested in DOCUMENT_INPUTS else "document_ocr"
+
+
+def _document_context(
+    record: dict, slug: str, message: str, page: int, mode: str = "document_ocr"
+) -> list[dict]:
+    """The page as OCR text, or as the rendered image the user chose instead.
+
+    THE MODE IS NOT DECORATION. The viewer has an "Input mode" radio, and an
+    earlier revision of this port ignored it entirely - so choosing *Image* sent
+    the OCR text anyway. The model answered confidently from the wrong source,
+    which is the failure a status code cannot show.
+    """
     from archihub.api.records import blocks as record_blocks
+
+    if mode == "image":
+        return [
+            {"role": "system", "content": prompts.DOCUMENT},
+            {
+                "role": "user",
+                "content": [
+                    page_image_part(record, page),
+                    {"type": "text", "text": f"Document page: {page}\n\n{message}"},
+                ],
+            },
+        ]
 
     _path, raw = record_blocks._page_blocks(record, slug, page)
     text = blocks_to_text(order_and_filter_blocks(raw))
@@ -225,10 +331,149 @@ def _document_context(record: dict, slug: str, message: str, page: int) -> list[
     ]
 
 
-def build_messages(body: dict, user: str) -> tuple[list[dict], dict]:
-    """``(messages, conversation)`` for this request.
+# ---------------------------------------------------------------------------
+# A gallery image
+# ---------------------------------------------------------------------------
+
+#: The derivative a gallery conversation reads. Fixed, like PAGE_IMAGE_SIZE.
+GALLERY_IMAGE_SIZE = "large"
+
+
+def gallery_image(resource_id: str, index: int, user: str) -> tuple[str, dict]:
+    """``(stored path, image_url part)`` for the nth image of a gallery.
+
+    Position follows the curator's ``order``, which the legacy path got wrong:
+    its order map was keyed by string and looked up by ``ObjectId``, so nothing
+    ever matched and every gallery fell back to Mongo's natural order. An index
+    past the end is a 404 here; there it raised ``IndexError``, reported as 500.
+    """
+    from archihub.api.records import viewers
+    from archihub.api.resources.services import load_visible as load_resource
+
+    # THE RESOURCE IS THE SUBJECT, so the resource's access rule is the one that
+    # applies - the same load the gallery viewer route uses, with the same
+    # projection.
+    resource, error = load_resource(resource_id, user, fields={"filesObj": 1})
+    if error is not None:
+        payload, status = error
+        raise AssistantError(payload.get("msg") or _("Resource does not exist"), status)
+
+    # `gallery_records` reads the RAW records, which is what this needs. Going
+    # through `records.get_by_gallery_index` would return the *presented*
+    # record instead, and presentation deliberately strips `filepath` and
+    # summarises `processing` - so the path simply would not be there.
+    records = viewers.gallery_records(resource)
+    if index < 0 or index >= len(records):
+        raise AssistantError(_("Record does not exist"), 404)
+
+    try:
+        entry = viewers.file_processing_of(records[index])
+    except viewers.ViewerError as exc:
+        raise AssistantError(str(exc), getattr(exc, "status_code", 404)) from exc
+
+    suffix = viewers.GALLERY_SUFFIXES[GALLERY_IMAGE_SIZE]
+    stored = entry["path"] + suffix
+    return stored, _image_part(stored)
+
+
+def _image_part(stored_path: str) -> dict:
+    """A stored web-derivative path as an ``image_url`` content part."""
+    import base64
+    import mimetypes
+
+    from archihub.core import files as filestore
+    from archihub.core.settings import get_settings
+
+    path = filestore.resolve_within(get_settings().web_files_path, stored_path)
+    if not path.is_file():
+        raise AssistantError(_("Record has not been processed"), 404)
+
+    if path.stat().st_size > MAX_IMAGE_BYTES:
+        raise AssistantError(_("The page image is too large to send"), 413)
+
+    media_type = mimetypes.guess_type(path.name)[0] or "image/jpeg"
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{encoded}"}}
+
+
+def _gallery_context(resource_id: str, message: str, index: int, user: str) -> tuple[list[dict], str]:
+    """``(messages, the stored path of the image sent)``."""
+    stored, part = gallery_image(resource_id, index, user)
+    return (
+        [
+            {"role": "system", "content": prompts.IMAGE_GALLERY},
+            {"role": "user", "content": [part, {"type": "text", "text": message}]},
+        ],
+        stored,
+    )
+
+
+#: How a stored turn refers to an image. Legacy's shape, and the one
+#: `AImessaging.tsx` renders - a PATH, never the bytes. Storing the data URL
+#: instead would put megabytes of base64 into the conversation document and walk
+#: it straight into MongoDB's 16 MB limit after a handful of turns.
+IMAGE_PART = "image_path"
+
+
+def _replay(messages: list[dict], conversation: dict) -> list[dict]:
+    """Prior turns, with stored image references resolved back to images.
+
+    ONLY THE MOST RECENT stored image is re-sent as an image; earlier ones
+    become a line naming the file. Legacy replayed every one, so a twenty-turn
+    gallery conversation sent twenty images on every request - cost and context
+    growing without bound. Collapsing them is also what the system prompt
+    already tells the model to expect: the newest image is the primary context
+    and earlier ones are referred to by file name.
+    """
+    prior = []
+    stored_images = [
+        part
+        for entry in conversation.get("messages") or []
+        if isinstance(entry, dict) and isinstance(entry.get("content"), list)
+        for part in entry["content"]
+        if isinstance(part, dict) and part.get("type") == IMAGE_PART
+    ]
+    newest = stored_images[-1] if stored_images else None
+
+    for entry in conversation.get("messages") or []:
+        if not isinstance(entry, dict) or not entry.get("role"):
+            continue
+        content = entry.get("content")
+        if not isinstance(content, list):
+            prior.append({"role": entry["role"], "content": content})
+            continue
+
+        parts = []
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") != IMAGE_PART:
+                parts.append(part)
+                continue
+            name = str(part.get("path") or "").rsplit("/", 1)[-1]
+            if part is newest:
+                try:
+                    parts.append(_image_part(part["path"]))
+                    continue
+                except AssistantError:
+                    # The derivative is gone. Naming it is still better than
+                    # dropping the turn, which would leave the model answering
+                    # about an image it was never shown and never told about.
+                    logger.info("Gallery image %s is no longer readable", part.get("path"))
+            parts.append({"type": "text", "text": f"[Previous image: {name}]"})
+
+        prior.append({"role": entry["role"], "content": parts})
+
+    return prior
+
+
+def build_messages(body: dict, user: str) -> tuple[list[dict], dict, dict]:
+    """``(messages, conversation, applied)`` for this request.
 
     ``conversation`` is the stored document being resumed, or ``{}``.
+    ``applied`` records what shaped the request and has to be stored with the
+    turn - the skills that were resolved, and the image a gallery turn refers
+    to (by path, never by its bytes).
     """
     from archihub.api.records import blocks as record_blocks
     from archihub.api.records import services as record_services
@@ -246,18 +491,35 @@ def build_messages(body: dict, user: str) -> tuple[list[dict], dict]:
     if not isinstance(message, str) or not message.strip():
         raise AssistantError(_("You must specify a message"), 400)
 
-    record_id = body.get("id")
-    if not isinstance(record_id, str) or not record_id:
+    target_id = body.get("id")
+    if not isinstance(target_id, str) or not target_id:
         raise AssistantError(_("You must specify a record"), 400)
 
+    # WHICH REQUESTS NEED A PROCESSING SLUG, AND WHY THE ANSWER IS NOT "all".
+    #
+    # A slug names one of a record's processings, and it is only needed when the
+    # context is READ from that processing - a transcript, or a page's OCR
+    # blocks. A document page sent as an IMAGE comes from `fileProcessing`,
+    # which every processed document has, and a gallery conversation is about a
+    # resource and a position in it.
+    #
+    # The distinction is not academic: the assistant opens on a plain PDF with
+    # no processing view selected, so `view` is undefined in the frontend and no
+    # slug is sent. Demanding one refused the request outright - and the legacy
+    # route was worse, subscripting `body['slug']` and 500ing on the KeyError.
     slug = body.get("slug") or body.get("processing_slug")
-    if not isinstance(slug, str) or not slug:
+    needs_slug = kind == "transcription" or (
+        kind == "document" and _document_input(body) == "document_ocr"
+    )
+    if needs_slug and (not isinstance(slug, str) or not slug):
         raise AssistantError(_("You must specify a processing"), 400)
 
-    record, error = record_services.load_visible(record_id, user)
-    if error is not None:
-        payload, status = error
-        raise AssistantError(payload.get("msg") or _("Record not found"), status)
+    record = None
+    if kind != "image_gallery":
+        record, error = record_services.load_visible(target_id, user)
+        if error is not None:
+            payload, status = error
+            raise AssistantError(payload.get("msg") or _("Record not found"), status)
 
     # Resume before building, so a conversation the caller does not own is
     # refused without reading the record's processing at all.
@@ -270,27 +532,58 @@ def build_messages(body: dict, user: str) -> tuple[list[dict], dict]:
             raise AssistantError(payload.get("msg") or _("Conversation not found"), status)
         conversation = loaded
 
+    applied: dict = {}
+    question = message.strip()
+
     try:
         if kind == "transcription":
-            messages = _transcription_context(record, slug, message.strip())
+            messages = _transcription_context(record, slug, question)
+        elif kind == "document":
+            messages = _document_context(
+                record, slug, question, _page(body), _document_input(body)
+            )
         else:
-            messages = _document_context(record, slug, message.strip(), _page(body))
+            index = _page(body) - 1 if _gallery_index(body) is None else _gallery_index(body)
+            messages, stored = _gallery_context(target_id, question, index, user)
+            applied["image_path"] = stored
+            applied["page"] = index
     except (transcription.TranscriptionError, record_blocks.BlockError) as exc:
         # These already carry the right status; re-raising them as 500 is how
         # the legacy builders reported "this record has no transcript".
         raise AssistantError(str(exc), getattr(exc, "status_code", 404)) from exc
 
     if conversation:
-        prior = [
-            {"role": entry.get("role"), "content": entry.get("content")}
-            for entry in conversation.get("messages") or []
-            if isinstance(entry, dict) and entry.get("role")
-        ]
         # After the context and before the new question, so the model reads the
         # source material first and the question last.
-        messages = messages[:-1] + prior + messages[-1:]
+        messages = messages[:-1] + _replay(messages, conversation) + messages[-1:]
 
-    return messages, conversation
+    # LAST, so the skill text lands on the turn actually being asked - after
+    # the history has been spliced in, not on a turn that later moves.
+    messages, resolved = skill_context.apply_to(messages, question, body.get("applied_skills"))
+    if resolved:
+        applied["skills"] = [
+            {"path": s.get("path"), "title": s.get("title"), "command": s.get("command")}
+            for s in resolved
+        ]
+
+    return messages, conversation, applied
+
+
+def _gallery_index(body: dict):
+    """The gallery position, if the caller stated one.
+
+    ``opts.page`` is a 0-based INDEX here and a 1-based PAGE for documents -
+    the legacy routes differ on this and the frontend sends what each expects,
+    so the difference is wire contract rather than an inconsistency to tidy.
+    """
+    opts = body.get("opts")
+    if not isinstance(opts, dict) or "page" not in opts:
+        return None
+    try:
+        value = int(opts["page"])
+    except (TypeError, ValueError):
+        return 0
+    return value if value >= 0 else 0
 
 
 # ---------------------------------------------------------------------------
@@ -298,39 +591,79 @@ def build_messages(body: dict, user: str) -> tuple[list[dict], dict]:
 # ---------------------------------------------------------------------------
 
 
-def store_turn(body: dict, user: str, conversation: dict, question: str, answer: str) -> str:
+def store_turn(
+    body: dict,
+    user: str,
+    conversation: dict,
+    question: str,
+    answer_text: str,
+    applied: dict | None = None,
+    steps: list[dict] | None = None,
+) -> str:
     """Append the exchange, creating the conversation if there is not one yet.
 
     Returns the conversation id. Failing to store must not lose the answer the
     user is already reading, so a write failure is logged and the id comes back
     empty rather than raising into the stream.
+
+    WHAT GOES ON EACH TURN. The user's turn carries the skills it was asked with
+    and, for a gallery, a reference to the image - as a PATH. The assistant's
+    carries the thinking steps. `AImessaging.tsx` reads all three back
+    (``msg.applied_skills``, ``msg.thinking_steps``, and ``image_path`` parts),
+    so a reopened conversation looks like the one that was had. Legacy stored
+    the skills only at conversation level and the steps not at all, so both were
+    lost on reload.
     """
-    turns = [
-        {"role": "user", "content": question},
-        {"role": "assistant", "content": answer},
-    ]
+    applied = applied or {}
+
+    user_turn: dict = {"role": "user", "content": question}
+    image_path = applied.get("image_path")
+    if image_path:
+        # NEVER the bytes. A base64 data URL here is megabytes per turn and
+        # reaches MongoDB's 16 MB document limit in a handful of exchanges.
+        user_turn["content"] = [
+            {"type": IMAGE_PART, "path": image_path},
+            {"type": "text", "text": question},
+        ]
+    if applied.get("skills"):
+        user_turn["applied_skills"] = applied["skills"]
+
+    assistant_turn: dict = {"role": "assistant", "content": answer_text}
+    if steps:
+        assistant_turn["thinking_steps"] = steps
+
+    turns = [user_turn, assistant_turn]
 
     try:
         if conversation:
             existing = list(conversation.get("messages") or [])
+            update = {"messages": existing + turns, UPDATED_AT: _now()}
+            if applied.get("page") is not None:
+                update["page"] = applied["page"]
             _mongo().update_record(
-                conversations.COLLECTION,
-                {"_id": conversation["_id"]},
-                {"messages": existing + turns, UPDATED_AT: _now()},
+                conversations.COLLECTION, {"_id": conversation["_id"]}, update
             )
             return str(conversation["_id"])
 
         now = _now()
+        kind = body.get("type")
         document = {
             "user": user,
             "messages": turns,
-            "type": body.get("type"),
+            "type": kind,
             "processing_slug": body.get("slug") or body.get("processing_slug"),
-            "record_id": body.get("id"),
-            "applied_skills": body.get("applied_skills") or [],
+            "applied_skills": applied.get("skills") or [],
             CREATED_AT: now,
             UPDATED_AT: now,
         }
+        # A gallery conversation hangs off the RESOURCE and remembers which
+        # image it was about; the history route filters on exactly these.
+        if kind == "image_gallery":
+            document["resource_id"] = body.get("id")
+            document["page"] = applied.get("page", 0)
+        else:
+            document["record_id"] = body.get("id")
+
         inserted = _mongo().insert_record(conversations.COLLECTION, document)
         return str(inserted.inserted_id)
     except Exception:
@@ -367,13 +700,13 @@ def _frame(payload: dict) -> str:
 
 def answer(body: dict, user: str) -> tuple[dict, int]:
     """One complete answer, stored, for a caller that did not ask to stream."""
-    messages, conversation = build_messages(body, user)
+    messages, conversation, applied = build_messages(body, user)
     provider, model = _provider_and_model(body)
     question = body["message"].strip()
 
     result = chat.complete(provider, messages, model=model)
     text = _answer_text(result)
-    conversation_id = store_turn(body, user, conversation, question, text)
+    conversation_id = store_turn(body, user, conversation, question, text, applied)
 
     return {"response": text, "conversation_id": conversation_id}, 200
 
@@ -392,18 +725,29 @@ def stream(body: dict, user: str):
     generator is iterated - `build_messages` and `_provider_and_model` run in
     `respond()` while the response line can still be chosen.
     """
-    messages, conversation = build_messages(body, user)
+    messages, conversation, applied = build_messages(body, user)
     provider, model = _provider_and_model(body)
     question = body["message"].strip()
 
     def generate():
         parts: list[str] = []
+        steps = thinking.ThinkingSteps()
         try:
             for chunk in chat.stream(provider, messages, model=model):
+                # Reasoning first: a step that opens should appear before the
+                # text produced under it, which is the order it happened in.
+                reasoning = getattr(chunk, "reasoning", "")
+                if reasoning:
+                    for event in steps.consume(reasoning):
+                        yield _frame(event)
+
                 delta = getattr(chunk, "delta", "")
                 if delta:
                     parts.append(delta)
                     yield _frame({"type": "response", "delta": delta})
+
+            for event in steps.finalize():
+                yield _frame(event)
         except ai_errors.ProviderError as exc:
             logger.info("Assistant stream failed for %s: %s", user, exc)
             yield _frame({"type": "error", "error": str(exc), "done": True})
@@ -415,8 +759,18 @@ def stream(body: dict, user: str):
             )
             return
 
+        summary = steps.summary()
         # Stored BEFORE `done`, so the id the client keeps always resolves.
-        conversation_id = store_turn(body, user, conversation, question, "".join(parts))
-        yield _frame({"type": "done", "done": True, "conversation_id": conversation_id})
+        conversation_id = store_turn(
+            body, user, conversation, question, "".join(parts), applied, summary
+        )
+        yield _frame(
+            {
+                "type": "done",
+                "done": True,
+                "conversation_id": conversation_id,
+                "thinking_steps": summary,
+            }
+        )
 
     return generate()

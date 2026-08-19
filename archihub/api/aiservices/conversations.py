@@ -21,7 +21,6 @@ from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
 logger = logging.getLogger(__name__)
 
 COLLECTION = "conversations"
-PAGE_SIZE = 20
 
 #: Kinds of conversation the interface distinguishes.
 CONVERSATION_TYPES = ("chat", "processing", "transcription", "document")
@@ -121,11 +120,17 @@ def validate_messages(messages) -> str | None:
 
 
 def get(conversation_id: str, user: str) -> tuple[dict, int]:
+    """One of the caller's own conversations, in full.
+
+    ``_id`` IS KEPT, in its extended-JSON form. `AImessaging.tsx` reads
+    ``response._id.$oid`` to know which conversation it is now continuing, so
+    renaming it to ``id`` loads the messages and then sends the next turn as a
+    NEW conversation - the thread silently forks on the first reply.
+    """
     conversation, error = load_own(conversation_id, user)
     if error is not None:
         return error
 
-    conversation["id"] = str(conversation.pop("_id"))
     return parse_result(conversation), 200
 
 
@@ -142,47 +147,102 @@ def delete(conversation_id: str, user: str) -> tuple[dict, int]:
     return {"msg": _("Conversation deleted")}, 200
 
 
-def history(body: dict, user: str) -> tuple[dict, int]:
-    """The caller's conversations, newest first.
+#: Conversation kinds that hang off a RECORD, and are filtered by its id.
+RECORD_KINDS = ("record", "transcription", "document")
 
-    Message bodies are projected out: a history list shows titles and dates, and
-    a hundred conversations' worth of transcripts is a large response to build
-    for a sidebar.
+#: Returned for every row. `messages` is trimmed to the first afterwards - it is
+#: what labels the row in the sidebar, so it cannot be projected out, and the
+#: rest of a transcript has no business in a list response.
+HISTORY_FIELDS = {
+    "_id": 1,
+    "created_at": 1,
+    "updated_at": 1,
+    "messages": 1,
+    "type": 1,
+    "processing_slug": 1,
+}
+
+
+def history(body: dict, user: str) -> tuple[list, int]:
+    """The caller's conversations about one record, newest first.
+
+    **Returns a bare ARRAY**, and every part of that sentence is contract:
+
+    * `AImessaging.tsx` does ``Array.isArray(response) ? response : []``, so an
+      envelope like ``{"results": [...]}`` is silently read as *no results* -
+      a 200 with a populated body rendering as "No results".
+    * A row keeps ``_id`` in its extended-JSON form, because the component
+      opens and deletes a conversation by ``item._id.$oid``. Renaming it to
+      ``id`` leaves the list rendering and every click throwing.
+    * A row keeps its first message, because the sidebar labels each entry with
+      ``item.messages[0].content``. Projecting messages out renders blank rows
+      at best.
+    * The record is named by ``id`` in the request, not ``record_id``. That is
+      what the component sends.
+
+    An earlier revision of this port got all four wrong at once, which is a
+    single 200 that shows an empty panel to a user who has conversations.
+
+    Deliberately unpaginated, as the legacy route is: the panel has no paging
+    control, so a limit would silently hide older conversations with nothing to
+    reach them by. Message bodies are already trimmed to one.
     """
+    kind = body.get("type")
+    target_id = body.get("id")
+    slug = body.get("processing_slug") or body.get("slug")
+
     filters: dict = {"user": user}
 
-    kind = body.get("type")
-    if kind:
-        if kind not in CONVERSATION_TYPES:
-            return {"msg": _('Unknown conversation type "{type}"', type=str(kind)[:30])}, 400
-        filters["type"] = kind
+    if kind in RECORD_KINDS:
+        if not isinstance(target_id, str) or not target_id:
+            return [], 200
 
-    for field in ("record_id", "resource_id", "processing_slug"):
-        value = body.get(field)
-        if value is not None:
-            if not isinstance(value, str):
-                return {"msg": _('"{field}" must be a text value', field=field)}, 400
-            filters[field] = value
+        # The conversations are the caller's own, but they quote a record, and
+        # the record may have been reserved since the conversation was had.
+        from archihub.api.records import services as record_services
 
-    page = body.get("page") or 0
-    if isinstance(page, bool) or not isinstance(page, int) or page < 0:
-        page = 0
+        _record, error = record_services.load_visible(target_id, user)
+        if error is not None:
+            payload, status = error
+            return payload, status
 
-    mongo = _mongo()
+        filters["record_id"] = target_id
+        if kind != "record":
+            filters["type"] = kind
+            if slug:
+                filters["processing_slug"] = slug
+
+    elif kind == "image_gallery":
+        if not isinstance(target_id, str) or not target_id:
+            return [], 200
+        filters["resource_id"] = target_id
+        filters["type"] = "image_gallery"
+
+    elif kind == "atlas":
+        filters["type"] = "atlas"
+        if slug:
+            filters["processing_slug"] = slug
+
+    else:
+        # Unknown kind: an empty list, exactly as the legacy route returns.
+        # Not a 400 - the panel asks on open, and refusing would replace an
+        # empty history with an error dialog.
+        return [], 200
+
     rows = list(
-        mongo.get_all_records(
+        _mongo().get_all_records(
             COLLECTION,
             filters,
-            fields={"messages": 0},
+            fields=HISTORY_FIELDS,
             # STORED SNAKE_CASE. Legacy wrote `created_at`/`updated_at` and the
             # conversations already in the database carry those names, so
-            # sorting on a camelCase key silently ordered by nothing at all.
+            # sorting on a camelCase key ordered by nothing at all.
             sort=[("updated_at", -1)],
-            limit=PAGE_SIZE,
-            skip=page * PAGE_SIZE,
         )
     )
-    for row in rows:
-        row["id"] = str(row.pop("_id"))
 
-    return parse_result({"results": rows, "total": mongo.count(COLLECTION, filters)}), 200
+    for row in rows:
+        messages = row.get("messages") or []
+        row["messages"] = messages[:1]
+
+    return parse_result(rows), 200

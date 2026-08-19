@@ -104,6 +104,11 @@ class ChatChunk:
     """
 
     delta: str = ""
+    #: The model's own reasoning, where a provider streams it separately from
+    #: the answer. Kept apart from ``delta`` rather than concatenated: it is not
+    #: part of the reply, and the assistant renders it as a collapsible
+    #: breakdown of what the model did rather than as text the user reads.
+    reasoning: str = ""
     tool_calls: list[dict] = field(default_factory=list)
     finish_reason: str | None = None
     usage: dict[str, int] = field(default_factory=dict)

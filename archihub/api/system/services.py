@@ -190,6 +190,52 @@ def is_first_time() -> bool:
         return False
 
 
+def _system_capabilities() -> list[str]:
+    """Capabilities derived from settings rather than declared by a plugin.
+
+    **These are not decoration; they are what the interface is gated on.** An
+    earlier revision of this port collected only the plugins' own capabilities,
+    so this instance returned an empty list and the frontend hid every feature
+    behind one: all four download buttons and both "Pregúntale a la IA" entry
+    points disappeared, with no error and nothing logged - the buttons simply
+    were not rendered.
+
+    Each is read the way the legacy route read it, and named identically,
+    because the names are matched with `.includes()` in `upgrade_front`:
+
+    ``llm``             at least one provider is configured
+    ``indexing``        Elasticsearch indexing is on
+    ``vector_db``       Qdrant indexing is on
+    ``files_download``  downloading originals is allowed
+
+    Failures are swallowed per capability rather than for the block as a whole:
+    this route is what the login screen bootstraps from, so a Qdrant setting that
+    cannot be read must not cost the user their download buttons as well.
+    """
+    derived: list[str] = []
+
+    def add(name: str, probe) -> None:
+        try:
+            if probe():
+                derived.append(name)
+        except Exception:
+            logger.warning("Could not determine the %s capability", name, exc_info=True)
+
+    def has_provider() -> bool:
+        from archihub.api.aiservices.providers import COLLECTION as PROVIDERS
+
+        # A count, not a listing: the legacy route fetched every provider
+        # record - credentials included - to ask whether there were any.
+        return _mongo().count(PROVIDERS, {}) > 0
+
+    add("llm", has_provider)
+    add("indexing", lambda: get_setting_value("index_management", "index_activation"))
+    add("vector_db", lambda: get_setting_value("index_management", "vector_activation"))
+    add("files_download", lambda: get_setting_value("files_management", "files_download"))
+
+    return derived
+
+
 def get_system_settings() -> tuple[dict, int]:
     """Public bootstrap payload, read by the frontend before anyone logs in.
 
@@ -200,6 +246,10 @@ def get_system_settings() -> tuple[dict, int]:
     The legacy version imported AND INSTANTIATED every active plugin here to
     collect capabilities - on an unauthenticated route. Capabilities now come
     from plugin metadata via the discovery module, with no instantiation.
+
+    Plugin capabilities are only half of the list; see `_system_capabilities`
+    for the four the instance's own settings decide, and why leaving them out
+    silently removed working features from the interface.
     """
     if is_first_time():
         return {"first_time": True}, 200
@@ -214,6 +264,8 @@ def get_system_settings() -> tuple[dict, int]:
             capabilities.extend(get_plugin_info(slug).get("capabilities") or [])
     except Exception:
         logger.warning("Could not collect plugin capabilities", exc_info=True)
+
+    capabilities.extend(_system_capabilities())
 
     # `language`, `capabilities`, `version` - and nothing else, which is what
     # the legacy route returns.

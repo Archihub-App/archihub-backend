@@ -180,6 +180,7 @@ class OllamaDialect:
             message = payload.get("message") if isinstance(payload.get("message"), dict) else {}
             yield ChatChunk(
                 delta=message.get("content") or "",
+                reasoning=message.get("thinking") or "",
                 tool_calls=list(message.get("tool_calls") or []),
                 finish_reason=payload.get("done_reason") if payload.get("done") else None,
                 usage=_usage(payload) if payload.get("done") else {},

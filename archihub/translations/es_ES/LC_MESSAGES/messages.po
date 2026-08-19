@@ -476,3 +476,24 @@ msgstr "{field} está faltando"
 
 msgid "The statistics could not be calculated"
 msgstr "No se pudieron calcular las estadísticas"
+
+msgid "Conversation not found"
+msgstr "Conversación no encontrada"
+
+msgid "The {type} assistant is not available on this backend yet"
+msgstr "El asistente de {type} aún no está disponible en este backend"
+
+msgid "You must specify a message"
+msgstr "Debe especificar un mensaje"
+
+msgid "You must specify a record"
+msgstr "Debe especificar un registro"
+
+msgid "You must specify a processing"
+msgstr "Debe especificar un procesamiento"
+
+msgid "You must specify a provider"
+msgstr "Debe especificar un proveedor"
+
+msgid "The page image is too large to send"
+msgstr "La imagen de la página es demasiado grande para enviarla"

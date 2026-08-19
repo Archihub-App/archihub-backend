@@ -181,9 +181,25 @@ class GoogleDialect:
             candidate = (payload.get("candidates") or [{}])[0]
             yield ChatChunk(
                 delta=_text(candidate),
+                reasoning=_thought_text(candidate),
                 finish_reason=candidate.get("finishReason"),
                 usage=_usage(payload.get("usageMetadata")),
             )
+
+
+def _thought_text(candidate: dict) -> str:
+    """Reasoning parts of one candidate.
+
+    Google marks them with ``thought: true`` on an otherwise ordinary text part,
+    so they must be separated here or the model's private reasoning is rendered
+    to the user as part of its answer.
+    """
+    parts = ((candidate.get("content") or {}).get("parts")) or []
+    return "".join(
+        part.get("text") or ""
+        for part in parts
+        if isinstance(part, dict) and part.get("thought")
+    )
 
 
 def _parts(content) -> list[dict]:
@@ -208,8 +224,20 @@ def _parts(content) -> list[dict]:
 
 
 def _text(candidate: dict) -> str:
+    """The answer, WITHOUT the model's reasoning.
+
+    Google returns reasoning as an ordinary text part flagged ``thought: true``,
+    in the same list as the answer. Concatenating everything renders the model's
+    private working out to the user as though it were the reply - and it reads
+    as one, because it is fluent prose in the same voice. `_thought_text` picks
+    up the other half.
+    """
     parts = (candidate.get("content") or {}).get("parts") or []
-    return "".join(part.get("text") or "" for part in parts if isinstance(part, dict))
+    return "".join(
+        part.get("text") or ""
+        for part in parts
+        if isinstance(part, dict) and not part.get("thought")
+    )
 
 
 def _usage(metadata) -> dict[str, int]:

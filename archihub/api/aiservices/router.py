@@ -460,13 +460,20 @@ def ask_assistant(
 
 @router.post(
     "/conversation/history",
-    responses={200: {"description": "Your conversations, newest first"}, **_RESPONSES},
+    responses={
+        200: {"description": "Your conversations about this record, newest first"},
+        **_RESPONSES,
+    },
 )
 def conversation_history(
     body: dict = Body(default_factory=dict),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> JSONResponse:
-    """Your own conversations. Declared before ``/conversation/{id}``."""
+    """Your own conversations about one record. Declared before ``/conversation/{id}``.
+
+    Answers a bare JSON ARRAY, not an envelope - see `conversations.history`
+    for why the component cannot read anything else.
+    """
     return _respond(conversations.history(body, current_user.username))
 
 

@@ -161,6 +161,8 @@ class AnthropicDialect:
                 delta = payload.get("delta") or {}
                 if delta.get("type") in ("text_delta", None):
                     yield ChatChunk(delta=delta.get("text") or "")
+                elif delta.get("type") == "thinking_delta":
+                    yield ChatChunk(reasoning=delta.get("thinking") or "")
             elif kind == "message_delta":
                 yield ChatChunk(
                     finish_reason=(payload.get("delta") or {}).get("stop_reason"),

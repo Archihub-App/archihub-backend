@@ -211,8 +211,14 @@ class OpenAICompatibleDialect:
         first = choices[0] if isinstance(choices[0], dict) else {}
         delta = first.get("delta") if isinstance(first.get("delta"), dict) else {}
 
+        # Two spellings in the wild for the same thing: DeepSeek and several
+        # OpenRouter-fronted models send `reasoning_content`, others `reasoning`.
+        # Neither is in the OpenAI spec, so both are read and absence is normal.
+        reasoning = _text_of(delta.get("reasoning_content")) or _text_of(delta.get("reasoning"))
+
         return ChatChunk(
             delta=_text_of(delta.get("content")),
+            reasoning=reasoning,
             tool_calls=list(delta.get("tool_calls") or []),
             finish_reason=first.get("finish_reason"),
             usage=_usage(payload.get("usage")),
