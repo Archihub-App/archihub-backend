@@ -121,12 +121,22 @@ def get_plugin(slug: str):
 
 
 def activate_plugin_settings() -> None:
-    """Run every mounted plugin's ``activate_settings``. Worker process only.
+    """Run every mounted plugin's ``activate_settings``. EVERY process.
 
     This is what registers the hooks that fire plugin tasks on resource and file
-    events. The legacy call site was gated on ``CELERY_WORKER`` for a reason:
-    registering them in the web process would dispatch those chains from
-    whichever worker happened to serve the request.
+    events, and it has to happen wherever those events are raised. The web
+    process raises most of them - creating a resource, attaching files, editing
+    metadata - so a web process with an empty hook bus is one where automatic
+    processing never runs, with nothing logged and a 201 returned.
+
+    Registering here does not mean the work happens here. A registered Celery
+    task is turned into a signature and sent to the broker; a worker executes
+    it. Only genuinely synchronous hooks run inline, and those (field validation
+    and rendering) are part of the request's own path by design.
+
+    The legacy code reached the same place by an easily-missed route: the mount
+    helper called this when ``CELERY_WORKER`` was set, and each plugin's
+    ``__init__`` called it when that variable was NOT set.
     """
     for slug, plugin in _mounted.items():
         try:

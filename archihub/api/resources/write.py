@@ -194,7 +194,21 @@ def create(body: dict, user: str, incoming_files=None) -> tuple[dict, int]:
             {"_id": inserted.inserted_id},
             {"filesObj": attached, "updatedAt": _now(), "updatedBy": user},
         )
-        _call_hook("resource_files_create", {"_id": resource_id, "filesObj": attached})
+        # `post_type` IS PART OF THE CONTRACT, not decoration. Every automatic
+        # processing hook starts by comparing it against the content type the
+        # operator configured, and returns without doing anything when they
+        # differ - so a body that omits it matches no configuration at all and
+        # every hook exits on its first line. The legacy call passed the whole
+        # update document; these are the fields a subscriber actually reads.
+        _call_hook(
+            "resource_files_create",
+            {
+                "_id": resource_id,
+                "post_type": post_type,
+                "metadata": payload.get("metadata") or {},
+                "filesObj": attached,
+            },
+        )
 
     # AFTER the insert: the reciprocal update needs this resource's id, and the
     # original ran it before there was one (F22).

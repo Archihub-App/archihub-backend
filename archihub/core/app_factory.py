@@ -144,7 +144,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_exception_handlers(app)
     _register_routers(app)
 
+    # After the plugins, so indexing sits above their automatic processing in
+    # the hook order and builds its document from metadata they have finished
+    # writing. See archihub/api/search/write_hooks.py.
+    _register_index_hooks()
+
     return app
+
+
+def _register_index_hooks() -> None:
+    """Wire the search index into the resource write path. Never fatal."""
+    from archihub.api.search.write_hooks import register_index_hooks
+
+    try:
+        register_index_hooks()
+    except Exception:
+        logger.exception("Could not register the indexing hooks; the search index will go stale")
 
 
 def _ensure_indexes_safely() -> None:
@@ -343,7 +358,7 @@ def _mount_plugins(app: FastAPI) -> None:
     plugin that is supported but broken, and taking the whole instance down for
     that means one plugin's missing dependency denies access to the archive.
     """
-    from archihub.plugins.framework.mounting import mount_plugins
+    from archihub.plugins.framework.mounting import activate_plugin_settings, mount_plugins
 
     try:
         mounted = mount_plugins(app)
@@ -353,3 +368,21 @@ def _mount_plugins(app: FastAPI) -> None:
 
     if mounted:
         logger.info("Mounted %d plugin(s): %s", len(mounted), ", ".join(sorted(mounted)))
+
+    # THE WEB PROCESS NEEDS THE HOOKS TOO, and this is the half that was missing.
+    #
+    # The legacy code registered them from two places, which reads like a
+    # duplication and is not: `register_plugin()` called `activate_settings()`
+    # only when CELERY_WORKER was set, and the plugin's own `__init__` called it
+    # only when CELERY_WORKER was NOT set. Between them every process got the
+    # registrations; porting the first half alone left this one with an empty
+    # hook bus.
+    #
+    # What that costs is not obvious from here, because dispatching is what a
+    # registration is FOR: `hooks.call()` turns each registered Celery task into
+    # a signature and sends it to the broker, so the job still runs in a worker.
+    # With nothing registered, `resource_files_create` fires into an empty
+    # registry - the upload succeeds, 201 comes back, and no derivative is ever
+    # made. Synchronous hooks (`validate_field`, `resource_field`) are worse
+    # still: they are part of the request's own path and simply do not happen.
+    activate_plugin_settings()

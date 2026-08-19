@@ -17,7 +17,15 @@ import logging
 from fastapi import APIRouter, Body, Depends, Query
 from fastapi.responses import JSONResponse, Response
 
-from archihub.api.aiservices import catalogue, chat, conversations, providers, skills, streaming
+from archihub.api.aiservices import (
+    assistant,
+    catalogue,
+    chat,
+    conversations,
+    providers,
+    skills,
+    streaming,
+)
 from archihub.api.aiservices import errors as ai_errors
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
@@ -419,17 +427,35 @@ def delete_skill(
 @router.post(
     "/conversation",
     responses={
-        200: {"description": "Conversation updated"},
-        201: {"description": "Conversation created"},
+        200: {"description": "The assistant's answer, or an SSE stream of it"},
+        501: {"description": "That kind of assistant is not implemented here"},
+        502: {"description": "The provider refused or is unreachable"},
         **_RESPONSES,
     },
 )
-def save_conversation(
+def ask_assistant(
     body: dict = Body(default_factory=dict),
-    current_user: CurrentUser = Depends(get_current_user),
-) -> JSONResponse:
-    """Start a conversation, or append to one you own."""
-    return _respond(conversations.save(body, current_user.username))
+    current_user: CurrentUser = Depends(require_reader),
+) -> Response:
+    """Ask the assistant about a record.
+
+    THIS IS THE CHAT ENDPOINT, not a save. `body["id"]` is the RECORD being
+    discussed and `body["conversation_id"]` the thread, if one is being resumed.
+    An earlier revision of this port read `id` as a conversation id and answered
+    404 for every request the frontend made (F64).
+
+    ``stream: true`` returns server-sent events shaped the way `AIservice.tsx`
+    parses them - see `assistant.py` on why they are not the frames
+    `/providers/{id}/chat` emits.
+    """
+    try:
+        if assistant.wants_stream(body):
+            return streaming.plain_response(assistant.stream(body, current_user.username))
+        return _respond(assistant.answer(body, current_user.username))
+    except assistant.AssistantError as exc:
+        return JSONResponse(status_code=exc.status_code, content={"msg": exc.message})
+    except ai_errors.ProviderError as exc:
+        return _provider_error(exc)
 
 
 @router.post(

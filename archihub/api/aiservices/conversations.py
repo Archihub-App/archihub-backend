@@ -23,12 +23,6 @@ logger = logging.getLogger(__name__)
 COLLECTION = "conversations"
 PAGE_SIZE = 20
 
-#: What a client may set when starting or continuing a conversation. `user` is
-#: taken from the token, never the body.
-CLIENT_FIELDS = (
-    "messages", "type", "processing_slug", "record_id", "resource_id", "page", "applied_skills",
-)
-
 #: Kinds of conversation the interface distinguishes.
 CONVERSATION_TYPES = ("chat", "processing", "transcription", "document")
 
@@ -119,41 +113,11 @@ def validate_messages(messages) -> str | None:
 # ---------------------------------------------------------------------------
 
 
-def _client_fields(body: dict) -> dict:
-    return {key: body[key] for key in CLIENT_FIELDS if key in body}
-
-
-def save(body: dict, user: str) -> tuple[dict, int]:
-    """Create a conversation, or append to one the caller owns."""
-    payload = _client_fields(body)
-
-    if "messages" in payload:
-        message = validate_messages(payload["messages"])
-        if message:
-            return {"msg": message}, 400
-
-    kind = payload.get("type") or "chat"
-    if kind not in CONVERSATION_TYPES:
-        return {"msg": _('Unknown conversation type "{type}"', type=str(kind)[:30])}, 400
-    payload["type"] = kind
-
-    conversation_id = body.get("id") or body.get("_id")
-    if conversation_id:
-        existing, error = load_own(conversation_id, user)
-        if error is not None:
-            return error
-
-        payload["updatedAt"] = _now()
-        _mongo().update_record(COLLECTION, {"_id": existing["_id"]}, payload)
-        return {"msg": _("Conversation updated"), "id": str(existing["_id"])}, 200
-
-    payload.setdefault("messages", [])
-    payload["user"] = user
-    payload["createdAt"] = _now()
-    payload["updatedAt"] = payload["createdAt"]
-
-    inserted = _mongo().insert_record(COLLECTION, payload)
-    return {"msg": _("Conversation created"), "id": str(inserted.inserted_id)}, 201
+# `save()` deliberately does not exist. `POST /aiservices/conversation` is the
+# ASK endpoint (see `assistant.py`); an earlier revision of this port gave that
+# path to a create-or-append handler, which is what made every chat turn answer
+# 404. Turns are written by `assistant.store_turn`, which is the only writer, so
+# there is one place that decides what a stored conversation looks like.
 
 
 def get(conversation_id: str, user: str) -> tuple[dict, int]:
@@ -210,7 +174,10 @@ def history(body: dict, user: str) -> tuple[dict, int]:
             COLLECTION,
             filters,
             fields={"messages": 0},
-            sort=[("updatedAt", -1)],
+            # STORED SNAKE_CASE. Legacy wrote `created_at`/`updated_at` and the
+            # conversations already in the database carry those names, so
+            # sorting on a camelCase key silently ordered by nothing at all.
+            sort=[("updated_at", -1)],
             limit=PAGE_SIZE,
             skip=page * PAGE_SIZE,
         )

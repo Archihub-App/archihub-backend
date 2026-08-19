@@ -47,6 +47,7 @@ CLEARED_WHEN_HIDDEN: dict[str, object] = {
     "number": None,
     "checkbox": False,
     "select-multiple2": [],
+    "userslit": [],
     "userslist": [],
     "simple-date": None,
     "repeater": [],
@@ -278,6 +279,10 @@ VALIDATORS = {
     "author": _validate_author_array,
     "location": _validate_location,
     "simple-date": _validate_simple_date,
+    # `userslit` is the id the forms builder actually stores; see the note in
+    # api/search/mapping.py. Keyed on the correct spelling alone, a User list
+    # field went unvalidated - it reached the database as whatever was sent.
+    "userslit": _validate_userslist,
     "userslist": _validate_userslist,
     "relation": _validate_relation,
 }

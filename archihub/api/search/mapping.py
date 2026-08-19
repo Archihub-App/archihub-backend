@@ -50,6 +50,14 @@ FIELD_TYPES: dict[str, dict] = {
     "repeater": {"type": "object"},
     "checkbox": {"type": "boolean"},
     "number": {"type": "float"},
+    # THE STORED SPELLING IS `userslit`. The forms builder writes whatever id
+    # the field-type catalogue gives it, and that id has been the typo since the
+    # beginning (see api/forms/field_types.py). Keying this table on the correct
+    # spelling meant it matched nothing, so a User list field was never mapped -
+    # while its VALUE was still sent to Elasticsearch, leaving the cluster to
+    # infer a type from the first document that carried one. `userslist` is kept
+    # beside it only to tolerate hand-edited data; nothing produces it.
+    "userslit": {"type": "keyword"},
     "userslist": {"type": "keyword"},
     "select-multiple2": {"type": "keyword", "ignore_above": 256},
     "author": {"type": "keyword", "ignore_above": 256},

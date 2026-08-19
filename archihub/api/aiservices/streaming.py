@@ -37,6 +37,16 @@ logger = logging.getLogger(__name__)
 #: is ignored by every conforming client.
 KEEPALIVE = ": keepalive\n\n"
 
+#: ``X-Accel-Buffering: no`` is the one that matters in this deployment: nginx
+#: fronts the backend and buffers proxied responses by default, so without it the
+#: whole answer arrives at once when the model finishes - streaming looks broken
+#: while being perfectly correct on the wire.
+STREAM_HEADERS = {
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
+
 
 def frame(payload: dict, *, event: str | None = None) -> str:
     """One SSE frame.
@@ -97,23 +107,31 @@ def event_stream(chunks: Iterator, *, on_error=None) -> Iterator[str]:
         yield done()
 
 
-def response(chunks: Iterator, *, on_error=None):
-    """A ``StreamingResponse`` carrying the headers streaming actually needs.
+def plain_response(frames: Iterator):
+    """Stream frames a caller has already rendered, with the same headers.
 
-    ``X-Accel-Buffering: no`` is the one that matters in this deployment: the
-    stack puts nginx in front of the backend, and nginx buffers proxied
-    responses by default — so without it the whole answer arrives at once when
-    the model finishes, and streaming looks broken while being perfectly
-    correct on the wire.
+    `response()` above renders model chunks into OpenAI-shaped frames. The
+    record assistant emits its own shape - `{"type": "response", ...}` then
+    `{"type": "done", ...}` - because that is what `AIservice.tsx` parses, and a
+    payload with neither `type` nor `response` falls through its parser to the
+    *done* branch. So the assistant builds its frames and this only carries
+    them, sharing the headers rather than duplicating them.
     """
+    from fastapi.responses import StreamingResponse
+
+    return StreamingResponse(
+        frames,
+        media_type="text/event-stream",
+        headers=STREAM_HEADERS,
+    )
+
+
+def response(chunks: Iterator, *, on_error=None):
+    """A ``StreamingResponse`` carrying the headers streaming actually needs."""
     from fastapi.responses import StreamingResponse
 
     return StreamingResponse(
         event_stream(chunks, on_error=on_error),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache, no-transform",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers=STREAM_HEADERS,
     )

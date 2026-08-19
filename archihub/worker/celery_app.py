@@ -157,6 +157,14 @@ def _load_plugins() -> None:
 
         mount_plugins(_NoRouterApp())
         activate_plugin_settings()
+
+        # The worker fires `resource_update` too - `plugins.framework.data`
+        # does it whenever a plugin task writes back to a resource - so it needs
+        # the indexing registrations as much as the web process does. The legacy
+        # `create_app` ran in both, which is what gave the worker them.
+        from archihub.api.search.write_hooks import register_index_hooks
+
+        register_index_hooks()
     except Exception:
         logging.getLogger(__name__).exception(
             "Could not load plugins; their tasks and automatic processing will not run"
