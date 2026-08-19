@@ -25,10 +25,6 @@ except (TypeError, ValueError):
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 
-# Page-rendering directories and image derivative suffixes, keyed by the name a
-# request may ask for. These are allowlists: the request's `size` selects a key,
-# it never becomes part of a path. Any value not listed here is refused before a
-# path is built.
 PAGE_DIRECTORIES = {'small': 'small', 'big': 'big'}
 GALLERY_SUFFIXES = {
     'small': '_small.jpg',

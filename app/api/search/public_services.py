@@ -9,8 +9,15 @@ index_handler = IndexHandler.IndexHandler()
 ELASTIC_INDEX_PREFIX = os.environ.get('ELASTIC_INDEX_PREFIX', '')
 
 
+def _published_only(body):
+    body = dict(body or {})
+    body['status'] = 'published'
+    return body
+
+
 def get_resources_by_filters(body):
     try:
+        body = _published_only(body)
         capabilities, status = get_system_settings()
         capabilities = capabilities['capabilities']
         searchSource = body.get('searchSource', 'index')
@@ -33,6 +40,7 @@ def get_resources_by_filters(body):
 
 def get_rss_feed(body, base_url, link_template, feed_title, feed_description):
     try:
+        body = _published_only(body)
         capabilities, status = get_system_settings()
         capabilities = capabilities['capabilities']
         searchSource = body.get('searchSource', 'index')
