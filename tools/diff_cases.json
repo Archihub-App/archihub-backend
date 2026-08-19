@@ -141,6 +141,14 @@
       "extract": "0.slug",
       "auth": false,
       "covers": "the public view-info route"
+    },
+    {
+      "name": "provider_id",
+      "path": "/aiservices/providers",
+      "extract": "0.id",
+      "source": "next",
+      "covers": "every per-provider read - the detail, the model catalogue and the reachability check, which is where a stored credential would surface if it ever escaped",
+      "_note": "Resolved from the PORT because aiservices was rewritten: legacy answers this route with a bare array of vendor NAMES, so no extract can read an id out of both. Feeds contract cases only - the harness refuses at load time if a parity case borrows it."
     }
   ],
   "cases": [
@@ -1457,6 +1465,177 @@
         "SourceFile"
       ],
       "_note": "The presentable EXIF subset is an allowlist. `File:Directory`/`SourceFile` are the server's own paths arriving through a second door - the one thing this API goes out of its way never to return."
+    },
+    {
+      "name": "aiservices: a provider's detail cannot leak its credential",
+      "path": "/aiservices/providers/${provider_id}",
+      "auth": true,
+      "expect_status": 200,
+      "expect_absent": [
+        "key",
+        "api_key",
+        "apiKey",
+        "secret",
+        "password"
+      ],
+      "expect_present": [
+        "has_key",
+        "key_fingerprint"
+      ],
+      "_note": "present() is the only serialiser and it cannot emit the key. `has_key` and `key_fingerprint` exist so two keys can be told apart without either being seen; asserting they are PRESENT keeps a future 'just drop the field' fix from passing the absence check while removing the operator's only way to tell which key is stored."
+    },
+    {
+      "name": "aiservices: the model catalogue cannot leak a credential",
+      "path": "/aiservices/providers/${provider_id}/models",
+      "auth": true,
+      "expect_status": 200,
+      "expect_absent": [
+        "key",
+        "api_key",
+        "apiKey",
+        "secret",
+        "password"
+      ],
+      "_note": "This route round-trips through the vendor. `expect_absent` walks every nesting level, so a key echoed back inside a model's `metadata` is caught too."
+    },
+    {
+      "name": "aiservices: the reachability check reports without leaking",
+      "path": "/aiservices/providers/${provider_id}/check",
+      "auth": true,
+      "expect_status": 200,
+      "expect_absent": [
+        "key",
+        "api_key",
+        "apiKey",
+        "secret",
+        "password"
+      ],
+      "expect_present": [
+        "ok"
+      ],
+      "_note": "Discovery failure must be REPORTED, never papered over - legacy returned a hardcoded model list when getModels raised, so a provider with an expired key showed a normal catalogue of models that could not be called."
+    },
+    {
+      "name": "aiservices: a provider's detail needs a token",
+      "path": "/aiservices/providers/${provider_id}",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "aiservices: the model catalogue needs a token",
+      "path": "/aiservices/providers/${provider_id}/models",
+      "auth": false,
+      "expect_status": 401,
+      "_note": "Unauthenticated reachability probing against the operator's own vendor account, billed to them, is the thing to keep shut."
+    },
+    {
+      "name": "aiservices: the reachability check needs a token",
+      "path": "/aiservices/providers/${provider_id}/check",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "aiservices: conversation history answers a bare array",
+      "method": "POST",
+      "path": "/aiservices/conversation/history",
+      "body": {
+        "type": "transcription",
+        "id": "${record_id}"
+      },
+      "auth": true,
+      "expect_status": 200,
+      "_note": "F66. `AImessaging.tsx` does `Array.isArray(response) ? response : []`, so an envelope reads as NO RESULTS - a 200 that renders 'No results' for a user who has conversations. The status alone cannot see it; this case exists so the shape is asserted even when the instance has none for this record."
+    },
+    {
+      "name": "aiservices: conversation history needs a token",
+      "method": "POST",
+      "path": "/aiservices/conversation/history",
+      "body": {
+        "type": "transcription",
+        "id": "${record_id}"
+      },
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "aiservices: an unknown conversation is 404, not someone else's",
+      "path": "/aiservices/conversation/000000000000000000000000",
+      "auth": true,
+      "expect_status": 404,
+      "_note": "A conversation belongs to the person who had it. The legacy delete filtered on the id alone, so a known id deleted anyone's; the read is guarded by the same load_own."
+    },
+    {
+      "name": "aiservices: reading a conversation needs a token",
+      "path": "/aiservices/conversation/000000000000000000000000",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "records: the media stream serves bytes to a permitted caller",
+      "path": "/records/${record_id}/stream",
+      "auth": true,
+      "expect_status": 200,
+      "_note": "Range support comes from Starlette's FileResponse, so the players' seeking needs no custom code - but only if the route actually serves the file. Binary, so this asserts rather than diffs."
+    },
+    {
+      "name": "records: the media stream needs a token",
+      "path": "/records/${record_id}/stream",
+      "auth": false,
+      "expect_status": 401,
+      "_note": "The authenticated stream is the one route that hands over the stored bytes directly; the public mirror is a separate path with its own is_public rule."
+    },
+    {
+      "name": "plugins: a plugin's settings need a token",
+      "path": "/filesProcessing/settings/settings",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: a plugin's settings are readable by a permitted caller",
+      "path": "/filesProcessing/settings/settings",
+      "auth": true,
+      "expect_status": 200,
+      "_note": "The processing screen renders its form from this. S32's fix made every plugin role check a dependency rather than a discarded return value, so a route that used to be guarded by nothing now refuses - this asserts it did not overshoot into refusing everyone."
+    },
+    {
+      "name": "plugins: a plugin declaring no settings is 404, not a traceback",
+      "path": "/inventoryMaker/settings/settings",
+      "auth": true,
+      "expect_status": 404,
+      "_note": "Legacy answers 500 here for both inventoryMaker and massiveUpdater, which declare no settings block."
+    },
+    {
+      "name": "plugins: a plugin icon needs a token",
+      "path": "/filesProcessing/image",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "adminApi: get_type refuses without a Fernet token",
+      "path": "/adminApi/get_type/${type_slug}",
+      "auth": false,
+      "expect_status": 401,
+      "_note": "The external APIs are consumed by other organisations' scripts, so their guards are invisible to any upgrade_front audit."
+    },
+    {
+      "name": "records: the public stream refuses a non-media record with a reason",
+      "path": "/records/public/${public_record_id}/stream",
+      "auth": false,
+      "expect_status": 400,
+      "_note": "Legacy answers 500 with the same message. Anonymous, so the refusal must be a refusal and not a traceback."
+    },
+    {
+      "name": "plugins: the inventoryMaker icon needs a token",
+      "path": "/inventoryMaker/image",
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: the massiveUpdater icon needs a token",
+      "path": "/massiveUpdater/image",
+      "auth": false,
+      "expect_status": 401,
+      "_note": "Each plugin declares its own routes, so the guard is asserted per plugin rather than assumed from the framework - S32 was 21 call sites that each looked fine on their own."
     }
   ],
   "_expected_differences": [

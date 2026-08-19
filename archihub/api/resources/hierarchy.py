@@ -1,25 +1,18 @@
 """Resource hierarchy: ancestry, children, and the navigation tree.
 
-Extracted from ``app/api/resources/services.py``, where the tree logic was
-spread across five cache-decorated functions (``get_children``,
-``get_children_cache``, ``get_tree``, ``get_parents``, ``get_parent``,
-``has_parent_postType``, ``validate_parent``) interleaved with the rest of a
-2,714-line module.
+This is the code that decides what the archive *looks like* to someone
+navigating it, and the write path's parent validation shares every helper in it.
+Keeping both in one module means the rules about where a resource may sit are
+stated once, and can be tested without a database.
 
-It is separated for the same reason ``access.py`` was: this is the code that
-decides what the archive *looks like* to a user navigating it, and the write
-path's parent validation shares every one of these helpers. Both are easier to
-reason about - and to test without a database - on their own.
+Four rules hold throughout, each enforced at the function that owns it:
 
-FOUR DEFECTS ARE CORRECTED HERE rather than carried forward; each is called out
-at the function that fixes it, and all four are recorded in BACKEND_FINDINGS:
-
-* ancestry recursion had no cycle guard (S15),
-* nothing prevented a caller from *creating* such a cycle (S15),
-* the parent-content-type allowlist was never actually enforced (F20),
-* the tree's has-children probe used a different status filter from the tree
-  level itself, so in draft view a folder holding only published children
-  rendered as a leaf (F21).
+* an ancestry walk terminates even if the stored graph contains a cycle;
+* a write may not create such a cycle in the first place;
+* a content type's declared ``parentType`` allowlist is binding;
+* whether a tree node is drawn as expandable is decided with the same status
+  filter that selected the node, so a folder is never drawn as a leaf while it
+  holds children the caller can see.
 """
 
 from __future__ import annotations
@@ -94,21 +87,18 @@ def direct_parents(resource_id: str) -> list[dict]:
 def ancestors(resource_id: str, level: int = 1, _seen: frozenset[str] | None = None) -> list[dict]:
     """Every ancestor of a resource, nearest first, de-duplicated.
 
-    CYCLE GUARD (BACKEND_FINDINGS S15). The original recursed on each parent
-    with no record of where it had already been. A resource graph containing a
-    cycle - A parent of B, B parent of A - therefore recursed until the
-    interpreter's stack limit and raised ``RecursionError``.
+    **The walk terminates whatever the stored graph looks like.** A cycle - A
+    parent of B, B parent of A - would otherwise recurse until the interpreter's
+    stack limit, and because a breadcrumb is resolved on nearly every read, a
+    single such pair would take the archive down for everyone who touches that
+    branch. :func:`validate_parent` is what keeps one from being created; this is
+    the second half of the same guarantee, for graphs that predate it or were
+    written by another process.
 
-    That is not hypothetical: :func:`validate_parent` below is what admits new
-    parent links, and the original only refused a resource that named *itself*.
-    Naming a resource that is already a descendant was accepted, which is
-    exactly how such a pair gets created. Once it exists, every read that
-    resolves a breadcrumb fails permanently, for everyone.
-
-    Guarded two ways - a visited set, and a depth ceiling for the case where the
-    cycle is longer than the set catches cheaply. Hitting either logs a warning
-    and returns what was resolved so far, because a partial breadcrumb is a far
-    better outcome for the reader than a 500.
+    Two independent guards: a visited set, and a depth ceiling for a cycle long
+    enough that the set is not the cheaper catch. Hitting either logs a warning
+    and returns what was resolved so far - a partial breadcrumb is a far better
+    outcome for the reader than a failed request.
     """
     seen = _seen if _seen is not None else frozenset()
 
@@ -229,20 +219,14 @@ def direct_children(resource_id: str) -> list[dict]:
 def parent_type_allowed(child_type: str, parent_type: str) -> bool:
     """Whether ``child_type`` declares ``parent_type`` as an acceptable parent.
 
-    BEHAVIOUR CHANGE, DELIBERATE (BACKEND_FINDINGS F20). The legacy equivalent
-    could never refuse anything, for three independent reasons: it was reached
-    only from a branch whose own condition made it unreachable; it returned a
-    ``(dict, 404)`` tuple - which is truthy - when the type did not exist; and
-    it was consulted only when parent and child shared a content type, so a
-    parent of some *other*, undeclared type was never examined at all. The
-    ``parentType`` allowlist that content types have always been able to declare
-    was, in practice, decorative.
+    The allowlist is binding wherever a type declares one, and is consulted for
+    every parent - including one of a different content type, which is the case
+    an allowlist mostly exists to constrain.
 
-    It is enforced here - but only where a type has actually declared one. An
-    absent or empty ``parentType`` means "unconstrained", not "nothing is
-    allowed". That distinction matters: existing instances have types with no
-    ``parentType`` at all, and reading the empty list as a prohibition would
-    make every save of those resources start failing at once.
+    An absent or empty ``parentType`` means **unconstrained**, not "nothing is
+    allowed". The distinction is load-bearing: most content types declare no
+    ``parentType`` at all, and reading the empty list as a prohibition would stop
+    every one of those resources from being saved.
     """
     record = _mongo().get_record(TYPES_COLLECTION, {"slug": child_type}, {"parentType": 1})
     if not record:
@@ -275,12 +259,11 @@ def validate_parent(body: dict, update: bool = False) -> dict:
     * ``parents`` - the full transitive closure, which is what the listing and
       the search index filter on.
 
-    CYCLE PREVENTION (BACKEND_FINDINGS S15). The original refused only a
-    resource naming *itself*. It did not refuse a resource naming one of its own
-    descendants, which produces exactly the cycle that made ancestry resolution
-    recurse forever. Detecting it costs nothing here: the proposed parent's
-    ancestors are already being resolved, and if this resource appears among
-    them then the proposed parent is beneath it.
+    **Refuses any parent that would close a cycle**, which means a resource
+    naming one of its own descendants as well as one naming itself. The check
+    costs nothing here because the proposed parent's ancestors are already being
+    resolved for the closure: if this resource appears among them, the proposed
+    parent sits beneath it.
     """
     parent = body.get("parent")
     if not parent:
@@ -291,9 +274,9 @@ def validate_parent(body: dict, update: bool = False) -> dict:
     if isinstance(parent, dict):
         parent = [parent]
 
-    # A malformed entry means the picker sent something unusable; treating the
-    # whole set as absent matches the original and keeps a bad payload from
-    # half-applying.
+    # A malformed entry means the picker sent something unusable. Treating the
+    # whole set as absent keeps a bad payload from half-applying, which would
+    # leave the resource in a position nobody chose.
     if any("id" not in p for p in parent):
         body["parent"] = []
         body["parents"] = []
@@ -347,9 +330,10 @@ def _post_type_of(resource_id: str) -> str:
 def _check_parent_is_acceptable(child_type: str | None, parent_type: str | None) -> None:
     """Both halves of the content-model rule, in one place.
 
-    A same-type parent additionally requires the type to be marked hierarchical;
-    a different-type parent must appear in the child type's ``parentType``
-    allowlist. The original only ever evaluated the first of these.
+    A same-type parent requires the type to be marked hierarchical; a
+    different-type parent must appear in the child type's ``parentType``
+    allowlist. Both are checked - they constrain different arrangements, and
+    neither implies the other.
     """
     from archihub.api.types.services import is_hierarchical
 
@@ -358,8 +342,9 @@ def _check_parent_is_acceptable(child_type: str | None, parent_type: str | None)
 
     if parent_type == child_type:
         result = is_hierarchical(child_type)
-        # is_hierarchical answers with a (payload, status) tuple for an unknown
-        # type; a missing type is a validation failure, not a hierarchy answer.
+        # `is_hierarchical` answers with a (payload, status) tuple, so an
+        # unknown type arrives as a shape rather than as a boolean. A missing
+        # type is a validation failure, not an answer about hierarchy.
         if not isinstance(result, tuple) or len(result) != 2:
             raise ValidationError(_("Post type does not exist"))
         hierarchical, _has_parents = result
@@ -395,9 +380,9 @@ def visible_type_slugs(username: str, slugs: list[str]) -> list[str]:
     A type with no ``viewRoles`` is visible to everyone; otherwise the caller
     must hold one of them, or be an administrator.
 
-    Order is preserved and duplicates are removed. The original appended the
-    slug once *per matching role*, so a user holding three of a type's view
-    roles put that type into the query three times.
+    Order is preserved and each slug appears once, however many of the type's
+    view roles the caller happens to hold - this list becomes a ``$in`` clause,
+    and repeating a value there is pure waste.
     """
     from archihub.api.users.services import has_role
 
@@ -433,9 +418,9 @@ def _status_filter(status: str, username: str, is_admin: bool):
 def _node_title(resource: dict) -> str:
     """The label shown in the tree.
 
-    A resource whose first-level metadata is missing its title is malformed, but
-    the original subscripted straight through it - so one such row anywhere in a
-    branch raised ``KeyError`` and took the entire tree response down with it.
+    A resource missing its first-level title is malformed, and one of them must
+    not cost the reader the rest of the branch: the node is rendered untitled and
+    the anomaly is logged, rather than failing the whole tree response.
     """
     metadata = resource.get("metadata")
     if isinstance(metadata, dict):
@@ -452,9 +437,9 @@ def _node_title(resource: dict) -> str:
 def _type_display(slugs: set[str]) -> dict[str, dict]:
     """Name and icon for each content type, in one query.
 
-    The original resolved these per node, calling ``get_icon`` and
-    ``get_by_slug`` inside the loop - two additional round trips for every row
-    of every tree level, all of them repeating the same handful of lookups.
+    Resolved for the whole level at once. A tree level holds many nodes drawn
+    from a handful of content types, so per-node lookups would repeat the same
+    few queries for every row.
     """
     if not slugs:
         return {}
@@ -474,20 +459,20 @@ def _type_display(slugs: set[str]) -> dict[str, dict]:
 def _ids_with_children(ids: list[str], slugs: list[str], status_clause) -> set[str]:
     """Which of ``ids`` have at least one descendant the caller could navigate to.
 
-    One query for the whole level, replacing the original's one query per node.
+    One query for the whole level.
 
-    F21: the status used here is the *same* clause the level itself was fetched
-    with. The original passed the raw requested status instead, so in draft mode
-    the level query matched drafts and published resources while this probe
-    matched drafts only - and a folder containing nothing but published children
-    was drawn as a leaf, with no way to expand it.
+    **``status_clause`` is the clause the level itself was fetched with, not the
+    raw requested status**, and passing anything else here is the way this
+    function goes quietly wrong. A draft-mode level matches drafts *and*
+    published resources; probing with "draft" alone would draw a folder holding
+    only published children as a leaf, with no way to expand it and nothing to
+    indicate the node was mis-drawn.
 
-    One clause of the original is not reproduced: it also required a descendant
-    to have *some* ancestor whose ``post_type`` was in the visible set. Because
-    the node being probed is itself such an ancestor, that was satisfied for any
-    well-formed document and only ever excluded rows whose stored ``parents``
-    entries were missing their ``post_type`` - i.e. it hid real children when
-    the data was incomplete, which is the wrong way round for a navigation aid.
+    The probe deliberately does not also require a descendant to have some
+    ancestor of a visible type. The node being probed is itself such an ancestor,
+    so the clause can only ever exclude rows whose stored ``parents`` entries are
+    missing a ``post_type`` - hiding real children when the data is incomplete,
+    which is the wrong way round for a navigation aid.
     """
     if not ids or not slugs:
         return set()
@@ -539,16 +524,15 @@ def get_tree(
     try:
         status_clause = _status_filter(status, user, has_role(user, "admin"))
     except PermissionDeniedError as exc:
-        # Rendered here rather than raised, because this service returns
-        # (payload, status) like the rest of the domain - and rendered with the
-        # legacy status rather than the exception's own 403, because
-        # `upgrade_front` compares this code exactly. Grep
-        # LEGACY_ROLE_FAILURE_STATUS for every site awaiting that flip.
+        # Rendered rather than raised: this service returns (payload, status)
+        # like the rest of the domain, and the router is what turns that into a
+        # response.
         return {"msg": exc.message}, LEGACY_ROLE_FAILURE_STATUS
 
-    # The level itself is always drawn from every type the caller may see;
-    # ``post_type`` narrows only the has-children probe below, which is what the
-    # original did too - the caller has already narrowed ``slugs`` for it.
+    # The level is always drawn from every type the caller may see. ``post_type``
+    # narrows only the has-children probe below: the caller has already been
+    # narrowed to ``slugs``, and constraining the level twice would hide nodes
+    # that are legitimately part of it.
     if root == "all":
         filters = {
             "post_type": {"$in": slugs},

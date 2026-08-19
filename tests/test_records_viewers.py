@@ -566,3 +566,28 @@ def test_a_chunked_result_is_reassembled_in_chunk_order(mongo, web_root):
     }
 
     assert viewers.blocks_for_page(record, 2, "ocr", "blocks")["blocks"] == [{"text": "p2"}]
+
+
+def test_an_image_page_index_is_still_validated(mongo, web_root):
+    """Serving images here must not carve out a kind where the index is unchecked.
+
+    Caught by the harness's existing negative-index contract case within minutes
+    of the image branch landing: it returned 200 where the case asserts 400,
+    because the branch ignored the indices entirely. An image has one page, so
+    0 is the only valid index - and it is checked, not assumed.
+    """
+    record = _image(web_root)
+
+    # Same two outcomes as a document: negative is a bad request, past the end
+    # is a missing page.
+    with pytest.raises(viewers.ViewerError) as exc:
+        viewers.page_images(record, [-1], "small")
+    assert exc.value.status_code == 400
+
+    for beyond in (1, 7):
+        with pytest.raises(viewers.ViewerError) as exc:
+            viewers.page_images(record, [beyond], "small")
+        assert exc.value.status_code == 404
+
+    # ...and the only valid index still works.
+    assert len(viewers.page_images(record, [0], "small")) == 1

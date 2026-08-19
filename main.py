@@ -3,7 +3,12 @@
 Run with::
 
     uvicorn main:app --host 0.0.0.0 --port 5001                     # dev
-    gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app         # prod
+    uvicorn main:app --host 0.0.0.0 --port 5001 --workers 4         # prod
+
+NOT ``gunicorn -k uvicorn.workers.UvicornWorker``: that shim is deprecated and
+has moved to the separate ``uvicorn-worker`` distribution, so depending on it
+ties the deploy to something already on its way out. uvicorn runs its own
+workers. ``start.sh`` selects the stack with ``ARCHIHUB_STACK=fastapi``.
 
 The legacy Flask entrypoint (``app:app`` via ``run.py`` / ``start.sh``) is
 untouched and still runs the old stack, so both can serve simultaneously on

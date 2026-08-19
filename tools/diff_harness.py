@@ -207,9 +207,20 @@ class Case:
 class Fixture:
     """A value discovered from the running instance, not written into the file.
 
-    Fired at the legacy backend - both stacks share one database, so the id it
-    returns is equally valid against the port, and reading it from the stack
-    being *replaced* keeps the port out of its own test setup.
+    Fired at the legacy backend by default - both stacks share one database, so
+    the id it returns is equally valid against the port, and reading it from the
+    stack being *replaced* keeps the port out of its own test setup.
+
+    ``source: "next"`` fires it at the PORT instead. That is not a shortcut, it
+    is the only thing that works for a domain that was **rewritten rather than
+    ported**: `aiservices` answers `GET /providers` with a bare array of vendor
+    NAMES on legacy and a list of provider objects on the port, so no `extract`
+    can read an id out of both. A rewritten domain has no parity cases by
+    definition - diffing it would report the rewrite as a wall of failures - so
+    its fixtures feed contract cases only, and a contract case never queries
+    legacy either. `_assert_next_fixtures_feed_contract_cases` enforces that,
+    because a parity case fed from the port would take one side's answer as the
+    question.
     """
 
     name: str
@@ -219,6 +230,8 @@ class Fixture:
     body: Any = None
     query: dict | None = None
     auth: bool = True
+    #: "legacy" (default) or "next". See the note above before choosing "next".
+    source: str = "legacy"
     #: What is untestable without it, printed when it fails to resolve.
     covers: str = ""
 
@@ -485,10 +498,17 @@ class DiffHarness:
                 )
                 continue
 
+            if fixture.source not in ("legacy", "next"):
+                raise SystemExit(
+                    f"Fixture {fixture.name!r}: source must be 'legacy' or 'next', "
+                    f"not {fixture.source!r}"
+                )
+            base = self.legacy_url if fixture.source == "legacy" else self.next_url
+
             try:
                 response = self.client.request(
                     fixture.method.upper(),
-                    f"{self.legacy_url}{substitute(fixture.path, self.bindings)}",
+                    f"{base}{substitute(fixture.path, self.bindings)}",
                     headers=headers,
                     params=substitute(fixture.query, self.bindings),
                     json=substitute(fixture.body, self.bindings),
@@ -513,7 +533,8 @@ class DiffHarness:
                 continue
 
             self.bindings[fixture.name] = value
-            print(f"  {fixture.name} = {value}")
+            marker = "" if fixture.source == "legacy" else "  (from the port)"
+            print(f"  {fixture.name} = {value}{marker}")
 
         return unresolved
 
@@ -619,7 +640,49 @@ def load_cases(path: Path) -> tuple[list[Case], list[Fixture]]:
         for entry in (raw.get("fixtures") or [] if isinstance(raw, dict) else [])
         if entry.get("name") and not entry["name"].startswith("_")
     ]
+    _assert_next_fixtures_feed_contract_cases(cases, fixtures)
     return cases, fixtures
+
+
+def _assert_next_fixtures_feed_contract_cases(
+    cases: list[Case], fixtures: list[Fixture]
+) -> None:
+    """A fixture read from the PORT may only feed cases that assert the port.
+
+    A parity case exists to ask whether the two stacks agree. Seeding it with a
+    value the port chose makes one side supply the question as well as half the
+    answer - the case would then pass on a port that returns a *consistent*
+    wrong id, which is exactly the failure it is there to catch. Contract cases
+    never query legacy, so the same value is unobjectionable there.
+
+    Checked at load time rather than left as a comment because `source: "next"`
+    reads as a convenience and will be reached for the moment a fixture is
+    awkward to resolve.
+    """
+    from_next = {f.name for f in fixtures if f.source == "next"}
+    if not from_next:
+        return
+
+    offenders = []
+    for case in cases:
+        if case.is_contract:
+            continue
+        used = (
+            placeholders_in(case.path)
+            | placeholders_in(case.body)
+            | placeholders_in(case.query)
+            | placeholders_in(case.form)
+        )
+        borrowed = sorted(used & from_next)
+        if borrowed:
+            offenders.append(f"  {case.name!r} uses {', '.join(borrowed)}")
+
+    if offenders:
+        raise SystemExit(
+            "Parity cases cannot use a fixture resolved from the port - they would\n"
+            "be asking the port to supply the question as well as the answer:\n"
+            + "\n".join(offenders)
+        )
 
 
 def report(results: list[Result], *, show_equal: bool) -> int:

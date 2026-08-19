@@ -242,6 +242,12 @@ def page_images(record: dict, pages, size: str) -> list[dict]:
     kind = entry.get("type")
 
     if kind == "image":
+        # One page, so index 0 is the only valid one - but it is still CHECKED.
+        # Serving images from this route must not carve out a record kind where
+        # a supplied index goes unvalidated; that invariant is why `_validate_index`
+        # exists (S18) and it holds for every kind or it is not an invariant.
+        for page in pages:
+            _validate_index(page, 1)
         return [_gallery_page(entry["path"], size)]
 
     if kind != "document":

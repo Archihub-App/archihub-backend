@@ -45,15 +45,47 @@ else
 fi
 
 # -------- START BACKEND --------
+# Which stack this container runs. Defaults to `flask` so an existing deploy is
+# unchanged by this file gaining the option; Phase 7 flips the default to
+# `fastapi` and deletes the legacy branch with app/.
+#
+# Until then nothing shipped could run the ported backend at all - the image
+# booted `app:app` whatever else was in it - so a deployment could not be tested
+# against the port even on a disposable instance.
+ARCHIHUB_STACK="${ARCHIHUB_STACK:-flask}"
+
 echo "Elasticsearch is up!"
+echo "Backend stack: ${ARCHIHUB_STACK}"
+
 while true; do
-  if [ "$FLASK_ENV" = "DEV" ]; then
-      echo "Running Flask in development mode"
-      flask run --host=0.0.0.0 &
-  elif [ "$FLASK_ENV" = "PROD" ]; then
-      gunicorn -w ${GUNICORN_WORKERS} -b 0.0.0.0:${FLASK_RUN_PORT} app:app &
+  if [ "$ARCHIHUB_STACK" = "fastapi" ]; then
+      # `main:app` is the ASGI entrypoint; `archihub/` is the ported package.
+      # uvicorn runs its own workers - gunicorn's `uvicorn.workers.UvicornWorker`
+      # is DEPRECATED (it moved to the separate `uvicorn-worker` distribution),
+      # so depending on it would tie the deploy to a shim that is already on its
+      # way out.
+      if [ "$FLASK_ENV" = "DEV" ]; then
+          echo "Running FastAPI in development mode"
+          uvicorn main:app --host 0.0.0.0 --port "${FLASK_RUN_PORT}" --reload &
+      elif [ "$FLASK_ENV" = "PROD" ]; then
+          uvicorn main:app --host 0.0.0.0 --port "${FLASK_RUN_PORT}" \
+                 --workers "${GUNICORN_WORKERS}" --no-access-log &
+      else
+          echo "Unknown FLASK_ENV: ${FLASK_ENV}"
+          exit 1
+      fi
+  elif [ "$ARCHIHUB_STACK" = "flask" ]; then
+      if [ "$FLASK_ENV" = "DEV" ]; then
+          echo "Running Flask in development mode"
+          flask run --host=0.0.0.0 &
+      elif [ "$FLASK_ENV" = "PROD" ]; then
+          gunicorn -w ${GUNICORN_WORKERS} -b 0.0.0.0:${FLASK_RUN_PORT} app:app &
+      else
+          echo "Unknown FLASK_ENV: ${FLASK_ENV}"
+          exit 1
+      fi
   else
-      echo "Unknown FLASK_ENV: ${FLASK_ENV}"
+      echo "Unknown ARCHIHUB_STACK: ${ARCHIHUB_STACK} (expected 'flask' or 'fastapi')"
       exit 1
   fi
 

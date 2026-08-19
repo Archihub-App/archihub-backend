@@ -22,26 +22,66 @@ authors = [{ name = "BITSOL", email = "contact@bit-sol.com.co" }]
 # inside a python:3.11 container matching the Dockerfile) so the ranges below
 # can be tightened to what production is *actually* running today, rather than
 # to whatever resolves newest.
+# SECURITY FLOORS (pip-audit, 2026-08-19)
+# ---------------------------------------
+# Several floors above are set to the first release that carries a published
+# fix, not to whatever was installed. The previous ranges all PERMITTED a
+# vulnerable version, so a fresh resolve on a new machine could legitimately
+# install one - `PyJWT>=2.9` allowed 2.9-2.12, and every one of those carries
+# the 11 advisories fixed in 2.13.0. A range is only as good as its floor.
+#
+#   PyJWT              >=2.13.0    11 advisories   <- signs and verifies every token
+#   python-multipart   >=0.0.31     5 advisories   <- parses every upload
+#   starlette          >=1.3.1      7 advisories   <- the ASGI layer under fastapi
+#   cryptography       >=50.0.0     1 advisory     <- Fernet API tokens
+#   python-ldap        >=3.4.5      2 advisories   <- directory authentication
+#   pypdf              >=6.15.0     2 advisories   <- parses UNTRUSTED uploaded PDFs
+#   pydantic-settings  >=2.14.2     1 advisory
+#   soupsieve          >=2.8.4      2 advisories   (transitive, via BeautifulSoup4)
+#
+# Verified together, not just resolved: the full unit suite (2659 passed) and
+# all 157 diff-harness cases were run against exactly this set, with byte-for-byte
+# identical harness results. starlette 1.x is a major bump and was the one worth
+# proving rather than assuming.
+#
+# `torch` reaches the image transitively through sentence-transformers and carries
+# 8 advisories of its own (fixed in 2.9.1). It is only loaded when the vector
+# database is enabled - `archihub/infra/vectors.py` imports it lazily for that
+# reason - so it is not floored here; floor it if you turn vectors on.
+#
+# Re-run:  pip-audit
 dependencies = [
     # --- Web framework (new: FastAPI stack) ---
     # FastAPI is pre-1.0 and still ships breaking-ish changes in minor releases,
     # so the range is wide and `uv.lock` is what actually pins it.
     "fastapi>=0.115,<1.0",
     "uvicorn[standard]>=0.32,<1.0",
-    "gunicorn>=23.0,<24.0",           # was installed ad hoc in the Dockerfile, never declared
-    "python-multipart>=0.0.18,<0.1",  # REQUIRED by FastAPI for Form()/File() multipart parsing
+    "python-multipart>=0.0.31,<0.1",  # REQUIRED by FastAPI for Form()/File() multipart parsing
     "pydantic>=2.9,<3.0",
-    "pydantic-settings>=2.6,<3.0",    # BaseSettings moved out of pydantic core in v2
+    "pydantic-settings>=2.14.2,<3.0", # BaseSettings moved out of pydantic core in v2
+
+    # Used DIRECTLY (JSONResponse/FileResponse semantics, Request, middleware) in
+    # five modules of archihub/core, so it is declared rather than inherited from
+    # fastapi. fastapi 0.135 requires `starlette>=0.46.0` with NO upper bound, so
+    # the security floor below is reachable without a fastapi upgrade.
+    "starlette>=1.3.1",
+
+    # RUNTIME, not a test tool. `archihub/api/aiservices/transport.py` is the one
+    # HTTP path every LLM call goes through, and it imports httpx at module level -
+    # `create_app()` raises ModuleNotFoundError without it. It sat under
+    # [optional-dependencies].dev, so `uv sync --no-dev` produced a backend that
+    # could not start at all. Verified by blocking the import and calling create_app.
+    "httpx>=0.27,<0.29",
 
     # --- Auth ---
-    "PyJWT>=2.9,<3.0",
-    "cryptography>=43.0",
+    "PyJWT>=2.13.0,<3.0",
+    "cryptography>=50.0.0",
     "bcrypt>=4.2,<6.0",
     # LDAP: the old requirements.txt declared `ldap3`, but app/api/auth/services.py
     # does `import ldap`, which is python-ldap - a different package with a
     # different API. python-ldap additionally needs libldap2-dev/libsasl2-dev at
     # build time (added to the Dockerfile). See PLAN_FASTAPI.md decision 1.
-    "python-ldap>=3.4,<4.0",
+    "python-ldap>=3.4.5,<4.0",
 
     # --- Datastores / infra ---
     "pymongo>=4.9,<5.0",
@@ -57,32 +97,32 @@ dependencies = [
     "numpy>=1.26,<3.0",
     "openpyxl>=3.1,<4.0",
     "pillow>=10.4",
-    "opencv-python>=4.10",
     "ffmpeg-python>=0.2,<0.3",
     "ffprobe3>=0.1,<0.2",
     "pyvips>=2.2,<3.0",
     "PyExifTool>=0.5,<0.6",
     "pdf2image>=1.17,<2.0",
-    "pypdf>=5.0,<7.0",
-    "pytesseract>=0.3,<0.4",
+    "pypdf>=6.15.0,<7.0",
     "python-magic>=0.4,<0.5",
     "python-docx>=1.1,<2.0",
     "python-dateutil>=2.9,<3.0",
     "BeautifulSoup4>=4.12,<5.0",
-    "StringGenerator>=0.4,<0.5",
+    "soupsieve>=2.8.4",              # bs4's selector engine; floored for its own advisories
 
     # --- Geo ---
     "shapely>=2.0,<3.0",
     "geopandas>=1.0,<2.0",
-    "topojson>=1.9,<2.0",
 
     # --- AI / LLM ---
-    "openai>=1.50",
-    "aisuite[openai]>=0.1",
-    "tiktoken>=0.8",
-    "transformers>=4.44",
-    "tokenizers>=0.20",
-    "sentence-transformers>=3.0",
+    # Only ONE of these survived the aiservices rewrite. The legacy module used
+    # `openai`, `aisuite` and `tiktoken` plus raw httpx (and already bypassed
+    # aisuite whenever tools were involved); the rewrite has a single transport
+    # and reads model facts from each provider, so none of the three is imported
+    # anywhere in archihub/. They are in the legacy block below until app/ goes.
+    # `transformers`/`tokenizers` are not declared either: sentence-transformers
+    # requires them, and re-declaring a hard transitive only creates a second
+    # place for its range to drift.
+    "sentence-transformers>=3.0",   # archihub/infra/vectors.py, imported lazily
 
     # --- i18n ---
     # Babel provides the .po/.mo tooling (compile_translations.sh). The runtime
@@ -90,25 +130,43 @@ dependencies = [
     # needed by the FastAPI stack - only by the legacy Flask app below.
     "Babel>=2.16,<3.0",
 
-    # --- LEGACY: Flask stack, removed at Phase 7 cutover ---
-    # These keep the old app runnable side-by-side with the new one so the
-    # diff harness (tools/diff_harness.py) has a reference implementation to
-    # compare against. Delete this whole block once every domain is ported.
+    # ------------------------------------------------------------------
+    # LEGACY-ONLY: delete this entire block together with app/.
+    # ------------------------------------------------------------------
+    # Every entry here was checked against the ported package and is imported
+    # ZERO times anywhere under archihub/ - by the core, by the worker, or by
+    # any of the five plugins. They keep the old stack runnable so the diff
+    # harness has a reference implementation; nothing else depends on them.
+    #
+    # Re-derive before deleting, rather than trusting this comment:
+    #   for m in flask werkzeug flasgger cv2 pytesseract topojson strgen \
+    #            openai aisuite tiktoken; do \
+    #     echo "$m: $(grep -rni "$m" archihub/ | wc -l)"; done
+    #
     "flask>=2.2,<4.0",
     "flask_cors>=4.0,<7.0",
     "flask-jwt-extended>=4.6,<5.0",
     "flask-babel>=4.0,<5.0",
     "flasgger>=0.9.7,<0.10",
     "Werkzeug>=2.2,<4.0",
+    "gunicorn>=23.0,<24.0",         # legacy PROD only; the port runs uvicorn's own workers
+    "opencv-python>=4.10",          # app/ only
+    "pytesseract>=0.3,<0.4",        # app/ only
+    "topojson>=1.9,<2.0",           # imported by NEITHER stack; drop outright
+    "StringGenerator>=0.4,<0.5",    # app/ only
+    "openai>=1.50",                 # app/api/aiservices only - rewritten away
+    "aisuite[openai]>=0.1",         # app/api/aiservices only - rewritten away
+    "tiktoken>=0.8",                # app/api/aiservices only - rewritten away
     # `flask_restful` was in requirements.txt but is imported nowhere
     # (grep -rn flask_restful app/ -> 0 matches). Deliberately dropped.
 ]
 
 [project.optional-dependencies]
 dev = [
+    # httpx is NOT here - it is a runtime dependency (see the note above it).
+    # TestClient and the diff harness use the same installed copy.
     "pytest>=8.3,<9.0",
     "pytest-asyncio>=0.24,<2.0",
-    "httpx>=0.27,<0.29",           # TestClient + the diff harness
     "deepdiff>=8.0,<9.0",          # response-body field-by-field diffing
 ]
 
