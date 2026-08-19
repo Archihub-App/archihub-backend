@@ -25,6 +25,34 @@ except (TypeError, ValueError):
 mongodb = DatabaseHandler.DatabaseHandler()
 cacheHandler = CacheHandler.CacheHandler()
 
+# Page-rendering directories and image derivative suffixes, keyed by the name a
+# request may ask for. These are allowlists: the request's `size` selects a key,
+# it never becomes part of a path. Any value not listed here is refused before a
+# path is built.
+PAGE_DIRECTORIES = {'small': 'small', 'big': 'big'}
+GALLERY_SUFFIXES = {
+    'small': '_small.jpg',
+    'medium': '_medium.jpg',
+    'large': '_large.jpg',
+    'big': '_large.jpg',
+}
+
+
+def _page_index(value, count):
+    """A page index from a request, checked against the real page count.
+
+    Negative values are refused rather than counting back from the end of the
+    document, which is what bare list subscripting does.
+    """
+    try:
+        index = int(value)
+    except (TypeError, ValueError):
+        raise Exception(_('Record does not have that many pages'))
+    if index < 0 or index >= count:
+        raise Exception(_('Record does not have that many pages'))
+    return index
+
+
 def normalize_text(text):
     if not isinstance(text, str):
         return text
@@ -917,9 +945,10 @@ def cache_get_imgs_gallery_by_id(id, pages, size):
     
     for i in range(len(img)):
         path = img[i]['processing']['fileProcessing']['path']
-        path_img = os.path.join(WEB_FILES_PATH, path)
-        if size == 'big': size = 'large'
-        path_img = path_img + '_' + size + '.jpg'
+        suffix = GALLERY_SUFFIXES.get(size)
+        if suffix is None:
+            raise Exception(_('File not found'))
+        path_img = os.path.join(WEB_FILES_PATH, path) + suffix
 
         if not os.path.exists(path_img):
             raise Exception(_('File not found'))
@@ -1033,16 +1062,18 @@ def cache_get_pages_by_id(id, pages, size):
     
     if record['processing']['fileProcessing']['type'] == 'document':
         path = record['processing']['fileProcessing']['path']
-        path_files = os.path.join(WEB_FILES_PATH, path, 'web/' + size + '/')
+        directory = PAGE_DIRECTORIES.get(size)
+        if directory is None:
+            raise Exception(_('Record does not have files'))
+        path_files = os.path.join(WEB_FILES_PATH, path, 'web', directory)
         path = os.path.join(WEB_FILES_PATH, path)
 
         files = sorted(os.listdir(path_files))
 
         response = []
         for x in pages:
-            if x >= len(files):
-                raise Exception(_('Record does not have that many pages'))
-            
+            x = _page_index(x, len(files))
+
             # verificar si el archivo existe
             file = files[x]
             file = os.path.join(path_files, file)
