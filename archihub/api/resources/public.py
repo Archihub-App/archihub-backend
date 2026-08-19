@@ -5,8 +5,9 @@ unrestricted after inheritance, and a content type declaring no ``viewRoles``.
 Nothing here re-derives it.
 
 **A public route answers 404 for "not public"**, byte-identical to "does not
-exist". The legacy public layer answered 401 with a distinct message, which
-confirms to an anonymous caller that a resource is there and reserved.
+exist". Answering 401 with a distinct message instead confirms to an anonymous
+caller that the resource exists and is reserved, which is the fact the refusal
+was meant to withhold.
 
 **Content types that restrict viewing are omitted, not refused.** A listing or
 a tree that includes a restricted type simply leaves it out - the caller asked

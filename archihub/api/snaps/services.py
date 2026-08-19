@@ -6,17 +6,16 @@ happens on every read (``render.py``), which is what keeps a snap correct when
 the underlying derivative is regenerated - and what makes the record's access
 rule the thing that governs it.
 
-**A SNAP IS NOT A CAPABILITY.** The original checked ownership on read and
-nothing on create: ``create`` fetched the record by id with no access check at
-all, so any authenticated user could snap any record in the archive and store
-its filename. The content stayed safe only because the *read* path happened to
-re-check - one layer of defence, on the wrong side of the write. Both sides
-check here. Recorded as BACKEND_FINDINGS S22.
+**A SNAP IS NOT A CAPABILITY.** Both sides check: creating one requires the
+record to be visible to the creator, and reading one requires ownership *and*
+that the record is still visible. Checking only on read leaves the archive one
+layer deep, on the wrong side of the write - any authenticated user could snap
+any record and store its filename.
 
-**The stored data is validated at creation**, which the original never did. It
-is read back much later, by a different code path, sometimes on another user's
-screen (article blocks embed snaps), so a malformed box or a missing page is
-not the creator's problem alone.
+**The stored data is validated at creation.** It is read back much later, by a
+different code path, and sometimes on another user's screen — article blocks
+embed snaps — so a malformed box or a missing page is not the creator's problem
+alone.
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ import logging
 from bson.objectid import ObjectId
 
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -228,7 +227,7 @@ def load_own(snap_id: str, user: str) -> tuple[dict | None, tuple[dict, int] | N
 
     if snap.get("user") != user:
         logger.info("Denied %s access to snap %s", user, snap_id)
-        return None, ({"msg": _(MSG_UNAUTHORIZED)}, LEGACY_ROLE_FAILURE_STATUS)
+        return None, ({"msg": _(MSG_UNAUTHORIZED)}, ROLE_FAILURE_STATUS)
 
     return snap, None
 

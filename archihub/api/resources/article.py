@@ -10,9 +10,10 @@ carry alongside their catalogue metadata. Blocks embed structured references
 comments. The frontend renders them through DOMPurify; see the sanitisation
 rule in the ``upgrade_front`` section of CLAUDE.md.
 
-AUTHORISATION IS TIGHTENED HERE. See :func:`may_edit` - the original's write
-path had a hole this closes, and closing it is a real behaviour change for
-instances relying on the default. It is written up as BACKEND_FINDINGS S17.
+AUTHORISATION IS STRICTER THAN THE DEFAULT. See :func:`may_edit`: an instance
+whose content types declare no ``editRoles`` falls back to the creator or a
+``super_editor``, rather than to everyone. That is narrower than a bare role
+check and is a real behaviour change for a deployment that declared none.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from bson.objectid import ObjectId
 
 from archihub.api.resources import access, hierarchy
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ def serialise(value):
 def may_edit(user: str, resource: dict, is_admin: bool) -> bool:
     """Whether this caller may change a resource's article.
 
-    THE RULE, and why it is not the original's (BACKEND_FINDINGS S17):
+    THE RULE, and why it is not the original's:
 
     * Administrators always may.
     * Nobody may edit what they cannot read. The original checked access rights
@@ -133,7 +134,7 @@ def get_article_body(resource_id: str, user: str) -> tuple[dict, int]:
     is_admin = has_role(user, "admin")
     if not access.may_view_resource(user, resource, is_admin):
         logger.info("Denied %s the article of resource %s", user, resource_id)
-        return {"msg": _(MSG_UNAUTHORIZED)}, LEGACY_ROLE_FAILURE_STATUS
+        return {"msg": _(MSG_UNAUTHORIZED)}, ROLE_FAILURE_STATUS
 
     return {"articleBody": serialise(resource.get("articleBody"))}, 200
 
@@ -153,7 +154,7 @@ def update_article_body(resource_id: str, body: dict, user: str) -> tuple[dict, 
     database layer writes exactly the fields that were set, a caller could
     publish a draft, clear its access restrictions and re-file it in the tree by
     adding those keys to an article save - bypassing every check the real update
-    route performs. See BACKEND_FINDINGS S17.
+    route performs.
     """
     from archihub.api.users.services import has_role
 
@@ -174,7 +175,7 @@ def update_article_body(resource_id: str, body: dict, user: str) -> tuple[dict, 
 
     if not may_edit(user, resource, has_role(user, "admin")):
         logger.info("Denied %s an article edit on resource %s", user, resource_id)
-        return {"msg": _(MSG_UNAUTHORIZED)}, LEGACY_ROLE_FAILURE_STATUS
+        return {"msg": _(MSG_UNAUTHORIZED)}, ROLE_FAILURE_STATUS
 
     _write(resource_id, serialise(article_body), user)
     _audit(user, {"resource": resource_id, "articleBody": article_body})
@@ -200,7 +201,7 @@ def add_block_comment(resource_id: str, body: dict, user: str) -> tuple[dict, in
 
     if not may_edit(user, resource, has_role(user, "admin")):
         logger.info("Denied %s a block comment on resource %s", user, resource_id)
-        return {"msg": _(MSG_UNAUTHORIZED)}, LEGACY_ROLE_FAILURE_STATUS
+        return {"msg": _(MSG_UNAUTHORIZED)}, ROLE_FAILURE_STATUS
 
     article_body = resource.get("articleBody") or []
     if not isinstance(article_body, list):

@@ -1,10 +1,10 @@
 """Search routes.
 
 Three: one authenticated, two public. The public pair mount first, and both go
-through the same service with ``public=True`` — which is what fixes S28. There
-is no code path by which a request can widen what an anonymous caller sees.
+through the same service with ``public=True``. There is no code path by which a
+request can widen what an anonymous caller sees.
 
-Unlike the legacy blueprint these are **always registered**. Whether search is
+These are **always registered**. Whether search is
 available is a per-request question answered by `services.indexing_enabled`,
 answering 503 when it is off. Registering conditionally at construction meant an
 operator turning indexing on had to restart every worker, and that the OpenAPI
@@ -60,7 +60,7 @@ def search_public(body: dict = Body(default_factory=dict)) -> JSONResponse:
     route read it from the body, and since every resource is indexed whatever
     its state with `accessRights` defaulting to `public`, asking for
     `status: "draft"` returned unpublished material to anyone — demonstrated
-    against a real index. See BACKEND_FINDINGS S28.
+    against a real index.
     """
     return _respond(services.search(body, None, public=True))
 

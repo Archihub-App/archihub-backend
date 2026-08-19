@@ -5,23 +5,23 @@ resolves a *stored* processing path to files on disk and returns them base64
 encoded inside JSON, which is how the frontend's viewers consume them.
 
 THE SIZE PARAMETER IS AN ALLOWLIST KEY, NOT A PATH SEGMENT. This is the whole
-reason this module exists rather than a direct port. The original built the
-directory to list as::
+reason this is a module of its own. Building the directory to list as::
 
     path_files = os.path.join(WEB_FILES_PATH, path, 'web/' + size + '/')
     files = sorted(os.listdir(path_files))
     ... open(file, 'rb') -> base64 -> response
 
-with ``size`` taken straight from the request body. A caller who can read any
-one record can therefore name any directory the service account can reach, list
-it, and have its contents returned base64 encoded. Recorded as BACKEND_FINDINGS
-S18. The invariant enforced below: **a client-supplied string never becomes a
-path component.** It selects a key in a fixed map; anything not in the map is
-refused before a path is built. Every path assembled from stored data
-additionally goes through ``resolve_within``.
+with ``size`` joined into the path. Any caller who can read one record can then
+name any directory the service account can reach, list it, and have its contents
+returned base64 encoded.
 
-Page indices are validated for the same reason in miniature - the original
-subscripted ``files[x]`` with the client's integer, so a negative index quietly
+THE INVARIANT: **a client-supplied string never becomes a path component.** It
+selects a key in a fixed map, and anything absent from that map is refused before
+a path is built. Every path assembled from *stored* data additionally goes
+through ``resolve_within``.
+
+Page indices are validated for the same reason in miniature - subscripting
+``files[x]`` with the client's integer means a negative index quietly
 returned a page counted from the end of the document instead of an error.
 """
 
@@ -245,7 +245,7 @@ def page_images(record: dict, pages, size: str) -> list[dict]:
         # One page, so index 0 is the only valid one - but it is still CHECKED.
         # Serving images from this route must not carve out a record kind where
         # a supplied index goes unvalidated; that invariant is why `_validate_index`
-        # exists (S18) and it holds for every kind or it is not an invariant.
+        # exists and it holds for every kind or it is not an invariant.
         for page in pages:
             _validate_index(page, 1)
         return [_gallery_page(entry["path"], size)]

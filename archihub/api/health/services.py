@@ -11,11 +11,10 @@ Elasticsearch and Qdrant report ``disabled`` rather than failing when their
 feature flags are off in the ``system`` collection, so an instance that never
 enabled indexing is still "ready".
 
-One deliberate behavioural fix: the legacy Elasticsearch check instantiated
-``IndexHandler``, whose ``__new__`` calls ``start()``, which **creates an index**
-when none exists. A readiness probe must not mutate cluster state, and Docker
-would have called it every 30 seconds. The new ``SearchClient`` does no I/O on
-construction and the check is a plain cluster-health read.
+**A readiness probe must not mutate anything.** Docker calls it every 30
+seconds, so a check that creates an index when none exists would keep recreating
+one. ``SearchClient`` performs no I/O on construction and the check is a plain
+cluster-health read.
 """
 
 from __future__ import annotations

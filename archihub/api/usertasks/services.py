@@ -6,10 +6,10 @@ A user task assigns review work on one resource or record to one editor. Exactly
 one may be open per target at a time, which is what stops two editors being
 asked to review the same thing.
 
-ERROR KEY: this domain mostly answers with ``{"error": ...}`` rather than the
+ERROR KEY: this domain answers with ``{"error": ...}`` rather than the
 ``{"msg": ...}`` every other domain uses - **except** the two "there are no
-tasks" 404s, which the legacy service returns under ``msg``. So the legacy is
-inconsistent with itself, not merely with its neighbours.
+tasks" 404s, which use ``msg``. That inconsistency is wire contract: clients read
+one key or the other per route, so it is reproduced rather than tidied.
 
 That is preserved exactly, both parts. Unifying the two would be a wire change
 with no behavioural benefit, and the harness diffs the body key by key, so the
@@ -25,7 +25,7 @@ from datetime import datetime
 from bson.objectid import ObjectId
 
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -244,7 +244,7 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
 
         if body.get("status") == STATUS_APPROVED:
             if not is_team_lead:
-                return {"error": _("You don't have the required authorization")}, LEGACY_ROLE_FAILURE_STATUS
+                return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
             update["status"] = STATUS_APPROVED
             update["approvedBy"] = user
             update["approvedAt"] = datetime.now()

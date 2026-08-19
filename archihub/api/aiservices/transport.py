@@ -1,16 +1,14 @@
 """The single HTTP path every dialect goes through.
 
 One place for timeouts, retries, connection reuse, streaming and error mapping.
-The legacy code had three transports — `aisuite`, the `openai` SDK and raw
-`httpx` — chosen per branch inside each provider class, so a timeout applied in
-one path and not another, and a retry loop existed in some vendors' classes and
-not others. Whichever path a call took was an accident of whether it passed
-`tools`.
+Several transports chosen per branch is how a timeout comes to apply on one path
+and not another, and how a retry loop ends up existing for some vendors and not
+others - differences that read as decisions to whoever finds them next.
 
-**Retries are bounded, jittered, and only for reasons a retry can fix.** The
-legacy loop retried whenever the string "429" appeared anywhere in the exception
-— including in an unrelated model name or an id — for a fixed five attempts with
-no jitter, so a rate-limited instance produced synchronised retry storms.
+**Retries are bounded, jittered, and only for reasons a retry can fix.** Deciding
+by substring - retrying whenever "429" appears anywhere in an exception - also
+matches an unrelated model name or request id; and retrying on a fixed schedule
+with no jitter turns one rate-limited instance into synchronised retry storms.
 """
 
 from __future__ import annotations

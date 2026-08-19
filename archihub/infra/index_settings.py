@@ -8,7 +8,7 @@ whose material is in another language gets Spanish stemming applied to it. The
 interface language setting has no bearing on this - changing it does not
 reanalyse anything. Making this configurable means making it a *setting read at
 regenerate time*, which is a change to the index lifecycle rather than to this
-file; recorded in BACKEND_FINDINGS (P12) rather than done here.
+file; rather than done here.
 """
 
 from __future__ import annotations

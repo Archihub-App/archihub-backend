@@ -8,10 +8,11 @@ TOKEN COMPATIBILITY IS THE POINT OF THIS MODULE. Both stacks sign with the same
 ``JWT_SECRET_KEY``, and during a phased cutover both may be serving at once, so
 tokens must be interchangeable in *both* directions:
 
-* a token minted by the legacy Flask app must be accepted here - otherwise
-  cutover logs every signed-in user out;
-* a token minted here must be accepted by the legacy app - otherwise a user who
-  logs in through the new stack cannot use any not-yet-ported route.
+* tokens are signed with ``JWT_SECRET_KEY`` and the claim set is stable, so a
+  token stays valid across a restart or a redeploy - a signed-in user is not
+  logged out by an upgrade;
+* the same secret is read by every process, so any of them can verify a token
+  another one minted.
 
 ``flask_jwt_extended`` 4.x emits exactly these claims, verified against a live
 instance of the library::

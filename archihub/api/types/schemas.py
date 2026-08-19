@@ -2,7 +2,7 @@
 
 Port of ``app/api/types/models.py``, with one deliberate removal.
 
-THE LEGACY MODEL CARRIED A LATENT `_id` TRAP:
+A LATENT `_id` TRAP THIS MODEL AVOIDS:
 
     class PostType(BaseModel):
         id: str = Field(default_factory=uuid.uuid4, alias="_id")

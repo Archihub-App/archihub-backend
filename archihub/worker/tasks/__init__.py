@@ -1,8 +1,8 @@
 """Celery task bodies.
 
-Dotted task names (``@shared_task(name='...')``) are preserved verbatim from the
-legacy code so that tasks already queued in Redis at cutover, and every row
-already in the `tasks` collection, keep resolving.
+Dotted task names (``@shared_task(name='...')``) are stable identifiers: a
+message already queued in Redis, and every row already in the `tasks`
+collection, resolves by that string. Renaming one strands both.
 
 IMPORTING THIS PACKAGE REGISTERS THE TASKS. ``celery_app`` autodiscovers
 ``archihub.worker.tasks``, which runs this file; a module not listed below is

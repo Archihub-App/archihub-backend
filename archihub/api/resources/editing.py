@@ -5,18 +5,18 @@ create/update path, ported from ``app/api/resources/services.py``:
 
 * :func:`update_files_order`     - reorder the files attached to a resource
 * :func:`update_granular`        - set one text field across a file's parents
-* :func:`change_post_type`       - see its docstring; it does not do that
+* :func:`change_post_type`       - move a resource to another content type
 
 They are grouped here because they share a shape the main write path does not:
 each touches a single named field, so none of them needs the metadata
 validation, parent validation or file handling that ``create``/``update`` do.
 That is also what makes them portable ahead of ``records``.
 
-AUTHORISATION. The three legacy routes each invented their own rule, and none
-checked everything: one looked only at access rights, one only at the content
-type's ``editRoles``, one at ownership plus roles. The pieces now live in
-``access.py`` and are combined explicitly per route, with the reasoning stated
-at each site.
+AUTHORISATION IS ASSEMBLED FROM NAMED PIECES IN ``access.py``, never invented
+per route. Each of these three states which combination it applies and why.
+Deciding it inline is how three sibling routes end up checking three different
+subsets - one access rights, one the content type's ``editRoles``, one
+ownership - each looking complete on its own.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from bson.objectid import ObjectId
 
 from archihub.api.resources import access
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def _now() -> datetime.datetime:
 
 
 def _denied() -> tuple[dict, int]:
-    return {"msg": _(MSG_UNAUTHORIZED)}, LEGACY_ROLE_FAILURE_STATUS
+    return {"msg": _(MSG_UNAUTHORIZED)}, ROLE_FAILURE_STATUS
 
 
 # ---------------------------------------------------------------------------
@@ -374,7 +374,7 @@ def change_post_type(body: dict, user: str) -> tuple[dict, int]:
 
     The legacy service did nothing: it checked the caller's edit roles over the
     resource's *current* type and returned ``{'msg': 'Post type changed'}``
-    without writing anything (BACKEND_FINDINGS F25). This implements it.
+    without writing anything. This implements it.
 
     FOUR GATES, and each one exists because reclassifying is not a rename:
 

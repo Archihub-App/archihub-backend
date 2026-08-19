@@ -1,9 +1,9 @@
 """Application logging.
 
-The legacy codebase has 274 bare ``print()`` calls and imports ``logging`` in
-only five infra-adjacent modules - never in a ``routes.py`` or ``services.py``.
-Diagnosing a production incident therefore meant reading container stdout with
-no levels, no timestamps and no way to filter by subsystem.
+Diagnosing a production incident against bare ``print()`` output means reading
+container stdout with no levels, no timestamps and no way to filter by
+subsystem. Every module here logs through the stdlib logger for its own name, so
+an operator can raise or lower one subsystem without touching the rest.
 
 This module sets up stdlib logging once at startup:
 

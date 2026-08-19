@@ -1,10 +1,8 @@
 """Roles and access rights.
 
-Port of the role helpers in ``app/utils/functions.py``. They live in ``core``
-rather than a domain package because both the types domain and the auth layer
-need them, and the legacy placement in a 41,000-line grab-bag module is what
-allowed a second, divergent copy of the authorisation helpers to appear
-alongside them.
+Role helpers. They live in ``core`` rather than in a domain package because both
+the types domain and the auth layer need them, and an authorisation helper with
+no obvious home is how a second, divergent copy comes to exist.
 
 HOW THE VOCABULARY IS ASSEMBLED - not obvious, and easy to get wrong:
 

@@ -16,17 +16,16 @@ plugins register their automatic processing at the order an operator configured
 rewrites a resource's metadata does so *before* the document is built. Moving
 these numbers silently reorders every side effect on the write path.
 
-TOGGLING INDEXING NEEDS A RESTART, and that is the legacy contract rather than
-an oversight. Registration is a process-local fact, so a setting flipped in one
-gunicorn worker could not reach the others (or the Celery workers) in any case;
-this deployment applies such changes by restarting, which is what
-``/system/restart`` is for. It is deliberately NOT the same question as
-``search.services.indexing_enabled()``, which gates the *routes* and is read per
-request precisely because a route's availability can be answered locally.
+TOGGLING INDEXING NEEDS A RESTART, and that is unavoidable rather than an
+oversight. Registration is a process-local fact, so a setting flipped in one web
+worker cannot reach the others or the Celery workers; this deployment applies
+such changes by restarting, which is what ``/system/restart`` is for. It is
+deliberately NOT the same question as ``search.services.indexing_enabled()``,
+which gates the *routes* and is read per request precisely because a route's
+availability can be answered locally.
 
-The legacy ``hookHandlerVector()`` beside it is not ported, because it is dead:
-nothing calls it. Qdrant registrations come from the ``QdrantHandler`` plugin,
-which registers them itself at import time.
+Qdrant registrations are not made here: they come from the ``QdrantHandler``
+plugin, which registers them itself when it is built.
 """
 
 from __future__ import annotations

@@ -114,7 +114,7 @@ def test_an_inherited_access_right_is_honoured_when_reading(mongo):
     mongo.user = {"accessRights": ["public"]}
 
     _payload, status = article.get_article_body(VALID_ID, "alice")
-    assert status == article.LEGACY_ROLE_FAILURE_STATUS
+    assert status == article.ROLE_FAILURE_STATUS
 
 
 def test_datetimes_inside_blocks_are_serialised(mongo):
@@ -146,7 +146,7 @@ def test_a_stranger_cannot_rewrite_an_article(mongo):
 
     _payload, status = article.update_article_body(VALID_ID, {"articleBody": []}, "stranger")
 
-    assert status == article.LEGACY_ROLE_FAILURE_STATUS
+    assert status == article.ROLE_FAILURE_STATUS
     assert mongo.writes == []
 
 
@@ -195,7 +195,7 @@ def test_lacking_the_declared_edit_role_is_refused(mongo):
     mongo.type = {"editRoles": ["curator"], "viewRoles": []}
 
     _payload, status = article.update_article_body(VALID_ID, {"articleBody": []}, "alice")
-    assert status == article.LEGACY_ROLE_FAILURE_STATUS
+    assert status == article.ROLE_FAILURE_STATUS
 
 
 def test_nobody_may_edit_what_they_cannot_read(mongo, monkeypatch):
@@ -207,7 +207,7 @@ def test_nobody_may_edit_what_they_cannot_read(mongo, monkeypatch):
     mongo.type = {"editRoles": ["curator"], "viewRoles": []}
 
     _payload, status = article.update_article_body(VALID_ID, {"articleBody": []}, "cur")
-    assert status == article.LEGACY_ROLE_FAILURE_STATUS
+    assert status == article.ROLE_FAILURE_STATUS
 
 
 # ---------------------------------------------------------------------------
@@ -353,7 +353,7 @@ def test_commenting_requires_the_same_authorisation_as_editing(mongo):
         VALID_ID, {"comment": "hola", "blockId": "b1"}, "stranger"
     )
 
-    assert status == article.LEGACY_ROLE_FAILURE_STATUS
+    assert status == article.ROLE_FAILURE_STATUS
     assert mongo.writes == []
 
 

@@ -11,11 +11,10 @@ single range, produces a ``multipart/byteranges`` body for several, and answers
 the things Starlette does *not* decide for us: which path is safe to serve,
 what the download filename should be, and when a temporary file gets cleaned up.
 
-A NOTE ON WHAT CHANGED. Flask's ``send_file`` guesses the media type from the
-filename and so did every legacy call site. That is kept, because the stored
-extension is what the frontend already relies on - but where the bytes are
-about to be interpreted by the *browser* rather than downloaded, prefer passing
-an explicit ``media_type`` derived from the record, not the filename.
+MEDIA TYPES. By default the type is guessed from the filename, which is what the
+frontend relies on for stored files. Where the bytes are about to be interpreted
+by the *browser* rather than downloaded, pass an explicit ``media_type`` derived
+from the record instead - a filename states only what the uploader claimed.
 """
 
 from __future__ import annotations

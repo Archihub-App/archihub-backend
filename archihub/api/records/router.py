@@ -4,12 +4,12 @@ Port of ``app/api/records/routes.py``. Records are the files themselves: the
 scans, recordings and documents that resources describe.
 
 Every route that touches a record starts from ``services.load_visible``, which
-returns the record or the *real* refusal - a 404 for one that does not exist,
-a role failure for one the caller may not open. The original opened eight
-functions with a check that collapsed both into 500 (BACKEND_FINDINGS F27);
-routing everything through one guard is what stops that reappearing.
+returns the record or the *real* refusal - a 404 for one that does not exist, a
+role failure for one the caller may not open. Repeating that check per route is
+how the two collapse into one status, and a permission failure reported as a 500
+is indistinguishable from a broken backend.
 
-Role failures keep the legacy 401 pending the coordinated frontend flip.
+A role failure answers 403; 401 is reserved for "I do not know who you are".
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse, Response
 from archihub.api.records import blocks, media, services, transcription, viewers
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
     require_role_any,
@@ -33,12 +33,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/records", tags=["Records"])
 
-require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
+require_admin = require_role_any("admin")
 require_block_editor = require_role_any(
-    "admin", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "editor"
 )
 require_transcriber = require_role_any(
-    "admin", "editor", "transcriber", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "editor", "transcriber"
 )
 
 _RESPONSES = {
@@ -536,7 +536,7 @@ def _edit_transcription(operation, record_id: str, body: dict, current_user: Cur
         logger.info("Denied %s transcription editing on %s", current_user.username, record_id)
         return (
             {"msg": _("You do not have permission to edit this transcription")},
-            LEGACY_ROLE_FAILURE_STATUS,
+            ROLE_FAILURE_STATUS,
         )
 
     return operation(record_id, body, current_user.username)

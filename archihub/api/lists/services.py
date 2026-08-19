@@ -8,8 +8,8 @@ against a live database - the create path never writes one), so that function
 could never match anything, and it then subscripted its ``None`` result before
 its own existence check. It is dead code and is deleted rather than reproduced.
 
-SUCCESS RESPONSES ARE BYTE-IDENTICAL to the legacy ones. Error responses are
-corrected, because the legacy ones were not merely different but unusable:
+Error responses are the part worth stating, because the obvious shapes here are
+unusable:
 
 ``get_by_id`` returned its errors as ``({'msg': ...}, 404)`` - a tuple - to a
 route that tested ``if 'msg' in resp``. Membership in a tuple is not key lookup,

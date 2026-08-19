@@ -9,15 +9,13 @@ import (``get_metadata``, ``get_icon``, ``is_hierarchical``, ``add_resource``,
 public ``POST /types/info`` - are NOT ported yet; they pull in the resources
 aggregation pipeline and land with that domain.
 
-RETURN CONVENTION: ``(payload, status_code)`` tuples, matching the legacy
-services so the router can pass them straight through and the diff harness sees
-byte-identical bodies. Once a route's parity is confirmed, these become
-exceptions from ``archihub.core.errors``.
+RETURN CONVENTION: ``(payload, status_code)`` tuples, which the router renders.
+A few helpers deviate and say so in their own docstrings, because callers probe
+their return shape.
 
-CACHING is not re-enabled here (see the note in ``api/users/services.py``): the
-legacy functions carry ``@cacheHandler.cache.cache()`` and correctness depends on
-``update_cache()`` invalidating eight of them plus the global cache. That is
-restored once the invalidation sites it depends on are ported.
+CACHING is deliberately off here (see the note in ``api/users/services.py``).
+These lookups are cheap to cache and hard to invalidate correctly, and a stale
+content type is a stale authorisation decision.
 """
 
 from __future__ import annotations
@@ -51,10 +49,10 @@ def _mongo():
 def parse_result(result):
     """BSON -> JSON-safe Python.
 
-    Kept identical to the legacy helper for now. It round-trips through a JSON
-    string, which is measurably wasteful on large payloads - noted as a
-    performance item rather than changed here, because doing so would alter
-    serialisation edge cases across every domain at once.
+    Round-trips through a JSON string, which is measurably wasteful on large
+    payloads. Replacing it would change serialisation edge cases across every
+    domain at once, so it is a deliberate, deferred performance item rather than
+    an oversight.
     """
     return json.loads(json_util.dumps(result))
 
@@ -62,9 +60,8 @@ def parse_result(result):
 def slugify(name: str) -> str:
     """Derive a URL slug from a display name.
 
-    Extracted from the legacy route handler, where it sat inline. Same rules:
-    lowercase, spaces to hyphens, drop anything not alphanumeric or a hyphen,
-    trim and collapse hyphens.
+    Lowercase, spaces to hyphens, drop anything that is not alphanumeric or a
+    hyphen, then trim and collapse hyphens.
     """
     slug = name.lower().replace(" ", "-")
     slug = "".join(char for char in slug if char.isalnum() or char == "-")
@@ -120,9 +117,8 @@ def create(body: dict, user: str) -> tuple[dict, int]:
         from archihub.api.types.schemas import PostTypeCreate
 
         post_type = PostTypeCreate(**body)
-        # model_dump(exclude_unset=True) is what the legacy insert relied on to
-        # drop the inert `id` default - see schemas.py. No `id` is declared here
-        # at all, so MongoDB assigns the ObjectId.
+        # No `id` is declared on the model, so MongoDB assigns the ObjectId -
+        # see schemas.py.
         _mongo().insert_record(COLLECTION, post_type.model_dump(exclude_none=True))
 
         _register_log(user, "type_create", {"post_type": {"name": post_type.name, "slug": post_type.slug}})
@@ -136,8 +132,8 @@ def create(body: dict, user: str) -> tuple[dict, int]:
 def get_by_slug(slug: str):
     """One content type, with its resolved parent chain and metadata form.
 
-    Returns the document itself on success (NOT a tuple) - matching the legacy
-    contract, which the router depends on to distinguish success from error.
+    Returns the document itself on success, NOT a tuple. The router tells
+    success from failure by that shape, so the asymmetry is deliberate.
     """
     try:
         post_type = _mongo().get_record(COLLECTION, {"slug": slug})
@@ -197,8 +193,8 @@ def update_by_slug(slug: str, body: dict, user: str) -> tuple[dict, int]:
             body["viewRoles"] = verify_roles_exist(body["viewRoles"])
 
         # A type must not be its own parent - that would make the recursive
-        # parent walk loop. `.get` rather than `[...]`: the legacy version
-        # raised KeyError when parentType was absent from a partial update.
+        # parent walk loop. `.get` rather than `[...]`, because a partial update
+        # legitimately omits `parentType`.
         parent_types = body.get("parentType") or []
         if slug in [parent.get("id") for parent in parent_types]:
             body["parentType"] = [parent for parent in parent_types if parent.get("id") != slug]
@@ -230,12 +226,12 @@ def delete_by_slug(slug: str, user: str) -> tuple[dict, int]:
 
     _register_log(user, "type_delete", {"post_type": {"name": post_type.get("name"), "slug": post_type.get("slug")}})
 
-    # NOTE: the legacy code fires 'resources_update_by_filters' (plural) here,
-    # but the only registration anywhere is 'resources_update_by_filter'
-    # (singular) - so this hook has never fired. Reproduced as a no-op rather
-    # than silently "fixed": whatever the singular hook does has never run on
-    # type deletion, and enabling it now would be a behaviour change to make
-    # deliberately, not as a side effect of a rename. See BACKEND_FINDINGS F2.
+    # NOTE: this raises 'resources_update_by_filters' (plural), and the only
+    # subscriber anywhere registers 'resources_update_by_filter' (singular) - so
+    # nothing runs. That is left as it stands rather than quietly corrected:
+    # whatever the singular hook does has never run on type deletion, and
+    # connecting it is a behaviour change to make deliberately rather than as a
+    # side effect of fixing a name.
     _call_hook("resources_update_by_filters", {"slug": slug})
 
     invalidate_cache()
@@ -250,16 +246,12 @@ def delete_by_slug(slug: str, user: str) -> tuple[dict, int]:
 def get_parents(post_type: dict, first: bool = True, fields: tuple[str, ...] = ("name", "slug", "icon"), seen: frozenset[str] = frozenset()) -> list[dict]:
     """Walk a type's parent chain, breadth-first, without repeating a type.
 
-    Two corrections to the legacy version:
+    A declared parent that no longer resolves yields an empty chain, not an
+    error. Deleting a parent type and then opening one of its children is the
+    ordinary way that happens, and it must not fail the child's page.
 
-    * It guarded with ``if not parent and not parent['hierarchical']`` where
-      ``parent`` is a list. When the list was empty the first operand was true,
-      so Python evaluated the second and raised ``TypeError: list indices must
-      be integers``. That is reachable simply by deleting a parent type and then
-      opening a child - the declared parent id no longer resolves, the list comes
-      back empty, and the request 500s.
-    * Mutable default arguments (``fields=[]``, ``post_types=[]``) replaced with
-      immutable ones.
+    ``fields`` and ``seen`` are immutable defaults on purpose: a mutable default
+    is shared across every call for the life of the process.
     """
     parent_refs = post_type.get("parentType") or []
     if not parent_refs:
@@ -274,8 +266,8 @@ def get_parents(post_type: dict, first: bool = True, fields: tuple[str, ...] = (
 
     parents = list(_mongo().get_all_records(COLLECTION, {"slug": {"$in": ids}}))
     if not parents:
-        # Declared parents that no longer exist (deleted type). Legacy crashed
-        # here; an empty chain is the correct answer.
+        # Every declared parent has since been deleted. An empty chain is the
+        # correct answer, not an error.
         return []
 
     parents = [parent for parent in parents if first or parent.get("slug") not in seen]
@@ -331,8 +323,9 @@ def get_children(post_type: dict, first: bool = True, fields: tuple[str, ...] = 
 def get_form_by_slug(slug: str):
     """Resolve a metadata form, annotated with plugin field types.
 
-    Returns the form dict, or ``({'msg': ...}, status)`` on failure - the legacy
-    contract, which callers probe with ``isinstance(result, tuple)``.
+    Returns the form dict, or ``({'msg': ...}, status)`` on failure. Callers
+    tell the two apart with ``isinstance(result, tuple)``, so the shapes must
+    stay distinguishable.
     """
     try:
         form = _mongo().get_record("forms", {"slug": slug})
@@ -456,11 +449,11 @@ def _get_access_rights_id():
 
 
 def invalidate_cache() -> None:
-    """Placeholder for the cache invalidation the legacy ``update_cache`` did.
+    """Invalidation point for the cached lookups in this module.
 
-    Caching of these lookups is re-enabled with the rest of the invalidation
-    sites; until then there is nothing to invalidate and this is a no-op that
-    keeps the call sites in place so they are not forgotten.
+    Caching is off (see the module docstring), so there is nothing to invalidate
+    and this is a no-op. It is called from every site that would need it, so
+    turning caching on is a change in one place rather than an audit of many.
     """
     logger.debug("types cache invalidation requested (caching not yet enabled)")
 
@@ -497,10 +490,9 @@ _VIZ_PIPELINES: dict[str, list] = {
 def get_type_viz(slug: str, viz_type: str) -> tuple[list | dict, int]:
     """Aggregate counts over the resources of one content type.
 
-    An unknown ``viz_type`` returns ``{"msg": "ok"}`` with 200, reproducing the
-    legacy fall-through exactly: the panel renders several charts and asks for
-    each by name, so answering an error for one it does not recognise would turn
-    a missing chart into a failed screen.
+    An unknown ``viz_type`` answers ``{"msg": "ok"}`` with 200. The panel renders
+    several charts and asks for each by name, so refusing one it does not
+    recognise would turn a missing chart into a failed screen.
     """
     pipeline = _VIZ_PIPELINES.get(viz_type)
     if pipeline is None:

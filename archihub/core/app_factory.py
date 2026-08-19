@@ -2,16 +2,14 @@
 
 Replaces ``app/__init__.py``'s ``create_app()``.
 
-IMPORTANT - why conditional mounting happens here and NOT in a lifespan handler:
-the legacy app decides at construction time which blueprints exist, by reading
-the ``system`` collection (``api_activation`` for adminApi/publicApi,
-``index_management`` for search) and ``active_plugins`` for the plugin routers.
-A FastAPI ``lifespan`` runs *after* the application object and its routing table
-are built, so routers added there are not reliably reflected in
-``/openapi.json`` and each gunicorn worker would re-run the logic
-independently. Anything that changes the route table therefore belongs in this
-factory; ``lifespan`` is reserved for warming resources (connections, the
-embedding model) that do not alter routing.
+IMPORTANT - why conditional mounting happens here and NOT in a lifespan handler.
+Which routers exist depends on the ``system`` collection (``active_plugins`` for
+the plugin routers) and is decided at construction. A FastAPI ``lifespan`` runs
+*after* the application object and its routing table are built, so routers added
+there are not reliably reflected in ``/openapi.json``, and every worker process
+would re-run the logic independently. Anything that changes the route table
+belongs in this factory; ``lifespan`` is reserved for warming resources -
+connections, the embedding model - that do not alter routing.
 
 Only the health router is mounted so far - the remaining domains land through
 Phase 3 (see PLAN_FASTAPI.md section 2).

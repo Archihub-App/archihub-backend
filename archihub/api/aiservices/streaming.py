@@ -1,7 +1,6 @@
 """Server-sent events, framed correctly.
 
-THE LEGACY FRAMING IS BROKEN, AND FIXING IT IS SAFE. `StreamingUtils.py`
-builds every frame as::
+SSE FRAMING IS EXACT, AND EASY TO GET SUBTLY WRONG. A frame built as::
 
     return f"data: {json.dumps(payload, ensure_ascii=False)}\\n\\n"
 

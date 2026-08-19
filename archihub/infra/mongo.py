@@ -2,10 +2,9 @@
 
 Port of ``app/utils/MongoConector.py`` + ``app/utils/DatabaseHandler.py``.
 
-Kept synchronous on purpose (PLAN_FASTAPI.md decision 6): the same instance is
-used by FastAPI route handlers (which run in Starlette's threadpool because they
-are declared ``def``) and by Celery task bodies, exactly as the legacy
-``DatabaseHandler`` singleton was.
+Synchronous on purpose (PLAN_FASTAPI.md decision 6): the same client serves
+FastAPI route handlers - which run in Starlette's threadpool, because they are
+declared ``def`` - and Celery task bodies, which have no event loop at all.
 
 The generic CRUD surface is preserved method-for-method so ported service
 modules keep the same call shapes. Two deliberate corrections:

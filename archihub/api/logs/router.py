@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 
 from archihub.api.logs import services
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     require_role_any,
 )
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/logs", tags=["Audit log"])
 
-require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
+require_admin = require_role_any("admin")
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
         403: {"description": "The admin role is required"}}

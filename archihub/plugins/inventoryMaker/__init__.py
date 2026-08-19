@@ -8,12 +8,11 @@ exports a public view's resources synchronously.
 
 THE PUBLIC ROUTE IS THE INTERESTING ONE, and three things about it changed.
 
-**It applies access rights.** The legacy filter was content type plus published
-status and nothing else, so a resource under embargo — reserved, visible to
-nobody without the right — appeared in an inventory anyone could download
-anonymously. It is the same rule as everywhere else in the port: the public
-caller's rights are fixed at "none", and only resources requiring none are
-exported. BACKEND_FINDINGS S33.
+**It applies access rights.** Filtering on content type and published status
+alone puts a resource under embargo — reserved, visible to nobody without the
+right — into an inventory anyone can download anonymously. The rule is the same
+one as everywhere else: a public caller's rights are fixed at "none", and only
+resources requiring none are exported.
 
 **It stops serving a stale file forever.** The workbook was cached under a name
 built from the view and content types, and the generator's first line was
@@ -23,9 +22,9 @@ appeared in the public inventory, and nothing said so. The name is now a digest
 of what went into it, exactly as the bulk-download archives are, so it changes
 when the contents change.
 
-**It cannot be asked for a content type the view does not show.** That check
-existed and was right; it is kept, and the request is now also refused when
-``post_type`` is not a list or a string, which the original assumed.
+**It cannot be asked for a content type the view does not show**, and the
+request is refused outright when ``post_type`` is neither a list nor a string
+rather than assumed to be one.
 """
 
 from __future__ import annotations
@@ -183,7 +182,7 @@ def _may_export(body: dict, user: str) -> tuple[dict, int] | None:
     from archihub.api.resources.access import effective_access_right
     from archihub.api.resources.services import can_view_type
     from archihub.api.users.services import has_right, has_role
-    from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+    from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
     is_admin = has_role(user, "admin")
 
@@ -193,14 +192,14 @@ def _may_export(body: dict, user: str) -> tuple[dict, int] | None:
     # than the screen the operator exported from.
     for slug in body.get("post_type") or []:
         if not can_view_type(user, slug):
-            return {"msg": _("You do not have sufficient permissions")}, LEGACY_ROLE_FAILURE_STATUS
+            return {"msg": _("You do not have sufficient permissions")}, ROLE_FAILURE_STATUS
 
     parent = body.get("parent")
     parent_id = parent.get("id") if isinstance(parent, dict) else parent
     if parent_id:
         right = effective_access_right(str(parent_id))
         if right and not is_admin and not has_right(user, right):
-            return {"msg": _("You do not have sufficient permissions")}, LEGACY_ROLE_FAILURE_STATUS
+            return {"msg": _("You do not have sufficient permissions")}, ROLE_FAILURE_STATUS
 
     return None
 

@@ -1,10 +1,8 @@
 """ArchiHUB backend (FastAPI).
 
-This package is the FastAPI rewrite of the legacy Flask application that still
-lives in ``app/``. The two coexist deliberately during the migration: the old
-stack stays runnable and untouched so it can serve as the reference
-implementation for ``tools/diff_harness.py``, which compares old and new
-responses field-by-field.
+The ArchiHUB backend: a FastAPI application over MongoDB, Elasticsearch,
+Qdrant, Redis and Celery, with a plugin framework for the processing pipelines
+an archive configures for itself.
 
 The new code does NOT live under ``app/`` because ``app/__init__.py`` builds
 and boots the whole Flask application at import time (``app = create_app()`` at

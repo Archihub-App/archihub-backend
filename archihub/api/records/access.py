@@ -5,7 +5,7 @@ Two things gate it: the record's own ``accessRights``, and the *effective*
 access right of each resource it hangs off - which is itself inherited from that
 resource's ancestors (see ``archihub/api/resources/access.py``).
 
-ONE CORRECTION, AND IT IS THE REASON THIS IS A MODULE. The original wrote:
+THE RULE THIS MODULE EXISTS TO STATE ONCE. Written inline, it comes out as:
 
     if not has_right(current_user, record['accessRights']) and not has_right(current_user, 'admin')
 
@@ -18,7 +18,7 @@ The effect is that administrators are refused access to restricted records,
 which fails closed and so is a usability defect rather than a hole - but it
 means "an administrator can always read it" was never true here, and any
 deployment appearing to rely on it was relying on records that had no access
-rights set. Corrected to a role check, and recorded as BACKEND_FINDINGS F27.
+rights set. It is a role check.
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ def is_public(record: dict) -> bool:
     parent was published, so **a file attached to an unpublished draft was
     served to anonymous callers** through `/records/public/<id>` as soon as
     somebody knew its id. Ids are not secret: they appear in the authenticated
-    listing every cataloguer can see. Recorded as BACKEND_FINDINGS S20.
+    listing every cataloguer can see.
     """
     if record.get("accessRights"):
         return False

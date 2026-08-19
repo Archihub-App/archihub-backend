@@ -15,22 +15,19 @@ app.register_blueprint(plugin_bp, url_prefix=f'/{plugin_url_prefix}')
 
 Two behavioural changes, both deliberate.
 
-**One broken plugin no longer takes the instance down.** The legacy web process
-let any exception from a plugin's construction propagate out of ``create_app``,
-so a plugin with a missing dependency meant the whole backend refused to start —
-every unrelated route with it. (The Celery scheduler, discovering the same
-plugins through its own separate copy of this logic, caught and skipped instead;
-the two disagreed.) Here a plugin that fails to build is logged loudly and
-skipped, and its absence is recorded so ``/system/plugins`` can report it. The
-guard that genuinely should refuse startup — an active plugin that has not been
-ported at all — already runs earlier, in the app factory.
+**One broken plugin must not take the instance down.** Letting an exception from
+a plugin's construction propagate out of ``create_app`` means one plugin's
+missing dependency denies access to the entire archive, every unrelated route
+included. Here a plugin that fails to build is logged loudly and skipped, and
+its absence is recorded so ``/system/plugins`` can report it. The decision that
+genuinely should refuse startup — an active plugin this backend cannot support
+at all — runs earlier, in the app factory.
 
-**A plugin is built once and reused.** The legacy code constructed a fresh
-``ExtendedPluginClass`` on every call that needed metadata: once per mount, once
-per ``/system/get-actions`` request, once per beat tick, and once *inside each
-Celery task body*. Here ``get_mounted()`` returns the same instances the router
-was built from, so a settings read and a route handler cannot disagree about
-what the plugin is.
+**A plugin is built once and reused.** ``get_mounted()`` returns the same
+instances the router was built from, so a settings read and a route handler
+cannot disagree about what the plugin is. Constructing a fresh instance per call
+- per mount, per settings request, per beat tick, inside each task body - makes
+that disagreement possible and expensive.
 """
 
 from __future__ import annotations

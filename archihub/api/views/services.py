@@ -13,7 +13,7 @@ declare ``filesObj`` - so a client could point a view's thumbnail at *any*
 record id. ``_thumbnail`` then read that record and base64-encoded its
 derivative into the response of ``get_all``, which is **unauthenticated**. That
 is a route from "can edit a view" to "can publish any image in the archive".
-Recorded as BACKEND_FINDINGS S25.
+
 
 **The thumbnail is only ever read from a record attached to that view.**
 Belt and braces alongside the allowlist: even a ``filesObj`` written directly to

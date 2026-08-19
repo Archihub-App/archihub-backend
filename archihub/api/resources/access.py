@@ -129,7 +129,7 @@ def holds_edit_role(username: str, post_type: str | None, is_admin: bool) -> boo
     """Whether the content type's ``editRoles`` admit this caller.
 
     A type declaring none is unconstrained by this check - which is why it can
-    never be the *only* check on a write path. See BACKEND_FINDINGS S17 for what
+    never be the *only* check on a write path. for what
     happened where it was.
     """
     from archihub.api.resources.hierarchy import type_roles
@@ -215,7 +215,7 @@ def may_see_all_drafts(is_publisher: bool, is_admin: bool) -> bool:
     other people's unpublished work, and quietly broadening access is not
     something that should ride along inside a framework migration. It needs an
     explicit decision from someone who knows how these roles are handed out.
-    See BACKEND_FINDINGS F18.
+
     """
     return is_publisher and is_admin
 

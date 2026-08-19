@@ -7,9 +7,9 @@ real limits**: ``/v1beta/models`` returns ``inputTokenLimit``,
 ``outputTokenLimit`` and ``supportedGenerationMethods`` for every model, so a
 catalogue built from it needs no hardcoded table.
 
-The legacy code kept one anyway — a `_GOOGLE_META` dict naming individual Gemini
-and Gemma releases with hand-written token limits — while calling an endpoint
-that was already returning those numbers.
+Keeping a hand-written table of Gemini and Gemma token limits would mean
+maintaining numbers the endpoint already returns, and being wrong about every
+model released since the table was written.
 """
 
 from __future__ import annotations

@@ -13,16 +13,15 @@ geometry pass over megabytes of coordinates, so:
   `type` are required to be strings. The originals assigned them into the filter
   as-is, so a JSON object arrived as a Mongo operator — `{"ident": {"$ne": null}}`
   returns every shape in the collection, simplifies all of them, and does it
-  without an account. Recorded as BACKEND_FINDINGS S27.
+  without an account.
 * **Results are capped.** Asking without an `ident` returned every matching
   shape, unbounded, each one simplified.
 * **Retention is quantised** before it reaches the simplification cache; see
   ``simplify.normalise_retention``.
 
-The Elasticsearch-indexing half of the legacy module lives in
-``archihub/worker/tasks/geometries.py`` — it is a Celery task, not a route. The
-loader (``upload_shapes``) stays here, because it is what produces the documents
-everything else in this module reads.
+The Elasticsearch-indexing half lives in ``archihub/worker/tasks/geometries.py``
+— it is a Celery task, not a route. The loader (``upload_shapes``) stays here,
+because it produces the documents everything else in this module reads.
 """
 
 from __future__ import annotations
@@ -341,7 +340,7 @@ def _boundary_levels(directory) -> list[tuple[int, object]]:
     for which the split yields a one-element list - so the loader raised
     ``IndexError: list index out of range`` before reading anything, and
     ``/system/geo-load`` returned 500 on the data the application ships with.
-    (BACKEND_FINDINGS F47.)
+
 
     The order is the second half. Each level's shapes are matched to a parent by
     intersecting them against the level above, which must therefore already be

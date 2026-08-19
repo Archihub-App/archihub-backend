@@ -9,10 +9,10 @@ tool calls and no agent loop behind it. This reads it line by line and promotes
 anything shaped like a heading into a step, so the assistant can show *what the
 model worked through* as a collapsible list instead of a wall of monologue.
 
-So the ``thinking_step`` events are a **presentation** of the reasoning stream.
-`AImessaging.tsx` also handles ``agent_thought``/``tool_execution``/
-``tool_result``/``memory_note``; nothing in this backend emits those, and nothing
-in the legacy one did either — they belong to a different subsystem.
+So the ``thinking_step`` events are a **presentation** of the reasoning stream,
+not an agent loop. `AImessaging.tsx` also handles ``agent_thought``/
+``tool_execution``/``tool_result``/``memory_note``; nothing here emits those, and
+they belong to a different subsystem.
 
 WHY THE REASONING IS NEVER CONCATENATED INTO THE ANSWER. It is fluent prose in
 the same voice, so a user cannot tell it apart once it is mixed in. It is kept on

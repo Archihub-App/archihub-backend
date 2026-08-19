@@ -10,7 +10,7 @@ import pytest
 from bson.objectid import ObjectId
 
 from archihub.api.usertasks import services
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 VALID_ID = "6a70b8c3497d4440325c94c3"
 
@@ -64,7 +64,7 @@ def test_an_editor_cannot_approve_a_task(mongo):
         VALID_ID, {"status": "approved"}, "editor@x.test", is_team_lead=False
     )
 
-    assert status == LEGACY_ROLE_FAILURE_STATUS
+    assert status == ROLE_FAILURE_STATUS
     assert mongo.updated == []
 
 

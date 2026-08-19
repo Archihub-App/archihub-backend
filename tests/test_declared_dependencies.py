@@ -129,3 +129,44 @@ def test_the_dev_extra_does_not_carry_a_runtime_dependency():
     }
     leaked = sorted(dev & runtime_modules - DECLARED)
     assert not leaked, f"declared only under [dev] but imported at runtime: {leaked}"
+
+
+# ---------------------------------------------------------------------------
+# A refusal must carry a refusal status
+# ---------------------------------------------------------------------------
+#
+# `JSONResponse` defaults to **200**. A handler that builds one by hand to
+# refuse a caller therefore says "no" with a success code unless it passes
+# `status_code` explicitly, and nothing about the call looks wrong.
+#
+# This is not hypothetical: removing that one keyword from
+# `tasks/router.py::_authorize` - so one user's task list refuses another user
+# with a 200 - passes the entire suite. Per-object decisions like that one
+# ("may this caller read *these* tasks") cannot be plain dependencies, so they
+# live in handler bodies where no dependency-level guard reaches them.
+
+
+def _json_response_calls() -> list[tuple[str, int]]:
+    import ast
+
+    calls = []
+    for path in sorted(PACKAGE_ROOT.rglob("*.py")):
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "JSONResponse"
+            ):
+                if not any(kw.arg == "status_code" for kw in node.keywords):
+                    calls.append((str(path.relative_to(PACKAGE_ROOT.parent)), node.lineno))
+    return calls
+
+
+def test_every_hand_built_response_states_its_status():
+    problems = _json_response_calls()
+    assert not problems, (
+        "JSONResponse defaults to 200, so a refusal built without an explicit "
+        "status_code succeeds silently:\n"
+        + "\n".join(f"  {path}:{line}" for path, line in problems)
+    )

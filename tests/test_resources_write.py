@@ -205,7 +205,7 @@ def test_publishing_an_incomplete_resource_is_refused(mongo, monkeypatch):
 
 def test_publishing_requires_the_publisher_role(mongo):
     _payload, status = write.create(body(status="published"), "alice")
-    assert status == write.LEGACY_ROLE_FAILURE_STATUS
+    assert status == write.ROLE_FAILURE_STATUS
 
 
 def test_an_admin_may_publish(mongo, monkeypatch):
@@ -217,7 +217,7 @@ def test_an_admin_may_publish(mongo, monkeypatch):
 def test_creating_requires_the_content_types_edit_role(mongo):
     mongo.types["carpeta"]["editRoles"] = ["curator"]
     _payload, status = write.create(body(), "alice")
-    assert status == write.LEGACY_ROLE_FAILURE_STATUS
+    assert status == write.ROLE_FAILURE_STATUS
 
 
 def test_server_owned_fields_cannot_be_set_by_the_client(mongo):
@@ -303,13 +303,13 @@ def test_updating_a_missing_resource_is_404(mongo):
 def test_a_stranger_cannot_update(mongo):
     mongo.resources[RESOURCE_ID] = resource(createdBy="owner")
     _payload, status = write.update(RESOURCE_ID, body(), "alice")
-    assert status == write.LEGACY_ROLE_FAILURE_STATUS
+    assert status == write.ROLE_FAILURE_STATUS
 
 
 def test_publishing_through_update_requires_the_publisher_role(mongo):
     mongo.resources[RESOURCE_ID] = resource()
     _payload, status = write.update(RESOURCE_ID, body(status="published"), "alice")
-    assert status == write.LEGACY_ROLE_FAILURE_STATUS
+    assert status == write.ROLE_FAILURE_STATUS
 
 
 def test_a_deleted_file_is_dropped_from_the_resource(mongo):
@@ -406,7 +406,7 @@ def test_a_failed_permission_check_leaves_the_whole_batch_untouched(mongo):
 
     _payload, status = write.delete([RESOURCE_ID, CHILD_ID], "alice")
 
-    assert status == write.LEGACY_ROLE_FAILURE_STATUS
+    assert status == write.ROLE_FAILURE_STATUS
     assert mongo.resources[RESOURCE_ID]["status"] == "draft"
 
 

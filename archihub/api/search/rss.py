@@ -1,11 +1,10 @@
 """The public blog feed.
 
 A thin rendering of a blog-view search. It is a *public* surface, so it goes
-through the same ``services.search`` with ``public=True`` — the feed cannot see
-anything the public search cannot, which was not true of the legacy version:
-`get_rss_feed` passed the caller's body to the same builder that let them choose
-a publication state, so `?body={"status":"draft"}` published unreleased drafts
-as an RSS feed (BACKEND_FINDINGS S28).
+through the same ``services.search`` with ``public=True``: the feed cannot see
+anything the public search cannot. Passing the caller's body through to a builder
+that reads a publication state from it would turn `?body={"status":"draft"}` into
+a feed of unreleased drafts.
 
 Everything interpolated into the XML is escaped, and the article body goes in a
 CDATA section with its terminator neutralised — an article containing `]]>`

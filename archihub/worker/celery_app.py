@@ -1,9 +1,8 @@
 """The Celery application.
 
-In the legacy code the Celery app did not exist as a module: it was built inside
-``app/__init__.py``'s ``celery_init_app(app)`` and hung off the Flask object as
-``app.celery_app``, so anything wanting the task queue had to import - and boot -
-the entire web application first.
+The Celery app is a module of its own, so anything that needs the task queue can
+import it without booting the web application. Hanging it off the web app object
+instead makes the queue unreachable except through a full application start.
 
 Here it is a standalone module that imports no web framework at all. That is
 what lets ``scheduleSystemTasks`` ask the broker which tasks are registered

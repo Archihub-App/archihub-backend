@@ -1,7 +1,6 @@
 """Geosystem routes.
 
-Port of ``app/api/geosystem/routes.py`` and ``public_routes.py``. Both routes
-are unauthenticated, in both the legacy code and here.
+Both routes are unauthenticated, deliberately.
 
 That is not an oversight in either. ``/geosystem/level`` is called by
 ``GeoService.getAdminLevel`` with no ``Authorization`` header at all, and the
@@ -9,11 +8,11 @@ public explore map draws boundaries before anyone signs in. What these serve is
 reference geography — the administrative divisions of a country — not anything
 the archive holds.
 
-The legacy ``routes.py`` imports ``jwt_required`` and never applies it, which
-reads like an intention that was dropped. Kept unauthenticated because that is
-the live contract; the defences are on the *inputs* instead (see
-``services``): nothing from the request becomes a query operator, results are
-capped, and the simplification retention is quantised.
+The public explore map draws administrative boundaries before anyone signs in,
+and ``GeoService.getAdminLevel`` sends no ``Authorization`` header - so requiring
+a token here would blank the map for every anonymous visitor. The defences are on
+the *inputs* instead (see ``services``): nothing from the request becomes a query
+operator, results are capped, and the simplification retention is quantised.
 """
 
 from __future__ import annotations

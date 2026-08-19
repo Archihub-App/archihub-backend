@@ -26,12 +26,10 @@ Two things change on purpose, and only one of them is visible on the wire.
   global, so the dependency that enforces auth and the one that documents it in
   OpenAPI are the same object. A route can no longer enforce a role while
   forgetting to declare it (or vice versa).
-* **Role failures return 403, not 401.** The legacy codebase used 401 at ~223
-  sites and 403 exactly once, even though most of those are permission checks on
-  a user who is already authenticated. 401 means "I don't know who you are";
-  403 means "I know, and no". This is the systematic correction described in
-  PLAN_FASTAPI.md section 7 - and it IS a wire change, so each domain's port
-  pairs it with the frontend audit required by decision 2.
+* **Role failures return 403, not 401.** 401 means "I don't know who you are",
+  which signing in fixes; 403 means "I know, and no", which it does not. Almost
+  every check here runs on an already-authenticated caller, so 403 is the honest
+  answer. See PLAN_FASTAPI.md section 7.
 """
 
 from __future__ import annotations
@@ -95,36 +93,28 @@ def get_current_user(
     return CurrentUser(username=tokens.get_identity(claims), claims=claims)
 
 
-# The status code a role failure produces on routes ported from the legacy API.
+# The status a role or right failure produces.
 #
-# **FLIPPED TO 403 (2026-08-12), together with the frontend.** The legacy API
-# answered 401 for permission failures, which conflates "I do not know who you
-# are" with "I know who you are and you may not do this" - the first is fixable
-# by signing in, the second is not.
+# 403, never 401. The two answer different questions: 401 means "I do not know
+# who you are", which signing in fixes, and 403 means "I know who you are and
+# you may not do this", which it does not. Collapsing them tells a user to log
+# in again to solve a problem that logging in cannot solve.
 #
-# The frontend audit that gated this found the risk was narrower than assumed:
-# `upgrade_front` has no global 401 handler and never signs a user out on one, so
-# a 403 is rejected exactly as a 401 was at the ~134 `status !== 200` sites. Only
-# three call sites enumerated status codes explicitly - the blob downloads in
-# `SystemService.tsx`, which listed 404/500/400/401 and would otherwise have read
-# a 403 refusal as a downloaded file. Those now check `response.ok`.
-#
-# The constant is kept, still passed explicitly, and still worth grepping for:
-# it marks every route whose status is set for legacy-compatibility reasons
-# rather than chosen freshly. Removing the now-redundant arguments is cosmetic
-# and can happen at Phase 7. See PLAN_FASTAPI.md decision 2.
-LEGACY_ROLE_FAILURE_STATUS = 403
+# Named and exported rather than written as a literal because services return
+# ``(payload, status)`` tuples, where a bare 403 says nothing about which kind
+# of refusal it is. Route dependencies do not need it - `PermissionDeniedError`
+# already carries this status - so passing it there is redundant.
+ROLE_FAILURE_STATUS = 403
 
 
 def require_role_any(*roles: str, status_code: int | None = None) -> Callable[..., CurrentUser]:
     """Dependency factory: require at least one of ``roles``.
 
-    Mirrors ``PluginClass.validate_roles``, which also passed when *any* of the
-    listed roles matched.
+    Passes when the caller holds *any* of the listed roles.
 
-    ``status_code`` defaults to 403 (correct). Ported routes pass
-    ``LEGACY_ROLE_FAILURE_STATUS`` to preserve the existing wire contract - see
-    the constant's comment.
+    ``status_code`` overrides the refusal status for the rare route that needs a
+    different one; it defaults to `PermissionDeniedError`'s own 403, which is
+    what a role failure should be.
     """
 
     def _dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:

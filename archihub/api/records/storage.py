@@ -226,7 +226,7 @@ def _insert(
         "filepath": _relative_path(stored),
         # The real content type, not one guessed from the extension. The
         # extension allowlist above says what the uploader claimed; this says
-        # what the bytes are. See BACKEND_FINDINGS S14.
+        # what the bytes are.
         "mime": filestore.sniff_media_type(stored.path)
         or _media_type_from_name(safe_name),
         "parent": [{"id": resource_id, "post_type": resource.get("post_type")}],
@@ -325,7 +325,7 @@ def detach_from_parent(record_id: str, parent_id: str, user: str | None) -> bool
 
     Lives here rather than in either caller because both the resource delete
     path and the view thumbnail replacement need exactly this, and the legacy
-    code had two different partial versions of it (see BACKEND_FINDINGS F28 for
+    code had two different partial versions of it ( for
     the one that never ran at all).
     """
     object_id = None

@@ -12,10 +12,9 @@ THE THREE DECISIONS, and the evidence behind them:
    is enforced *while streaming*, so an oversized upload is refused after one
    chunk past the limit rather than after it has been written.
 
-2. **``os.fsync`` moves to the destination.** The original called
-   ``file.flush()`` and ``os.fsync(file.fileno())`` on the *incoming* upload,
-   which is meaningless - you cannot fsync data you are reading. The durability
-   it was reaching for belongs to the file we write.
+2. **``os.fsync`` applies to the destination.** Flushing and syncing the
+   *incoming* upload is meaningless - you cannot fsync data you are reading.
+   The durability belongs to the file being written.
 
    The plan predicted this would *raise* under Starlette, because
    ``UploadFile.file`` is a ``SpooledTemporaryFile``. It does not, on either
@@ -25,17 +24,16 @@ THE THREE DECISIONS, and the evidence behind them:
    is the same, and nothing here touches the source's descriptor.
 
 3. **Range requests are Starlette's job.** Verified against the installed
-   Starlette (1.4.1): ``FileResponse`` implements single- and multi-range
-   handling natively, including ``206``, ``Content-Range`` and ``416``. So the
-   ~20 legacy ``send_file`` sites port to ``FileResponse`` with no custom range
-   code, and the multimedia players' seeking keeps working.
+   version: ``FileResponse`` implements single- and multi-range handling
+   natively, including ``206``, ``Content-Range`` and ``416``. Serving a stored
+   file therefore needs no custom range code, and the multimedia players'
+   seeking works.
 
-FILENAMES. The original wrote each upload under the client's own (sanitised)
-name and *then* renamed it to a UUID. That leaves a window in which two
-concurrent uploads of the same filename land on the same path - the second
-overwrites the first, and both then rename, so one upload is silently lost.
-:func:`store_upload` writes directly to the final name, which removes the window
-rather than narrowing it.
+FILENAMES. :func:`store_upload` writes directly to a UUID name, never to the
+client's own. Writing under the client's name and renaming afterwards leaves a
+window in which two concurrent uploads of the same filename land on one path:
+the second overwrites the first, both then rename, and one upload is lost with
+no error.
 """
 
 from __future__ import annotations
@@ -128,10 +126,10 @@ def extension_of(filename: str) -> str:
 def is_allowed(filename: str, allowed_extensions) -> bool:
     """Whether a filename's extension is in the allowed set.
 
-    EXTENSION CHECKING IS NOT CONTENT CHECKING. This tells you what the file
-    claims to be, which is all the original ever verified (BACKEND_FINDINGS
-    S14). Use :func:`sniff_media_type` as well wherever the bytes are about to
-    be handed to a parser - ffmpeg, LibreOffice and pdf2image all shell out.
+    EXTENSION CHECKING IS NOT CONTENT CHECKING. This tells you only what the
+    uploader claimed. Use :func:`sniff_media_type` as well wherever the bytes are
+    about to be handed to a parser - ffmpeg, LibreOffice and pdf2image all shell
+    out, so what the file actually is decides what runs.
     """
     extension = extension_of(filename)
     return bool(extension) and extension in {e.lower().lstrip(".") for e in allowed_extensions}
@@ -307,7 +305,7 @@ def sniff_media_type(path: str | os.PathLike) -> str | None:
 
     ``python-magic`` is already a declared dependency but was never used for
     this. Call it before handing bytes to ffmpeg, LibreOffice or a PDF parser -
-    the extension only says what the uploader claimed. See BACKEND_FINDINGS S14.
+    the extension only says what the uploader claimed.
     """
     try:
         import magic

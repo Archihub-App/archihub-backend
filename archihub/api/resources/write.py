@@ -12,7 +12,7 @@ It assembles pieces that already exist rather than restating them:
 * ``records.storage.attach_files``- storing and deduplicating its files
 * ``access``                      - who may do any of this
 
-TWO STRUCTURAL CHANGES FROM THE ORIGINAL, both about batches:
+TWO RULES ABOUT BATCHES:
 
 1. **Permission is checked for every id before anything is written.** The
    original looped, and returned on the first refusal - having already deleted
@@ -22,7 +22,7 @@ TWO STRUCTURAL CHANGES FROM THE ORIGINAL, both about batches:
 
 2. **Reciprocal relation updates happen after the insert, not before.** The
    original called ``update_relations_children`` before the resource had an id,
-   then dereferenced ``body['_id']``. See BACKEND_FINDINGS F22.
+   then dereferenced ``body['_id']``.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from bson.objectid import ObjectId
 from archihub.api.resources import access, hierarchy, validation
 from archihub.core.errors import BusinessError
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ STATUS_DELETED = "deleted"
 #: the file pipeline, ``favCount`` by the favourites routes, ``parents`` is
 #: derived from ``parent``. The original built its update from whatever the
 #: request contained, which is how the article route became a way to change all
-#: of them (S17); an allowlist is the shape that does not have that failure
+#: of them; an allowlist is the shape that does not have that failure
 #: mode.
 CLIENT_FIELDS = (
     "post_type", "metadata", "status", "accessRights", "parent", "ident", "atlasWiki",
@@ -77,7 +77,7 @@ def _now() -> datetime.datetime:
 
 
 def _denied() -> tuple[dict, int]:
-    return {"msg": _(MSG_UNAUTHORIZED)}, LEGACY_ROLE_FAILURE_STATUS
+    return {"msg": _(MSG_UNAUTHORIZED)}, ROLE_FAILURE_STATUS
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +211,7 @@ def create(body: dict, user: str, incoming_files=None) -> tuple[dict, int]:
         )
 
     # AFTER the insert: the reciprocal update needs this resource's id, and the
-    # original ran it before there was one (F22).
+    # original ran it before there was one.
     _sync_reciprocal_relations(resource_id, payload, metadata, before={})
 
     _audit(user, "resource_create", {"resource": {**payload, "_id": resource_id}})
@@ -393,7 +393,7 @@ def _sync_reciprocal_relations(
     """Keep same-type relation fields pointing both ways.
 
     When a resource names another of its own content type as related, the other
-    one should list it back. Runs after the write, so the id exists (F22).
+    one should list it back. Runs after the write, so the id exists.
     """
     for destiny in _self_relation_fields(metadata, payload.get("post_type")):
         now = _ids_at(payload, destiny)
@@ -578,7 +578,7 @@ def _detach_records(resource: dict, resource_id: str, user: str) -> None:
     field is ``filesObj`` - ``files`` is not a field of the ``Resource`` model at
     all, so the condition was always false and the call was dead code. Deleting
     a resource left its records pointing at it, still ``uploaded``, invisible to
-    the recycle bin and to any cleanup. See BACKEND_FINDINGS F28.
+    the recycle bin and to any cleanup.
     """
     from archihub.api.records.storage import detach_from_parent
 

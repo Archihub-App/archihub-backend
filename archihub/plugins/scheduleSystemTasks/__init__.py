@@ -11,13 +11,12 @@ that into a schedule (``archihub/worker/schedule.py``, already ported). The
 plugin itself only stores the choice; it declares the ``scheduler`` capability,
 which is how the schedule builder knows to read its settings.
 
-THIS PLUGIN IS WHY S32 MATTERS MOST. Its settings ARE a task scheduler: writing
-them makes the workers run something, repeatedly, forever. The legacy routes
-called ``self.validate_roles(current_user, ['admin', 'processing'])`` and
-discarded the result, so **any authenticated account** — a transcriber, a
-read-only researcher — could read and rewrite that schedule. Here the role is a
-dependency on the route, which cannot be discarded because there is nothing to
-discard.
+THIS PLUGIN'S ROLE CHECKS CARRY MORE WEIGHT THAN MOST. Its settings ARE a task
+scheduler: writing them makes the workers run something, repeatedly, forever. A
+role check whose result is computed and then dropped would leave that open to
+**any authenticated account** — a transcriber, a read-only researcher. Here the
+role is a dependency on the route, resolved before the handler body runs, so
+there is no return value available to ignore.
 """
 
 from __future__ import annotations

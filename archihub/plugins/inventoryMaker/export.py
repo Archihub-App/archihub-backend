@@ -13,7 +13,7 @@ absolute layout of the server's storage. That is the same field the records API
 goes out of its way never to return (see CLAUDE.md: "Two things never leave the
 records API"), and exporting it through a different door does not make it less
 of a disclosure. The sheet keeps what an inventory is for: what the file is
-called, what type it is and how big it is. BACKEND_FINDINGS S34.
+called, what type it is and how big it is.
 """
 
 from __future__ import annotations

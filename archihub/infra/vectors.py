@@ -2,10 +2,8 @@
 
 Port of ``app/utils/VectorDatabaseHandler.py``.
 
-The legacy handler had four real defects, all confirmed against the source
-during plan review and all fixed here (PLAN_FASTAPI.md section 4). These are
-pre-existing correctness bugs, NOT migration artefacts - the vector search path
-could not have worked as written:
+FOUR THINGS THIS PATH MUST GET RIGHT, each of which fails silently rather than
+loudly (PLAN_FASTAPI.md section 4):
 
 1. ``insert_vector`` called ``qdrant.upsert(collection_name=..., points=vector[0],
    payload=...)``. ``points`` must be a list of ``PointStruct`` (or a Batch);

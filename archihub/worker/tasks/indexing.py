@@ -7,22 +7,22 @@ and all triggered from the admin settings screen:
     system.index_resources          (re)index resources into it
     system.index_resources_delete   drop one resource from it
 
-The dotted names are the legacy ones verbatim: a task queued in Redis before a
-cutover, and every row already in the `tasks` collection, resolves by this string.
+The dotted names are stable identifiers: a message already queued in Redis, and
+every row in the `tasks` collection, resolves by this string.
 
 WHAT CHANGED, AND WHY IT HAD TO
 -------------------------------
 
-**A failed resource is counted as a failure.** The original wrapped each
-resource in ``except Exception: continue`` after having already incremented the
-counter, so a run in which every single document was rejected finished with
-"Indexing finished for 12000 resources" and no error anywhere - the only symptom
-being an empty search. Failures are counted separately and named in the result.
+**A failed resource is counted as a failure.** Incrementing the counter before
+the work and swallowing exceptions means a run in which every document was
+rejected still finishes with "Indexing finished for 12000 resources" and no
+error anywhere - the only symptom being an empty search. Failures are counted
+separately and named in the result.
 
-**A filtered run stays filtered.** The original's first page applied the caller's
-filter and every page after it queried ``{}``. So indexing one resource was
-correct only because one resource fits in a page; a filter matching more than
-1000 walked the entire collection from page two onward. (BACKEND_FINDINGS F44.)
+**A filtered run stays filtered.** Applying the caller's filter to the first page
+and querying ``{}`` for the rest is correct only while the result fits in one
+page - so it works for a single resource and silently walks the entire
+collection for anything larger.
 
 **Documents go in batches.** One HTTP round trip per resource is what a full
 reindex of a real archive spends its time on. ``bulk_index`` sends a page at a

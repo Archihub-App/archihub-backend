@@ -1,7 +1,7 @@
 """Capabilities one plugin provides to another.
 
-There is exactly one such dependency among the five in scope, and the legacy
-code expressed it as a direct import across plugin package boundaries:
+There is exactly one such dependency among the five in scope. Expressed as a
+direct import across plugin package boundaries it would read:
 
 ```python
 try:

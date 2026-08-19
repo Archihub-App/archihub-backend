@@ -2,10 +2,9 @@
 
 Ordinary CRUD, with one rule that is not ordinary and is the reason this is its
 own module: **a conversation belongs to the person who had it.** Every read and
-every write goes through ``load_own``. The legacy service checked ownership in
-some paths and not others — ``get_conversation`` compared ``user`` while
-``delete_conversation`` filtered by id alone — so a known id was enough to
-delete somebody else's chat, including whatever archive material it quoted.
+every write goes through ``load_own``, without exception. Checking ownership on
+some paths and not others makes a known id enough to read or delete somebody
+else's chat, along with whatever archive material it quotes.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ import logging
 from bson.objectid import ObjectId
 
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,7 @@ def load_own(conversation_id: str, user: str) -> tuple[dict | None, tuple[dict, 
         logger.info("Denied %s access to conversation %s", user, conversation_id)
         return None, (
             {"msg": _("You don't have the required authorization")},
-            LEGACY_ROLE_FAILURE_STATUS,
+            ROLE_FAILURE_STATUS,
         )
 
     return conversation, None

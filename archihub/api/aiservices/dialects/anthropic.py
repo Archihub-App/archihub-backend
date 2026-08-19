@@ -1,10 +1,8 @@
 """Anthropic's Messages API.
 
-New in this rewrite — the legacy module could not talk to Anthropic at all,
-despite Claude being one of the three model families an archive is most likely
-to want. Adding it meant writing a class; here it is one adapter of about a
-hundred lines, and every *deployment* of it (Anthropic direct, Bedrock-style
-proxies, gateways) is a row in a collection.
+One adapter of about a hundred lines, and every *deployment* of it — Anthropic
+direct, Bedrock-style proxies, gateways — is a row in a collection rather than
+another class.
 
 The wire format differs enough to need its own adapter: the system prompt is a
 top-level field rather than a message, ``max_tokens`` is required rather than

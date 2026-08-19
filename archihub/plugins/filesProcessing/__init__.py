@@ -17,10 +17,9 @@ automatically when files are attached to a resource of a configured content type
 WHICH KIND OF FILE IS DECIDED BY AN ALLOWLIST, NOT BY SUBSTRING
 ---------------------------------------------------------------
 
-The original dispatched on ``'audio' in file['mime']``, ``'word' in ...``,
-``'sheet' in ...`` — substring tests against a stored MIME type — with a
-tiebreaker on ``get_filename_extension``, which returned ``None`` for any
-filename containing more than one dot:
+Dispatching on substrings of a stored MIME type — ``'audio' in mime``, ``'word'
+in mime``, ``'sheet' in mime`` — with an extension check as a tiebreaker looks
+reasonable and is not:
 
 ```python
 if len(filename.split('.')) != 2:
@@ -150,7 +149,7 @@ def process_record(record: dict) -> bool:
     Every branch ends by writing ``processing.fileProcessing`` through
     ``store_processing_result``, which `$set`s that one path — the original
     read the whole ``processing`` block and wrote it back, so a transcription
-    finishing concurrently was discarded (F49).
+    finishing concurrently was discarded.
     """
     from archihub.core import files as filestore
     from archihub.core.settings import get_settings
@@ -267,9 +266,9 @@ class FilesProcessing(ArchiPlugin):
             """Queue derivative generation over a selection of resources."""
             error = self.validate_settings_fields(body, "bulk")
             if error:
-                # The legacy route called validate_fields and DISCARDED its
-                # refusal, so a body missing its content type reached the task
-                # and raised KeyError there. S32.
+                # The refusal is RETURNED, not merely computed. Discarding it
+                # lets a body missing its content type reach the task, where the
+                # failure surfaces as a worker traceback instead of a 400.
                 return json_response({"msg": error}, 400)
 
             try:

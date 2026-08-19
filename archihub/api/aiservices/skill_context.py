@@ -19,9 +19,9 @@ without touching the picker.
 
 RESOLUTION IS BY LOOKUP, NEVER BY PATH ARITHMETIC. An identifier is matched
 against the stored ``path``/``command``/``name``/``title`` of a skill record. A
-skill that does not resolve is **skipped silently**, matching the legacy
-behaviour: an unrecognised backslash token in prose (a Windows path, an escape)
-must not fail the request.
+skill that does not resolve is **skipped silently**: an unrecognised backslash
+token in prose - a Windows path, an escape sequence - must not fail the
+request.
 """
 
 from __future__ import annotations

@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from archihub.plugins.framework import interop
 from archihub.plugins.framework.base import ArchiPlugin, translate_display
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 PLUGINS = ("scheduleSystemTasks", "liquidText", "filesProcessing", "inventoryMaker", "massiveUpdater")
 
@@ -406,7 +406,7 @@ def test_another_users_task_result_is_refused(monkeypatch, tmp_path):
 
     payload, status = base.task_result_file("t", "me", is_admin=False)
 
-    assert status == LEGACY_ROLE_FAILURE_STATUS
+    assert status == ROLE_FAILURE_STATUS
 
 
 def test_a_pending_task_has_no_file_yet(monkeypatch):

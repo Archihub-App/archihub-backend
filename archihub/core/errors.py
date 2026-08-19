@@ -1,6 +1,6 @@
 """Error handling and the HTTP status-code policy.
 
-Two problems in the legacy codebase drive this module (PLAN_FASTAPI.md section 7):
+Two problems this module exists to prevent (PLAN_FASTAPI.md section 7):
 
 * ~233 sites do ``except Exception as e: return {'msg': str(e)}, 500``, leaking
   raw exception text - stack-adjacent internals, sometimes connection strings -

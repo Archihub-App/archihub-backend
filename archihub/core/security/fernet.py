@@ -12,13 +12,13 @@ TWO SCHEMES LIVE HERE, AND THE ORDER MATTERS.
 from the database can be presented to the API. This is what new keys use, and it
 is tried first.
 
-**Legacy** - a JWT encrypted with a Fernet key, the ciphertext stored verbatim on
-the user document and compared against the presented string. That means the
-stored value *is* the credential: a database read yields working keys. It is
-retained ONLY so that any credential already in circulation keeps working, and
-nothing issues new ones. Once no deployment has a populated ``token`` /
-``adminToken`` / ``nodeToken`` / ``vizToken`` field left, this path and those
-fields should be deleted.
+**Deprecated scheme** - a JWT encrypted with a Fernet key, the ciphertext stored
+verbatim on the user document and compared against the presented string. The
+stored value *is* the credential, so a database read yields working keys. It is
+retained ONLY so that credentials already in circulation keep working; nothing
+issues new ones. Once no deployment has a populated ``token`` / ``adminToken`` /
+``nodeToken`` / ``vizToken`` field left, this path and those fields should be
+deleted.
 
 THE THREE VARIANTS ARE NOT INTERCHANGEABLE. They look like copy-paste in the
 original, but they check different fields, and getting that wrong would let an
@@ -36,9 +36,9 @@ into one parameterised helper is how it would get lost.
 ERROR REPORTING IS ALSO ASYMMETRIC ON PURPOSE. Every failure collapses to a
 generic "Invalid or expired token" so nothing about why is leaked - except the
 weekly rate limit, whose message is meant to reach the caller so they know they
-are throttled rather than broken. The legacy code achieved that with catch
-ordering and a bare ``str(e)``; here :class:`RateLimitError` carries it, so the
-distinction survives refactoring.
+are throttled rather than broken. :class:`RateLimitError` carries that
+distinction as a type, so it survives refactoring; expressing it through catch
+ordering and a bare ``str(e)`` does not.
 """
 
 from __future__ import annotations

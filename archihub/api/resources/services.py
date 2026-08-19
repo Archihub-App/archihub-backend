@@ -11,9 +11,10 @@ the application. Being ported in slices; this one covers the READ path:
 The write path (create/update/delete/restore, the article editor, file ordering,
 the tree, and the 11 hook call sites) follows in later slices.
 
-ACCESS CONTROL LIVES IN ``access.py``, not here. In the original it was inline in
-the middle of this listing query, interleaved with pagination and sorting, which
-is how the draft-visibility defect (BACKEND_FINDINGS F18) survived unnoticed.
+ACCESS CONTROL LIVES IN ``access.py``, not here. Interleaving it with pagination
+and sorting inside a listing query is how a visibility defect goes unnoticed:
+the clause is correct in isolation and wrong in combination, and nothing in the
+surrounding code is about visibility at all.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from bson.objectid import ObjectId
 
 from archihub.api.resources import access, presentation
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +163,7 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
 
         for post_type in post_types:
             if not can_view_type(user, post_type):
-                return {"msg": _("You don't have the required authorization")}, LEGACY_ROLE_FAILURE_STATUS
+                return {"msg": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
 
         active_columns = _column_names(body.get("activeColumns"))
 
@@ -180,7 +181,7 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
             status=body.get("status") or "published",
         )
         if error:
-            return {"msg": _("You don't have the required authorization")}, LEGACY_ROLE_FAILURE_STATUS
+            return {"msg": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
 
         # `metadata.firstLevel.title` is in the base projection because the
         # listing renders a title for every row whether or not the caller asked

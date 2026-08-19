@@ -106,9 +106,9 @@ def get_setting_value(name: str, entry_id: str, fallback_index: int | None = Non
     """Read one entry's value from a settings group.
 
     Looks the entry up by id, falling back to a position only when given one.
-    The legacy code indexed these arrays directly (``data[2]['value']`` for the
-    locale, ``data[0]``/``data[1]`` for the self-service toggles), which reads
-    the wrong setting the moment a document is reordered or extended.
+    Indexing these arrays directly - ``data[2]['value']`` for the locale, say -
+    reads a different setting the moment a document is reordered or extended,
+    and reads it successfully, so nothing reports the mistake.
     """
     record = get_setting(name)
     data = (record or {}).get("data") or []
@@ -173,11 +173,11 @@ def get_access_rights_id():
 def is_first_time() -> bool:
     """Whether the instance still needs its initial administrator.
 
-    STRICTER THAN THE LEGACY CHECK, deliberately. That asked whether the
-    ``users`` *collection* existed. Collection existence is a weak proxy for
-    "nobody has been set up": it answers the wrong question if a collection is
-    created empty, and it is the only thing standing in front of an
-    unauthenticated endpoint that creates an administrator. Counting documents
+    Counts documents rather than asking whether the ``users`` collection exists.
+    Collection existence is a weak proxy for "nobody has been set up" - it
+    answers the wrong question for a collection created empty - and this is the
+    only thing standing in front of an unauthenticated endpoint that creates an
+    administrator. Counting documents
     asks the question that actually matters.
     """
     mongo = _mongo()
@@ -193,15 +193,14 @@ def is_first_time() -> bool:
 def _system_capabilities() -> list[str]:
     """Capabilities derived from settings rather than declared by a plugin.
 
-    **These are not decoration; they are what the interface is gated on.** An
-    earlier revision of this port collected only the plugins' own capabilities,
-    so this instance returned an empty list and the frontend hid every feature
-    behind one: all four download buttons and both "Pregúntale a la IA" entry
-    points disappeared, with no error and nothing logged - the buttons simply
-    were not rendered.
+    **These are not decoration; they are what the interface is gated on**, and
+    they are only half the list - the other half is declared by plugins. Collect
+    one half and the frontend hides every feature behind the other: all four
+    download buttons and both "Pregúntale a la IA" entry points simply are not
+    rendered, with no error, no request and nothing logged.
 
-    Each is read the way the legacy route read it, and named identically,
-    because the names are matched with `.includes()` in `upgrade_front`:
+    The names are matched with `.includes()` in `upgrade_front`, so they are
+    literal and each is derived independently:
 
     ``llm``             at least one provider is configured
     ``indexing``        Elasticsearch indexing is on
@@ -224,8 +223,8 @@ def _system_capabilities() -> list[str]:
     def has_provider() -> bool:
         from archihub.api.aiservices.providers import COLLECTION as PROVIDERS
 
-        # A count, not a listing: the legacy route fetched every provider
-        # record - credentials included - to ask whether there were any.
+        # A count, not a listing. Fetching provider records to ask whether any
+        # exist reads their stored credentials for no reason.
         return _mongo().count(PROVIDERS, {}) > 0
 
     add("llm", has_provider)
@@ -243,9 +242,9 @@ def get_system_settings() -> tuple[dict, int]:
     onboarding is pending, the interface language, the version, and which
     optional features are on.
 
-    The legacy version imported AND INSTANTIATED every active plugin here to
-    collect capabilities - on an unauthenticated route. Capabilities now come
-    from plugin metadata via the discovery module, with no instantiation.
+    Capabilities come from plugin metadata via the discovery module. Nothing is
+    instantiated: this route is unauthenticated, and constructing every active
+    plugin to read a list of names would run plugin code for anonymous callers.
 
     Plugin capabilities are only half of the list; see `_system_capabilities`
     for the four the instance's own settings decide, and why leaving them out
@@ -267,14 +266,13 @@ def get_system_settings() -> tuple[dict, int]:
 
     capabilities.extend(_system_capabilities())
 
-    # `language`, `capabilities`, `version` - and nothing else, which is what
-    # the legacy route returns.
+    # `language`, `capabilities`, `version` - and nothing else.
     #
     # THIS ENDPOINT IS UNAUTHENTICATED: the login screen reads it before anyone
-    # has signed in. So every field is public, and a field is worth adding only
-    # if something reads it. An earlier revision also returned `first_time`,
-    # `indexing` and `vector`; none has a consumer (`providers.tsx` coerces
-    # `!!data.first_time`, so absent behaves exactly as false) and the last two
+    # has signed in. Every field is therefore public, and one is worth adding
+    # only if something reads it. `first_time`, `indexing` and `vector` are
+    # deliberately absent - nothing consumes them (`providers.tsx` coerces
+    # `!!data.first_time`, so absent behaves exactly as false), and the last two
     # restate what `capabilities` already carries.
     return {
         "version": __version__,
@@ -299,8 +297,8 @@ def set_first_time(body: dict) -> tuple[dict, int]:
         return {"msg": _("All fields are required")}, 400
 
     if body["password"] != body["confirmPassword"]:
-        # The legacy version never compared these, so a mistyped confirmation
-        # silently created an account with the first value.
+        # Compared, not assumed: a mistyped confirmation would otherwise create
+        # the administrator account with a password nobody knows.
         return {"msg": _("Passwords do not match")}, 400
 
     set_system_setting()
@@ -372,9 +370,9 @@ def get_plugins() -> tuple[dict, int]:
                     # "lunch", "control". `/processing` renders one button per
                     # entry and routes to `/processing/{type}/{slug}`, so a
                     # plugin whose `type` is missing crashes that page on
-                    # `undefined.map`. Legacy returned the whole `plugin_info`,
-                    # which carried this incidentally; this payload is a chosen
-                    # subset, and the field was not chosen.
+                    # `undefined.map`. This payload is a deliberately chosen
+                    # subset of `plugin_info`, so a field the interface needs has
+                    # to be chosen explicitly.
                     #
                     # Defaulted to `[]` rather than omitted: an installed plugin
                     # that declares no screens is a real case (`liquidText`), and
@@ -439,10 +437,10 @@ def set_plugin_active(slug: str, active: bool, current_user: str) -> tuple[dict,
 def toggle_plugin(slug: str, current_user: str) -> tuple[dict, int]:
     """Flip a plugin's activation, refusing an unknown slug.
 
-    The legacy version listed the ``app/plugins`` directory to decide whether a
-    plugin exists, so it accepted the name of any directory present on disk -
-    including one this backend cannot mount. It also toggled first and checked
-    afterwards in the activation direction.
+    Existence is decided against the plugins this backend can actually mount,
+    not against the directories present on disk - otherwise a plugin can be
+    switched on that the application will refuse to load. The check happens
+    before the write, in both directions.
     """
     from archihub.plugins.framework.discovery import _validate_slug
     from archihub.plugins.framework.ported_registry import PORTED_PLUGINS
@@ -476,9 +474,9 @@ def clear_cache() -> tuple[dict, int]:
     """Flush the shared cache.
 
     NOTE: this is a Redis ``FLUSHDB``, so it clears the entire database - which
-    is also the Celery broker. Preserved from the legacy behaviour, and recorded
-    as a finding rather than changed here, because narrowing it needs namespaced
-    keys or a separate database number to be introduced first.
+    is also the Celery broker, meaning queued jobs go with it. Narrowing it needs
+    namespaced keys or a separate database number to exist first; until then the
+    breadth is a known property of the operation rather than an oversight.
     """
     from archihub.infra.cache import get_cache
 
@@ -499,10 +497,9 @@ def clear_cache() -> tuple[dict, int]:
 def _queue(task, user: str, name: str, message: str, *args) -> tuple[dict, int]:
     """Queue a task, record it against ``user``, and report it as accepted.
 
-    A broker that is down answers 503 rather than 200. The legacy version had
-    no such branch: ``.delay()`` raised, the surrounding ``except Exception``
-    turned it into ``{'msg': str(e)}, 500``, and an operator saw a connection
-    error where a queue outage was the actual news.
+    A broker that is down answers 503, not 200 and not 500. The distinction is
+    for the operator reading it: 503 says the queue is unreachable, where a
+    generic 500 carrying a connection string says only that something broke.
     """
     try:
         queued = task.delay(*args)
@@ -546,8 +543,8 @@ def regenerate_index(user: str) -> tuple[dict, int]:
 
     schema = get_setting("resources-schema")
     if not schema:
-        # The legacy code subscripted this straight away, so a missing schema
-        # was a TypeError reported as a 500 with the raw message.
+        # Checked before use: a missing schema is a configuration problem the
+        # operator can act on, not an internal error.
         return {"msg": _("The field for the index management doesn't exists in the system")}, 404
 
     mapping = build_resources_mapping(schema.get("data") or {})

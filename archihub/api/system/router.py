@@ -16,7 +16,7 @@ mounted plugin's own settings and actions, and `/restart`, which drives the
 SIGHUP supervisor. The first two need the plugin framework (Phase 5); the third
 needs the process model to be settled (Phase 7).
 
-Role failures keep the legacy 401 pending the coordinated frontend flip.
+A role failure answers 403; 401 is reserved for "I do not know who you are".
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from archihub.api.system import services
 from archihub.core.i18n import gettext as _
 from archihub.core.security.fernet import FernetIdentity, node_fernet_auth_dependency
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
     require_role_any,
@@ -41,15 +41,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/system", tags=["System settings"])
 
-require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
+require_admin = require_role_any("admin")
 require_admin_or_editor = require_role_any(
-    "admin", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "editor"
 )
 #: The plugins listing is what the processing screens read to build themselves,
 #: so it admits `processing` as well as `admin` - narrowing it to admin alone
 #: leaves an operator holding only `processing` with an empty page.
 require_admin_or_processing = require_role_any(
-    "admin", "processing", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "processing"
 )
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
@@ -237,7 +237,7 @@ def change_plugin_status(
 def get_actions(
     body: dict = Body(...),
     current_user: CurrentUser = Depends(
-        require_role_any("admin", "processing", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS)
+        require_role_any("admin", "processing", "editor")
     ),
 ) -> JSONResponse:
     """Which plugin actions to offer at one place in the interface.
@@ -343,7 +343,7 @@ def geo_load(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse
     computes a spatial join per level, which on a full national dataset is
     minutes. The legacy route was synchronous too and the frontend waits on it,
     so the contract is preserved here rather than quietly changed to a queued
-    task - recorded as BACKEND_FINDINGS P13.
+    task -
     """
     from archihub.api.geosystem import services as geo_services
 

@@ -7,12 +7,12 @@ resolving a skill per message by walking a directory would not survive a
 multi-node deployment.
 
 Two-way sync is the consequence, and it is the interesting part: on start-up
-each side is compared and the newer wins, per file. That is inherited from the
-legacy `SkillManager` and preserved, because it is the behaviour operators rely
-on.
+each side is compared and the newer wins, per file. Operators edit skills from
+both ends - through the interface and by dropping a Markdown file on the box -
+so neither side can be treated as authoritative.
 
 **THE PATH IS THE SECURITY BOUNDARY.** A skill path arrives in a URL and becomes
-a file that gets written, read and deleted. The legacy check was string-based::
+a file that gets written, read and deleted. A string-based check on it - say::
 
     normalized = os.path.normpath(normalized).replace('\\\\', '/')
     if normalized.startswith('..'):

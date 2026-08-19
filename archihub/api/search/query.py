@@ -1,17 +1,16 @@
 """Turning a search request into an Elasticsearch query.
 
 **THE CALLER DOES NOT CHOOSE WHAT MAY BE SEARCHED.** The publication state and
-the access-rights clause are decided here from *who is asking*, and a request
-cannot influence either. That is the whole point of this module, and it is what
-the legacy builder got wrong:
+the access-rights clause are decided here from *who is asking*, and no request
+field can influence either. That is the whole point of this module:
 
     {'term': {'status.keyword': body['status'] if 'status' in body else 'published'}}
 
 with the public service passing the caller's body through untouched. Since the
 indexer indexes every resource whatever its state and defaults `accessRights` to
 ``public``, an anonymous request asking for ``status: "draft"`` read unpublished
-material — **demonstrated against a real index, 16 drafts.** Recorded as
-BACKEND_FINDINGS S28.
+material — **demonstrated against a real index, 16 drafts.**
+
 
 Two other rules follow from the same thought — a search endpoint is reachable by
 people who are not signed in, so everything they send is adversarial until
@@ -20,12 +19,12 @@ proven otherwise:
 * **The keyword is a *simple* query string, not a query string.** `query_string`
   is Elasticsearch's full DSL in a string: it accepts regular expressions and
   leading wildcards, which is a denial of service on an open endpoint, and it
-  raises on malformed syntax, so a stray bracket typed into a search box was a
+  raises on malformed syntax, so a stray bracket typed into a search box is a
   500. `simple_query_string` never throws and its features are selectable.
-* **`_source` is an allowlist.** The legacy builder appended the request's
-  `activeColumns` to `_source` verbatim, letting the caller pick which stored
-  fields came back — including fields the content type marks as restricted,
-  which the resource detail route is careful to withhold.
+* **`_source` is an allowlist**, derived from the fields the requested content
+  types declare. Appending the request's `activeColumns` verbatim lets the
+  caller name any stored field — including ones the content type marks as
+  restricted, which the detail route is careful to withhold.
 """
 
 from __future__ import annotations

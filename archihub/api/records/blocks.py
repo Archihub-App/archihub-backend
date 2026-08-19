@@ -11,7 +11,7 @@ filed under a series whose access rights they do not hold and which they cannot
 open in the interface. The record's own visibility rule is applied here, before
 any write, and it is the same rule the read path uses: ``may_edit`` composes
 ``records.access.may_view_record`` with the role gate rather than restating
-either. Recorded as BACKEND_FINDINGS S19.
+either.
 
 **Writes are addressed, not wholesale.** Each of the originals read the entire
 ``processing`` block, mutated one entry in Python and wrote the whole thing
@@ -243,11 +243,11 @@ def _prepare(user: str, body: dict) -> tuple[dict, str]:
 
     record = _load(record_id)
     if not may_edit(user, record, has_role(user, "admin")):
-        from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+        from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
         logger.info("Denied %s block editing on record %s", user, record_id)
         raise BlockError(
-            _("You don't have the required authorization"), LEGACY_ROLE_FAILURE_STATUS
+            _("You don't have the required authorization"), ROLE_FAILURE_STATUS
         )
 
     return record, slug

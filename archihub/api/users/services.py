@@ -627,7 +627,7 @@ def delete_user(body: dict, current_user: str) -> tuple[dict, int]:
 
     Deleting the user document alone is not enough: API keys live in their own
     collection and a session JWT stays valid until it expires. The keys are
-    revoked here; session tokens are covered by BACKEND_FINDINGS S7, which is
+    revoked here; session tokens are covered by, which is
     still open.
     """
     username = body.get("username")

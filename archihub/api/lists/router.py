@@ -1,12 +1,10 @@
 """Controlled-vocabulary routes.
 
-Port of ``app/api/lists/routes.py``. All five routes require admin OR editor,
-and all keep the legacy **401** for role failures pending the coordinated
-frontend flip - see ``LEGACY_ROLE_FAILURE_STATUS``.
+All five routes require admin OR editor. A role failure answers **403** - see
+``ROLE_FAILURE_STATUS``.
 
-Success responses are byte-identical to the legacy ones. Error responses are
-corrected: see the module docstring in ``services.py`` for why the previous ones
-returned HTTP 200 with a JSON array body.
+See the module docstring in ``services.py`` for the error-response shapes and
+why they are what they are.
 """
 
 from __future__ import annotations
@@ -19,7 +17,7 @@ from fastapi.responses import JSONResponse
 from archihub.api.lists import services
 from archihub.api.lists.schemas import ListCreate, ListUpdate
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     require_role_any,
 )
@@ -30,7 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/lists", tags=["Lists"])
 
 require_admin_or_editor = require_role_any(
-    "admin", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "editor"
 )
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},

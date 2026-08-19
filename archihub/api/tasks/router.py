@@ -2,12 +2,11 @@
 
 Port of ``app/api/tasks/routes.py``.
 
-ACCESS CONTROL IS TIGHTENED HERE, deliberately. The legacy guard on the two
-per-user routes only refused when the requested user was literally
-``automatic``, so any authenticated caller could read another person's task list
-by passing their username. The rule is now stated positively in
+ACCESS CONTROL ON THE TWO PER-USER ROUTES IS STATED POSITIVELY, in
 ``services.may_read_tasks_of``: your own tasks, or anyone's if you are an
-administrator.
+administrator. An allow-rule is checkable at a glance; the equivalent written as
+exclusions is not, and a guard that refuses only one special username lets every
+other person's task list through.
 
 That is a genuine behaviour change rather than a port, and it is the correct
 direction - the frontend only ever requests the signed-in user's own tasks (or
@@ -24,7 +23,7 @@ from fastapi.responses import JSONResponse
 from archihub.api.tasks import services
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
     require_role_any,
@@ -35,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
-require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
+require_admin = require_role_any("admin")
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
         403: {"description": "Insufficient role"}}
@@ -64,7 +63,7 @@ def _authorize(current_user: CurrentUser, requested_user: str) -> JSONResponse |
         "Denied %s access to the task list of %s", current_user.username, requested_user
     )
     return JSONResponse(
-        status_code=LEGACY_ROLE_FAILURE_STATUS, content={"msg": _(MSG_UNAUTHORIZED)}
+        status_code=ROLE_FAILURE_STATUS, content={"msg": _(MSG_UNAUTHORIZED)}
     )
 
 

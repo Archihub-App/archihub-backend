@@ -4,8 +4,8 @@ PARTIAL PORT: ``add_task`` and ``has_task`` only, because the hook bus needs
 them. The polling endpoints (``get_tasks`` and friends) land with the rest of the
 domain in Phase 3.
 
-``has_task`` IS A REWRITE, NOT A PORT. The legacy version
-(``app/api/tasks/services.py:158``) cannot work as written:
+``has_task`` ANSWERS "IS THIS WORK ALREADY QUEUED?", and the obvious
+implementations do not:
 
 1. It rebinds ``task`` from the Mongo document to a ``TaskUpdate`` Pydantic model
    (``task = TaskUpdate(**update)``) and then immediately does

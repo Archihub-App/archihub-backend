@@ -5,8 +5,8 @@ effects fan out without domain modules importing each other: creating a resource
 fires ``resource_create``, and whatever registered against that name runs -
 Elasticsearch indexing, Qdrant vectorisation, plugin post-processing.
 
-The original is framework-agnostic (no Flask imports), so the logic is preserved
-closely. What changed:
+The dispatch logic is deliberately plain - no framework types cross this
+boundary, because both the web process and the workers raise events. Of note:
 
 * ``register()`` swallowed every exception with ``print(str(e))``. A hook that
   failed to register did so silently, and the feature it powered simply never

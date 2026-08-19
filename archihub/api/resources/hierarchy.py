@@ -23,7 +23,7 @@ from bson.objectid import ObjectId
 
 from archihub.core.errors import PermissionDeniedError, ValidationError
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -527,7 +527,7 @@ def get_tree(
         # Rendered rather than raised: this service returns (payload, status)
         # like the rest of the domain, and the router is what turns that into a
         # response.
-        return {"msg": exc.message}, LEGACY_ROLE_FAILURE_STATUS
+        return {"msg": exc.message}, ROLE_FAILURE_STATUS
 
     # The level is always drawn from every type the caller may see. ``post_type``
     # narrows only the has-children probe below: the caller has already been

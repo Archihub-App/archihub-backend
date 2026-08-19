@@ -1,9 +1,9 @@
 """Serving a record's derivatives.
 
 The web-optimised versions a record's processing produced: an MP4 for video, an
-MP3 for audio, three JPEG sizes for images. The original file is never served
-here - it is the archival master, often hundreds of megabytes, and the players
-want the derivative.
+MP3 for audio, three JPEG sizes for images. The source file is never served here
+- it is the archival master, often hundreds of megabytes, and the players want
+the derivative.
 
 Range handling is Starlette's; see ``archihub/core/responses.py``. What is left
 is resolving which file on disk a request means, and refusing to serve one that

@@ -26,7 +26,7 @@ task = self.bulk.delay(body, current_user)
 So those routes have no authorisation beyond `@jwt_required()`. It reads
 correctly, it is even indented as though it guards what follows, and it does
 nothing. The same is true of ``validate_fields``, whose refusals are discarded
-at the same sites. Recorded as BACKEND_FINDINGS S32.
+at the same sites.
 
 Here a role requirement is a **FastAPI dependency**, so it is resolved before
 the handler body runs and its result cannot be dropped: there is no value to
@@ -58,7 +58,7 @@ from fastapi.responses import JSONResponse
 from archihub.core.i18n import gettext as _
 from archihub.core.responses import json_response
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     require_role_any,
 )
@@ -77,10 +77,10 @@ def require_roles(*roles: str):
 
     Always a dependency, never a call inside a handler — see the module
     docstring. The legacy 401 is preserved for the same reason as everywhere
-    else in the port (`LEGACY_ROLE_FAILURE_STATUS`); grep that constant for
+    else in the port (`ROLE_FAILURE_STATUS`); grep that constant for
     every site awaiting the coordinated frontend flip.
     """
-    return require_role_any(*roles, status_code=LEGACY_ROLE_FAILURE_STATUS)
+    return require_role_any(*roles)
 
 
 def translate_display(value: Any, parent_key: str | None = None) -> Any:
@@ -393,7 +393,7 @@ def task_result_file(task_id: str, user: str, *, is_admin: bool) -> tuple[Any, i
         return {"msg": _("Task does not exist")}, 404
 
     if task.get("user") != user and not is_admin:
-        return {"msg": _("You do not have sufficient permissions")}, LEGACY_ROLE_FAILURE_STATUS
+        return {"msg": _("You do not have sufficient permissions")}, ROLE_FAILURE_STATUS
 
     status = task.get("status")
     if status == "pending":

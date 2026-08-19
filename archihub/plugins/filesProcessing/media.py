@@ -13,14 +13,13 @@ except Exception as e:
     raise Exception('Error al convertir el archivo: ' + str(e))
 ```
 
-An untranslated Spanish sentence with the underlying exception's text appended,
-raised from inside a Celery task — so the failure reached the operator as a
-failed job whose message named a path on the server's disk, and the original
-exception type was lost. Here a failure is logged with its traceback and raised
-as ``ProcessingFailed`` carrying only what the file was.
+A failure here is logged with its traceback and raised as ``ProcessingFailed``
+carrying only what the file was. Appending an underlying exception's own text to
+the message instead sends a path on the server's disk to whoever reads the job
+list, and discards the exception type on the way.
 
 THE SUBPROCESS GUARDS ARE NEW, and they are the same set as ``records/media.py``
-(BACKEND_FINDINGS F34): a timeout, output captured rather than inherited, and a
+: a timeout, output captured rather than inherited, and a
 non-zero exit treated as failure. ``convert_to_pdf_with_libreoffice`` was a bare
 ``subprocess.run`` with none of the three, so a LibreOffice that hung — which it
 does, on a malformed document, waiting for a dialog nobody will answer — held a

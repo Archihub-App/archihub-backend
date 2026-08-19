@@ -2,16 +2,16 @@
 
 **Nothing in this codebase contains a list of model names.** The catalogue is
 whatever each configured provider says it offers, asked over the network and
-cached briefly. That is the whole point: a table of model names in source is
-wrong the day a vendor ships anything, and the legacy module had three of them
-(`_OPENAI_META`, `_GOOGLE_META`, and the Ollama family substrings) plus
-hardcoded fallback lists for when discovery failed.
+cached briefly. A table of model names in source is wrong the day a vendor ships
+anything, and it is wrong in a way nobody notices until a user asks for a model
+the archive cannot see.
 
-Those fallbacks are the part worth dwelling on. When `getModels` raised, the
-legacy code returned a hand-written list of models it hoped existed — so a
-provider with an expired key, or a typo'd base URL, presented a normal-looking
-catalogue of models that could not actually be called. Discovery failure is
-reported here, not papered over.
+**Discovery failure is reported, never papered over.** Answering a failed
+lookup with a hand-written list of models that probably exist gives a provider
+with an expired key or a mistyped base URL a normal-looking catalogue in which
+nothing can actually be called. A `Catalogue` carries its own `error`/`reason`,
+and a transient failure keeps the previous list marked `stale` rather than
+emptying the picker.
 
 Capability and context data come from the provider where the provider states it
 (see each dialect), and otherwise from an **operator-managed overrides

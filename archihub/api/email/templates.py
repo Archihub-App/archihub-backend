@@ -3,7 +3,7 @@
 Port of ``app/api/email/templates.py``, with the translation fixed and the link
 escaped.
 
-TWO BUGS IN THE ORIGINAL, both invisible until you look closely:
+TWO THINGS THAT ARE EASY TO GET WRONG HERE, and invisible when you do:
 
 1. ``_(f"...{link}...")`` interpolated the f-string BEFORE handing it to the
    translator, so the message id contained the actual URL. No catalogue entry can

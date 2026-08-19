@@ -5,7 +5,7 @@ exists for one reason: **the native API tells you what a model can do, and the
 compatible one does not.** ``/api/tags`` lists what is pulled locally and
 ``/api/show`` reports a model's capabilities and context length directly.
 
-That is worth an adapter because the alternative is what the legacy code did:
+That is worth an adapter, because the alternative is:
 
     _OLLAMA_VISION_FAMILIES = ("llava", "bakllava", "moondream", "minicpm-v",
                                "qwen-vl", "qwen3-vl", "gemma3", "pixtral",

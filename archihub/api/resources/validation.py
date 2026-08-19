@@ -10,15 +10,15 @@ a resource of that type may carry. Nothing about that is expressible as a static
 Pydantic schema, which is why this is hand-written validation rather than a
 request model (PLAN_FASTAPI.md section 7).
 
-SHAPE CHANGE FROM THE ORIGINAL. ``validate_fields`` took a caller-supplied
-``errors`` dict and mutated it, while also returning a possibly-different body -
-so callers had to remember to inspect an argument they passed *in*. Here it
-returns ``(body, errors)`` and the caller cannot forget half the result.
+``validate_fields`` RETURNS ``(body, errors)``. Both halves come back together
+so a caller cannot act on one and forget the other - which is what happens when
+validation reports through a dict the caller passed *in* and returns the body
+separately.
 
-The original's 285 lines were one function: nine near-identical blocks, each
-re-reading the same value up to three times and each repeating the same
-condition-field handling. The repetition is what let the defects below hide -
-they are present in some copies of the block and not others.
+ONE VALIDATOR PER FIELD KIND, dispatched from a table. Nine near-identical
+blocks in a single function is how a rule comes to hold for some field kinds and
+not others: every block repeats the same condition handling, and a correction
+applied to one copy looks complete.
 """
 
 from __future__ import annotations
@@ -307,7 +307,7 @@ def resolve_condition_field(field: dict, fields: list[dict]) -> dict | None:
 
     ``conditionField`` is an *index* into the form's field list.
 
-    BUG FIXED (BACKEND_FINDINGS F23). The original wrote::
+    BUG FIXED. The original wrote::
 
         hasCondition = int(field['conditionField']) if 'conditionField' in field else False
         conditionField = metadata['fields'][hasCondition] if hasCondition else False

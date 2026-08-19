@@ -8,13 +8,12 @@ transcript under ``processing``. This plugin copies that text into a
 exports the result as DOCX, PDF or plain text.
 
 THE CROSS-PLUGIN DEPENDENCY IS BEHIND AN INTERFACE. PDF export needs LibreOffice,
-which lives in ``filesProcessing``. The legacy code imported it directly at the
-point of use and wrapped the import in a `try` that re-raised with a Spanish
-sentence, so an instance with `filesProcessing` deactivated reported "error
-importing the module" from inside a Celery task. Here the conversion is looked
-up through ``archihub.plugins.framework.interop``, which answers a clear refusal
-if no plugin provides it — and the plugin order in PLAN_FASTAPI.md (liquidText
-before filesProcessing) is exactly why that indirection has to exist.
+which lives in ``filesProcessing``. The conversion is looked up through
+``archihub.plugins.framework.interop``, which answers a clear refusal when no
+plugin provides it. Importing across plugin package boundaries instead couples
+the two to each other's file layout, bypasses activation entirely — the import
+succeeds whether or not the providing plugin is switched on — and reports its
+failure as a sentence about a Python import from inside a Celery task.
 """
 
 from __future__ import annotations
@@ -164,10 +163,10 @@ class LiquidText(ArchiPlugin):
     def save_text(self, body: dict, user: str) -> tuple[dict, int]:
         """Store an edited transcript against a record.
 
-        THE RECORD'S OWN VISIBILITY IS CHECKED. The legacy version looked the
-        record up by id and wrote to it, checking only the caller's global role
-        — so an editor could rewrite the transcript of a series they are not
-        permitted to open. Exactly the shape of S19, at a different route.
+        THE RECORD'S OWN VISIBILITY IS CHECKED, not just the caller's global
+        role. Checking the role alone lets an editor rewrite the transcript of a
+        series they are not permitted to open — the write path must compose the
+        same visibility rule the read path applies.
         """
         from archihub.api.records import services as record_services
 

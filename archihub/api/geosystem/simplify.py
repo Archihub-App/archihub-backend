@@ -9,7 +9,7 @@ spike survives simplification where a gentle bend of the same triangle area does
 not. ``weight_factor=0.7`` is Mapshaper's default.
 
 What is NOT ported verbatim is the caching around it - see ``simplify`` in this
-module and BACKEND_FINDINGS P10.
+module.
 """
 
 from __future__ import annotations
@@ -251,7 +251,7 @@ def _count_geom_vertices(geom):
 #: distinct value, on an **unauthenticated** route - so a caller could fill the
 #: temporal volume by walking `0.100001, 0.100002, ...`. Quantising bounds the
 #: key space to a hundred entries per shape set; sweeping bounds it in time.
-#: See BACKEND_FINDINGS P10.
+#:
 RETENTION_DECIMALS = 2
 MIN_RETENTION = 0.01
 MAX_RETENTION = 1.0

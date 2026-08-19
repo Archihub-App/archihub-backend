@@ -1,12 +1,10 @@
 """Provider adapters, organised by **wire protocol** rather than by vendor.
 
-THIS IS THE CENTRAL DESIGN DECISION, and it is what the legacy module got
-wrong. It had one Python class per vendor — `OpenAIProvider`, `GoogleProvider`,
-`OpenRouterProvider`, `AzureProvider`, `OllamaProvider`, `LlamaServerProvider` —
-roughly 1,000 lines in which five of the six spoke *the same protocol* and
-differed only in a base URL, a header, and which hardcoded table of model names
-they consulted. Adding a vendor meant writing a class. Adding a model meant
-editing a dict in source and shipping a release.
+THIS IS THE CENTRAL DESIGN DECISION. A class per vendor collapses under its own
+weight: most vendors speak *the same protocol* and differ only in a base URL, a
+header and a credential, so the classes end up near-identical and drift apart
+anyway. Worse, it makes adding a vendor a code change and adding a model a
+release.
 
 Here there are two independent axes:
 
@@ -24,10 +22,9 @@ a configuration change, not a release. That is what "no hardcoded parts" has to
 mean to be worth anything.
 
 Everything speaks HTTP through `httpx` directly rather than through a vendor
-SDK. The legacy code depended on `aisuite`, `openai` **and** raw `httpx`, and
-already bypassed `aisuite` whenever tools were involved — which is the codebase
-telling you the abstraction was not earning its dependency. One HTTP path means
-one place for timeouts, retries, streaming and error mapping.
+SDK. One HTTP path means one place for timeouts, retries, streaming and error
+mapping - and an SDK that has to be bypassed for tool calls is not earning the
+dependency it costs.
 """
 
 from __future__ import annotations

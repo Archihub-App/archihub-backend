@@ -2,16 +2,14 @@
 
 A provider is **data**: a dialect, a base URL, a credential, some headers. There
 is no Python class per vendor, so connecting an archive to a provider nobody has
-heard of is a POST, not a release. That is the difference between this and the
-legacy module, where `llm_providers = ["OpenAI", "Google", "OpenRouter",
-"Azure", "Ollama", "LlamaServer"]` was a literal in source and anything absent
-from it was unreachable.
+heard of is a POST, not a release. A list of vendor names in source makes
+everything absent from it unreachable, and the list is never complete.
 
-**Credentials are encrypted at rest and never leave.** The legacy listing
-projected `{"key": 0}` to hide them, which works only for as long as every query
-remembers to. Here the key is excluded by the serialiser that builds every
-response, so forgetting is not possible — and it is redacted to a fingerprint so
-an operator can tell two keys apart without seeing either.
+**Credentials are encrypted at rest and never leave.** The key is excluded by
+the single serialiser that builds every response, rather than by each query
+remembering to project it away — one place to be right instead of many places to
+forget. It is reported as a fingerprint, so an operator can tell two keys apart
+without seeing either.
 """
 
 from __future__ import annotations

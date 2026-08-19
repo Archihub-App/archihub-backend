@@ -2,18 +2,17 @@
 
 Spoken by almost everything: OpenAI, OpenRouter, Groq, Together, DeepSeek,
 Mistral, xAI, Fireworks, Cerebras, Perplexity, Azure AI, Google's compatibility
-endpoint, vLLM, LM Studio, llama.cpp's server, Ollama's ``/v1``. In the legacy
-module that was five near-identical classes; here it is one adapter and five
-rows in a collection.
+endpoint, vLLM, LM Studio, llama.cpp's server, Ollama's ``/v1``. One adapter,
+and each of those is a row in a collection rather than a class.
 
 **Model metadata is read from the provider, never from a table in this file.**
 `/models` returns different amounts of detail per provider — OpenRouter gives
 context length and input modalities, Together gives context length, OpenAI gives
 nothing but identifiers — and all of it is passed through as reported. Where a
-provider says nothing, nothing is claimed. The legacy code kept dictionaries of
-model names with hand-written context windows and capability lists, which is
-both wrong for models it had not heard of and wrong for models whose windows
-changed.
+provider says nothing, nothing is claimed. A dictionary of model names with
+hand-written context windows is wrong for every model it has not heard of, and
+wrong invisibly for the ones whose windows have since changed - a stale number
+is still a number, and nothing reports it as out of date.
 """
 
 from __future__ import annotations

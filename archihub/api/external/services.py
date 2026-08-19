@@ -12,7 +12,7 @@ so a caller could send `{"$where": "..."}` — server-side JavaScript execution 
 or any operator at any depth. It needs an admin API token, which bounds who can
 reach it, but an API token is a long-lived credential handed to an integration:
 "the caller is trusted" is exactly the assumption that makes a leaked token
-catastrophic rather than annoying. Recorded as BACKEND_FINDINGS S29.
+catastrophic rather than annoying.
 
 The replacement is the pattern already used for `/users` and `/logs`: a field
 allowlist, string equality only, matching what the endpoint is actually for.

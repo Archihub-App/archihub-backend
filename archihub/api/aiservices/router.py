@@ -1,13 +1,11 @@
 """AI service routes.
 
-Rewritten rather than ported, and the route table reflects the rewrite: what
-used to be "models" (a confusing name for *provider configurations*) is now
-``/aiservices/providers``, and the **model catalogue is a separate resource that
-is discovered, not stored**.
+Two resources, deliberately separate: ``/aiservices/providers`` holds provider
+*configurations*, which are stored, and the **model catalogue is discovered from
+each provider rather than stored** at ``/providers/{id}/models``.
 
-Roles are unchanged from the legacy blueprint: reading needs ``admin``,
-``processing`` or ``llm``; configuring a provider needs ``admin`` or
-``processing``.
+Roles: reading needs ``admin``, ``processing`` or ``llm``; configuring a
+provider needs ``admin`` or ``processing``.
 """
 
 from __future__ import annotations
@@ -29,7 +27,7 @@ from archihub.api.aiservices import (
 from archihub.api.aiservices import errors as ai_errors
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
     require_role_any,
@@ -41,10 +39,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/aiservices", tags=["AI services"])
 
 require_reader = require_role_any(
-    "admin", "processing", "llm", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "processing", "llm"
 )
 require_operator = require_role_any(
-    "admin", "processing", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "processing"
 )
 
 _RESPONSES = {
@@ -442,7 +440,7 @@ def ask_assistant(
     THIS IS THE CHAT ENDPOINT, not a save. `body["id"]` is the RECORD being
     discussed and `body["conversation_id"]` the thread, if one is being resumed.
     An earlier revision of this port read `id` as a conversation id and answered
-    404 for every request the frontend made (F64).
+    404 for every request the frontend made.
 
     ``stream: true`` returns server-sent events shaped the way `AIservice.tsx`
     parses them - see `assistant.py` on why they are not the frames

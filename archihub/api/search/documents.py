@@ -3,18 +3,16 @@
 Port of the body of ``index_resources_task`` in
 ``app/api/system/tasks/elasticTasks.py``, extracted from the loop that drove it.
 
-WHY IT IS ITS OWN MODULE. In the original this was ~160 lines inside a
-``for resource in resources:`` inside a ``try/except Exception: continue``, so
-there was no way to ask what a given resource indexes as - the only observable
-was whether the whole run reported a number at the end. Every defect listed
-below was found by being able to call this on one document.
+WHY IT IS ITS OWN MODULE: so you can ask what a *given* resource indexes as.
+Built inline in a loop that swallows exceptions, the only observable is whether
+the run reported a number at the end - which it does whether the documents were
+accepted or every one of them was rejected.
 
 WHAT IS AND IS NOT INDEXED. The index backs search, and search results are shown
-to anonymous visitors, so the rule is that a field reaches the index only if the
-content type declares it as searchable metadata. Two field kinds are excluded by
-the schema itself (``file``), and one - ``repeater`` - is excluded by the
-original code in a way this port DELIBERATELY REPRODUCES; see
-``_apply_repeater_dates``.
+to anonymous visitors, so a field reaches the index only if the content type
+declares it as searchable metadata. ``file`` is excluded by the schema itself,
+and ``repeater`` is excluded DELIBERATELY - see ``_apply_repeater_dates`` for
+why turning it on could remove resources from the index.
 """
 
 from __future__ import annotations
@@ -140,7 +138,7 @@ def _apply_repeater_dates(resource: dict, field: dict) -> None:
     change: rows are free-form, so a field holding a number in one resource and
     text in another is a mapping conflict that makes Elasticsearch REJECT the
     whole document - i.e. turning this on could remove resources from the index
-    that are in it today. Recorded as BACKEND_FINDINGS F46, to be done with a
+    that are in it today., to be done with a
     mapping decision behind it rather than in passing.
     """
     rows = get_by_path(resource, field.get("destiny", ""))

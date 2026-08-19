@@ -114,7 +114,7 @@ def test_a_restricted_record_is_refused(mongo):
     mongo.user = {"accessRights": ["public"]}
 
     _payload, status = services.get_by_id(RECORD_ID, "alice")
-    assert status == services.LEGACY_ROLE_FAILURE_STATUS
+    assert status == services.ROLE_FAILURE_STATUS
 
 
 def test_holding_the_right_grants_access(mongo):
@@ -152,7 +152,7 @@ def test_a_record_inherits_its_parents_restriction(mongo):
     mongo.user = {"accessRights": ["public"]}
 
     _payload, status = services.get_by_id(RECORD_ID, "alice")
-    assert status == services.LEGACY_ROLE_FAILURE_STATUS
+    assert status == services.ROLE_FAILURE_STATUS
 
 
 def test_a_restriction_inherited_by_the_parent_from_its_own_ancestor_applies(mongo):
@@ -166,7 +166,7 @@ def test_a_restriction_inherited_by_the_parent_from_its_own_ancestor_applies(mon
     mongo.user = {"accessRights": ["public"]}
 
     _payload, status = services.get_by_id(RECORD_ID, "alice")
-    assert status == services.LEGACY_ROLE_FAILURE_STATUS
+    assert status == services.ROLE_FAILURE_STATUS
 
 
 def test_a_dangling_parent_reference_does_not_deny_access(mongo):
@@ -200,7 +200,7 @@ def test_a_permission_failure_is_not_reported_as_a_server_error(mongo):
     mongo.user = {"accessRights": []}
 
     _record, error = services.load_visible(RECORD_ID, "alice")
-    assert error[1] == services.LEGACY_ROLE_FAILURE_STATUS
+    assert error[1] == services.ROLE_FAILURE_STATUS
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,7 @@
 """Metadata-form routes.
 
-Port of ``app/api/forms/routes.py``. Every route requires the **admin** role
-(not admin-or-editor like types and lists) and keeps the legacy 401 for role
-failures pending the coordinated frontend flip.
+Every route requires the **admin** role - not admin-or-editor, as types and
+lists do.
 
 TWO SHAPES THAT LOOK WRONG AND ARE NOT, both confirmed against
 ``upgrade_front/src/services/FormService.tsx``:
@@ -31,7 +30,7 @@ from fastapi.responses import JSONResponse
 from archihub.api.forms import services
 from archihub.api.forms.schemas import FormCreate, FormUpdate
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     require_role_any,
 )
@@ -41,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/forms", tags=["Forms"])
 
-require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
+require_admin = require_role_any("admin")
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
         403: {"description": "The admin role is required"}}

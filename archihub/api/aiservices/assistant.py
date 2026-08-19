@@ -5,13 +5,11 @@ talks to a provider) and the user (who has a video open and types "give me a
 summary of the interview"). It decides what the model is shown, applies the
 access rule, and records the turn.
 
-**It exists because `POST /aiservices/conversation` means "ask" and not "save".**
-In the legacy backend that path is `set_conversation`, dispatching on
-``body['type']`` to one of four builders. The rewrite gave the same path to
-conversation-record CRUD and put raw chat on a new one
-(`/providers/{id}/chat`), so every AI entry point in the product answered 404
-"Conversation not found" — the frontend's ``id`` is the *record* being discussed,
-and it was being looked up as a conversation id (F64).
+**`POST /aiservices/conversation` means "ask", not "save".** Its ``id`` is the
+*record* being discussed, never a conversation id, and the reply is a stream. Give
+that path to conversation-record CRUD and every AI entry point in the product
+answers 404 "Conversation not found" — the id is real, it is simply being looked
+up in the wrong collection. Stored-conversation CRUD lives in `conversations.py`.
 
 WHAT EACH TYPE SHOWS THE MODEL
 ------------------------------
@@ -30,19 +28,17 @@ WHAT EACH TYPE SHOWS THE MODEL
                    ``image_url`` part. Only the NEWEST stored image is re-sent
                    when a conversation resumes; earlier ones are named.
 
-``atlas`` is not implemented and says so with a 501, naming the type — which is
-distinguishable from "this route does not exist", what the caller got before. It
-cannot be ported: legacy imports ``app.plugins.atlas.services`` and there is no
-such package in this repository, so that branch fails there too.
+``atlas`` is not implemented and says so with a 501 naming the type, which a
+caller can tell apart from "this route does not exist". It depends on an
+``atlas`` plugin that this repository does not contain.
 
 ACCESS IS THE RECORD'S, NOT THE CONVERSATION'S
 ----------------------------------------------
 
 Everything here starts at ``records.services.load_visible``, so a caller is shown
-a transcript exactly when they could open the record it belongs to. The legacy
-builders called ``get_by_id`` and raised a bare Spanish exception on anything but
-200, which the route reported as a 500 — a permission failure indistinguishable
-from a broken backend.
+a transcript exactly when they could open the record it belongs to, and a refusal
+arrives with the status that says which refusal it was. A permission failure
+reported as a 500 is indistinguishable from a broken backend.
 
 Resuming a conversation additionally requires owning it (``conversations.load_own``).
 Both checks are needed and neither implies the other: a conversation is personal,
@@ -85,9 +81,9 @@ logger = logging.getLogger(__name__)
 IMPLEMENTED_TYPES = ("transcription", "document", "image_gallery")
 KNOWN_TYPES = ("transcription", "document", "image_gallery", "atlas")
 
-#: Legacy stores these snake_case. They are not new fields - 36 conversations on
-#: this instance already carry them - so the port must write the same names or
-#: history sorts on a key none of the existing rows have.
+#: Stored snake_case, which is the shape already on disk. Writing camelCase here
+#: would not error: history would simply sort on a key no stored row has, and
+#: "newest first" would order by nothing at all.
 CREATED_AT = "created_at"
 UPDATED_AT = "updated_at"
 
@@ -119,10 +115,9 @@ class AssistantError(Exception):
 def wants_stream(body: dict) -> bool:
     """Whether the caller asked for server-sent events.
 
-    The legacy helper also accepted ``strem`` and ``sstream`` in two places
-    each. Those are typos that were tolerated rather than fixed; the frontend
-    sends ``stream`` at the top level and has always done so, so only the
-    correct spelling and the ``opts`` nesting are honoured here.
+    Accepts ``stream`` at the top level or nested under ``opts``, which is what
+    the frontend sends. Misspellings are not honoured - tolerating one keeps it
+    alive in callers that would otherwise be corrected.
     """
     opts = body.get("opts")
     if isinstance(opts, dict) and "stream" in opts:
@@ -222,10 +217,9 @@ PAGE_IMAGE_SIZE = "big"
 def page_image_part(record: dict, page: int) -> dict:
     """One rendered page of a document, as an ``image_url`` content part.
 
-    Legacy passed a private ``{"type": "image_path", "path": ...}`` part and let
-    each provider class open the file itself. The dialects here already convert
-    the standard ``image_url`` part - all four of them - so the file is read
-    once, at the edge, and every provider gets the same thing.
+    The file is read once, here, and handed on as a standard ``image_url`` part
+    that all four dialects already convert. Passing a private part carrying a
+    path instead would make every provider responsible for opening files.
 
     Every path component is either a fixed constant or comes out of the
     database through ``resolve_within``; ``page`` selects from a sorted listing
@@ -290,9 +284,9 @@ DOCUMENT_INPUTS = ("document_ocr", "image")
 def _document_input(body: dict) -> str:
     """Which of the two the caller asked for.
 
-    An unrecognised value falls back to the OCR text rather than being refused,
-    matching the legacy route: the setting is a display preference and losing
-    the answer over it would be worse than answering from the text.
+    An unrecognised value falls back to the OCR text rather than being refused:
+    the setting is a display preference, and losing the answer over it is worse
+    than answering from the text.
     """
     requested = body.get("opt")
     return requested if requested in DOCUMENT_INPUTS else "document_ocr"
@@ -303,10 +297,10 @@ def _document_context(
 ) -> list[dict]:
     """The page as OCR text, or as the rendered image the user chose instead.
 
-    THE MODE IS NOT DECORATION. The viewer has an "Input mode" radio, and an
-    earlier revision of this port ignored it entirely - so choosing *Image* sent
-    the OCR text anyway. The model answered confidently from the wrong source,
-    which is the failure a status code cannot show.
+    THE MODE IS NOT DECORATION. The viewer's "Input mode" radio selects which of
+    the two the model is shown. Ignoring it and always sending the OCR text is a
+    200 in which the model answers confidently from a source the user did not
+    choose - the kind of failure no status code can show.
     """
     from archihub.api.records import blocks as record_blocks
 
@@ -347,10 +341,10 @@ GALLERY_IMAGE_SIZE = "large"
 def gallery_image(resource_id: str, index: int, user: str) -> tuple[str, dict]:
     """``(stored path, image_url part)`` for the nth image of a gallery.
 
-    Position follows the curator's ``order``, which the legacy path got wrong:
-    its order map was keyed by string and looked up by ``ObjectId``, so nothing
-    ever matched and every gallery fell back to Mongo's natural order. An index
-    past the end is a 404 here; there it raised ``IndexError``, reported as 500.
+    Position follows the curator's ``order``. Keys in that map are strings, so
+    they must be looked up as strings - an ``ObjectId`` never matches one, and
+    the silent result is that every gallery falls back to Mongo's natural order
+    while appearing to work. An index past the end is a 404, not an exception.
     """
     from archihub.api.records import viewers
     from archihub.api.resources.services import load_visible as load_resource
@@ -413,10 +407,10 @@ def _gallery_context(resource_id: str, message: str, index: int, user: str) -> t
     )
 
 
-#: How a stored turn refers to an image. Legacy's shape, and the one
-#: `AImessaging.tsx` renders - a PATH, never the bytes. Storing the data URL
-#: instead would put megabytes of base64 into the conversation document and walk
-#: it straight into MongoDB's 16 MB limit after a handful of turns.
+#: How a stored turn refers to an image: a PATH, never the bytes, which is what
+#: `AImessaging.tsx` renders. Storing the data URL instead puts roughly 600 KB of
+#: base64 into the conversation document per image and reaches MongoDB's 16 MB
+#: ceiling within a handful of turns.
 IMAGE_PART = "image_path"
 
 
@@ -424,11 +418,11 @@ def _replay(messages: list[dict], conversation: dict) -> list[dict]:
     """Prior turns, with stored image references resolved back to images.
 
     ONLY THE MOST RECENT stored image is re-sent as an image; earlier ones
-    become a line naming the file. Legacy replayed every one, so a twenty-turn
-    gallery conversation sent twenty images on every request - cost and context
-    growing without bound. Collapsing them is also what the system prompt
-    already tells the model to expect: the newest image is the primary context
-    and earlier ones are referred to by file name.
+    become a line naming the file. Replaying every one makes a twenty-turn
+    gallery conversation send twenty images per request, growing cost and context
+    without bound. Collapsing them is also what the system prompt tells the model
+    to expect: the newest image is the primary context, earlier ones are referred
+    to by name.
     """
     prior = []
     stored_images = [
@@ -510,8 +504,8 @@ def build_messages(body: dict, user: str) -> tuple[list[dict], dict, dict]:
     #
     # The distinction is not academic: the assistant opens on a plain PDF with
     # no processing view selected, so `view` is undefined in the frontend and no
-    # slug is sent. Demanding one refused the request outright - and the legacy
-    # route was worse, subscripting `body['slug']` and 500ing on the KeyError.
+    # slug is sent. Demanding one there refuses a request that is perfectly
+    # well formed.
     slug = body.get("slug") or body.get("processing_slug")
     needs_slug = kind == "transcription" or (
         kind == "document" and _document_input(body) == "document_ocr"
@@ -553,8 +547,8 @@ def build_messages(body: dict, user: str) -> tuple[list[dict], dict, dict]:
             applied["image_path"] = stored
             applied["page"] = index
     except (transcription.TranscriptionError, record_blocks.BlockError) as exc:
-        # These already carry the right status; re-raising them as 500 is how
-        # the legacy builders reported "this record has no transcript".
+        # These already carry the right status. Flattening them to 500 would
+        # report "this record has no transcript" as a broken backend.
         raise AssistantError(str(exc), getattr(exc, "status_code", 404)) from exc
 
     if conversation:
@@ -577,9 +571,9 @@ def build_messages(body: dict, user: str) -> tuple[list[dict], dict, dict]:
 def _gallery_index(body: dict):
     """The gallery position, if the caller stated one.
 
-    ``opts.page`` is a 0-based INDEX here and a 1-based PAGE for documents -
-    the legacy routes differ on this and the frontend sends what each expects,
-    so the difference is wire contract rather than an inconsistency to tidy.
+    ``opts.page`` is a 0-based INDEX for a gallery and a 1-based PAGE for a
+    document. The frontend sends what each expects, so the difference is wire
+    contract rather than an inconsistency to tidy away.
     """
     opts = body.get("opts")
     if not isinstance(opts, dict) or "page" not in opts:
@@ -615,9 +609,9 @@ def store_turn(
     and, for a gallery, a reference to the image - as a PATH. The assistant's
     carries the thinking steps. `AImessaging.tsx` reads all three back
     (``msg.applied_skills``, ``msg.thinking_steps``, and ``image_path`` parts),
-    so a reopened conversation looks like the one that was had. Legacy stored
-    the skills only at conversation level and the steps not at all, so both were
-    lost on reload.
+    so a reopened conversation looks like the one that was had. Recording the
+    skills only at conversation level, or omitting the steps, loses both on
+    reload with nothing to indicate they were ever there.
     """
     applied = applied or {}
 

@@ -267,7 +267,7 @@ def test_another_users_snap_is_refused(mongo):
     found, error = services.load_own(SNAP_ID, "bob")
 
     assert found is None
-    assert error[1] == services.LEGACY_ROLE_FAILURE_STATUS
+    assert error[1] == services.ROLE_FAILURE_STATUS
 
 
 def test_not_even_an_administrator_reads_someone_elses_snap(mongo, monkeypatch):
@@ -306,7 +306,7 @@ def test_deleting_another_users_snap_is_refused(mongo):
 
     payload, status = services.delete(SNAP_ID, "bob")
 
-    assert status == services.LEGACY_ROLE_FAILURE_STATUS
+    assert status == services.ROLE_FAILURE_STATUS
     assert mongo.deleted == []
 
 

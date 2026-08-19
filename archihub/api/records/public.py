@@ -3,9 +3,8 @@
 Same files, no caller. Everything here answers one question first - *is this
 record public?* - and that question has exactly one implementation,
 ``access.is_public``, which composes with the resource rule rather than
-restating it. The legacy public layer applied a slightly different subset of the
-rule at each of its six routes, which is how a file attached to an unpublished
-draft came to be served anonymously (BACKEND_FINDINGS S20).
+restating it. Applying a slightly different subset of the rule per route is how
+a file attached to an unpublished draft ends up served anonymously.
 
 **A public route must never say more than "no".** Where the authenticated API
 distinguishes "no such record" from "not yours to read", this returns 404 for
@@ -177,7 +176,7 @@ def download(record_id: str, kind: str):
     The ``files_download`` capability is checked here. The legacy public route
     did not check it at all, while its authenticated twin did - so an archive
     that had switched downloads off still served them to anonymous callers, on
-    the one surface where that matters most. Recorded as BACKEND_FINDINGS S21.
+    the one surface where that matters most.
     """
     if not media.downloads_enabled():
         raise media.DownloadRefused(_("Files download isn't active"), 400)

@@ -1,19 +1,19 @@
 """Asking a model something, and coping when it says no.
 
 Everything here is written once against the dialect contract and works for every
-provider. In the legacy module the same logic was copied into each of six
-provider classes, with differences between the copies that nobody intended —
-some retried, some did not; some applied a timeout, some did not; the parameter
-for the token ceiling was chosen by testing whether the model id started with
-`"gpt-5"`, `"o1"`, `"o3"` or `"o4"`.
+provider. Copying this logic per vendor is how the copies come to disagree about
+things nobody decided — whether a call retries, whether it has a timeout, which
+parameter carries the token ceiling — and each difference then looks deliberate
+to the next reader.
 
 Three things happen here that are worth stating plainly.
 
-**A request that will not fit is shrunk, not failed.** A conversation grows past
-the model's window eventually; the recovery is to compress the middle of the
-history and retry, keeping the system prompt and the most recent turns intact.
-The legacy version did this too, but keyed on substring-matching the error
-message; here it keys on a classified ``CONTEXT_LENGTH`` reason.
+**A request that will not fit is shrunk, not failed.** Every conversation grows
+past the model's window eventually; the recovery is to compress the middle of
+the history and retry, keeping the system prompt and the most recent turns
+intact. It keys on a classified ``CONTEXT_LENGTH`` reason rather than on the
+wording of an error message, which varies by provider, by version and by
+locale.
 
 **Compression is progressive and bounded.** Each attempt keeps fewer turns
 verbatim. It stops when there is nothing left to give up, rather than looping.

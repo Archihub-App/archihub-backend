@@ -523,7 +523,7 @@ def test_the_recycle_bin_is_refused_to_non_admins(tree_data):
     """Refused with the legacy status, not the 403 this really is - the frontend
     compares the code exactly, so both sides flip together or neither does."""
     payload, status = hierarchy.get_tree("all", ["fondo"], "alice", status="deleted")
-    assert status == hierarchy.LEGACY_ROLE_FAILURE_STATUS
+    assert status == hierarchy.ROLE_FAILURE_STATUS
     assert "msg" in payload
 
 

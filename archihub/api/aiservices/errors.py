@@ -1,7 +1,7 @@
 """What went wrong with a model call, classified so callers can act on it.
 
-The legacy code decided what an error meant by looking for substrings in its
-message::
+The tempting implementation decides what an error meant by looking for
+substrings in its message::
 
     _CONTEXT_TOKEN_ERROR_MARKERS = (
         "context_length_exceeded", "maximum context length", ...
@@ -9,9 +9,9 @@ message::
 
 That is guessing. Every provider words its errors differently, wording changes
 between versions, and it is locale-dependent — an error returned in another
-language matches nothing. It also mixes up unrelated failures: the legacy list
-needed an explicit "unless it mentions rate limit" clause because the phrase
-"token limit" appears in both.
+language matches nothing. It also conflates unrelated failures, which is why
+such lists end up needing clauses like "unless it also mentions rate limit":
+the phrase "token limit" appears in both.
 
 Here the classification reads **structured signals** in order of reliability:
 

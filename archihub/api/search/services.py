@@ -1,10 +1,10 @@
 """Running a search, for a caller who may or may not exist.
 
 One implementation with the caller's rights as a parameter, rather than an
-authenticated copy and a public copy that drift. The legacy code had two
-services calling the same builder with ``user`` and ``None``, and the difference
-that mattered — that a public caller must not choose a publication state — was
-in neither of them.
+authenticated copy and a public copy that drift apart. Two services calling one
+builder with ``user`` and ``None`` look equivalent, and the difference that
+matters — that a public caller must not choose a publication state — belongs to
+neither of them.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import logging
 
 from archihub.api.search import query as query_builder
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +144,7 @@ def search(body: dict, user: str | None, *, public: bool) -> tuple[dict, int]:
         if error is not None:
             # 401 rather than the legacy 500, which its own Swagger documented
             # as the behaviour: "insufficient role ... lands here with 500".
-            return {"msg": error}, LEGACY_ROLE_FAILURE_STATUS
+            return {"msg": error}, ROLE_FAILURE_STATUS
 
         declared, sortable_text = _declared_fields(allowed)
         statuses = query_builder.resolve_status(

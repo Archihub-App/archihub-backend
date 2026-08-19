@@ -1,30 +1,19 @@
 """Application configuration.
 
-Replaces the legacy ``config.py`` (``_require_env`` + ``DevelopmentConfig`` /
-``ProductionConfig``) with a single Pydantic ``BaseSettings`` model.
+One Pydantic ``BaseSettings`` model, read once at startup.
 
-Behaviour preserved from ``config.py``:
+Three rules the rest of the application depends on:
 
-* ``SECRET_KEY``, ``JWT_SECRET_KEY`` and ``FERNET_KEY`` are **required** - the
-  process refuses to start if any is missing. There are deliberately no
-  fallback values for secrets.
-* ``TEST_SECRET_HEADER_KEY`` stays optional-with-no-fallback: leaving it unset
-  simply means ``/health/test-control/*`` authentication can never succeed,
-  which is the safe default for a feature that must stay off outside
-  disposable instances.
-
-Deliberate improvement: ``_require_env`` raised on the *first* missing
-variable, so an operator with three unset secrets had to run the container
-three times to discover them all. Pydantic validates every field before
-raising, so a single startup failure now lists all of them at once.
-
-Deliberate change, called out in PLAN_FASTAPI.md: the legacy
-``MongoConector`` carried a hardcoded fallback password
-(``os.environ.get(MONGO_ADMIN, '7bOS9*NkX41M')``). That literal is NOT
-reproduced here. ``mongo_password`` defaults to an empty string instead, so a
-deployment that fails to set it gets a normal Mongo authentication error
-rather than silently attempting a well-known credential that is published in
-the source tree.
+* ``SECRET_KEY``, ``JWT_SECRET_KEY`` and ``FERNET_KEY`` are **required**, and the
+  process refuses to start without them. **No secret has a fallback value.** A
+  default credential in source is a credential every deployment shares and
+  nobody chose, and it works just well enough that the omission goes unnoticed.
+* ``TEST_SECRET_HEADER_KEY`` is optional with no fallback, which is different:
+  unset simply means ``/health/test-control/*`` authentication can never
+  succeed. That is the safe default for a feature that must stay off anywhere
+  other than a disposable instance.
+* Every field is validated before anything raises, so an operator with three
+  unset variables learns about all three from one startup attempt.
 """
 
 from __future__ import annotations
@@ -63,9 +52,9 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # Runtime environment
     # ------------------------------------------------------------------
-    # Legacy name was FLASK_ENV. Both are accepted during the migration so a
-    # deployment can be cut over without a simultaneous .env edit; ENVIRONMENT
-    # wins when both are present. See PLAN_FASTAPI.md section 11.
+    # ENVIRONMENT is the name; FLASK_ENV is accepted as a synonym so a
+    # deployment can be cut over without editing its .env at the same moment.
+    # ENVIRONMENT wins when both are set. See PLAN_FASTAPI.md section 11.
     environment: Literal["DEV", "PROD"] = Field(default="PROD", validation_alias="ENVIRONMENT")
     flask_env: str | None = Field(default=None, validation_alias="FLASK_ENV")
 
@@ -82,7 +71,8 @@ class Settings(BaseSettings):
     # of which requests reached the application and what they were answered.
     access_log: bool | None = Field(default=None, validation_alias="ACCESS_LOG")
 
-    # Legacy name was FLASK_RUN_PORT (compose passes BACKEND_PORT_FLASK into it).
+    # FLASK_RUN_PORT is accepted as a synonym; compose passes BACKEND_PORT_FLASK
+    # into it, so both names are in circulation.
     backend_port: int = Field(default=5000, validation_alias="BACKEND_PORT")
     flask_run_port: int | None = Field(default=None, validation_alias="FLASK_RUN_PORT")
 
@@ -102,10 +92,9 @@ class Settings(BaseSettings):
     mongo_database: str = Field(default="archihub-prod", validation_alias="MONGO_DATABASE")
     mongo_rs: str = Field(default="rs0", validation_alias="MONGO_RS")
     # How long an operation waits for a reachable server before giving up.
-    # The legacy URI set socketTimeoutMS/connectTimeoutMS to 300000 (5 minutes)
-    # but never set this, leaving pymongo's 30s default. Made explicit and
-    # configurable so an unreachable database surfaces as a prompt error
-    # instead of a request that appears to hang.
+    # Explicit and configurable, so an unreachable database surfaces as a prompt
+    # error rather than as a request that appears to hang. Leaving it implicit
+    # means the socket timeouts and this one can disagree by minutes.
     mongo_server_selection_timeout_ms: int = Field(
         default=10000, validation_alias="MONGO_SERVER_SELECTION_TIMEOUT_MS"
     )
@@ -147,9 +136,9 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     vector_host: str = Field(default="localhost", validation_alias="VECTOR_HOST")
     vector_port: int = Field(default=6333, validation_alias="VECTOR_PORT")
-    # Legacy read this straight from os.environ, so it was a *str* whenever the
-    # variable was set and an int otherwise - then handed to Qdrant's
-    # VectorParams(size=...), which requires an int. Typed properly here.
+    # Typed, because it is handed to Qdrant's `VectorParams(size=...)`, which
+    # requires an int. Read straight from the environment it would be a str
+    # whenever the variable is set and an int when it is not.
     vector_size: int = Field(default=768, validation_alias="VECTOR_SIZE")
 
     # ------------------------------------------------------------------
@@ -166,20 +155,19 @@ class Settings(BaseSettings):
     # directory. An operator only sets this to point at their own boundary set.
     geo_data_path: str = Field(default="", validation_alias="GEO_DATA_PATH")
 
-    # Where skill Markdown files live. The legacy SkillManager derived this from
-    # the module's own location when unset (`<repo>/skills`), which breaks the
-    # moment the package is installed rather than run from a checkout.
+    # Where skill Markdown files live. An explicit setting rather than something
+    # derived from the module's own location, which stops being meaningful once
+    # the package is installed rather than run from a checkout.
     llm_skills_path: str = Field(default="skills", validation_alias="LLM_SKILLS_PATH")
 
-    # Upload ceiling. Flask had no MAX_CONTENT_LENGTH at all, so uploads were
-    # effectively unbounded; inheriting "unbounded" by accident is worse than
-    # choosing a number. See PLAN_FASTAPI.md section 6.
+    # Upload ceiling. A deliberate number: "unbounded" is a decision too, and a
+    # far worse one to arrive at by omission. See PLAN_FASTAPI.md section 6.
     max_upload_bytes: int = Field(default=5 * 1024 * 1024 * 1024, validation_alias="MAX_UPLOAD_BYTES")
 
     # How many characters of transcript one page of the transcription viewer
-    # holds. The legacy module read this at import time and silently fell back
-    # to the default on a non-integer or non-positive value; typed here so a
-    # bad value is a startup error naming the variable instead.
+    # holds. Typed and bounded, so a non-integer or non-positive value is a
+    # startup error naming the variable rather than a silent fall back to the
+    # default that nobody notices until the viewer paginates oddly.
     transcription_page_char_limit: int = Field(
         default=6000, gt=0, validation_alias="TRANSCRIPTION_PAGE_CHAR_LIMIT"
     )
@@ -197,13 +185,12 @@ class Settings(BaseSettings):
     @field_validator("archihub_test_mode", "celery_worker", mode="before")
     @classmethod
     def _parse_loose_bool(cls, value: object) -> object:
-        """Accept the shell-ish truthy spellings the legacy code checked for.
+        """Accept the shell spellings of "true", and nothing else.
 
-        ``TestControlAuth`` compared ``os.environ.get(...).lower() != 'true'``
-        and ``register_plugin`` used a bare ``os.environ.get('CELERY_WORKER', False)``
-        truthiness check (so ``CELERY_WORKER=0`` counted as *enabled*). Pydantic's
-        stricter bool parsing is used instead, which is the safer reading for a
-        flag that gates destructive test-control routes.
+        A bare truthiness check on the environment value reads ``"0"`` and
+        ``"false"`` as **enabled**, because both are non-empty strings. That is
+        the wrong way round for flags that gate destructive test-control routes,
+        so only the affirmative spellings count.
         """
         if isinstance(value, str):
             return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -211,7 +198,7 @@ class Settings(BaseSettings):
 
     @property
     def is_dev(self) -> bool:
-        """DEV mode, honouring the legacy FLASK_ENV spelling as a fallback."""
+        """DEV mode, accepting either variable name."""
         if self.flask_env is not None and self.flask_env.upper() == "DEV":
             return True
         return self.environment == "DEV"

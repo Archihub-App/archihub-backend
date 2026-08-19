@@ -2,11 +2,9 @@
 
 Port of ``app/api/email/services.py``, with the connection handled properly.
 
-The legacy version built an ``smtplib.SMTP`` by hand and called ``quit()`` at the
-end of the happy path only - so any exception in between leaked the socket, and
-``starttls()`` was invoked through a conditional expression evaluated for its
-side effect (``server.starttls() if use_tls else None``). It also had no timeout,
-which on an unresponsive mail server holds the calling thread indefinitely.
+The connection is a context manager with an explicit timeout. Closing it only on
+the happy path leaks the socket on any exception in between, and an unresponsive
+mail server with no timeout holds the calling thread indefinitely.
 
 CALLERS MUST TREAT FAILURE AS NON-FATAL where the response would otherwise
 reveal something. ``forgot_password`` is the case that matters: if a real account

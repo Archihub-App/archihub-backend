@@ -1,34 +1,31 @@
 """Elasticsearch access (raw HTTP).
 
-Port of the connection layer of ``app/utils/IndexHandler.py``.
+DELIBERATELY raw HTTP via ``requests``, not ``elasticsearch-py``. Adopting the
+real client is deferred to the Elasticsearch 7->8 server upgrade
+(PLAN_FASTAPI.md decision 3), because the two are entangled: this code branches
+on the *error body* of a response (``'error' in response`` with ``status ==
+404``) where ``elasticsearch-py`` raises ``NotFoundError``, so swapping the
+client silently inverts control flow in ``regenerate_index`` and its neighbours.
+That rework belongs with the version bump that motivates it.
 
-DELIBERATELY still raw HTTP via ``requests``, not ``elasticsearch-py``.
-Adopting the real client is deferred together with the Elasticsearch 7->8 server
-upgrade (PLAN_FASTAPI.md decision 3), because the two are entangled: the current
-code branches on the *error body* of a response (``'error' in response`` with
-``status == 404``) whereas ``elasticsearch-py`` raises ``NotFoundError`` instead,
-so swapping the client silently inverts control flow in ``regenerate_index`` and
-friends. That rework belongs with the version bump that motivates it.
+THREE RULES, all consequences of one decision - an index name is produced in
+exactly one place:
 
-THREE THINGS THIS DOES DIFFERENTLY, all consequences of one decision: an index
-name is produced in exactly one place.
+* **``resolve_index`` is the only way to name an index**, and every method takes
+  a *suffix*, so a call site cannot omit the instance prefix. Pasting
+  ``ELASTIC_INDEX_PREFIX + '-' + slug`` together at each of some thirty call
+  sites means one of them will eventually be missing the prefix, and the result
+  is an index nobody reads and a clear that silently does nothing.
+* **Every request goes through ``_request``**, which carries authentication, TLS
+  verification and a real timeout. Repeating that block per method lets the arms
+  drift apart - and a wedged cluster with no timeout holds a worker until
+  Celery's own ceiling, twelve hours later.
+* **Failures raise.** Returning a raw ``requests.Response`` leaves each caller to
+  remember its own status check, and the one that forgets produces a partial
+  index and a success message.
 
-* ``resolve_index`` is the only way to name an index, so the instance prefix
-  cannot be omitted. The legacy code pasted ``ELASTIC_INDEX_PREFIX + '-' + slug``
-  together at roughly thirty call sites and forgot it at one of them, which is
-  BACKEND_FINDINGS F45: geometry reindexing cleared an index nobody writes to.
-* Every request goes through ``_request``, which carries a real timeout. The
-  original repeated the same auth/verify block fourteen times, half of them
-  without ``verify=`` at all, and none with a timeout - a wedged cluster hung the
-  worker until Celery's own ceiling, twelve hours later.
-* Failures raise. ``index_document`` returned the raw ``requests.Response`` and
-  left the caller to remember ``if r.status_code != 201 and r.status_code != 200``;
-  the shapes indexer did not remember, so a rejected mapping produced a silent
-  partial index and a success message.
-
-Writes are still one document per round trip only where the legacy contract
-demands it. ``bulk_index`` exists because a full reindex of a real archive is
-dominated by HTTP round trips, not by Elasticsearch.
+``bulk_index`` exists because a full reindex of a real archive is dominated by
+HTTP round trips rather than by Elasticsearch.
 """
 
 from __future__ import annotations
@@ -59,11 +56,10 @@ class SearchUnavailable(Exception):
 def _next_version(current_index: str, alias: str) -> int:
     """The version number after ``current_index``'s.
 
-    Indices are named ``<alias>_<n>``. The legacy code read the number with
-    ``name.split('_')[1]``, which is the *second* segment of the whole name - so
-    an instance whose ELASTIC_INDEX_PREFIX contains an underscore
-    (``my_archive-resources_3``) parsed "archive-resources" as its version and
-    raised ``ValueError`` inside a Celery task, reported only as a failed job.
+    Indices are named ``<alias>_<n>``, so the version is the segment after the
+    LAST underscore. Taking the second segment of the whole name breaks on any
+    instance whose index prefix itself contains one (``my_archive-resources_3``),
+    and it breaks inside a Celery task, where it surfaces only as a failed job.
     """
     suffix = current_index[len(alias) :].lstrip("_")
     try:
@@ -76,11 +72,9 @@ def _next_version(current_index: str, alias: str) -> int:
 class SearchClient:
     """Minimal Elasticsearch HTTP client.
 
-    Unlike the legacy ``IndexHandler``, constructing this does NOT perform any
-    network call or create any index. ``IndexHandler.__new__`` called
-    ``start()``, which created a brand-new index whenever none existed - meaning
-    a mere health check could mutate cluster state. Index bootstrapping is an
-    explicit call here instead.
+Constructing this performs NO network call and creates NO index. Index
+    bootstrapping is an explicit call, so that reaching for the client - in a
+    health check, say - cannot mutate cluster state as a side effect.
     """
 
     def __init__(self) -> None:
@@ -104,11 +98,10 @@ class SearchClient:
     ) -> requests.Response:
         """One place where an HTTP call to the cluster is made.
 
-        Every call carries auth, TLS verification and a timeout. The legacy
-        handler branched on ``if self.ssl_context`` in every method and passed
-        ``verify=`` only in the first arm, so an instance with no certificate
-        configured silently used a different verification policy from one that
-        had - and no call anywhere had a timeout.
+        Every call carries authentication, TLS verification and a timeout.
+        Deciding those per method lets the branches disagree - an instance with
+        no certificate configured ends up on a different verification policy from
+        one that has, and neither reports the difference.
         """
         return requests.request(
             method,
@@ -159,10 +152,9 @@ class SearchClient:
         Takes the index *suffix*, like every other method here - see
         ``resolve_index``.
 
-        The legacy handler returned the error body as an ordinary result, so a
-        malformed query or a missing index came back as an empty search rather
-        than a failure - which is why a stray bracket in a search box looked
-        like "no results" in some paths and a 500 in others.
+        A malformed query or a missing index RAISES. Returning the cluster's
+        error body as an ordinary result turns a stray bracket in a search box
+        into "no results", which is the one answer a user will not question.
         """
         index = self.resolve_index(suffix)
         return self._expect_ok(
@@ -174,7 +166,7 @@ class SearchClient:
 
         THE ONLY PLACE AN INDEX NAME IS BUILT. Everything below takes a *suffix*
         (``"resources"``, ``"shapes"``) and resolves it here, so no method can be
-        called with a name that is missing this instance's prefix. See F45.
+        called with a name that is missing this instance's prefix.
         """
         return f"{self.index_prefix}-{suffix}"
 
@@ -230,9 +222,9 @@ class SearchClient:
     def reindex(self, source: str, dest: str) -> dict:
         """Copy one concrete index into another.
 
-        ``wait_for_completion`` is left at its default (true), matching the
-        legacy behaviour: the caller blocks until the copy finishes. This runs
-        inside a Celery task, so the request that started it has long returned.
+        ``wait_for_completion`` is left at its default (true), so the caller
+        blocks until the copy finishes. This runs inside a Celery task, so the
+        request that started it has long since returned.
         """
         body = {"source": {"index": source}, "dest": {"index": dest}}
         return self._expect_ok(
@@ -258,11 +250,11 @@ class SearchClient:
         new numbered index is created, the alias is pointed at it, the old
         contents are copied across and the old index is dropped.
 
-        ORDER MATTERS AND IS NOT THE LEGACY ORDER. The original added the new
-        index to the alias *before* reindexing into it, so for the duration of
-        the copy the alias resolved to two indices - one full, one filling up -
-        and every search served duplicate hits. Here the alias is switched over
-        in a single atomic ``_aliases`` call once the copy is complete, so a
+        ORDER MATTERS. The alias is switched over in a single atomic
+        ``_aliases`` call once the copy is complete. Adding the new index to the
+        alias *before* reindexing into it leaves the alias resolving to two
+        indices for the whole duration of the copy - one full, one filling up -
+        and every search in that window serves duplicate hits. Here a
         search either sees the old index or the new one, never both.
         """
         existing = self.get_alias_indexes(suffix)
@@ -280,8 +272,9 @@ class SearchClient:
 
         if len(existing) != 1:
             # More than one index behind the alias means a previous regeneration
-            # was interrupted. Refuse rather than guess which one is current -
-            # the legacy code created yet another one and left the mess growing.
+            # was interrupted. Refuse rather than guess which one is current:
+            # creating a third leaves the operator with more to untangle, not
+            # less.
             raise SearchUnavailable(
                 f"Alias {alias} resolves to {len(existing)} indices; "
                 "resolve this manually before regenerating"
@@ -346,8 +339,8 @@ class SearchClient:
 
         Returns the ids that FAILED, each with the cluster's reason, rather than
         raising: a single malformed resource must not abandon the other 999 in
-        the batch. The caller decides what a partial failure means - and, unlike
-        the legacy per-document loop, it can actually find out that one happened.
+        the batch. The caller decides what a partial failure means, and can find
+        out that one happened - which a loop discarding each response cannot.
         """
         if not documents:
             return []

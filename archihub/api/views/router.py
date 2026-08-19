@@ -21,7 +21,7 @@ from archihub.api.views import services
 from archihub.core.files import UnsupportedFile, UploadTooLarge
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
     require_role_any,
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/views", tags=["Views"])
 
-require_editor = require_role_any("admin", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS)
+require_editor = require_role_any("admin", "editor")
 
 _RESPONSES = {
     401: {"description": "Missing/invalid token, or not an editor"},

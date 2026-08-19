@@ -13,13 +13,12 @@ is tens of thousands of polygons.
 TWO DEFECTS FIXED HERE, both invisible from outside
 ---------------------------------------------------
 
-**The wrong index was emptied.** ``index_shapes`` wrote its documents to
-``<prefix>-shapes`` and cleared ``shapes`` - a name with no prefix, which on
-every real instance is an index that does not exist. Elasticsearch answered 404,
-the return value was discarded, and the clear silently did nothing. So every
-rerun added a second copy of every boundary to the index instead of replacing
-the first. BACKEND_FINDINGS F45; it is why the port makes ``resolve_index`` the
-only way to name an index.
+**THE INDEX NAME MUST CARRY THE INSTANCE PREFIX, on the clear as well as the
+write.** Writing to ``<prefix>-shapes`` while clearing ``shapes`` targets an
+index that exists on no real instance: Elasticsearch answers 404, the return
+value is discarded, and the clear silently does nothing - so every rerun adds a
+second copy of every boundary instead of replacing the first. This is why
+``resolve_index`` is the only way to name an index.
 
 **Write failures were discarded.** ``index_document``'s response was not looked
 at, so a rejected mapping produced a partially-filled index and a message saying

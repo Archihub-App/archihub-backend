@@ -1,6 +1,6 @@
 """Plugin discovery: one implementation, used by both processes.
 
-The legacy tree discovers plugins TWICE, in two hand-maintained copies:
+Discovery happens ONCE, here. Two hand-maintained copies of it look like:
 
 * ``app/__init__.py:register_plugin()`` - imports ``app.plugins.<slug>``, builds
   the Blueprint, mounts it on Flask.

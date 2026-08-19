@@ -1,28 +1,26 @@
 """The files attached to a resource: listing them, counting them, zipping them.
 
-Shared by the authenticated routes and their public mirrors, because the only
-thing that differs between the two is *which records the caller may see* - and
-that is one parameter, not a second implementation. The legacy code had two
-near-identical copies (``get_resource_records`` / ``get_resource_records_public``)
-that had already drifted apart on exactly that point.
+Shared by the authenticated routes and their public mirrors: the only thing that
+differs between the two is *which records the caller may see*, and that is one
+parameter rather than a second implementation. Two copies of this logic drift,
+and they drift precisely on the visibility rule.
 
-THE BULK DOWNLOAD IS WHERE THE CARE IS NEEDED, for two reasons found in the
-original and recorded as BACKEND_FINDINGS S23 and S24.
+THE BULK DOWNLOAD IS WHERE THE CARE IS NEEDED. It combines the two things that
+are individually dangerous - a filesystem write and an access decision - and the
+public mirror reaches it with no authentication at all. Four rules hold:
 
-* The archive path was built as
-  ``os.path.join(WEB_FILES_PATH, 'zipfiles', user + '-' + body['id'] + '-' + body['type'] + '.zip')``
-  with ``body['type']`` straight from the request. That is a **file write** to
-  wherever the caller points it - verified resolving to ``/tmp/evil.zip`` - and
-  the public route reaches it with no authentication at all.
-* The public archive **included files the caller may not see**. Restricted
-  records had their name blanked but kept their ``filepath``, and the loop wrote
-  by ``filepath``.
-
-The rules here, in consequence: the requested kind indexes a fixed map and never
-becomes part of a path; the archive name is derived from a digest of what goes
-into it; a record the caller cannot see is *excluded*, not renamed; and entry
-names inside the archive are sanitised, since a stored name with ``..`` in it
-would otherwise write outside the extraction directory on whoever opens it.
+* **The requested kind indexes a fixed map and never becomes part of a path.**
+  Joining a request value into the archive filename is a file write to wherever
+  the caller points it.
+* **The archive name is a digest of what goes into it** - the resource, the kind,
+  and the ids it contains. So no client string reaches the path, *and* the name
+  changes when the contents do; caching on a fixed name serves a stale archive
+  for the life of the deployment, long after the files were corrected.
+* **A record the caller may not see is excluded, not renamed.** Blanking a
+  display name while still writing the file by its stored path puts restricted
+  material into an anonymous download.
+* **Entry names inside the archive are sanitised.** A stored name containing
+  ``..`` writes outside the extraction directory on whoever opens it.
 """
 
 from __future__ import annotations
@@ -49,7 +47,7 @@ ZIP_PREFIX = "bundle-"
 #: How long a cached archive may sit before the next request removes it.
 STALE_ZIP_SECONDS = 24 * 60 * 60
 
-#: Placeholder entry the legacy listing appends when images are grouped.
+#: Placeholder entry the listing appends when images are grouped into a gallery.
 GALLERY_ID = "imgGallery"
 
 
@@ -83,8 +81,8 @@ def ordered_file_entries(resource: dict) -> list[dict]:
     """A resource's ``filesObj`` in display order, with gaps filled.
 
     Entries may carry an explicit ``order``; those that do not are assigned the
-    lowest unused position, which is what the original did and what keeps a
-    freshly attached file from jumping to the front of a curated sequence.
+    lowest unused position, so a freshly attached file lands at the end rather
+    than jumping to the front of a sequence someone curated.
     """
     entries = [
         dict(entry)
@@ -178,9 +176,9 @@ def _load_records(ids: list[str], group_images: bool) -> list[dict]:
 def _describe(record: dict, entry: dict, user: str | None, *, public: bool) -> dict:
     """One row of the listing.
 
-    ``filepath`` is never included - not even briefly. The original projected it
-    and then popped it back off, which worked but left the value one missed
-    branch away from the response; here it is not fetched at all.
+    ``filepath`` is never included - not even briefly. It is not fetched at all,
+    rather than fetched and removed before returning: the second shape leaves the
+    value one missed branch away from the response.
     """
     visible = _may_see(record, user, public=public)
     kind = ((record.get("processing") or {}).get("fileProcessing") or {}).get("type")
@@ -266,17 +264,15 @@ def count_images(resource: dict) -> tuple[dict, int]:
 def bulk_download(resource: dict, kind: str, user: str | None, *, public: bool = False):
     """A zip of everything attached to a resource that the caller may have.
 
-    A single file is served directly rather than wrapped in an archive, which is
-    what the original did too.
+    A single file is served directly rather than wrapped in an archive.
     """
     from archihub.api.records import media
 
     if kind not in DOWNLOAD_KINDS:
         raise DownloadRefused(_("Unsupported download type"), 400)
     if not media.downloads_enabled():
-        # Checked for the public route as well. The legacy public route omitted
-        # it entirely, so an archive with downloads switched off still served
-        # them anonymously.
+        # Checked on the public route too. An archive with downloads switched
+        # off must not go on serving them to anonymous callers.
         raise DownloadRefused(_("Files download isn't active"), 400)
 
     entries = ordered_file_entries(resource)
@@ -298,10 +294,9 @@ def bulk_download(resource: dict, kind: str, user: str | None, *, public: bool =
 def _downloadable(entries: list[dict], user: str | None, *, public: bool) -> list[dict]:
     """The records behind these entries that the caller is actually allowed.
 
-    A record they may not see is **left out**. The original kept it in and only
-    blanked its display name, while still writing its bytes into the archive by
-    ``filepath`` - so a public bulk download shipped restricted files under a
-    placeholder name.
+    A record they may not see is **left out**, not included under a blanked
+    name: the archive is written from each record's stored path, so anything that
+    survives this filter ends up in the download whatever it is called.
     """
     object_ids = [oid for oid in (_object_id(e["id"]) for e in entries) if oid is not None]
     if not object_ids:
@@ -326,11 +321,11 @@ def _downloadable(entries: list[dict], user: str | None, *, public: bool) -> lis
 def archive_name(resource_id: str, records: list[dict], kind: str) -> str:
     """A cache filename derived from what the archive will contain.
 
-    Not from the request. Two properties matter and the original had neither:
+    Derived from the contents, never from the request. Two properties follow:
     no client-supplied string reaches the path, and **the name changes when the
-    contents change** - the original cached on a fixed name and served the stale
-    archive forever, so a resource whose files were corrected went on handing
-    out the old set.
+    contents change**. A fixed name would serve the first archive ever built for
+    the life of the deployment, so a resource whose files were corrected would go
+    on handing out the old set.
     """
     digest = hashlib.sha256()
     digest.update(str(resource_id).encode())
@@ -356,10 +351,9 @@ def _archive(resource: dict, records: list[dict], kind: str):
     destination = directory / archive_name(resource_id, records, kind)
 
     if not destination.is_file():
-        # Written under a temporary name and moved into place, so a request that
-        # dies halfway cannot leave a truncated archive to be served as complete
-        # by the next one - which is precisely what the original's
-        # `if not os.path.exists(zippath)` check would have done.
+        # Written under a temporary name and moved into place. A request that
+        # dies halfway would otherwise leave a truncated archive that the next
+        # request finds, judges present, and serves as complete.
         staging = destination.with_suffix(".partial")
         try:
             with zipfile.ZipFile(staging, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -396,8 +390,8 @@ def _entry_name(record: dict, fallback: str) -> str:
     """The name a file gets *inside* the archive.
 
     Sanitised, because a stored name containing ``..`` or a leading ``/`` writes
-    outside the extraction directory on whoever opens the archive. The original
-    passed the stored name through unchanged.
+    outside the extraction directory on whoever opens the archive - the harm
+    lands on the person who downloaded it, not on this server.
     """
     return filestore.secure_name(record.get("name") or fallback) or fallback
 
@@ -438,9 +432,9 @@ def sweep_stale_archives(directory) -> int:
 
 #: Directories under WEB_FILES_PATH holding files this application generated and
 #: can regenerate. An administrator may empty either from the settings screen.
-#: An ALLOWLIST, not a parameter: the value reaches a filesystem path, and the
-#: legacy routes took no argument precisely because there was nothing safe to
-#: pass. Adding a directory here is a deliberate act.
+#: An ALLOWLIST, not a parameter: the value reaches a filesystem path, so there
+#: is no safe way to accept an arbitrary one. Adding a directory is a deliberate
+#: act, made here.
 GENERATED_DIRECTORIES = {
     "zipfiles": "Zip files deleted",
     "inventoryMaker": "Inventory files deleted",
@@ -450,11 +444,11 @@ GENERATED_DIRECTORIES = {
 def delete_generated(directory: str) -> tuple[dict, int]:
     """Empty one of the generated-file directories.
 
-    Only regular files are removed, and only directly inside it: the originals,
-    the web derivatives and the users' own uploads live elsewhere under the same
-    root, and a symlink placed here must not become a way to delete them. The
-    legacy version called ``os.remove`` on every entry, which raised on the
-    first subdirectory and left the rest in place - reported as a 500.
+    Only regular files, and only directly inside the directory. The originals,
+    the web derivatives and users' own uploads live elsewhere under the same
+    root, so a symlink placed here must not become a way to delete them; and
+    calling ``os.remove`` on every entry indiscriminately stops at the first
+    subdirectory, leaving the rest of the clean-up undone.
     """
     from archihub.core.i18n import gettext as _
     from archihub.core.settings import get_settings

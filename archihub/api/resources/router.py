@@ -7,7 +7,7 @@ Not yet ported: create/update/delete/restore, the article editor, file ordering,
 the tree, the record sub-resources, and the public mirror of all of it. Those
 carry the write path and the 11 hook call sites.
 
-Role failures keep the legacy 401 pending the coordinated frontend flip.
+A role failure answers 403; 401 is reserved for "I do not know who you are".
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from archihub.api.resources import article, editing, files, hierarchy, services,
 from archihub.core.files import UnsupportedFile, UploadTooLarge
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
     require_role_any,
@@ -53,7 +53,7 @@ def _respond(result) -> JSONResponse:
 # The editorial routes are gated twice: coarsely here, so a reader never reaches
 # the service at all, and precisely inside it against the specific resource.
 require_editor = require_role_any(
-    "admin", "editor", "super_editor", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "editor", "super_editor"
 )
 
 
@@ -243,7 +243,7 @@ def get_tree(
                 current_user.username, "admin"
             ):
                 return JSONResponse(
-                    status_code=LEGACY_ROLE_FAILURE_STATUS,
+                    status_code=ROLE_FAILURE_STATUS,
                     content={"msg": _("You don't have the required authorization")},
                 )
 
@@ -347,7 +347,7 @@ def change_post_type(
     DESPITE THE NAME, NOTHING IS CHANGED. This is a permission check that was
     never finished; the legacy Swagger already documents it as such and the
     response message is preserved because the frontend displays it. See
-    BACKEND_FINDINGS F25.
+
     """
     return _respond(editing.change_post_type(body, current_user.username))
 

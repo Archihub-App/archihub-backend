@@ -3,8 +3,9 @@
 Port of the read half of ``app/api/records/services.py``. The write half - the
 upload and deduplication path - is in ``storage.py``.
 
-A SYSTEMATIC DEFECT IS FIXED HERE, at every site rather than one of them. Eight
-functions in the original open with:
+ONE GUARD, NOT EIGHT. Every route here starts from the same visibility check, so
+"does not exist" and "you may not see it" cannot collapse into one status. The
+shape to avoid is:
 
     resp_, status = get_by_id(id, current_user)
     if status != 200:
@@ -13,7 +14,7 @@ functions in the original open with:
 so a **404** (no such record) and a **401** (not yours to read) both reach the
 client as **500**. The message survives, the status does not. `upgrade_front`
 branches on status, so a permission failure looked to it like a server fault.
-Recorded as BACKEND_FINDINGS F27; the helper below returns the real status.
+; the helper below returns the real status.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from bson.objectid import ObjectId
 
 from archihub.api.records import access
 from archihub.core.i18n import gettext as _
-from archihub.core.security.jwt import LEGACY_ROLE_FAILURE_STATUS
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ def load_visible(record_id: str, user: str) -> tuple[dict | None, tuple[dict, in
 
     if not access.may_view_record(user, record, has_role(user, "admin")):
         logger.info("Denied %s access to record %s", user, record_id)
-        return None, ({"msg": _(MSG_UNAUTHORIZED)}, LEGACY_ROLE_FAILURE_STATUS)
+        return None, ({"msg": _(MSG_UNAUTHORIZED)}, ROLE_FAILURE_STATUS)
 
     return record, None
 

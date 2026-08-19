@@ -30,7 +30,7 @@ from archihub.api.types import services
 from archihub.api.types.schemas import PostTypeCreate, PostTypeUpdate
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
     require_role_any,
@@ -43,12 +43,12 @@ router = APIRouter(prefix="/types", tags=["Content types"])
 
 MSG_UNAUTHORIZED = "You don't have the required authorization"
 
-# `LEGACY_ROLE_FAILURE_STATUS` is 403 since the coordinated frontend flip; it is
+# `ROLE_FAILURE_STATUS` is 403 since the coordinated frontend flip; it is
 # still passed explicitly because it marks the routes whose status was chosen for
 # legacy-compatibility reasons. See its comment in core/security/jwt.py.
-require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
+require_admin = require_role_any("admin")
 require_admin_or_editor = require_role_any(
-    "admin", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "editor"
 )
 
 
@@ -175,7 +175,7 @@ def get_by_slug(
         )
         if not allowed:
             return JSONResponse(
-                status_code=LEGACY_ROLE_FAILURE_STATUS, content={"msg": _(MSG_UNAUTHORIZED)}
+                status_code=ROLE_FAILURE_STATUS, content={"msg": _(MSG_UNAUTHORIZED)}
             )
 
     result = services.get_by_slug(slug)

@@ -1,13 +1,13 @@
 """Translations, without Flask-Babel.
 
-The legacy app configured Flask-Babel with a ``locale_selector`` that read the
-active language from MongoDB on every request::
+The active language is an instance-wide setting stored in MongoDB, not a
+per-user or per-request choice::
 
     def get_locale():
         user_management = mongodb.get_record('system', {'name': 'user_management'})
         return user_management['data'][2]['value']
 
-Two properties of that make the port simple:
+Two properties of that shape this module:
 
 * The locale is **global to the instance**, not per-user or per-request - it is
   a single system setting. So Celery task bodies can resolve it exactly the same

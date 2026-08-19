@@ -20,7 +20,7 @@ result or a transcript is doing something different, and giving it the same
 entry point would mean widening what a user can submit to that route. So it has
 its own, narrow one.
 
-The narrowness also fixes a lost update. The legacy pattern was:
+The narrowness is what prevents a lost update. The tempting pattern is:
 
 ```python
 update = {'processing': record['processing']}          # read a moment ago
@@ -33,7 +33,7 @@ normal case, since a file is OCR'd and transcribed and thumbnailed by different
 tasks — each write back the whole `processing` block as they last read it, and
 the second silently discards the first's result. ``store_processing_result``
 `$set`s one dotted path instead, the same fix already applied in
-``records/blocks.py``. BACKEND_FINDINGS F49.
+``records/blocks.py``.
 """
 
 from __future__ import annotations
@@ -170,10 +170,9 @@ def broadcast_cache_clear() -> None:
     """Ask the master node to flush its cache.
 
     Fire-and-forget by design — a plugin task must not fail because a peer is
-    unreachable — but with a **timeout**, which the original had not: it was a
-    bare ``requests.get`` inside ``except: pass``, so an unresponsive master
-    held the worker for the full socket timeout and the swallowing handler made
-    that indistinguishable from success. Part of the P2 family.
+    unreachable — but always with a **timeout**. Without one, an unresponsive
+    master holds the worker for the full socket timeout, and a handler that
+    swallows the error makes that wait indistinguishable from success.
     """
     from archihub.core.settings import get_settings
 

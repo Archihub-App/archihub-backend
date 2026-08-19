@@ -2,7 +2,7 @@
 
 Port of ``app/api/users/routes.py``.
 
-Role failures keep the legacy 401 pending the coordinated frontend flip.
+A role failure answers 403; 401 is reserved for "I do not know who you are".
 
 ROUTE ORDER MATTERS HERE. Every literal path (`/me`, `/requests`, `/register`,
 `/favorites`, ...) is declared BEFORE `/{user_id}`, or the parameterised route
@@ -36,7 +36,7 @@ from archihub.api.users.schemas import (
     UserListRequest,
 )
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
     require_role_any,
@@ -48,10 +48,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["Users"])
 
 require_admin_or_editor = require_role_any(
-    "admin", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "editor"
 )
-require_admin = require_role_any("admin", status_code=LEGACY_ROLE_FAILURE_STATUS)
-require_visualizer = require_role_any("visualizer", status_code=LEGACY_ROLE_FAILURE_STATUS)
+require_admin = require_role_any("admin")
+require_visualizer = require_role_any("visualizer")
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
         403: {"description": "Insufficient role"}}

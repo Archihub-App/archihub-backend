@@ -183,7 +183,7 @@ def test_the_content_types_edit_roles_now_apply_to_reordering(mongo):
 
     _payload, status = editing.update_files_order(VALID_ID, {"files": []}, "alice")
 
-    assert status == editing.LEGACY_ROLE_FAILURE_STATUS
+    assert status == editing.ROLE_FAILURE_STATUS
     assert mongo.writes == []
 
 
@@ -203,7 +203,7 @@ def test_an_unreadable_resource_cannot_be_reordered(mongo):
     mongo.type = {"editRoles": [], "viewRoles": []}
 
     _payload, status = editing.update_files_order(VALID_ID, {"files": []}, "alice")
-    assert status == editing.LEGACY_ROLE_FAILURE_STATUS
+    assert status == editing.ROLE_FAILURE_STATUS
 
 
 def test_a_resource_with_no_files_is_not_an_error(mongo):
@@ -352,7 +352,7 @@ def test_a_stranger_cannot_edit_someone_elses_resource(granular):
     _payload, status = editing.update_resource_granular(
         PARENT_A, "metadata.firstLevel.title", "x", "alice"
     )
-    assert status == editing.LEGACY_ROLE_FAILURE_STATUS
+    assert status == editing.ROLE_FAILURE_STATUS
 
 
 def test_a_super_editor_may_edit_anyones_resource(granular, monkeypatch):
@@ -371,7 +371,7 @@ def test_editing_a_published_resource_requires_the_publisher_role(granular):
     _payload, status = editing.update_resource_granular(
         PARENT_A, "metadata.firstLevel.title", "x", "alice"
     )
-    assert status == editing.LEGACY_ROLE_FAILURE_STATUS
+    assert status == editing.ROLE_FAILURE_STATUS
 
 
 def test_a_publisher_may_edit_a_published_resource(granular, monkeypatch):
@@ -392,7 +392,7 @@ def test_an_unreadable_resource_cannot_be_edited(granular):
     _payload, status = editing.update_resource_granular(
         PARENT_A, "metadata.firstLevel.title", "x", "alice"
     )
-    assert status == editing.LEGACY_ROLE_FAILURE_STATUS
+    assert status == editing.ROLE_FAILURE_STATUS
 
 
 def test_a_resource_predating_created_by_does_not_500(granular):
@@ -402,7 +402,7 @@ def test_a_resource_predating_created_by_does_not_500(granular):
     _payload, status = editing.update_resource_granular(
         PARENT_A, "metadata.firstLevel.title", "x", "alice"
     )
-    assert status == editing.LEGACY_ROLE_FAILURE_STATUS
+    assert status == editing.ROLE_FAILURE_STATUS
 
 
 def test_a_hook_returning_a_non_string_is_a_400_not_a_500(granular, monkeypatch):
@@ -486,7 +486,7 @@ def test_the_edit_role_is_required_on_the_target_type_too(reclassify, monkeypatc
 
     _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
 
-    assert status == editing.LEGACY_ROLE_FAILURE_STATUS
+    assert status == editing.ROLE_FAILURE_STATUS
     assert "fondo" in calls
     assert reclassify.writes == []
 
@@ -496,7 +496,7 @@ def test_a_caller_who_cannot_see_the_resource_may_not_reclassify_it(reclassify, 
 
     _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
 
-    assert status == editing.LEGACY_ROLE_FAILURE_STATUS
+    assert status == editing.ROLE_FAILURE_STATUS
     assert reclassify.writes == []
 
 

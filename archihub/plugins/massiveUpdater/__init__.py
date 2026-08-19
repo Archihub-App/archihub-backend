@@ -3,9 +3,8 @@
 Port of ``app/plugins/massiveUpdater/__init__.py``. The counterpart to
 ``inventoryMaker``: an archivist exports a sheet, edits it, and uploads it here.
 
-REWRITTEN, NOT TRANSCRIBED, and the reason is that most of the original could
-not run. Every claim below was verified by reading, and each is recorded in
-BACKEND_FINDINGS F50:
+FOUR THINGS THIS IMPORTER MUST GET RIGHT, each of which fails on a whole
+spreadsheet rather than on one row:
 
 * **Any sheet with a `parent` column killed the whole import.** Line 305 called
   ``get_value_by_path(row['parent'])`` — one argument to a two-argument function.
@@ -28,12 +27,11 @@ preserved exactly is the *file format* — the sheet names, the two-row header
 convention, the column meanings — because that is the contract with the
 spreadsheets already in people's hands.
 
-VALIDATION GOES THROUGH THE SAME PATH A FORM SUBMISSION DOES. The original
-validated field by field and then wrote with ``mongodb.update_record`` directly,
-bypassing the resource write path entirely — so an import could set fields a
-person editing the same resource could not. Here each row is assembled and handed
-to ``resources.write``/``plugins.framework.data``, which apply the content type's
-own rules.
+VALIDATION GOES THROUGH THE SAME PATH A FORM SUBMISSION DOES. Each row is
+assembled and handed to ``resources.write``/``plugins.framework.data``, which
+apply the content type's own rules. Validating field by field and then writing
+with ``update_record`` directly bypasses the resource write path, so an import
+could set fields a person editing the same resource could not.
 """
 
 from __future__ import annotations

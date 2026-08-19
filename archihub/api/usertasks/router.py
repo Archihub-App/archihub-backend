@@ -10,7 +10,7 @@ TWO DISTINCT PERMISSION LEVELS, and the difference matters:
   signing off their own review would defeat the review step, so that check lives
   in the service, which is the only place that sees the requested status.
 
-Role failures keep the legacy 401 pending the coordinated frontend flip.
+A role failure answers 403; 401 is reserved for "I do not know who you are".
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse
 from archihub.api.usertasks import services
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
-    LEGACY_ROLE_FAILURE_STATUS,
+    ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
     require_role_any,
@@ -34,9 +34,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/usertasks", tags=["Review tasks"])
 
-require_lead = require_role_any("admin", "team_lead", status_code=LEGACY_ROLE_FAILURE_STATUS)
+require_lead = require_role_any("admin", "team_lead")
 require_editor_or_lead = require_role_any(
-    "admin", "team_lead", "editor", status_code=LEGACY_ROLE_FAILURE_STATUS
+    "admin", "team_lead", "editor"
 )
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},

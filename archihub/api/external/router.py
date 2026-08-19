@@ -6,10 +6,10 @@ live outside this repository, so a change here is invisible to any audit of
 and response shapes are therefore preserved exactly; the deviations are listed
 below and belong in the operator release notes.
 
-**Deviations from the legacy wire contract, all deliberate:**
+**Deviations from the published wire contract, all deliberate:**
 
 1. `POST /adminApi/get_id` now takes an allowlisted lookup instead of using the
-   whole request body as a Mongo filter (BACKEND_FINDINGS S29). An integration
+   whole request body as a Mongo filter. An integration
    filtering by `ident`, `post_type` or a `metadata.firstLevel.*` field is
    unaffected; one relying on arbitrary Mongo operators will need changing, and
    that is the point.
@@ -20,11 +20,10 @@ below and belong in the operator release notes.
 4. Malformed input that used to produce a 500 (an absent `term`, a resource
    without `metadata`) now produces a 400 or a well-formed 200.
 
-**Availability follows the `api_activation` settings, per request.** The legacy
-app registered these blueprints or not at construction, so switching an API on
-meant restarting every worker; here the routes exist always and answer 404 when
-the instance has that API switched off — the same thing an external caller saw
-before, without the restart.
+**Availability follows the `api_activation` setting, per request.** The routes
+always exist and answer a plain 404 when the instance has that API switched off,
+which is indistinguishable from a missing route. Deciding at construction
+instead would mean restarting every worker to switch an API on.
 """
 
 from __future__ import annotations
@@ -237,7 +236,7 @@ def get_resource_id(
     """Find a published resource by an identifier you already hold.
 
     **The request body is no longer used as a Mongo filter.** It was, verbatim,
-    so a caller could send `{"$where": "..."}` (BACKEND_FINDINGS S29). Lookups by
+    so a caller could send `{"$where": "..."}`. Lookups by
     `ident`, `post_type` or a `metadata.firstLevel.*` field work unchanged.
     """
     if not _enabled(ADMIN_SETTING):
@@ -324,7 +323,7 @@ def plugin_proxy(
     re-entered the WSGI stack through ``current_app.test_client()`` with the
     caller's headers, and copied the inner response's headers out verbatim
     (``Content-Length`` included, which can desynchronise the outer response).
-    BACKEND_FINDINGS S30.
+
 
     Here the named plugin is looked up in the **mounted registry** — so it must
     be active and ported — and the endpoint must match one of that plugin's own
@@ -396,7 +395,7 @@ def list_resources(
 
     A keyword routes to the search index; without one it is an ordinary
     listing. Both are the **public** paths, so neither can be asked for anything
-    but published material — see BACKEND_FINDINGS S28.
+    but published material —
     """
     if not _enabled(PUBLIC_SETTING):
         return _unavailable()
