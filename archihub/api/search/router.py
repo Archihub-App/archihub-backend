@@ -128,8 +128,7 @@ def search(
 
     A requested publication state is honoured only as far as the caller's roles
     allow: drafts need publisher or editor, the recycle bin needs administrator.
-    A content type the caller cannot view is a **401** — the legacy route raised
-    a bare exception that its own caller turned into a 500, which its Swagger
-    documented as the behaviour.
+    A content type the caller cannot view is a **403**: the caller is known and
+    is not permitted, which signing in again does not change.
     """
     return _respond(services.search(body, current_user.username, public=False))

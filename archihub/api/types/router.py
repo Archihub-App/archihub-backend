@@ -84,6 +84,7 @@ def get_all(current_user: CurrentUser = Depends(get_current_user)) -> JSONRespon
 
 @router.post(
     "",
+    status_code=201,
     responses={
         201: {"description": "Content type created"},
         400: {"description": "Name and slug are required, or the slug already exists"},

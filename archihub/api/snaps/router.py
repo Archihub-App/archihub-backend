@@ -69,19 +69,19 @@ def create(
 
 @router.delete(
     "/{snap_id}",
-    status_code=204,
-    responses={204: {"description": "Snap deleted"}, **_RESPONSES},
+    responses={200: {"description": "Snap deleted"}, **_RESPONSES},
 )
 def delete(
     snap_id: str,
     current_user: CurrentUser = Depends(get_current_user),
-) -> Response:
-    """Delete one of your own snaps."""
-    payload, status_code = services.delete(snap_id, current_user.username)
-    if status_code == 204:
-        # 204 means no body, and Starlette raises if one is attached.
-        return Response(status_code=204)
-    return JSONResponse(status_code=status_code, content=payload)
+) -> JSONResponse:
+    """Delete one of your own snaps.
+
+    200 with a message, matching every other delete in this API. See the note
+    on ``forms.delete_by_slug`` for why the rule is uniform rather than
+    per-route.
+    """
+    return _respond(services.delete(snap_id, current_user.username))
 
 
 @router.get(

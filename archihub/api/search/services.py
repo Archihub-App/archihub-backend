@@ -142,8 +142,8 @@ def search(body: dict, user: str | None, *, public: bool) -> tuple[dict, int]:
 
         allowed, error = visible_types(post_types, user)
         if error is not None:
-            # 401 rather than the legacy 500, which its own Swagger documented
-            # as the behaviour: "insufficient role ... lands here with 500".
+            # A refusal, not a failure: the caller is known and may not see
+            # these types. 403 rather than a server error.
             return {"msg": error}, ROLE_FAILURE_STATUS
 
         declared, sortable_text = _declared_fields(allowed)

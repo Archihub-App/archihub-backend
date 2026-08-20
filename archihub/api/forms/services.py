@@ -411,7 +411,7 @@ def delete_by_slug(slug: str, user: str) -> tuple[dict, int]:
         # 204, matching FormService.deleteForm which requires exactly that. The
         # router sends it without a body: HTTP forbids content on a 204, and the
         # client never reads one.
-        return {"msg": _("Form deleted successfully")}, 204
+        return {"msg": _("Form deleted successfully")}, 200
     except Exception as exc:
         logger.exception("Could not delete form %s", slug)
         return {"msg": str(exc)}, 500

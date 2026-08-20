@@ -86,6 +86,7 @@ def get_system_settings() -> JSONResponse:
 
 @router.post(
     "/set-first-time",
+    status_code=201,
     responses={
         201: {"description": "Instance configured; administrator created"},
         400: {"description": "Already configured, or the submitted fields are invalid"},

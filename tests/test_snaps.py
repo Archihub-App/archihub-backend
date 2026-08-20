@@ -297,7 +297,8 @@ def test_deleting_your_own_snap_removes_it(mongo):
 
     payload, status = services.delete(SNAP_ID, "alice")
 
-    assert status == 204
+    assert status == 200
+    assert payload["msg"]
     assert mongo.deleted
 
 

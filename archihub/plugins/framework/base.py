@@ -76,9 +76,9 @@ def require_roles(*roles: str):
     """A role requirement for a plugin route.
 
     Always a dependency, never a call inside a handler — see the module
-    docstring. The legacy 401 is preserved for the same reason as everywhere
-    else in the port (`ROLE_FAILURE_STATUS`); grep that constant for
-    every site awaiting the coordinated frontend flip.
+    docstring. Refusal is `ROLE_FAILURE_STATUS`: 403, because the caller is
+    known and signing in again cannot help. 401 means only "I do not know who
+    you are".
     """
     return require_role_any(*roles)
 
@@ -256,12 +256,15 @@ class ArchiPlugin:
         return {"msg": _("Settings updated")}, 200
 
     def activate_settings(self) -> None:
-        """Register hooks from stored settings. Runs in the worker process only.
+        """Register this plugin's hooks. Called in EVERY process.
 
-        The legacy call site was ``if os.environ.get('CELERY_WORKER', False)``,
-        and this is why: the hooks these register dispatch Celery tasks, and
-        registering them in the web process would mean a resource upload fired
-        the chain from whichever process handled the request.
+        Registering decides whether an event is *noticed*, not where the work
+        runs: ``hooks.call`` turns a registered Celery task into a signature and
+        sends it to the broker, so a worker still executes it. The web process
+        is what raises nearly all of these events - creating a resource,
+        attaching files, editing metadata - so a web process that skipped this
+        would have an empty hook bus, and automatic processing would never
+        start, with a 201 returned and nothing logged.
         """
 
     def build(self) -> APIRouter:

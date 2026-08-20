@@ -106,6 +106,7 @@ def get_record_tasks(
 
 @router.post(
     "",
+    status_code=201,
     responses={201: {"description": "Task assigned"}, 400: {"description": "Invalid, or one is already open"}, **_ROLE_RESPONSES},
 )
 def create_task(

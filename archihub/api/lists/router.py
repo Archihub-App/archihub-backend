@@ -56,6 +56,7 @@ def get_all(current_user: CurrentUser = Depends(require_admin_or_editor)) -> JSO
 
 @router.post(
     "",
+    status_code=201,
     responses={201: {"description": "List created"}, **_ROLE_RESPONSES},
 )
 def create(

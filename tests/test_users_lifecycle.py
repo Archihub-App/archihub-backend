@@ -116,6 +116,15 @@ def test_schema_drops_privilege_fields_from_self_registration():
     assert not hasattr(parsed, "roles")
 
 
+def test_registration_answers_201(mongo, roles):
+    """The route declares 201; the service tuple is what actually sets it."""
+    mongo.records["users"] = None
+    _payload, status = services.register_user(
+        {"username": "a@b.c", "password": "p", "roles": [], "accessRights": []}
+    )
+    assert status == 201
+
+
 def test_passwords_are_hashed_not_stored(mongo, roles):
     mongo.records["users"] = None
     services.register_user(

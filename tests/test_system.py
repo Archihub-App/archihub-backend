@@ -106,6 +106,31 @@ def test_set_first_time_checks_the_password_confirmation(mongo, monkeypatch):
     assert status == 400
 
 
+def test_set_first_time_answers_201(mongo, monkeypatch):
+    """The route declares 201; the service tuple is what actually sets it.
+
+    The account creation itself is stubbed - this pins the status onboarding
+    reports, not the registration path, which `test_users_lifecycle` covers.
+    """
+    import archihub.api.users.services as users_services
+
+    mongo.counts["users"] = 0
+    monkeypatch.setattr(services, "set_system_setting", lambda: None)
+    monkeypatch.setattr(
+        users_services, "register_user", lambda payload: ({"msg": "ok"}, 201)
+    )
+
+    _payload, status = services.set_first_time(
+        {
+            "username": "admin@x.test",
+            "password": "one",
+            "confirmPassword": "one",
+            "typeTemplate": "basic",
+        }
+    )
+    assert status == 201
+
+
 # ---------------------------------------------------------------------------
 # Seeding
 # ---------------------------------------------------------------------------

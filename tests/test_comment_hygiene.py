@@ -99,7 +99,7 @@ def test_no_comment_names_a_finding_identifier():
 #: The number may only go DOWN - lower it as you clear files, and never raise it
 #: to make a new comment pass. The destination is zero, at which point this
 #: becomes a plain `assert not problems` like its neighbour above.
-ARCHAEOLOGY_BUDGET = 355
+ARCHAEOLOGY_BUDGET = 349
 
 
 def test_no_module_docstring_compares_against_an_implementation_that_is_gone():

@@ -188,6 +188,7 @@ def get_snaps(
 
 @router.post(
     "/register",
+    status_code=201,
     responses={201: {"description": "Account created"}, 400: {"description": "Invalid input"}, **_ROLE_RESPONSES},
 )
 def register(
@@ -200,6 +201,7 @@ def register(
 
 @router.post(
     "/register-me",
+    status_code=201,
     responses={
         201: {"description": "Account created, pending verification"},
         400: {"description": "Registration is disabled, or the account exists"},

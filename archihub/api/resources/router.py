@@ -129,6 +129,7 @@ def _write_response(call) -> JSONResponse:
 
 @router.post(
     "",
+    status_code=201,
     responses={
         201: {"description": "Resource created"},
         400: {"description": "Validation failed, or an unusable file"},

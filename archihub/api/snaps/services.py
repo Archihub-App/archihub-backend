@@ -239,7 +239,7 @@ def delete(snap_id: str, user: str) -> tuple[dict, int]:
 
     _mongo().delete_record(COLLECTION, {"_id": ObjectId(snap_id)})
     _audit(user, "snap_delete", {"snap": {"id": snap_id}})
-    return {"msg": _("Snap deleted successfully")}, 204
+    return {"msg": _("Snap deleted successfully")}, 200
 
 
 def list_for_user(user: str, body: dict) -> tuple[dict, int]:

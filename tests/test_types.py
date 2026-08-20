@@ -208,6 +208,17 @@ def test_create_requires_name_and_slug(mongo):
     assert status == 400
 
 
+def test_create_answers_201(mongo):
+    """The status the route DECLARES comes from here: the decorator's
+    ``status_code`` is only a default, and a service tuple overrides it. If this
+    drifts to 200 the published spec keeps promising 201 and no request fails.
+    """
+    _payload, status = services.create(
+        {"name": "Report", "description": "d", "slug": "report-201"}, "admin"
+    )
+    assert status == 201
+
+
 def test_create_does_not_write_an_id(mongo):
     """The legacy model declared a UUID `_id` default that only stayed harmless
     because insert used exclude_unset. Nothing here should emit one - MongoDB

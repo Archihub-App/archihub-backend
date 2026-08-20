@@ -116,7 +116,8 @@ class Settings(BaseSettings):
     celery_beat_refresh_interval: int = Field(
         default=60, validation_alias="CELERY_BEAT_REFRESH_INTERVAL"
     )
-    # Set by start_celery.sh so plugin activate_settings() only runs in workers.
+    # Set by start_celery.sh to mark a worker process. Plugin hook
+    # registration is NOT gated on it - every process registers.
     celery_worker: bool = Field(default=False, validation_alias="CELERY_WORKER")
 
     # ------------------------------------------------------------------

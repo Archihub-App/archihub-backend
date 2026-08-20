@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Body, Depends, Response
+from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 
 from archihub.api.forms import services
@@ -76,6 +76,7 @@ def get_all(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
 
 @router.post(
     "",
+    status_code=201,
     responses={
         201: {"description": "Form created"},
         500: {"description": "Validation failed, or the form conflicts with the combined schema"},
@@ -136,9 +137,8 @@ def update_by_slug(
 
 @router.delete(
     "/{slug}",
-    status_code=204,
     responses={
-        204: {"description": "Form deleted"},
+        200: {"description": "Form deleted"},
         400: {"description": "The form is still used by a content type"},
         404: {"description": "Form not found"},
         **_ROLE_RESPONSES,
@@ -147,21 +147,21 @@ def update_by_slug(
 def delete_by_slug(
     slug: str,
     current_user: CurrentUser = Depends(require_admin),
-):
+) -> JSONResponse:
     """Delete a form, unless a content type still references it.
 
-    Returns a bodyless 204 on success. The legacy handler returned 204 *with* a
-    JSON body, which HTTP forbids; the client reads no body here, so sending
-    none is both correct and compatible.
+    Answers 200 with a message, which is the shape EVERY delete in this API
+    uses. Some deletes here return data a caller can act on - bulk results,
+    remaining counts - so 204 cannot cover all of them, and one uniform rule is
+    worth more than splitting deletes into two classes by whether they happen
+    to have something to say.
     """
-    payload, status_code = services.delete_by_slug(slug, current_user.username)
-    if status_code == 204:
-        return Response(status_code=204)
-    return JSONResponse(status_code=status_code, content=payload)
+    return _respond(services.delete_by_slug(slug, current_user.username))
 
 
 @router.post(
     "/duplicate/{slug}",
+    status_code=201,
     responses={
         201: {"description": "Form duplicated"},
         404: {"description": "Form not found"},

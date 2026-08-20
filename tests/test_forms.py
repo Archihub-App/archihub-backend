@@ -271,13 +271,16 @@ def test_delete_refuses_while_a_content_type_uses_the_form(mongo):
     assert mongo.deleted == []
 
 
-def test_delete_succeeds_with_204_when_unused(mongo):
+def test_delete_succeeds_with_a_message_when_unused(mongo):
+    """Every delete in this API answers 200 with a message, so this one does
+    too - a caller must not have to know which routes carry a body."""
     mongo.records["forms"] = {"name": "F", "slug": "f"}
     mongo.counts["post_types"] = 0
 
-    _payload, status = services.delete_by_slug("f", "admin")
+    payload, status = services.delete_by_slug("f", "admin")
 
-    assert status == 204
+    assert status == 200
+    assert payload["msg"]
     assert mongo.deleted == [("forms", {"slug": "f"})]
 
 
