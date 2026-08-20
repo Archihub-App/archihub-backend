@@ -348,16 +348,34 @@ def _screen_list(declared) -> list[str]:
 
 
 def get_plugins() -> tuple[dict, int]:
-    """Installed plugins and whether each is active."""
+    """Installed plugins and whether each is active.
+
+    The set is read from the plugins directory, never from a list written down
+    in the source. Installing a plugin is documented as copying it into that
+    directory and rebuilding, and this listing is the only screen it can be
+    activated from - so a name this route does not know is a plugin an operator
+    cannot switch on.
+
+    Read statically, without importing: rendering an administration screen must
+    not execute code from every directory that happens to be present, including
+    directories nobody has activated.
+    """
     try:
-        from archihub.plugins.framework.discovery import get_active_plugin_slugs, get_plugin_info
-        from archihub.plugins.framework.ported_registry import PORTED_PLUGINS
+        from archihub.plugins.framework.discovery import (
+            get_active_plugin_slugs,
+            list_installed_plugins,
+            read_manifest,
+        )
 
         active = set(get_active_plugin_slugs())
 
+        # Union rather than the directory alone: a plugin that was deleted from
+        # disk while still switched on has to stay visible, or it becomes
+        # impossible to switch off from here.
         plugins = []
-        for slug in sorted(PORTED_PLUGINS | active):
-            info = get_plugin_info(slug)
+        for slug in sorted(set(list_installed_plugins()) | active):
+            manifest = read_manifest(slug)
+            info = manifest.info
             plugins.append(
                 {
                     "slug": slug,
@@ -379,9 +397,13 @@ def get_plugins() -> tuple[dict, int]:
                     # the difference between "no screens" and "field absent" is
                     # exactly what broke the page.
                     "type": _screen_list(info.get("type")),
-                    # Surfaced so an operator can see why a plugin cannot be
-                    # activated on this backend.
-                    "supported": slug in PORTED_PLUGINS,
+                    # Whether this backend can build the plugin, and if not,
+                    # why. Reported rather than used to hide the row: someone
+                    # who has just installed a plugin needs to be told what is
+                    # wrong with it, which is more useful than its absence.
+                    "supported": manifest.mountable,
+                    "installed": manifest.installed,
+                    "problem": manifest.problem,
                 }
             )
         # Wrapped, not bare: `SystemService.getListPlugins`'s two callers both
@@ -399,20 +421,30 @@ def set_plugin_active(slug: str, active: bool, current_user: str) -> tuple[dict,
     written: the setting would take effect at the next restart and the instance
     would then fail to start.
     """
-    from archihub.plugins.framework.discovery import _validate_slug
-    from archihub.plugins.framework.ported_registry import PORTED_PLUGINS
+    from archihub.plugins.framework.discovery import _validate_slug, read_manifest
 
     try:
         _validate_slug(slug)
     except Exception:
         return {"msg": _("Invalid plugin")}, 400
 
-    if active and slug not in PORTED_PLUGINS:
-        return {
-            "msg": _(
-                "This plugin is not supported by this backend yet and cannot be activated"
-            )
-        }, 400
+    # Only ACTIVATION is gated. Switching a plugin off has to keep working
+    # whatever state it is in - a plugin this backend cannot build is exactly
+    # the one an operator needs to deactivate, and refusing that leaves editing
+    # the settings document by hand as the only way out.
+    if active:
+        manifest = read_manifest(slug)
+        if not manifest.installed:
+            return {"msg": _("This plugin is not installed on this instance")}, 404
+        if not manifest.mountable:
+            return {
+                "msg": _(
+                    "This plugin is not supported by this backend yet and cannot be activated"
+                ),
+                # The generic message is what the interface shows; the specific
+                # one is what makes it actionable.
+                "detail": manifest.problem,
+            }, 400
 
     mongo = _mongo()
     record = mongo.get_record(COLLECTION, {"name": "active_plugins"}) or {}
@@ -435,26 +467,25 @@ def set_plugin_active(slug: str, active: bool, current_user: str) -> tuple[dict,
 
 
 def toggle_plugin(slug: str, current_user: str) -> tuple[dict, int]:
-    """Flip a plugin's activation, refusing an unknown slug.
+    """Flip a plugin's activation, refusing a slug that is not installed.
 
-    Existence is decided against the plugins this backend can actually mount,
-    not against the directories present on disk - otherwise a plugin can be
-    switched on that the application will refuse to load. The check happens
-    before the write, in both directions.
+    Existence is a question about the plugins directory. Whether the plugin can
+    be *mounted* is a different question, asked by ``set_plugin_active`` and
+    only in the activating direction - so this route can always switch one off.
     """
-    from archihub.plugins.framework.discovery import _validate_slug
-    from archihub.plugins.framework.ported_registry import PORTED_PLUGINS
+    from archihub.plugins.framework.discovery import _validate_slug, is_installed
 
     try:
         _validate_slug(slug)
     except Exception:
         return {"msg": _("Plugin does not exist")}, 404
 
-    if slug not in PORTED_PLUGINS:
-        return {"msg": _("Plugin does not exist")}, 404
-
     record = get_setting("active_plugins") or {}
     currently_active = slug in (record.get("data") or [])
+
+    if not currently_active and not is_installed(slug):
+        return {"msg": _("Plugin does not exist")}, 404
+
     return set_plugin_active(slug, not currently_active, current_user)
 
 

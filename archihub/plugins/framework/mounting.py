@@ -68,8 +68,7 @@ def build_plugin(slug: str):
 def mount_plugins(app: FastAPI, slugs: list[str] | None = None) -> dict:
     """Build and mount every active, ported plugin. Returns what mounted."""
     from archihub.core.routing import include_router
-    from archihub.plugins.framework.discovery import get_active_plugin_slugs
-    from archihub.plugins.framework.ported_registry import is_ported
+    from archihub.plugins.framework.discovery import get_active_plugin_slugs, is_mountable
 
     _mounted.clear()
     _failed.clear()
@@ -82,7 +81,7 @@ def mount_plugins(app: FastAPI, slugs: list[str] | None = None) -> dict:
             return {}
 
     for slug in slugs:
-        if not is_ported(slug):
+        if not is_mountable(slug):
             # Not an error here: the startup guard has already decided whether
             # this instance may run at all, and in bypass mode it deliberately
             # may. Logged there, once, rather than again per plugin.

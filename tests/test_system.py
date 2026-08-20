@@ -183,13 +183,46 @@ def test_settings_lookup_prefers_id_over_position(mongo):
 # ---------------------------------------------------------------------------
 
 
-def test_activating_an_unsupported_plugin_is_refused(mongo):
+def test_activating_a_plugin_that_is_not_installed_is_refused(mongo):
     """The change would only take effect at the next restart, and the instance
     would then refuse to start."""
     payload, status = services.set_plugin_active("ocrProcessing", True, "admin")
 
-    assert status == 400
+    assert status == 404
     assert mongo.updated == []
+
+
+def test_activating_an_installed_plugin_this_backend_cannot_build_is_refused(mongo, tmp_path, monkeypatch):
+    """A different refusal from the one above, and deliberately so: one is
+    solved by installing the plugin, the other by adapting it. The reply
+    carries the specific reason beside the message the interface shows."""
+    monkeypatch.setattr("archihub.plugins.framework.discovery.PLUGIN_ROOT", tmp_path)
+    package = tmp_path / "someLegacyPlugin"
+    package.mkdir()
+    package.joinpath("__init__.py").write_text('plugin_info = {"name": "x"}\n')
+
+    payload, status = services.set_plugin_active("someLegacyPlugin", True, "admin")
+
+    assert status == 400
+    assert "build()" in payload["detail"]
+    assert mongo.updated == []
+
+
+def test_activating_a_plugin_copied_into_the_directory_works(mongo, tmp_path, monkeypatch):
+    """The reason the check is a directory scan: an operator installs a plugin
+    and it becomes activatable, with no change to this backend's source."""
+    monkeypatch.setattr("archihub.plugins.framework.discovery.PLUGIN_ROOT", tmp_path)
+    package = tmp_path / "brandNewPlugin"
+    package.mkdir()
+    package.joinpath("__init__.py").write_text(
+        'plugin_info = {"name": "x"}\n\n\ndef build():\n    return object()\n'
+    )
+
+    payload, status = services.set_plugin_active("brandNewPlugin", True, "admin")
+
+    assert status == 200
+    _collection, _filters, update = mongo.updated[0]
+    assert update["data"] == ["brandNewPlugin"]
 
 
 def test_deactivating_is_always_allowed(mongo):
@@ -207,6 +240,68 @@ def test_deactivating_is_always_allowed(mongo):
 def test_a_malformed_plugin_slug_is_rejected(mongo):
     payload, status = services.set_plugin_active("../../etc/passwd", True, "admin")
     assert status == 400
+
+
+# ---------------------------------------------------------------------------
+# toggle_plugin - `GET /system/plugins/{slug}`, the ONLY path the admin table
+# uses. `PluginsResults.tsx`'s switch calls `SystemService.setActivePlugin`,
+# which ignores the checkbox value and asks the backend to flip the state.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def installed(tmp_path, monkeypatch):
+    """A plugins directory the toggle route resolves names against."""
+    monkeypatch.setattr("archihub.plugins.framework.discovery.PLUGIN_ROOT", tmp_path)
+
+    def install(slug, mountable=True):
+        package = tmp_path / slug
+        package.mkdir(parents=True, exist_ok=True)
+        source = 'plugin_info = {"name": "x"}\n'
+        if mountable:
+            source += "\n\ndef build():\n    return object()\n"
+        package.joinpath("__init__.py").write_text(source)
+
+    return install
+
+
+def test_toggling_on_a_plugin_that_was_only_just_installed(mongo, installed):
+    installed("brandNewPlugin")
+
+    payload, status = services.toggle_plugin("brandNewPlugin", "admin")
+
+    assert status == 200
+    _collection, _filters, update = mongo.updated[0]
+    assert update["data"] == ["brandNewPlugin"]
+
+
+def test_toggling_an_unknown_plugin_on_is_a_404(mongo, installed):
+    payload, status = services.toggle_plugin("neverHeardOfIt", "admin")
+
+    assert status == 404
+    assert mongo.updated == []
+
+
+def test_toggling_an_active_plugin_OFF_works_even_when_it_is_not_installed(mongo, installed):
+    """This is the remedy for an instance that will not start, so it must never
+    depend on the plugin being loadable - the case where it is needed is exactly
+    the case where it is not."""
+    mongo.records["system"] = {"name": "active_plugins", "data": ["ocrProcessing"]}
+
+    payload, status = services.toggle_plugin("ocrProcessing", "admin")
+
+    assert status == 200
+    _collection, _filters, update = mongo.updated[0]
+    assert update["data"] == []
+
+
+def test_toggling_on_a_plugin_this_backend_cannot_build_is_refused(mongo, installed):
+    installed("someLegacyPlugin", mountable=False)
+
+    payload, status = services.toggle_plugin("someLegacyPlugin", "admin")
+
+    assert status == 400
+    assert mongo.updated == []
 
 
 # ---------------------------------------------------------------------------

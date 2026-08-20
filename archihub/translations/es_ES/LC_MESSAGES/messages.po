@@ -351,6 +351,9 @@ msgstr "Se agregó la tarea a la fila de procesamientos. Puedes revisar en tu pe
 msgid "This dialect requires a base URL"
 msgstr "Este dialecto requiere una URL base"
 
+msgid "This plugin is not installed on this instance"
+msgstr "Este plugin no está instalado en esta instancia"
+
 msgid "This plugin is not supported by this backend yet and cannot be activated"
 msgstr "Este plugin aún no es compatible con este backend y no se puede activar"
 

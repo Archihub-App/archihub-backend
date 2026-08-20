@@ -111,9 +111,9 @@ def _init_worker(**_kwargs) -> None:
     configure_logging(level="DEBUG" if settings.is_dev else "INFO", json_output=not settings.is_dev)
 
     try:
-        from archihub.plugins.framework.discovery import assert_active_plugins_are_ported
+        from archihub.plugins.framework.discovery import assert_active_plugins_are_mountable
 
-        assert_active_plugins_are_ported()
+        assert_active_plugins_are_mountable()
     except Exception:
         # Log before re-raising: Celery's own startup error reporting is terse,
         # and the guard's message is the actionable part.
