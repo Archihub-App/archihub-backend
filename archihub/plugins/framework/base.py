@@ -206,7 +206,14 @@ class ArchiPlugin:
         floor, so required fields were never actually required. A caller here has to do
         something with a string.
         """
-        if group == "bulk" and "post_type" not in body:
+        if group == "bulk" and not body.get("records") and not body.get("post_type"):
+            # A bulk group is selected EITHER by an explicit record list or by a
+            # content type. Both are real entry points: the processing screens
+            # send `post_type`, and a plugin action on the record detail screen
+            # sends `records` for the one record being looked at. Demanding
+            # `post_type` unconditionally refuses every record-level action -
+            # which the caller sees as a 400 with a message about content types
+            # it never had the chance to choose.
             return _("No content type was specified")
 
         for setting in self.settings.get(f"settings_{group}") or []:

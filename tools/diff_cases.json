@@ -1636,6 +1636,31 @@
       "auth": false,
       "expect_status": 401,
       "_note": "Each plugin declares its own routes, so the guard is asserted per plugin rather than assumed from the framework - S32 was 21 call sites that each looked fine on their own."
+    },
+    {
+      "name": "plugins: massiveUpdater settings need a role",
+      "method": "GET",
+      "path": "/massiveUpdater/settings/all",
+      "auth": false,
+      "expect_status": 401,
+      "_note": [
+        "CONTRACT. The settings routes every plugin gets for free were the only",
+        "reachable plugin GETs with no case at all - a read, so the harness can",
+        "fire it, unlike the plugin's write routes."
+      ]
+    },
+    {
+      "name": "plugins: massiveUpdater result download needs a role",
+      "method": "GET",
+      "path": "/massiveUpdater/filedownload/000000000000000000000000",
+      "auth": false,
+      "expect_status": 401,
+      "_note": [
+        "CONTRACT, and the guard is what matters: the task id is deliberately one",
+        "that does not exist, so a 401 proves the role is resolved BEFORE the task",
+        "is looked up. A 404 here would mean an anonymous caller can probe which",
+        "task ids exist."
+      ]
     }
   ],
   "_expected_differences": [

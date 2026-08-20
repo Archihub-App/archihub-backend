@@ -17,10 +17,20 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from archihub.plugins.framework import interop
+from archihub.plugins.framework import discovery
 from archihub.plugins.framework.base import ArchiPlugin, translate_display
 from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
-PLUGINS = ("scheduleSystemTasks", "liquidText", "filesProcessing", "inventoryMaker", "massiveUpdater")
+#: READ FROM DISK, never written down. A plugin directory copied in is
+#: activatable the moment it is there, so the guards below - every route's role
+#: is a dependency, no handler checks a role itself - have to cover it without
+#: anyone remembering to add its name here. A hardcoded list silently exempts
+#: exactly the plugins nobody has reviewed yet.
+PLUGINS = tuple(
+    slug
+    for slug in discovery.list_installed_plugins()
+    if discovery.is_mountable(slug)
+)
 
 
 @pytest.fixture(autouse=True)
@@ -142,6 +152,48 @@ def test_the_scheduler_capability_is_declared_where_beat_looks_for_it():
     from archihub.plugins.scheduleSystemTasks import plugin_info
 
     assert "scheduler" in plugin_info["capabilities"]
+
+
+# ---------------------------------------------------------------------------
+# A bulk selection has two shapes, and both are real
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("slug", PLUGINS)
+def test_a_bulk_group_accepts_an_explicit_record_selection(slug):
+    """The record detail screen sends `records`, not `post_type`.
+
+    A plugin action offered at `detail_record` acts on the one record being
+    looked at, so the payload the frontend builds is
+    `{records: [id], opts: {...}}` with no content type in it - the user was
+    never asked for one. Demanding `post_type` here refuses every record-level
+    action with a message about a field the screen does not have.
+    """
+    plugin = build(slug)
+    if not plugin.settings.get("settings_bulk"):
+        pytest.skip(f"{slug} declares no bulk settings group")
+
+    assert plugin.validate_settings_fields({"records": ["abc"], "opts": {}}, "bulk") is None
+
+
+@pytest.mark.parametrize("slug", PLUGINS)
+def test_a_bulk_group_still_accepts_a_content_type_selection(slug):
+    """The other entry point: the processing screens select by content type."""
+    plugin = build(slug)
+    if not plugin.settings.get("settings_bulk"):
+        pytest.skip(f"{slug} declares no bulk settings group")
+
+    assert plugin.validate_settings_fields({"post_type": "document"}, "bulk") is None
+
+
+@pytest.mark.parametrize("slug", PLUGINS)
+def test_a_bulk_group_with_neither_is_refused(slug):
+    """Neither shape means nothing was selected, which is a real 400."""
+    plugin = build(slug)
+    if not plugin.settings.get("settings_bulk"):
+        pytest.skip(f"{slug} declares no bulk settings group")
+
+    assert plugin.validate_settings_fields({"opts": {}}, "bulk") is not None
 
 
 # ---------------------------------------------------------------------------

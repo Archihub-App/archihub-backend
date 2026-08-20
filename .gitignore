@@ -19,6 +19,20 @@ requirements.txt.bak
 !/app/plugins/liquidText
 !/app/plugins/scheduleSystemTasks
 
+# Same rule for the FastAPI plugins folder. An installed plugin is a directory
+# copied in - often a clone with its own .git, its own licence and its own
+# author - so the default has to be "not ours to commit". Only the five that
+# ship with the backend, plus the framework and the package marker, are tracked.
+/archihub/plugins/*
+
+!/archihub/plugins/__init__.py
+!/archihub/plugins/framework
+!/archihub/plugins/filesProcessing
+!/archihub/plugins/inventoryMaker
+!/archihub/plugins/massiveUpdater
+!/archihub/plugins/liquidText
+!/archihub/plugins/scheduleSystemTasks
+
 /app/utils/geo/*
 
 /skills/*

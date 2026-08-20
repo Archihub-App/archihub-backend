@@ -15,6 +15,20 @@ the two can disagree indefinitely.
 Import name to distribution name is resolved from installed metadata
 (`packages_distributions`) rather than a hand-written table, so it cannot drift.
 A module that cannot be resolved is REPORTED rather than skipped silently.
+
+THERE ARE TWO MANIFESTS, because there are two install layers. The backend's own
+dependencies are `pyproject.toml`'s `[project].dependencies`. A **plugin** adds
+its dependencies in its OWN `requirements.txt`, beside its package - that file is
+the published contract with third-party plugin authors, who ship a directory and
+expect the image build to install what it declares. Checking a plugin's imports
+against the backend manifest would demand that every plugin's dependencies be
+core dependencies, which defeats the point of a plugin being separately
+installable.
+
+So a plugin import must be satisfied by the core manifest OR by that plugin's
+own requirements.txt. A VCS requirement must carry `#egg=<distribution>`: the
+distribution name is not derivable from a git URL, so without it the declaration
+cannot be checked and is reported rather than assumed good.
 """
 
 from __future__ import annotations
@@ -49,6 +63,44 @@ def _declared() -> set[str]:
     for spec in data["project"]["dependencies"]:
         names.add(_normalise(re.split(r"[<>=!~\[; ]", spec, maxsplit=1)[0]))
     return names
+
+
+PLUGIN_ROOT = PACKAGE_ROOT / "plugins"
+
+#: Directories under the plugin root that are part of the backend, not plugins.
+PLUGIN_RESERVED = {"framework", "__pycache__"}
+
+
+def _plugin_of(path: pathlib.Path) -> str | None:
+    """The plugin a file belongs to, or None for core code."""
+    try:
+        relative = path.relative_to(PLUGIN_ROOT)
+    except ValueError:
+        return None
+    slug = relative.parts[0] if len(relative.parts) > 1 else None
+    return slug if slug and slug not in PLUGIN_RESERVED else None
+
+
+def _plugin_declared(slug: str) -> tuple[set[str], list[str]]:
+    """One plugin's declared distributions, and the lines that could not be read."""
+    manifest = PLUGIN_ROOT / slug / "requirements.txt"
+    if not manifest.is_file():
+        return set(), []
+
+    names: set[str] = set()
+    unreadable: list[str] = []
+    for raw in manifest.read_text().splitlines():
+        line = raw.split("#egg=")[0].strip() if "#egg=" in raw else raw.strip()
+        if "#egg=" in raw:
+            names.add(_normalise(raw.split("#egg=")[1].strip()))
+            continue
+        if not line or line.startswith(("#", "-")):
+            continue
+        if line.startswith(("git+", "http://", "https://")):
+            unreadable.append(raw.strip())
+            continue
+        names.add(_normalise(re.split(r"[<>=!~\[; ]", line, maxsplit=1)[0]))
+    return names, unreadable
 
 
 def _imported() -> dict[str, set[str]]:
@@ -90,20 +142,76 @@ def test_every_imported_module_resolves_to_a_distribution():
 
 
 def test_every_runtime_import_is_a_runtime_dependency():
+    """The BACKEND's imports. Plugin packages are checked separately, below."""
     problems = []
     for module, files in sorted(IMPORTED.items()):
+        core_files = [f for f in files if _plugin_of(REPO_ROOT / f) is None]
+        if not core_files:
+            continue
         dists = {_normalise(d) for d in DISTRIBUTIONS.get(module, [])}
         if not dists or dists & DECLARED:
             continue
-        where = sorted(files)[:3]
         problems.append(
-            f"  {module} (from {', '.join(sorted(dists))}) imported by {', '.join(where)}"
+            f"  {module} (from {', '.join(sorted(dists))}) imported by "
+            f"{', '.join(sorted(core_files)[:3])}"
         )
 
     assert not problems, (
         "Imported at runtime but not in [project].dependencies. A dev-only or "
         "transitive declaration is not enough - the app must start from a "
         "production install:\n" + "\n".join(problems)
+    )
+
+
+def _installed_plugins() -> list[str]:
+    return sorted(
+        d.name
+        for d in PLUGIN_ROOT.iterdir()
+        if d.is_dir() and d.name not in PLUGIN_RESERVED and (d / "__init__.py").is_file()
+    )
+
+
+def test_every_plugin_declares_the_dependencies_it_imports():
+    """A plugin's extras live in its own requirements.txt, beside its package.
+
+    This is the file a third-party plugin ships and the image build installs.
+    A plugin that imports something declared nowhere installs fine and then
+    fails at the first task that touches it - inside a worker, as a failed job.
+    """
+    problems = []
+    for slug in _installed_plugins():
+        declared, _unreadable = _plugin_declared(slug)
+        allowed = DECLARED | declared
+        for module, files in sorted(IMPORTED.items()):
+            if not any(_plugin_of(REPO_ROOT / f) == slug for f in files):
+                continue
+            dists = {_normalise(d) for d in DISTRIBUTIONS.get(module, [])}
+            if not dists or dists & allowed:
+                continue
+            problems.append(
+                f"  {slug}: imports {module} (from {', '.join(sorted(dists))}) "
+                f"- add it to archihub/plugins/{slug}/requirements.txt"
+            )
+
+    assert not problems, (
+        "Plugin imports that no manifest declares:\n" + "\n".join(problems)
+    )
+
+
+def test_a_vcs_requirement_names_its_distribution():
+    """`git+https://...` alone cannot be checked against an import.
+
+    pip is happy either way, so the omission is invisible until someone asks
+    whether the declaration matches the code - which is what this file does.
+    """
+    problems = []
+    for slug in _installed_plugins():
+        _declared_names, unreadable = _plugin_declared(slug)
+        for line in unreadable:
+            problems.append(f"  {slug}: {line}  -> append #egg=<distribution>")
+
+    assert not problems, (
+        "VCS requirements with no declared distribution name:\n" + "\n".join(problems)
     )
 
 
