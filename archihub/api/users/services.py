@@ -431,7 +431,7 @@ def get_favorites(username: str, body: dict) -> tuple[dict | list, int]:
         record["view"] = (by_id.get(record_id) or {}).get("view")
         resolved.append(record)
 
-    return {"total": total, "resources": resolved}, 200
+    return {"total": total, "results": resolved}, 200
 
 
 # ---------------------------------------------------------------------------

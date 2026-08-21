@@ -202,3 +202,41 @@ def test_absent_profile_is_400_not_500(mongo):
     mongo.records["users"] = None
     _payload, status = services.get_profile("ghost")
     assert status == 400
+
+
+# ---------------------------------------------------------------------------
+# The response shape
+# ---------------------------------------------------------------------------
+
+
+def test_the_list_is_returned_under_results(mongo):
+    """`FavoriteMain.tsx` does `setFavorites(response.results)` and then reads
+    `favorites.length` unguarded, so any other key is an uncaught TypeError on
+    the profile screen - reported as a 200 by every status assertion.
+
+    `SidebarFavorites.tsx` reads the same key behind an `Array.isArray` guard,
+    where the same mistake shows up as an article editor whose favourites
+    sidebar is permanently empty.
+    """
+    mongo.records["users"] = {"favorites": [{"type": "resources", "id": VALID_ID, "view": "grid"}]}
+    mongo.collections["resources"] = [
+        {"_id": ObjectId(VALID_ID), "metadata": {"firstLevel": {"title": "A title"}}}
+    ]
+
+    payload, status = services.get_favorites("alice", {"type": "resources", "page": 0})
+
+    assert status == 200
+    assert set(payload) == {"total", "results"}
+    assert payload["total"] == 1
+    assert payload["results"][0]["id"] == VALID_ID
+    assert payload["results"][0]["view"] == "grid"
+
+
+def test_an_empty_list_is_still_a_list(mongo):
+    """Not `None` and not a missing key: the screen indexes it either way."""
+    mongo.records["users"] = {"favorites": []}
+
+    payload, _status = services.get_favorites("alice", {"type": "records", "page": 0})
+
+    assert payload["results"] == []
+    assert payload["total"] == 0

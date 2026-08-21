@@ -318,10 +318,45 @@
       "auth": true
     },
     {
-      "name": "users: favorites list",
+      "name": "users: favorites list, missing type",
       "method": "POST",
       "path": "/users/favorites_list",
       "body": {
+        "page": 0
+      },
+      "auth": true
+    },
+    {
+      "_comment": [
+        "The case above omits `type`, so BOTH stacks refuse it and no success",
+        "body is ever compared. That is how the payload key silently changed",
+        "name here. Send each valid type as well, so the shape is diffed."
+      ],
+      "name": "users: favorites list, resources",
+      "method": "POST",
+      "path": "/users/favorites_list",
+      "body": {
+        "type": "resources",
+        "page": 0
+      },
+      "auth": true
+    },
+    {
+      "name": "users: favorites list, records",
+      "method": "POST",
+      "path": "/users/favorites_list",
+      "body": {
+        "type": "records",
+        "page": 0
+      },
+      "auth": true
+    },
+    {
+      "name": "users: favorites list, snaps",
+      "method": "POST",
+      "path": "/users/favorites_list",
+      "body": {
+        "type": "snaps",
         "page": 0
       },
       "auth": true
@@ -1672,7 +1707,7 @@
     "-- the port returns the right code where legacy faults --",
     "  types: unknown slug            legacy 500 -> 404",
     "  users: unknown id              legacy 500 (leaks the bson InvalidId text) -> 404",
-    "  users: favorites list          legacy 500 (KeyError 'type') -> 422",
+    "  users: favorites list, missing type   legacy 500 (KeyError 'type') -> 422",
     "  lists: unknown id              legacy 200 carrying a 500-shaped body -> 404",
     "  logs: list                     legacy 500 -> 200",
     "  tasks: list                    legacy 500 (the handler returns None, which",
