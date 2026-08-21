@@ -1,7 +1,5 @@
 """inventoryMaker — export the catalogue as spreadsheets.
 
-Port of ``app/plugins/inventoryMaker/__init__.py`` and its ``services.py``.
-
 Four exports, all queued: resources (with their files), controlled vocabularies,
 metadata standards, and content types. Plus one **unauthenticated** route that
 exports a public view's resources synchronously.

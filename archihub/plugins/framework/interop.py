@@ -1,16 +1,9 @@
 """Capabilities one plugin provides to another.
 
-There is exactly one such dependency among the five in scope. Expressed as a
-direct import across plugin package boundaries it would read:
-
-```python
-try:
-    from app.plugins.filesProcessing.utils.DocumentProcessing import convert_to_pdf_with_libreoffice
-except Exception as e:
-    raise Exception('Error al importar el módulo del plugin para el procesamiento de documentos: ' + str(e))
-```
-
-Three things are wrong with that, and only the third is obvious:
+``liquidText`` needs LibreOffice conversion, which lives in ``filesProcessing``.
+The obvious way to express that is a direct import of the providing plugin's
+helper across package boundaries. Three things are wrong with doing it that way,
+and only the third is obvious:
 
 1. It couples ``liquidText`` to ``filesProcessing``'s *internal file layout*.
    Moving a helper inside filesProcessing breaks a different plugin.

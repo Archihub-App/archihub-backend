@@ -51,7 +51,9 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class IndexSpec:
     collection: str
-    keys: list[tuple[str, int]]
+    # The second element is normally a sort direction, but a geospatial index
+    # names its type there instead ("2dsphere").
+    keys: list[tuple[str, int | str]]
     name: str
     unique: bool = False
     sparse: bool = False
@@ -270,6 +272,36 @@ INDEXES: list[IndexSpec] = [
         keys=[("term", ASC)],
         name="ix_options_term",
         reason="List option lookup by term.",
+    ),
+    # --------------------------------------------------------------- shapes
+    # The administrative boundaries behind the explore map. The collection is
+    # empty until the boundaries are loaded, which is why it went unnoticed:
+    # an unindexed scan over nothing costs nothing.
+    IndexSpec(
+        collection="shapes",
+        keys=[("geometry", "2dsphere")],
+        name="ix_shapes_geometry",
+        # A 2dsphere build FAILS if any single document holds geometry it
+        # cannot index, and published boundary sets do contain self-intersecting
+        # rings - so the loader repairs geometry before storing it. Tolerated
+        # here because one unrepairable boundary must not stop the instance
+        # starting; the query still works, it just scans.
+        tolerate_failure=True,
+        reason=(
+            "Every map viewport query filters with $geoIntersects. Without this "
+            "each one scans the whole collection, parsing polygons that carry "
+            "thousands of coordinate pairs."
+        ),
+    ),
+    IndexSpec(
+        collection="shapes",
+        keys=[("properties.admin_level", ASC), ("properties.parent", ASC), ("properties.name", ASC)],
+        name="ix_shapes_level_parent_name",
+        reason=(
+            "The map's drill-down: boundaries at one administrative level, "
+            "optionally under one parent, sorted by level then name. Equality "
+            "then sort, so the same index serves the level-only query too."
+        ),
     ),
 ]
 

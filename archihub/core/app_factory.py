@@ -148,7 +148,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # writing. See archihub/api/search/write_hooks.py.
     _register_index_hooks()
 
+    # Last, so nothing can stop this process before it is able to serve.
+    _start_restart_monitor()
+
     return app
+
+
+def _start_restart_monitor() -> None:
+    """Watch for a restart requested by another process. Never fatal.
+
+    Activation changes are written by whichever process handled the request, so
+    without this a plugin switched on from the admin screen would take effect in
+    the web container and nowhere else - the workers would keep running the
+    previous set until somebody restarted them by hand.
+    """
+    from archihub.core.runtime_restart import start_runtime_restart_monitor
+
+    try:
+        start_runtime_restart_monitor()
+    except Exception:
+        logger.exception("Could not start the restart monitor; restarts will need to be manual")
 
 
 def _register_index_hooks() -> None:

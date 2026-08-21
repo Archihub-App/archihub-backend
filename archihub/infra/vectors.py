@@ -1,7 +1,5 @@
 """Qdrant vector database access.
 
-Port of ``app/utils/VectorDatabaseHandler.py``.
-
 FOUR THINGS THIS PATH MUST GET RIGHT, each of which fails silently rather than
 loudly (PLAN_FASTAPI.md section 4):
 

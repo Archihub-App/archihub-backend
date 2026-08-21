@@ -9,7 +9,7 @@ authors = [{ name = "BITSOL", email = "contact@bit-sol.com.co" }]
 
 # NOTE ON PINNING (see PLAN_FASTAPI.md section 9)
 # ----------------------------------------------
-# The previous requirements.txt had ZERO version constraints on ANY package, so
+# The requirements.txt this replaced had ZERO version constraints on ANY package, so
 # two deployments building on different days could end up on different versions
 # of everything. Reproducibility here comes from `uv.lock` (exact, hash-pinned,
 # committed), while this file declares the compatible ranges uv resolves within.
@@ -126,39 +126,9 @@ dependencies = [
 
     # --- i18n ---
     # Babel provides the .po/.mo tooling (compile_translations.sh). The runtime
-    # translator is stdlib `gettext` via archihub/core/i18n.py, so flask-babel is NOT
-    # needed by the FastAPI stack - only by the legacy Flask app below.
+    # translator is stdlib `gettext` via archihub/core/i18n.py, so no web
+    # framework's i18n integration is involved.
     "Babel>=2.16,<3.0",
-
-    # ------------------------------------------------------------------
-    # LEGACY-ONLY: delete this entire block together with app/.
-    # ------------------------------------------------------------------
-    # Every entry here was checked against the ported package and is imported
-    # ZERO times anywhere under archihub/ - by the core, by the worker, or by
-    # any of the five plugins. They keep the old stack runnable so the diff
-    # harness has a reference implementation; nothing else depends on them.
-    #
-    # Re-derive before deleting, rather than trusting this comment:
-    #   for m in flask werkzeug flasgger cv2 pytesseract topojson strgen \
-    #            openai aisuite tiktoken; do \
-    #     echo "$m: $(grep -rni "$m" archihub/ | wc -l)"; done
-    #
-    "flask>=2.2,<4.0",
-    "flask_cors>=4.0,<7.0",
-    "flask-jwt-extended>=4.6,<5.0",
-    "flask-babel>=4.0,<5.0",
-    "flasgger>=0.9.7,<0.10",
-    "Werkzeug>=2.2,<4.0",
-    "gunicorn>=23.0,<24.0",         # legacy PROD only; the port runs uvicorn's own workers
-    "opencv-python>=4.10",          # app/ only
-    "pytesseract>=0.3,<0.4",        # app/ only
-    "topojson>=1.9,<2.0",           # imported by NEITHER stack; drop outright
-    "StringGenerator>=0.4,<0.5",    # app/ only
-    "openai>=1.50",                 # app/api/aiservices only - rewritten away
-    "aisuite[openai]>=0.1",         # app/api/aiservices only - rewritten away
-    "tiktoken>=0.8",                # app/api/aiservices only - rewritten away
-    # `flask_restful` was in requirements.txt but is imported nowhere
-    # (grep -rn flask_restful app/ -> 0 matches). Deliberately dropped.
 ]
 
 [project.optional-dependencies]

@@ -373,7 +373,13 @@ def test_a_real_plugin_endpoint_resolves():
 
 def test_the_routes_keep_their_legacy_paths():
     """External integrations are addressed by these strings and nothing in this
-    repository would catch a change to them."""
+    repository would catch a change to them.
+
+    THE SET IS TRANSCRIBED FROM THE STACK BEING REPLACED, not from what this
+    module happens to declare. Pinning what is here would only assert that
+    nobody changed it - it would agree with a missing route just as readily as
+    with a complete one, which is how `/adminApi/lists/{id}` went unnoticed.
+    """
     from archihub.api.external.router import admin_router, public_router
 
     admin = {route.path for route in admin_router.routes}
@@ -388,6 +394,7 @@ def test_the_routes_keep_their_legacy_paths():
         "/adminApi/create_type",
         "/adminApi/update_type",
         "/adminApi/get_type/{slug}",
+        "/adminApi/lists/{list_id}",
         "/adminApi/plugins/{plugin}/{plugin_endpoint:path}",
     }
     assert public == {"/publicApi", "/publicApi/types", "/publicApi/resources/{resource_id}"}

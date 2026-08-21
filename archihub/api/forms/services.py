@@ -1,7 +1,5 @@
 """Metadata-form business logic.
 
-Port of ``app/api/forms/services.py``.
-
 A form defines the fields a content type catalogues. Each field declares a
 ``destiny`` - the dotted path it writes into on a resource - and every form on
 the instance contributes to one combined schema. Two forms may therefore not

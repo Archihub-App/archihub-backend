@@ -1,5 +1,8 @@
 **/__pycache__/
 .env
+# A plugin keeps its own settings and credentials beside its package. The five
+# bundled plugins are tracked, so theirs would otherwise be committed.
+archihub/plugins/*/.env
 fix.py
 upload_geojson.py
 /uploads
@@ -8,21 +11,10 @@ upload_geojson.py
 /userfiles
 /temporal
 
-requirements.txt.bak
-
-# everything in the plugins folder
-/app/plugins/*
-
-!/app/plugins/filesProcessing
-!/app/plugins/inventoryMaker
-!/app/plugins/massiveUpdater
-!/app/plugins/liquidText
-!/app/plugins/scheduleSystemTasks
-
-# Same rule for the FastAPI plugins folder. An installed plugin is a directory
-# copied in - often a clone with its own .git, its own licence and its own
-# author - so the default has to be "not ours to commit". Only the five that
-# ship with the backend, plus the framework and the package marker, are tracked.
+# An installed plugin is a directory copied in - often a clone with its own
+# .git, its own licence and its own author - so the default has to be "not ours
+# to commit". Only the five that ship with the backend, plus the framework and
+# the package marker, are tracked.
 /archihub/plugins/*
 
 !/archihub/plugins/__init__.py
@@ -33,7 +25,10 @@ requirements.txt.bak
 !/archihub/plugins/liquidText
 !/archihub/plugins/scheduleSystemTasks
 
-/app/utils/geo/*
+# 24MB of bundled administrative boundaries. Ignored for its size, not its
+# nature - a deployment needing a different boundary set points GEO_DATA_PATH
+# at it rather than replacing these.
+/archihub/data/geo/*
 
 /skills/*
 !/skills/system

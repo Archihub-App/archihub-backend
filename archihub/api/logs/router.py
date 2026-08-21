@@ -1,7 +1,4 @@
-"""Audit log routes.
-
-Port of ``app/api/logs/routes.py``.
-"""
+"""Audit log routes."""
 
 from __future__ import annotations
 

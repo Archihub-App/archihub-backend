@@ -170,9 +170,9 @@ def test_only_the_matching_pair_is_redacted():
 # ---------------------------------------------------------------------------
 # Turning it off
 #
-# ENVIRONMENT_NAME does NOT control this. That variable names the instance - the
-# Mongo database and the index prefix are built from it - so renaming a database
-# must not change how the application logs. The mode is ENVIRONMENT/FLASK_ENV.
+# The mode is ENVIRONMENT/FASTAPI_ENV and nothing else. What names the instance
+# is a deployment-level variable the application does not read, so renaming a
+# database cannot change how the application logs.
 # ---------------------------------------------------------------------------
 
 
@@ -180,9 +180,9 @@ def _settings(**overrides):
     """Settings built from the arguments alone.
 
     `_env_file=None` matters: without it pydantic-settings reads the developer's
-    own `.env`, whose `FLASK_ENV='DEV'` would make every case here look like DEV
-    regardless of what the test passed. `flask_env` is also defaulted explicitly,
-    since it is the legacy spelling that wins over `ENVIRONMENT`.
+    own `.env`, whose `FASTAPI_ENV` would make every case here look like whatever
+    that file says regardless of what the test passed. `FASTAPI_ENV` is also
+    defaulted explicitly, since it wins over `ENVIRONMENT`.
     """
     from archihub.core.settings import Settings
 
@@ -190,7 +190,7 @@ def _settings(**overrides):
         "secret_key": "x",
         "jwt_secret_key": "y",
         "fernet_key": "z",
-        "FLASK_ENV": None,
+        "FASTAPI_ENV": None,
     }
     return Settings(_env_file=None, **{**base, **overrides})
 
@@ -200,8 +200,9 @@ def test_the_access_log_follows_the_environment_by_default():
     assert _settings(ENVIRONMENT="PROD").access_log_enabled is False
 
 
-def test_the_legacy_flask_env_spelling_is_honoured():
-    assert _settings(ENVIRONMENT="PROD", FLASK_ENV="DEV").access_log_enabled is True
+def test_the_fastapi_env_spelling_wins_over_environment():
+    """The deployment kit passes the mode in as FASTAPI_ENV, so it must win."""
+    assert _settings(ENVIRONMENT="PROD", FASTAPI_ENV="DEV").access_log_enabled is True
 
 
 def test_an_explicit_setting_overrides_the_environment():
@@ -210,10 +211,6 @@ def test_an_explicit_setting_overrides_the_environment():
     assert _settings(ENVIRONMENT="PROD", ACCESS_LOG="true").access_log_enabled is True
     assert _settings(ENVIRONMENT="DEV", ACCESS_LOG="false").access_log_enabled is False
 
-
-def test_the_instance_name_does_not_control_logging():
-    """ENVIRONMENT_NAME builds the database name; it is not a mode switch."""
-    assert _settings(ENVIRONMENT="PROD", ENVIRONMENT_NAME="DEV").access_log_enabled is False
 
 
 @pytest.fixture

@@ -1,7 +1,5 @@
 """Health and test-control routes.
 
-Port of ``app/api/health/routes.py``.
-
 The Flasgger YAML docstrings become FastAPI route metadata: prose moves to the
 handler docstring (FastAPI reads it as the OpenAPI description), ``tags:`` moves
 to the decorator, and the ``responses:`` map becomes the ``responses=`` kwarg.

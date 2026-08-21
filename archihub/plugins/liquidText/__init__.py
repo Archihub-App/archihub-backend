@@ -1,7 +1,5 @@
 """liquidText — turn a transcription into an editable, exportable text.
 
-Port of ``app/plugins/liquidText/__init__.py``.
-
 WHAT IT DOES. An audio or video record that has been transcribed carries its
 transcript under ``processing``. This plugin copies that text into a
 ``liquidText`` processing entry that a person can then edit in the viewer, and

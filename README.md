@@ -4,7 +4,7 @@
 
 El sistema ArchiHUB se compone de dos partes principales: un backend y un frontend. El backend, siendo una API, permite que el frontend sea un componente intercambiable. Actualmente, hay una versión del frontend que ejecuta todas las tareas relacionadas con el procesamiento y la gestión del archivo. No obstante, esta configuración no restringe el uso del sistema, ya que se puede desarrollar una interfaz adaptada a las necesidades específicas de cada usuario, dependiendo de sus requerimientos.
 
-En cuanto al backend, opera utilizando una base de datos MongoDB en conjunto con ElasticSearch para indexar el contenido y realizar búsquedas avanzadas. La API se encuentra desarrollada en Python, utilizando Flask como framework, y emplea un gestor de tareas basado en Celery.
+En cuanto al backend, opera utilizando una base de datos MongoDB en conjunto con ElasticSearch para indexar el contenido y realizar búsquedas avanzadas. La API se encuentra desarrollada en Python, utilizando FastAPI como framework, y emplea un gestor de tareas basado en Celery.
 
 ## Instalación con Docker
 
@@ -20,7 +20,7 @@ En cuanto al uso del aplicativo, te recomendamos revisar las [guías en video](h
 
 Como se mencionó anteriormente, como usuario puedes desarrollar una interfaz completamente personalizada. Para facilitar esta tarea, hemos puesto a disposición de los usuarios de la herramienta la documentación de la Api de ArchiHUB. Para acceder a ella, el aplicativo se debe [haber iniciado](https://archihub-app.github.io/archihub.github.io/es/install_local/#arrancar-el-aplicativo).
 
-Con el aplicativo andando, debes acceder al endpoint de Swagger en la URL [http://localhost:{FLASK_RUN_PORT}/apidocs/](http://localhost:11000/apidocs/), donde *FLASK_RUN_PORT* es el número de puerto configurado en las varibles de entorno y que por defecto es 11000.
+Con el aplicativo andando, debes acceder al endpoint de Swagger en la URL [http://localhost:{FASTAPI_RUN_PORT}/apidocs/](http://localhost:11000/apidocs/), donde *FASTAPI_RUN_PORT* es el número de puerto configurado en las varibles de entorno y que por defecto es 11000.
 
 ## Citación
 

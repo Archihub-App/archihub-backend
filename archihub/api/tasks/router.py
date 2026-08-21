@@ -1,7 +1,5 @@
 """Background task routes.
 
-Port of ``app/api/tasks/routes.py``.
-
 ACCESS CONTROL ON THE TWO PER-USER ROUTES IS STATED POSITIVELY, in
 ``services.may_read_tasks_of``: your own tasks, or anyone's if you are an
 administrator. An allow-rule is checkable at a glance; the equivalent written as

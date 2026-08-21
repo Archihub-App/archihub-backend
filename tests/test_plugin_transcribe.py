@@ -325,3 +325,161 @@ def test_the_export_format_is_an_allowlist():
 def test_an_unsupported_format_is_refused_before_anything_is_written():
     with pytest.raises(ValueError):
         plugin.download_task({"format": "../../etc/passwd", "records": []}, "alice")
+
+
+# ---------------------------------------------------------------------------
+# Loading the speaker-separation pipeline
+#
+# Both failures here cost a whole transcription run: the credential keyword was
+# renamed between major versions of a library this plugin does not pin, and the
+# call answers a refused credential by returning None rather than raising.
+# ---------------------------------------------------------------------------
+
+
+def _make_pipeline(keyword, result="pipeline"):
+    """A stand-in for pyannote's `Pipeline.from_pretrained`.
+
+    Built with the keyword in its REAL signature, because the code under test
+    chooses which one to pass by reading that signature - a stand-in accepting
+    `**kwargs` would make either choice look correct.
+    """
+    calls: list = []
+    namespace = {"calls": calls, "result": result}
+    exec(
+        f"def from_pretrained(checkpoint, {keyword}=None):\n"
+        f"    calls.append((checkpoint, {{{keyword!r}: {keyword}}}))\n"
+        f"    return result\n",
+        namespace,
+    )
+    return namespace["from_pretrained"], calls
+
+
+def _hf_token(monkeypatch, value):
+    """Supply the plugin's own credential.
+
+    Set in the environment, which is where a container puts it and which wins
+    over the plugin's `.env`. The plugin reads it through
+    `plugins.framework.config`, so this is a real supply rather than a patch of
+    the code under test.
+    """
+    monkeypatch.setenv("HF_TOKEN", value)
+
+
+def _install(monkeypatch, from_pretrained):
+    """Make `from pyannote.audio import Pipeline` yield this stand-in."""
+    import sys
+    import types
+
+    module = types.ModuleType("pyannote.audio")
+    module.Pipeline = type("Pipeline", (), {"from_pretrained": staticmethod(from_pretrained)})
+
+    package = types.ModuleType("pyannote")
+    package.audio = module
+    monkeypatch.setitem(sys.modules, "pyannote", package)
+    monkeypatch.setitem(sys.modules, "pyannote.audio", module)
+
+
+@pytest.mark.parametrize("keyword", ["use_auth_token", "token"])
+def test_the_credential_keyword_follows_the_installed_library(monkeypatch, keyword):
+    """It was renamed between major versions, and this plugin pins neither.
+
+    Guessing wrong is a TypeError raised after the run has already started.
+    """
+    plugin = pytest.importorskip("archihub.plugins.transcribeWhisperX")
+    from_pretrained, calls = _make_pipeline(keyword)
+    _install(monkeypatch, from_pretrained)
+    _hf_token(monkeypatch, "a-token")
+
+    assert plugin._load_diarization_pipeline() == "pipeline"
+
+    (_checkpoint, kwargs), = calls
+    assert kwargs == {keyword: "a-token"}
+
+
+def test_a_refused_credential_is_reported_where_the_cause_is_known(monkeypatch):
+    """The call prints and returns None rather than raising.
+
+    Left unchecked, the absence surfaces inside the per-record loop as
+    "'NoneType' object is not callable", long after the step that reported the
+    models had loaded.
+    """
+    plugin = pytest.importorskip("archihub.plugins.transcribeWhisperX")
+    _install(monkeypatch, _make_pipeline("use_auth_token", result=None)[0])
+    _hf_token(monkeypatch, "a-token")
+
+    with pytest.raises(RuntimeError) as exc:
+        plugin._load_diarization_pipeline()
+
+    assert "HF_TOKEN" in str(exc.value)
+    assert plugin.DIARIZATION_MODEL in str(exc.value)
+
+
+def test_the_token_falls_back_to_the_plugins_own_env_file(monkeypatch):
+    """The plugin owns this setting, so it is supplied beside the plugin.
+
+    A container injects it as a real environment variable and has no file at
+    all; a machine configured by file has the file and not the variable. Both
+    have to work, which is why the backend's own settings are not involved -
+    it does not download models and has no reason to know this credential
+    exists.
+    """
+    plugin = pytest.importorskip("archihub.plugins.transcribeWhisperX")
+    from archihub.plugins.framework import config as plugin_config
+
+    from_pretrained, calls = _make_pipeline("token")
+    _install(monkeypatch, from_pretrained)
+
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setattr(
+        plugin_config, "read_env_file", lambda slug: {"HF_TOKEN": "from-the-plugin-file"}
+    )
+
+    plugin._load_diarization_pipeline()
+
+    (_checkpoint, kwargs), = calls
+    assert kwargs == {"token": "from-the-plugin-file"}
+
+
+def test_an_absent_credential_names_the_plugin_and_the_variable(monkeypatch):
+    """Refused where the cause is known, not at the model host."""
+    plugin = pytest.importorskip("archihub.plugins.transcribeWhisperX")
+    from archihub.plugins.framework import config as plugin_config
+
+    _install(monkeypatch, _make_pipeline("token")[0])
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setattr(plugin_config, "read_env_file", lambda slug: {})
+
+    with pytest.raises(plugin_config.MissingPluginSetting) as exc:
+        plugin._load_diarization_pipeline()
+
+    assert "HF_TOKEN" in str(exc.value)
+    assert "transcribeWhisperX" in str(exc.value)
+
+
+def test_the_diarisation_library_floor_is_a_compatibility_bound():
+    """3.x calls `hf_hub_download(use_auth_token=...)`, removed in hub 1.0.
+
+    The floor is load-bearing rather than cosmetic: the backend's own
+    dependencies pull in a modern huggingface_hub, so an unbounded
+    `pyannote.audio` resolves to a pair that installs cleanly and raises
+    TypeError the first time a diarisation runs.
+    """
+    import pathlib
+    import re
+
+    manifest = pathlib.Path("archihub/plugins/transcribeWhisperX/requirements.txt")
+    if not manifest.exists():
+        pytest.skip("plugin not installed in this checkout")
+
+    lines = [
+        line.strip()
+        for line in manifest.read_text().splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    pyannote = [line for line in lines if line.lower().startswith("pyannote")]
+    assert pyannote, "the plugin must declare pyannote.audio"
+
+    match = re.search(r">=\s*(\d+)", pyannote[0])
+    assert match and int(match.group(1)) >= 4, (
+        f"pyannote.audio must be floored at 4.0 or later, found {pyannote[0]!r}"
+    )

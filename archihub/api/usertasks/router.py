@@ -1,7 +1,5 @@
 """Editorial review task routes.
 
-Port of ``app/api/usertasks/routes.py``.
-
 TWO DISTINCT PERMISSION LEVELS, and the difference matters:
 
 * Reading and assigning work requires ``admin`` or ``team_lead``.

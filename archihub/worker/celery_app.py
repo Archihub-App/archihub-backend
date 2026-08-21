@@ -124,6 +124,20 @@ def _init_worker(**_kwargs) -> None:
 
     _load_plugins()
 
+    # The worker is a separate process from the one that serves the admin
+    # screen, so a plugin toggled there changes nothing here until this process
+    # restarts - its task registry and hook registrations are both built above,
+    # once. Watching the shared revision counter is what makes the change reach
+    # the workers, including workers on other machines.
+    try:
+        from archihub.core.runtime_restart import start_runtime_restart_monitor
+
+        start_runtime_restart_monitor()
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Could not start the restart monitor; this worker will need restarting by hand"
+        )
+
 
 @worker_process_init.connect
 def _init_worker_process(**_kwargs) -> None:

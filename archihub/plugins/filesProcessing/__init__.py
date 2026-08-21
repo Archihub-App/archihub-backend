@@ -1,7 +1,5 @@
 """filesProcessing — derive web-viewable versions of archived files.
 
-Port of ``app/plugins/filesProcessing/__init__.py``.
-
 WHAT IT DOES. An archived master (a TIFF, a WAV, a PDF) is not what a browser
 should be served. This plugin reads the master and writes derivatives beside it
 under ``WEB_FILES_PATH`` — JPEG sizes and deep-zoom tiles for images, MP3/Ogg for

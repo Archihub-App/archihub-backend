@@ -1,7 +1,5 @@
 """Gate for the ``/health/test-control/*`` routes.
 
-Port of ``app/utils/TestControlAuth.py``.
-
 These routes wipe and reseed an entire instance, so the gate is deliberately
 paranoid and its behaviour is a hard contract with ``ArchiHUBTestRunner``, which
 distinguishes the three failure modes by status code during preflight:

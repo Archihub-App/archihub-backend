@@ -4,14 +4,6 @@ The ArchiHUB backend: a FastAPI application over MongoDB, Elasticsearch,
 Qdrant, Redis and Celery, with a plugin framework for the processing pipelines
 an archive configures for itself.
 
-The new code does NOT live under ``app/`` because ``app/__init__.py`` builds
-and boots the whole Flask application at import time (``app = create_app()`` at
-module scope, preceded by a torch import and monkeypatch). Any
-``from app.core... import ...`` would therefore drag the entire Flask stack -
-Mongo reads, SkillManager, plugin registration - into the FastAPI process.
-
-At the Phase 7 cutover, ``app/`` is deleted and this package remains.
-
 ARCHITECTURE NOTE - this stack is intentionally synchronous.
 Route handlers are declared with plain ``def`` (not ``async def``), which makes
 Starlette run them in a worker threadpool. That is a deliberate decision, not an

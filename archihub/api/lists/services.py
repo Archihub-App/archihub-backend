@@ -1,7 +1,5 @@
 """Controlled-vocabulary business logic.
 
-Port of ``app/api/lists/services.py``.
-
 Lists are addressed **by id**, confirmed with the maintainer. ``get_by_slug`` is
 therefore NOT ported: `lists` documents carry no ``slug`` field at all (verified
 against a live database - the create path never writes one), so that function

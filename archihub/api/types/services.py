@@ -1,7 +1,5 @@
 """Content-type business logic.
 
-Port of ``app/api/types/services.py``.
-
 SCOPE: the five CRUD operations behind ``GET/POST /types`` and
 ``GET/PUT/DELETE /types/{slug}``, plus the cross-domain helpers other modules
 import (``get_metadata``, ``get_icon``, ``is_hierarchical``, ``add_resource``,

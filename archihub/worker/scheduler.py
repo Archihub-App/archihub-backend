@@ -1,7 +1,5 @@
 """Celery beat scheduler backed by MongoDB.
 
-Port of ``app/celery_scheduler.py``.
-
 Standard Celery beat reads its schedule once at startup, so adding a scheduled
 task through the admin UI would require restarting the beat process. This
 scheduler re-reads the ``system`` collection on a timer and merges the result

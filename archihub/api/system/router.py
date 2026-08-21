@@ -1,7 +1,5 @@
 """System settings routes.
 
-Port of ``app/api/system/routes.py``.
-
 TWO ROUTES ARE UNAUTHENTICATED, and both are deliberate:
 
 * ``GET /system/get-settings`` - the frontend reads it before anyone can log in,
@@ -10,11 +8,6 @@ TWO ROUTES ARE UNAUTHENTICATED, and both are deliberate:
 * ``POST /system/set-first-time`` - creates the initial administrator, so there
   is nobody to authenticate as. Its guard is that the instance has no users, and
   that is re-checked inside the service rather than trusted from a prior call.
-
-STILL NOT PORTED HERE: `/plugins/{name}` and `/get-actions`, which read a
-mounted plugin's own settings and actions, and `/restart`, which drives the
-SIGHUP supervisor. The first two need the plugin framework (Phase 5); the third
-needs the process model to be settled (Phase 7).
 
 A role failure answers 403; 401 is reserved for "I do not know who you are".
 """
@@ -267,6 +260,24 @@ def get_actions(
 def clear_cache(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
     """Flush the shared cache."""
     return _respond(services.clear_cache())
+
+
+@router.get(
+    "/restart",
+    responses={
+        200: {"description": "A restart was requested"},
+        500: {"description": "The request could not be recorded"},
+        **_ROLE_RESPONSES,
+    },
+)
+def restart(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """Restart every process of the deployment.
+
+    A GET because the settings screen's button reaches it through the shared
+    system-action helper, which sends one for every button it renders. The path
+    and method are the contract with that screen.
+    """
+    return _respond(services.restart_system())
 
 
 # ---------------------------------------------------------------------------

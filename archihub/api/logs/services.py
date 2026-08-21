@@ -1,7 +1,5 @@
 """Audit log.
 
-Port of ``app/api/logs/services.py``.
-
 ``register_log`` is called from ordinary service code at the point where the
 business logic has decided an action succeeded - NOT from middleware. That is
 deliberate: an audit entry needs to know which business action occurred and with

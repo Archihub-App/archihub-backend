@@ -10,7 +10,7 @@
 #
 # Layer 3 is what makes the documented workflow real: copy a plugin directory
 # in, rebuild, and its dependencies are installed. Before this it was not -
-# a merge script concatenated every plugin's requirements into the tracked
+# a merge script concatenated every plugin's requirements into a tracked
 # requirements.txt, rewrote that file in place during the build, and stripped
 # the comments in which authors had been declaring their system packages.
 
@@ -70,8 +70,7 @@ COPY scripts/export_core_requirements.py ./scripts/
 
 RUN python scripts/export_core_requirements.py pyproject.toml /tmp/core-requirements.txt \
     && pip install --upgrade pip setuptools wheel \
-    && pip install -r /tmp/core-requirements.txt \
-    && pip install gunicorn
+    && pip install -r /tmp/core-requirements.txt
 
 # The constraint set every plugin install is held to. Taken after the core
 # resolve, so it reflects what is actually installed rather than what was asked
@@ -81,17 +80,13 @@ RUN pip freeze --exclude-editable > /tmp/constraints.txt
 # ---------------------------------------------------------------------------
 # 3. Plugins
 # ---------------------------------------------------------------------------
-# Both trees, because both exist until the legacy stack is removed: the running
-# stack is chosen at start time by ARCHIHUB_STACK, so the image has to be able
-# to serve either.
 COPY scripts/install_plugin_deps.sh ./scripts/
-COPY app/plugins ./app/plugins
 COPY archihub/plugins ./archihub/plugins
 
 RUN sed -i 's/\r$//' scripts/install_plugin_deps.sh \
     && chmod +x scripts/install_plugin_deps.sh \
     && PLUGIN_CONSTRAINTS=/tmp/constraints.txt \
-       ./scripts/install_plugin_deps.sh /app/app/plugins /app/archihub/plugins
+       ./scripts/install_plugin_deps.sh /app/archihub/plugins
 
 # Where Tesseract looks for language files. Set from the directory that exists
 # in THIS image rather than assumed: the path carries Tesseract's major version,
@@ -113,3 +108,8 @@ RUN sed -i 's/\r$//' start.sh start_celery.sh \
 # Directories the application writes to. Created here rather than by a build
 # script so they exist even when nothing is bind-mounted over them.
 RUN mkdir -p /app/uploads /app/userfiles /app/webfiles /app/temporal
+
+# The ASGI entrypoint. `start.sh` is the supervisor: it waits for
+# Elasticsearch, runs uvicorn, and restarts it on SIGHUP - which is how a
+# restart requested from the admin screen takes effect.
+CMD ["./start.sh"]

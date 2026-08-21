@@ -53,8 +53,12 @@ htmlcov
 tests
 tools
 node_modules
-requirements.txt.bak
 
 # ---- documentation and notes ----
 *.md
 !README.md
+
+# A plugin's own settings file, for the same reason as the root `.env`: it holds
+# credentials, and a deployment injects them as environment variables rather
+# than having them baked into an image layer.
+archihub/plugins/*/.env

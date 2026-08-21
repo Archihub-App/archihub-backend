@@ -1,7 +1,5 @@
 """Instance settings and onboarding.
 
-Port of ``app/api/system/services.py``.
-
 SCOPE: settings read/write, the seeder, plugin activation, cache clearing and
 first-time onboarding. The maintenance routes that rebuild Elasticsearch indexes
 or load geometry (`regenerate-index`, `index-resources`, `index-geometries`,
@@ -27,7 +25,14 @@ COLLECTION = "system"
 
 # Settings groups that are never returned by the generic listing: the plugin
 # registry is managed through its own routes and is not user-editable settings.
-_HIDDEN_SETTINGS = {"active_plugins"}
+#: Settings groups no client may write through the settings screen.
+#:
+#: `active_plugins` decides what is mounted, and is changed through the plugin
+#: routes, which check that a plugin can actually be built first.
+#: `runtime_control` holds the restart counter every process polls - writing it
+#: from a settings form would restart the whole deployment as a side effect of
+#: saving an unrelated preference.
+_HIDDEN_SETTINGS = {"active_plugins", "runtime_control"}
 
 
 def _mongo():
@@ -135,20 +140,79 @@ def update_option(name: str, data: dict) -> None:
     _mongo().update_record(COLLECTION, {"name": name}, {"data": entries})
 
 
+def _settings_layout() -> tuple[set[str], dict[str, str]]:
+    """The writable group names, and which group declares each entry id.
+
+    Read from the stored documents rather than written down: the settings a
+    deployment has are whatever is in its database, and a plugin or a migration
+    may add to them.
+    """
+    groups: set[str] = set()
+    owner: dict[str, str] = {}
+
+    for record in _mongo().get_all_records(
+        COLLECTION, {"name": {"$nin": list(_HIDDEN_SETTINGS)}}
+    ):
+        name = record.get("name")
+        # Re-checked here, not left to the query. The exclusion decides what a
+        # client can write, so it must hold whatever the driver does with the
+        # filter - and a protected group reaching this loop would make every
+        # entry id inside it addressable by name.
+        if not name or name in _HIDDEN_SETTINGS:
+            continue
+        groups.add(name)
+        for entry in record.get("data") or []:
+            if isinstance(entry, dict) and entry.get("id"):
+                owner.setdefault(entry["id"], name)
+
+    return groups, owner
+
+
 def update_settings(body: dict, current_user: str) -> tuple[dict, int]:
     """Apply a settings update from the admin UI.
 
-    Only entries that already exist in a group are written. A client cannot
-    introduce new settings keys, which would otherwise let arbitrary data
+    THE SETTINGS SCREEN SENDS ONE FLAT OBJECT of ``{entry_id: value}`` - it
+    builds its form from entries drawn out of several groups and submits them
+    together, without the group names. Accepting only the grouped shape means
+    every value is a scalar, nothing matches, and the route answers 200 having
+    written nothing: the screen reports success and redisplays the old values.
+
+    Each id is resolved to the group that declares it. The grouped shape is
+    still accepted, since a caller that knows the group can say so; the two are
+    told apart safely because no entry id is also a group name, and no setting's
+    value is itself a mapping.
+
+    Only entries that already exist are written, in either shape. A client
+    cannot introduce new keys, which would otherwise let arbitrary data
     accumulate in a document the application reads by position elsewhere.
     """
     try:
-        for name, values in (body or {}).items():
-            if name in _HIDDEN_SETTINGS:
-                logger.warning("Refusing to update protected settings group %s", name)
+        groups, owner = _settings_layout()
+        pending: dict[str, dict] = {}
+        unknown: list[str] = []
+
+        for key, value in (body or {}).items():
+            if key in _HIDDEN_SETTINGS:
+                logger.warning("Refusing to update protected settings group %s", key)
                 continue
-            if isinstance(values, dict):
-                update_option(name, values)
+
+            if key in groups and isinstance(value, dict):
+                pending.setdefault(key, {}).update(value)
+                continue
+
+            group = owner.get(key)
+            if group is None:
+                unknown.append(key)
+                continue
+            pending.setdefault(group, {})[key] = value
+
+        if unknown:
+            # Named rather than silently dropped: a setting that does not apply
+            # is the failure this function existed to hide.
+            logger.warning("Ignoring settings this instance does not declare: %s", ", ".join(sorted(unknown)))
+
+        for name, values in pending.items():
+            update_option(name, values)
 
         clear_system_cache()
         _register_log(current_user, "system_update", {"settings": list((body or {}).keys())})
@@ -594,9 +658,50 @@ def set_plugin_active(slug: str, active: bool, current_user: str) -> tuple[dict,
     clear_system_cache()
     _register_log(current_user, "system_update", {"plugin": slug, "active": active})
 
-    return {
-        "msg": _("Plugin updated successfully. Restart the application to apply the change")
-    }, 200
+    # Which plugins are active decides what is mounted and which tasks are
+    # registered, and both are read once at startup - so the change is not
+    # visible anywhere until every process restarts. Requesting it here is what
+    # makes the switch in the admin screen take effect; leaving the operator to
+    # restart by hand means the plugin they just enabled appears to do nothing.
+    _request_restart("plugin_status_updated")
+
+    return {"msg": _("Plugin successfully updated, restart requested")}, 200
+
+
+def _request_restart(reason: str) -> None:
+    """Ask every process of the deployment to restart, including this one.
+
+    Never fatal: the setting has already been written, so a failure to schedule
+    the restart must not be reported as a failure to save. It is logged, and the
+    operator can still restart from the system settings screen.
+    """
+    from archihub.core.runtime_restart import request_runtime_restart, schedule_local_restart
+
+    try:
+        request_runtime_restart(reason)
+        schedule_local_restart()
+    except Exception:
+        logger.exception("Could not request a runtime restart (%s)", reason)
+
+
+def restart_system() -> tuple[dict, int]:
+    """Restart every process of the deployment.
+
+    Reached from the button in the system settings screen. The revision counter
+    this writes is shared through the database, so workers on other machines
+    stop too - a restart that only reached the process handling the request
+    would leave the deployment running two configurations at once.
+    """
+    from archihub.core.runtime_restart import request_runtime_restart, schedule_local_restart
+
+    try:
+        request_runtime_restart("manual_restart")
+    except Exception:
+        logger.exception("Could not record the restart request")
+        return {"msg": _("Error while processing the request")}, 500
+
+    schedule_local_restart()
+    return {"msg": _("System restart requested successfully")}, 200
 
 
 def toggle_plugin(slug: str, current_user: str) -> tuple[dict, int]:

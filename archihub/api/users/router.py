@@ -1,7 +1,5 @@
 """User routes.
 
-Port of ``app/api/users/routes.py``.
-
 A role failure answers 403; 401 is reserved for "I do not know who you are".
 
 ROUTE ORDER MATTERS HERE. Every literal path (`/me`, `/requests`, `/register`,

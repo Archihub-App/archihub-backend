@@ -39,7 +39,6 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # Secrets - required, no fallbacks
     # ------------------------------------------------------------------
-    secret_key: str = Field(validation_alias="SECRET_KEY")
     jwt_secret_key: str = Field(validation_alias="JWT_SECRET_KEY")
     fernet_key: str = Field(validation_alias="FERNET_KEY")
 
@@ -52,18 +51,16 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # Runtime environment
     # ------------------------------------------------------------------
-    # ENVIRONMENT is the name; FLASK_ENV is accepted as a synonym so a
-    # deployment can be cut over without editing its .env at the same moment.
-    # ENVIRONMENT wins when both are set. See PLAN_FASTAPI.md section 11.
+    # ENVIRONMENT is the name; FASTAPI_ENV is accepted as a synonym because the
+    # deployment kit passes the mode in under that name. ENVIRONMENT wins when
+    # both are set.
     environment: Literal["DEV", "PROD"] = Field(default="PROD", validation_alias="ENVIRONMENT")
-    flask_env: str | None = Field(default=None, validation_alias="FLASK_ENV")
+    fastapi_env: str | None = Field(default=None, validation_alias="FASTAPI_ENV")
 
-    # NOT a mode switch. This names the *instance* - it is what the Mongo
-    # database (`archihub-<name>`) and the Elasticsearch index prefix are built
-    # from. Whether the backend is in DEV or PROD mode is ENVIRONMENT/FLASK_ENV
-    # above; keeping the two apart is what stops renaming a database from
-    # changing how the application logs.
-    environment_name: str = Field(default="prod", validation_alias="ENVIRONMENT_NAME")
+    # ENVIRONMENT_NAME is deliberately NOT a field here. It names the instance
+    # and the deployment substitutes it into MONGO_DATABASE and the index
+    # prefix; the application reads those, so a field for it would be a second,
+    # silently unused copy of the same fact.
 
     # Per-request access log. Unset follows the environment - on in DEV, off in
     # PROD - which is what an operator expects without configuring anything.
@@ -71,16 +68,14 @@ class Settings(BaseSettings):
     # of which requests reached the application and what they were answered.
     access_log: bool | None = Field(default=None, validation_alias="ACCESS_LOG")
 
-    # FLASK_RUN_PORT is accepted as a synonym; compose passes BACKEND_PORT_FLASK
-    # into it, so both names are in circulation.
+    # FASTAPI_RUN_PORT is accepted as a synonym; the deployment kit passes the
+    # published port in under that name, so both are in circulation.
     backend_port: int = Field(default=5000, validation_alias="BACKEND_PORT")
-    flask_run_port: int | None = Field(default=None, validation_alias="FLASK_RUN_PORT")
+    fastapi_run_port: int | None = Field(default=None, validation_alias="FASTAPI_RUN_PORT")
 
-    gunicorn_workers: int = Field(default=4, validation_alias="GUNICORN_WORKERS")
+    # How many uvicorn worker processes to run in PROD.
+    uvicorn_workers: int = Field(default=4, validation_alias="UVICORN_WORKERS")
 
-    # JWT lifetime in seconds. Note the /auth/login route deliberately overrides
-    # this with a 1-day expiry; this value is the framework-level default only.
-    jwt_access_token_expires: int = 18000
 
     # ------------------------------------------------------------------
     # MongoDB
@@ -186,6 +181,7 @@ class Settings(BaseSettings):
     master_host: str = Field(default="", validation_alias="MASTER_HOST")
     node_token: str = Field(default="", validation_alias="NODE_TOKEN")
 
+
     # ------------------------------------------------------------------
     # Derived values
     # ------------------------------------------------------------------
@@ -206,7 +202,7 @@ class Settings(BaseSettings):
     @property
     def is_dev(self) -> bool:
         """DEV mode, accepting either variable name."""
-        if self.flask_env is not None and self.flask_env.upper() == "DEV":
+        if self.fastapi_env is not None and self.fastapi_env.upper() == "DEV":
             return True
         return self.environment == "DEV"
 
@@ -217,11 +213,11 @@ class Settings(BaseSettings):
 
     @property
     def effective_port(self) -> int:
-        return self.flask_run_port or self.backend_port
+        return self.fastapi_run_port or self.backend_port
 
     @property
     def cors_origins(self) -> list[str] | str:
-        """Legacy CORS behaviour, preserved exactly.
+        """Which origins may call this backend.
 
         ``/adminApi/*`` and ``/publicApi/*`` are always ``*`` (they are consumed
         by other organisations' scripts, not just this repo's frontend); every

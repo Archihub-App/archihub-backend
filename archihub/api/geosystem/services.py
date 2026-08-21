@@ -303,27 +303,25 @@ def get_shape(body: dict) -> tuple[list | dict, int]:
 def geo_data_directory():
     """Where the bundled administrative boundary files live.
 
-    RESOLVED FROM THIS FILE, not from the working directory. The original did
-    ``os.path.abspath('app/utils/geo')``, which is only that directory when the
-    process happens to have been started from the repository root - under
-    gunicorn with a different working directory it resolved somewhere that does
-    not exist, and the route answered 500 with a bare ``FileNotFoundError``.
+    RESOLVED FROM THIS FILE, never from the working directory. A relative path
+    is only the intended directory when the process happens to have been started
+    from the repository root; a server started anywhere else resolves it
+    somewhere that does not exist, and the route answers 500 with a bare
+    ``FileNotFoundError``.
 
-    The data itself still sits under ``app/`` because it is 24MB of GeoJSON and
-    duplicating it during the migration helps nobody. It MOVES TO
-    ``archihub/data/geo`` AT PHASE 7 CUTOVER, when ``app/`` is deleted; this
-    function and the setting below are the only two places that changes.
+    ``GEO_DATA_PATH`` overrides it, which is how a deployment points at a
+    boundary set of its own rather than the one shipped here.
     """
     from pathlib import Path
 
     from archihub.core.settings import get_settings
 
-    configured = getattr(get_settings(), "geo_data_path", "") or ""
+    configured = get_settings().geo_data_path or ""
     if configured:
         return Path(configured)
 
-    # archihub/api/geosystem/services.py -> repository root
-    return Path(__file__).resolve().parents[3] / "app" / "utils" / "geo"
+    # archihub/api/geosystem/services.py -> archihub/api -> archihub
+    return Path(__file__).resolve().parents[2] / "data" / "geo"
 
 
 #: ``admin_0``, ``admin_1``, ... Anything else in the directory is ignored.
@@ -388,6 +386,106 @@ def upload_shapes() -> tuple[dict, int]:
         return {"msg": _("Error updating the polygons")}, 500
 
 
+def _polygonal(geometry):
+    """The polygonal part of ``geometry``, or ``None`` if it has none.
+
+    A BOUNDARY IS AN AREA, and repairing one does not guarantee an area comes
+    back. Resolving a self-intersection can yield a collection that also holds
+    the offending lines, and a ring whose points are collinear repairs to a
+    *MultiLineString* - which is a perfectly valid geometry, so a validity check
+    alone accepts it and a line gets stored as though it were a region.
+    """
+    from shapely.geometry import MultiPolygon
+
+    if geometry is None:
+        return None
+    if geometry.geom_type == "Polygon":
+        return geometry
+    if geometry.geom_type == "MultiPolygon":
+        return geometry
+
+    parts = getattr(geometry, "geoms", [])
+    polygons = [
+        poly
+        for part in parts
+        if part.geom_type in ("Polygon", "MultiPolygon")
+        for poly in (part.geoms if part.geom_type == "MultiPolygon" else [part])
+    ]
+    return MultiPolygon(polygons) if polygons else None
+
+
+def _repair_invalid_geometries(features, source_name: str, gpd):
+    """Return ``features`` with every geometry valid, dropping any that cannot be.
+
+    A SINGLE INVALID POLYGON DISABLES THE WHOLE LAYER, in two ways that look
+    unrelated:
+
+    * MongoDB refuses to build the ``2dsphere`` index if any one document holds
+      geometry it cannot index, so every ``$geoIntersects`` the map runs
+      degrades to a full collection scan over polygons carrying thousands of
+      coordinate pairs.
+    * Elasticsearch rejects that document outright, so the boundary is simply
+      absent from the map, and the indexing task reports success with a failure
+      count an operator has to be reading the worker log to notice.
+
+    Published boundary sets do contain self-intersecting rings - a property of
+    the data rather than something a deployment can be asked to correct - so
+    repairing on load is the one place it can be handled.
+
+    THE WHOLE COLUMN IS REPLACED IN ONE ASSIGNMENT. Writing through
+    ``.geometry.iloc[i]`` silently updates a copy under pandas' copy-on-write,
+    which reports every repair as done and leaves the data exactly as it was.
+
+    Only polygonal parts of a repaired result are kept: ``make_valid`` can
+    resolve a self-intersection into a collection that also holds the offending
+    lines, and a boundary is an area - keeping a stray LineString would store a
+    geometry meaning something other than what was published.
+    """
+    from shapely.validation import make_valid
+
+    geometries, keep, repaired, dropped = [], [], [], []
+
+    for position, geometry in enumerate(features.geometry):
+        name = str(features.iloc[position].get("name", "?"))
+
+        # Emptiness is checked as well as validity: shapely calls an empty
+        # polygon valid, but it carries no coordinates for MongoDB to build a
+        # geo key from, so storing one blocks the 2dsphere index exactly as a
+        # self-intersecting ring does.
+        if geometry is not None and geometry.is_valid and not geometry.is_empty:
+            geometries.append(geometry)
+            keep.append(True)
+            continue
+
+        fixed = _polygonal(make_valid(geometry)) if geometry is not None else None
+
+        if fixed is None or fixed.is_empty or not fixed.is_valid:
+            geometries.append(geometry)
+            keep.append(False)
+            dropped.append(name)
+            continue
+
+        geometries.append(fixed)
+        keep.append(True)
+        repaired.append(name)
+
+    if repaired:
+        # Named, not counted: this is a silent change to published source data,
+        # and which boundary was altered is what makes it checkable.
+        logger.warning(
+            "Repaired %d invalid geometr(ies) in %s: %s",
+            len(repaired), source_name, ", ".join(sorted(repaired)),
+        )
+    if dropped:
+        logger.error(
+            "Dropped %d geometr(ies) in %s that could not be repaired: %s",
+            len(dropped), source_name, ", ".join(sorted(dropped)),
+        )
+
+    features = features.set_geometry(gpd.GeoSeries(geometries, index=features.index, crs=features.crs))
+    return features[keep] if dropped else features
+
+
 def _load_boundary_file(path, level: int) -> int:
     """Replace one administrative level from one GeoJSON file."""
     import json
@@ -405,9 +503,15 @@ def _load_boundary_file(path, level: int) -> int:
             raise ValueError(f"{path.name}: boundary features have no {required!r} property")
 
     features["admin_level"] = level
-    features["name"] = features["name"].str.capitalize()
+    # Stripped BEFORE capitalising, not after: published boundary names carry
+    # stray leading spaces, and `capitalize` uppercases the first character -
+    # which is the space - so the name stays lowercase and sorts ahead of every
+    # properly-cased one in the picker.
+    features["name"] = features["name"].str.strip().str.capitalize()
     if features.crs is None:
         features.crs = "EPSG:4326"
+
+    features = _repair_invalid_geometries(features, path.name, gpd)
 
     mongo = _mongo()
     mongo.delete_records(COLLECTION, {"properties.admin_level": level})

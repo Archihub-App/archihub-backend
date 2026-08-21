@@ -49,15 +49,7 @@ echo "Elasticsearch is up!"
 CELERY_RUN_MODE="${CELERY_RUN_MODE:-worker}"
 CELERY_LOGLEVEL="${CELERY_LOGLEVEL:-INFO}"
 CELERY_QUEUES="${CELERY_QUEUES:-}"
-# The worker follows the same selector as the web process, so a stack cannot be
-# switched on one side and not the other - the two share a broker and identical
-# task names by design, so a mismatched pair looks like it works right up until
-# a job is executed by the wrong stack.
-if [ "${ARCHIHUB_STACK:-flask}" = "fastapi" ]; then
-  CELERY_APP="${CELERY_APP:-archihub.worker.celery_app}"
-else
-  CELERY_APP="${CELERY_APP:-app.celery_app}"
-fi
+CELERY_APP="${CELERY_APP:-archihub.worker.celery_app}"
 CELERY_BEAT_SCHEDULE_FILE="${CELERY_BEAT_SCHEDULE_FILE:-/tmp/celerybeat-schedule}"
 CELERY_EXTRA_ARGS="${CELERY_EXTRA_ARGS:-}"
 

@@ -7,13 +7,12 @@ Run with::
 
 NOT ``gunicorn -k uvicorn.workers.UvicornWorker``: that shim is deprecated and
 has moved to the separate ``uvicorn-worker`` distribution, so depending on it
-ties the deploy to something already on its way out. uvicorn runs its own
-workers. ``start.sh`` selects the stack with ``ARCHIHUB_STACK=fastapi``.
+ties the deployment to something already on its way out. uvicorn runs its own
+worker processes.
 
-The legacy Flask entrypoint (``app:app`` via ``run.py`` / ``start.sh``) is
-untouched and still runs the old stack, so both can serve simultaneously on
-different ports while the migration proceeds - which is what
-``tools/diff_harness.py`` compares.
+In a container this is started by ``start.sh``, which waits for Elasticsearch
+and then supervises the server - it restarts uvicorn on SIGHUP, which is how a
+restart requested from the admin screen takes effect.
 """
 
 from __future__ import annotations

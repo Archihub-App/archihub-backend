@@ -1,7 +1,5 @@
 """Login.
 
-Port of ``app/api/auth/services.py``.
-
 TWO INVARIANTS GOVERN THIS MODULE. Both are easy to break with a change that
 looks like an improvement, so they are stated rather than left to be inferred:
 

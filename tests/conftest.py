@@ -48,6 +48,47 @@ def settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     get_settings.cache_clear()
 
 
+#: Where `no_process_restarts` stashes the real terminator, so
+#: `tests/test_runtime_restart.py` - which tests it - can put it back.
+REAL_TERMINATE_ATTR = "archihub.core.runtime_restart._real_terminate_runtime"
+
+
+@pytest.fixture(autouse=True)
+def no_process_restarts(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Stop the restart machinery from acting on the process running the tests.
+
+    Two separate hazards, and the second one is not theoretical - it is how this
+    fixture came to exist.
+
+    ``start_runtime_restart_monitor`` starts a thread that polls the ``system``
+    collection. With no database running every poll is a connection timeout, and
+    the thread outlives the test that created it, so the suite would accumulate
+    one poller per ``create_app()`` call.
+
+    ``schedule_local_restart`` **sends SIGTERM to the current process** a second
+    after it is called - which is correct under a supervisor whose whole job is
+    to start the replacement, and fatal anywhere else. Any test touching plugin
+    activation reaches it, so without this the run is killed part-way through
+    with no failure reported: it presents as the suite hanging, and the exit
+    code is the only evidence of what happened.
+
+    The wiring is asserted in ``tests/test_runtime_restart.py`` by checking that
+    the service calls these functions, not by letting them run.
+    """
+    from archihub.core import runtime_restart
+
+    # Stashed where a test that needs the real thing can reach it - the same
+    # arrangement `pinned_locale` uses below. Without it, a test exercising this
+    # module would silently exercise the stub and pass whatever it asserted.
+    monkeypatch.setattr(
+        REAL_TERMINATE_ATTR, runtime_restart.terminate_runtime, raising=False
+    )
+    monkeypatch.setattr(runtime_restart, "start_runtime_restart_monitor", lambda: None)
+    monkeypatch.setattr(runtime_restart, "schedule_local_restart", lambda *a, **k: None)
+    monkeypatch.setattr(runtime_restart, "terminate_runtime", lambda: None)
+    yield
+
+
 #: Where `pinned_locale` stashes the real resolver, so `tests/test_i18n.py` -
 #: which tests that resolver itself, against a fake Mongo - can put it back.
 REAL_GET_LOCALE_ATTR = "archihub.core.i18n._real_get_locale"

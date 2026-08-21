@@ -1,7 +1,5 @@
 """Editorial review tasks.
 
-Port of ``app/api/usertasks/services.py``.
-
 A user task assigns review work on one resource or record to one editor. Exactly
 one may be open per target at a time, which is what stops two editors being
 asked to review the same thing.

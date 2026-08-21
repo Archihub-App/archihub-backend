@@ -203,9 +203,16 @@ def test_seeding_creates_a_missing_group(mongo, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
+def _settings_instance(mongo, *groups):
+    """Stub an instance whose `system` collection holds these settings groups."""
+    mongo.collections["system"] = list(groups)
+    by_name = {g["name"]: g for g in groups}
+    mongo.records["system"] = lambda filters: by_name.get(filters.get("name"))
+
+
 def test_only_existing_entries_are_written(mongo):
     """A client must not be able to introduce new settings keys."""
-    mongo.records["system"] = {"name": "g", "data": [{"id": "known", "value": 1}]}
+    _settings_instance(mongo, {"name": "g", "data": [{"id": "known", "value": 1}]})
 
     services.update_settings({"g": {"known": 2, "injected": "x"}}, "admin")
 
@@ -214,11 +221,66 @@ def test_only_existing_entries_are_written(mongo):
     assert update["data"][0]["value"] == 2
 
 
+def test_the_settings_screens_flat_payload_is_applied(mongo):
+    """THE SETTINGS SCREEN SENDS NO GROUP NAMES.
+
+    It builds one form from entries drawn out of several groups and submits
+    them together as a flat object. Accepting only the grouped shape makes
+    every value a scalar, so nothing matches and the route answers 200 having
+    written nothing - the screen reports success and redisplays the old values.
+    """
+    _settings_instance(
+        mongo,
+        {"name": "api_activation", "data": [{"id": "api_activation_admin", "value": False}]},
+        {"name": "index_management", "data": [{"id": "index_activation", "value": False}]},
+    )
+
+    services.update_settings(
+        {"api_activation_admin": True, "index_activation": True}, "admin"
+    )
+
+    written = {
+        filters["name"]: {e["id"]: e["value"] for e in update["data"]}
+        for _collection, filters, update in mongo.updated
+    }
+    assert written["api_activation"]["api_activation_admin"] is True
+    assert written["index_management"]["index_activation"] is True
+
+
+def test_a_flat_key_this_instance_does_not_declare_is_not_written(mongo):
+    _settings_instance(mongo, {"name": "g", "data": [{"id": "known", "value": 1}]})
+
+    services.update_settings({"invented": "x"}, "admin")
+
+    assert mongo.updated == []
+
+
 def test_the_plugin_registry_is_not_editable_as_settings(mongo):
     """active_plugins drives what the application loads at startup; it has its
     own guarded route and must not be writable through the generic settings
     endpoint."""
+    _settings_instance(mongo, {"name": "active_plugins", "data": ["a-plugin"]})
+
     services.update_settings({"active_plugins": {"data": ["anything"]}}, "admin")
+
+    assert mongo.updated == []
+
+
+def test_the_restart_counter_is_not_writable_through_settings(mongo):
+    """Every process polls it, so writing it restarts the whole deployment.
+
+    With entry ids resolved to their group, any id in any group would otherwise
+    be reachable from the settings form - so the protected groups have to be
+    excluded from the lookup itself, not only from the top-level keys.
+    """
+    _settings_instance(
+        mongo,
+        {"name": "runtime_control", "data": [{"id": "restart_revision", "value": 7}]},
+        {"name": "g", "data": [{"id": "known", "value": 1}]},
+    )
+
+    services.update_settings({"restart_revision": 9999}, "admin")
+
     assert mongo.updated == []
 
 

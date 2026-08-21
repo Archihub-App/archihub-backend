@@ -57,22 +57,20 @@ def _repo_root() -> Path:
 
 
 def translation_directories() -> list[Path]:
-    """Core catalog, the port's own additions, plus one per plugin.
+    """The application catalog, plus one per plugin that ships translations.
 
-    Port of ``get_translation_directories()``. Order is significant: the first
-    readable catalog is primary and the rest are registered as fallbacks, so a
-    msgid the legacy catalog already translates keeps that translation.
+    Order is significant: the first readable catalog is primary and the rest are
+    registered as fallbacks, so a plugin may add msgids but never redefine one
+    the application already translates.
 
-    ``archihub/translations`` holds **only msgids the rewrite introduced**. It
-    exists because ``app/`` is the reference implementation the diff harness
-    compares against and nothing in the port writes to it - so new strings could
-    not simply be appended to the legacy ``.po``. The two merge into one catalog
-    when ``app/`` is deleted at Phase 7.
+    A plugin's catalog is found under its own directory, which is what makes a
+    plugin installable by copying it in - its translations arrive with it and
+    need no change here.
     """
     root = _repo_root()
-    directories = [root / "app" / "translations", root / "archihub" / "translations"]
+    directories = [root / "archihub" / "translations"]
 
-    plugins_root = root / "app" / "plugins"
+    plugins_root = root / "archihub" / "plugins"
     if plugins_root.is_dir():
         for plugin_dir in sorted(plugins_root.iterdir()):
             candidate = plugin_dir / "translations"

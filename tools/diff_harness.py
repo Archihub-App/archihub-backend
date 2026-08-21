@@ -1,59 +1,62 @@
 #!/usr/bin/env python3
-"""Compare the legacy Flask backend against the FastAPI rewrite, response by response.
+"""Assert the backend's responses, route by route, field by field.
 
 WHY THIS EXISTS
 ---------------
-``ArchiHUBTestRunner`` is the project's end-to-end suite, but a survey during
-migration planning found it has real behavioural coverage for only about a
-quarter of the core routes. ``records`` (24 routes), ``aiservices`` (17),
-``views``, ``usertasks``, ``geosystem``, ``tasks``, ``snaps``, ``adminApi``,
-``publicApi``, all 80 plugin routes and all 39 Celery tasks have no behavioural
-tests at all - only route-existence checking via the ``swagger-inventory`` suite.
-
-Porting those blind would mean discovering regressions in production. So this
-harness is the regression gate for everything the runner does not cover: it
-fires identical requests at both backends, pointed at the same database, and
-diffs the status code and the full response body field by field.
+``ArchiHUBTestRunner`` is the project's end-to-end suite, but a survey found it
+has real behavioural coverage for only about a quarter of the core routes.
+``records``, ``aiservices``, ``views``, ``usertasks``, ``geosystem``, ``tasks``,
+``snaps``, ``adminApi``, ``publicApi``, every plugin route and every Celery task
+have no behavioural tests there at all - only route-existence checking via the
+``swagger-inventory`` suite. This harness is the gate for what the runner does
+not cover.
 
 Field-by-field matters. A test that asserts ``response.ok`` and reads two fields
 passes happily while a third field silently disappears - which is exactly the
-failure mode FastAPI's ``response_model`` filtering introduces, and why
-PLAN_FASTAPI.md section 7 forbids enabling response models before a route has
-been diffed.
+failure mode FastAPI's ``response_model`` filtering introduces, and why a route
+must be checked here before a response model is enabled on it.
+
+TWO KINDS OF CASE
+-----------------
+A *contract* case states what the response must be - a status, a field that must
+be present, a field that must be absent - and asserts it against the backend
+directly. These are the normal kind and the only kind that needs one backend.
+
+A *parity* case fires the same request at TWO backends and diffs both bodies in
+full. It needs ``--legacy`` pointing at something to compare against; without it
+these are reported as skipped, never as passed. They were the migration's main
+gate, when the question was whether a rewritten route still answered what its
+predecessor did. Keep them: the same mechanism compares a release candidate
+against the version in production.
 
 USAGE
 -----
-Start both backends against the same MongoDB, then::
+::
 
-    python tools/diff_harness.py \\
-        --legacy http://localhost:5000 \\
-        --next   http://localhost:5001 \\
-        --cases  tools/diff_cases.json
+    python tools/diff_harness.py --mint-token admin@example.org
 
-Exits non-zero if any case differs, so it can gate a phase in CI.
+    # comparing two running backends against ONE database
+    python tools/diff_harness.py --legacy http://localhost:5000 --next http://localhost:5001
+
+Exits non-zero if any case fails, so it can gate a release in CI.
 
 Options worth knowing:
 
   --mint-token USER       authenticate as USER without a password (see below)
   --only users            run only cases whose name or path contains this string
-  --reset                 reset+reseed through the LEGACY backend before running
+  --reset                 reset+reseed the instance before running
   --show-equal            print passing cases too, not just failures
   --update-baseline FILE  record current responses for later comparison
 
 WHAT IT ACTUALLY NEEDS
 ----------------------
-Two running backends pointed at the same MongoDB. **Nothing has to be installed
-into this environment** - the legacy stack is queried over HTTP, never imported.
-An earlier note in PLAN_FASTAPI.md concluded the harness was blocked behind a
-multi-gigabyte ``torch`` install because ``import torch`` is line 1 of
-``app/__init__.py``; that only matters if you import the legacy app, which this
-does not do.
+A running backend. When comparing two, both must point at the SAME database, and
+neither is ever imported - both are queried over HTTP.
 
 AUTHENTICATION
 --------------
-Both stacks share ``JWT_SECRET_KEY``, so a token minted by either is accepted by
-the other - which is itself a property worth checking, and is what makes an
-in-place cutover possible without logging every user out.
+A token is accepted by any stack sharing ``JWT_SECRET_KEY``, which is what makes
+an in-place upgrade possible without logging every user out.
 
 ``--mint-token USERNAME`` exploits that: it signs a token locally from the
 configured secret, so **no account password is needed** and no real credential
@@ -386,14 +389,17 @@ def _parse_body(response: httpx.Response) -> Any:
 class DiffHarness:
     def __init__(
         self,
-        legacy_url: str,
+        legacy_url: str | None,
         next_url: str,
         *,
         timeout: float = 60.0,
         volatile_keys: tuple[str, ...] = DEFAULT_VOLATILE_KEYS,
         test_secret: str | None = None,
     ) -> None:
-        self.legacy_url = legacy_url.rstrip("/")
+        # None once the stack being replaced is no longer available. Parity
+        # cases then cannot run at all - see `run_case` - and everything the
+        # harness still does is asserted against the port alone.
+        self.legacy_url = legacy_url.rstrip("/") if legacy_url else None
         self.next_url = next_url.rstrip("/")
         self.volatile_keys = volatile_keys
         self.test_secret = test_secret
@@ -417,7 +423,8 @@ class DiffHarness:
     def login(self, username: str, password: str) -> None:
         """Mint a token on the legacy backend and use it against both."""
         response = self.client.post(
-            f"{self.legacy_url}/auth/login", json={"username": username, "password": password}
+            f"{self.legacy_url or self.next_url}/auth/login",
+            json={"username": username, "password": password},
         )
         if response.status_code != 200:
             raise SystemExit(
@@ -441,7 +448,7 @@ class DiffHarness:
             raise SystemExit("--reset needs --test-secret (X-ArchiHUB-Test-Secret)")
 
         response = self.client.post(
-            f"{self.legacy_url}{RESET_PATH}",
+            f"{self.legacy_url or self.next_url}{RESET_PATH}",
             headers={"X-ArchiHUB-Test-Secret": self.test_secret},
         )
         if response.status_code == 404:
@@ -503,7 +510,11 @@ class DiffHarness:
                     f"Fixture {fixture.name!r}: source must be 'legacy' or 'next', "
                     f"not {fixture.source!r}"
                 )
-            base = self.legacy_url if fixture.source == "legacy" else self.next_url
+            # With no previous stack, every fixture resolves against the port.
+            # That is sound precisely because parity cases cannot run either:
+            # what remains are contract cases, which never consult a second
+            # stack, so nothing is being asked to supply its own answer.
+            base = self.legacy_url if (fixture.source == "legacy" and self.legacy_url) else self.next_url
 
             try:
                 response = self.client.request(
@@ -572,6 +583,15 @@ class DiffHarness:
 
         if case.is_contract:
             return self._run_contract(case)
+
+        if not self.legacy_url:
+            # Reported as skipped, never as passed. A parity case compares two
+            # stacks; with one of them gone there is nothing to compare, and
+            # saying so is the only honest result.
+            return Result(
+                case, 0, 0, None,
+                skipped="parity needs a second stack; pass --legacy to compare against one",
+            )
 
         try:
             legacy = self._request(self.legacy_url, case)
@@ -722,7 +742,8 @@ def report(results: list[Result], *, show_equal: bool) -> int:
     contract = [r for r in ran if r.case.is_contract]
 
     print(f"\n{'=' * 60}")
-    print(f"{sum(r.ok for r in parity)}/{len(parity)} parity cases identical to legacy")
+    if parity:
+        print(f"{sum(r.ok for r in parity)}/{len(parity)} parity cases identical to the compared stack")
     print(f"{sum(r.ok for r in contract)}/{len(contract)} contract cases met (port asserted directly)")
     if skipped:
         print(f"{len(skipped)} skipped")
@@ -747,7 +768,14 @@ def report(results: list[Result], *, show_equal: bool) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--legacy", default="http://localhost:5000", help="Flask backend base URL")
+    parser.add_argument(
+        "--legacy",
+        default=None,
+        help=(
+            "Base URL of a second backend to compare against. Optional: without it "
+            "only contract cases run, which is the normal mode now that there is one stack."
+        ),
+    )
     parser.add_argument("--next", dest="next_url", default="http://localhost:5001", help="FastAPI backend base URL")
     parser.add_argument("--cases", type=Path, default=Path(__file__).parent / "diff_cases.json")
     parser.add_argument("--only", help="Run only cases whose name or path contains this substring")
@@ -764,7 +792,7 @@ def main() -> int:
         help="Mint a token for USERNAME from the configured JWT_SECRET_KEY and use it.",
     )
     parser.add_argument("--test-secret", help="X-ArchiHUB-Test-Secret, needed by --reset")
-    parser.add_argument("--reset", action="store_true", help="Reset+reseed via the legacy backend first")
+    parser.add_argument("--reset", action="store_true", help="Reset+reseed the instance first")
     parser.add_argument("--show-equal", action="store_true", help="Also print passing cases")
     parser.add_argument(
         "--bind",
@@ -790,11 +818,12 @@ def main() -> int:
 
     harness = DiffHarness(args.legacy, args.next_url, test_secret=args.test_secret)
 
-    print(f"legacy : {harness.legacy_url}")
-    print(f"next   : {harness.next_url}")
+    if harness.legacy_url:
+        print(f"compare: {harness.legacy_url}")
+    print(f"backend: {harness.next_url}")
 
     if args.reset:
-        print("\nResetting instance via legacy backend...")
+        print("\nResetting instance...")
         harness.reset()
 
     if args.mint_token:
@@ -807,7 +836,7 @@ def main() -> int:
         print("  authenticated (token supplied)")
     elif args.username and args.password:
         harness.login(args.username, args.password)
-        print("  authenticated (token minted on legacy, used against both)")
+        print("  authenticated (token minted by logging in)")
     elif any(c.auth for c in cases):
         print("  no credentials given - authenticated cases will run unauthenticated")
 
@@ -823,7 +852,8 @@ def main() -> int:
     needed = [f for f in fixtures if f.name in wanted]
 
     if needed:
-        print(f"\nResolving {len(needed)} fixture(s) against the legacy backend...")
+        target = "the compared stack" if harness.legacy_url else "the backend"
+        print(f"\nResolving {len(needed)} fixture(s) against {target}...")
         unresolved = harness.resolve_fixtures(needed)
         for fixture, reason in unresolved:
             print(f"  {fixture.name}: UNRESOLVED - {reason}")

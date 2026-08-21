@@ -303,6 +303,24 @@ def get_type(slug: str, identity: ApiIdentity = Depends(admin_identity)) -> JSON
     return _respond(result if isinstance(result, tuple) else (result, 200))
 
 
+@admin_router.get(
+    "/lists/{list_id}",
+    responses={200: {"description": "The list"}, 404: {"description": "No such list"}},
+)
+def get_list(list_id: str, identity: ApiIdentity = Depends(admin_identity)) -> JSONResponse:
+    """One controlled vocabulary by id.
+
+    Part of the external contract other organisations' scripts read, so the
+    path, the method and the response shape are what the previous stack served.
+    """
+    if not _enabled(ADMIN_SETTING):
+        return _unavailable()
+
+    from archihub.api.lists import services as list_services
+
+    return _respond(list_services.get_by_id(list_id))
+
+
 @admin_router.api_route(
     "/plugins/{plugin}/{plugin_endpoint:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH"],

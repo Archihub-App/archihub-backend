@@ -14,7 +14,7 @@ This module sets up stdlib logging once at startup:
   from one request can be correlated. Celery tasks bind their task id the same
   way.
 
-Not to be confused with ``app/api/logs/`` - that is the Mongo-backed **audit**
+Not to be confused with ``archihub/api/logs/`` - that is the Mongo-backed **audit**
 log (``register_log``, a 29-action enum, field-level diffs for resource history).
 It is a product feature, stays a plain function call at the point where business
 logic decides an action succeeded, and is unrelated to this module.
