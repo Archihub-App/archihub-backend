@@ -206,6 +206,14 @@ class ArchiPlugin:
             key = setting.get("id")
             label = setting.get("label", key)
             if key not in body:
+                # A DECLARED DEFAULT SATISFIES A REQUIRED FIELD. The two are not
+                # in conflict: `required` means the run needs a value, and a
+                # default is the plugin supplying one. Demanding it in the
+                # payload as well makes the default unreachable and refuses
+                # every caller that relied on it - including the record-detail
+                # action, whose form the operator may never open.
+                if "default" in setting:
+                    continue
                 return _("The field {label} is required", label=label)
             if setting.get("type") == "file" and not body.get(key):
                 return _("The field {label} is required", label=label)
@@ -258,11 +266,20 @@ class ArchiPlugin:
         start, with a 201 returned and nothing logged.
         """
 
+    #: Set by a plugin that declares its own `/settings` routes. The shared
+    #: pair is then skipped rather than registered alongside: Starlette matches
+    #: in registration order, so a duplicate does not error - the plugin's own
+    #: route answers and the framework's sits behind it, unreachable but
+    #: published in the OpenAPI document, which is the one artefact nobody
+    #: re-reads and every third-party integrator does.
+    declares_own_settings_routes = False
+
     def build(self) -> APIRouter:
-        """Assemble the router: the plugin's own routes, then the shared three."""
+        """Assemble the router: the plugin's own routes, then the shared ones."""
         self.add_routes()
         self._add_image_route()
-        self._add_settings_routes()
+        if not self.declares_own_settings_routes:
+            self._add_settings_routes()
         return self.router
 
     # -- the three every plugin gets ------------------------------------

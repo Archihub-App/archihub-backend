@@ -79,6 +79,29 @@ logger = logging.getLogger(__name__)
 
 #: Types this backend can answer, and the ones it deliberately cannot yet.
 IMPLEMENTED_TYPES = ("transcription", "document", "image_gallery")
+
+#: Conversation types this backend does not answer itself. A plugin publishes
+#: the entry point through `interop`, so the type is available exactly when
+#: that plugin is ACTIVE - which is the same condition the interface uses to
+#: decide whether to offer it, since the capability comes from the same place.
+PLUGIN_TYPES = {"atlas": "atlas_conversation"}
+
+
+def plugin_handler(kind: str):
+    """The plugin entry point for a conversation type, or ``None``.
+
+    ``None`` means no active plugin provides it, which is a 501 - the type is
+    recognised, this instance just cannot serve it.
+    """
+    capability = PLUGIN_TYPES.get(kind)
+    if not capability:
+        return None
+
+    from archihub.plugins.framework import interop
+
+    if not interop.has(capability):
+        return None
+    return interop.get(capability, needed_by="aiservices")
 KNOWN_TYPES = ("transcription", "document", "image_gallery", "atlas")
 
 #: Stored snake_case, which is the shape already on disk. Writing camelCase here
@@ -482,6 +505,9 @@ def build_messages(body: dict, user: str) -> tuple[list[dict], dict, dict]:
     if kind not in KNOWN_TYPES:
         raise AssistantError(_('Unknown conversation type "{type}"', type=str(kind)[:30]), 400)
     if kind not in IMPLEMENTED_TYPES:
+        # A plugin type never reaches here: `respond()` hands it to the plugin
+        # before building messages, because a plugin conversation is not about
+        # a record and has none of the context this function assembles.
         raise AssistantError(
             _("The {type} assistant is not available on this backend yet", type=str(kind)), 501
         )
@@ -675,7 +701,7 @@ def store_turn(
 # ---------------------------------------------------------------------------
 
 
-def _provider_and_model(body: dict) -> tuple[dict, str]:
+def provider_and_model(body: dict) -> tuple[dict, str]:
     provider_ref = body.get("provider")
     provider_id = provider_ref.get("id") if isinstance(provider_ref, dict) else provider_ref
     if not provider_id:
@@ -700,7 +726,7 @@ def _frame(payload: dict) -> str:
 def answer(body: dict, user: str) -> tuple[dict, int]:
     """One complete answer, stored, for a caller that did not ask to stream."""
     messages, conversation, applied = build_messages(body, user)
-    provider, model = _provider_and_model(body)
+    provider, model = provider_and_model(body)
     question = body["message"].strip()
 
     result = chat.complete(provider, messages, model=model)
@@ -721,11 +747,11 @@ def stream(body: dict, user: str):
     """The answer as SSE, in the shape `AIservice.tsx` parses.
 
     Everything that can fail with a status has already failed by the time this
-    generator is iterated - `build_messages` and `_provider_and_model` run in
+    generator is iterated - `build_messages` and `provider_and_model` run in
     `respond()` while the response line can still be chosen.
     """
     messages, conversation, applied = build_messages(body, user)
-    provider, model = _provider_and_model(body)
+    provider, model = provider_and_model(body)
     question = body["message"].strip()
 
     def generate():

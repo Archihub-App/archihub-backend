@@ -470,3 +470,49 @@ def test_get_plugin_info_never_raises():
 
 def test_capability_check_on_missing_plugin_is_false():
     assert discovery.plugin_has_capability("definitely_not_a_plugin", "scheduler") is False
+
+
+# ---------------------------------------------------------------------------
+# Loading a plugin must not stand up a second web framework
+# ---------------------------------------------------------------------------
+
+
+def test_importing_an_unsupported_plugin_is_refused_before_it_executes(tmp_path, monkeypatch):
+    """A package in the plugins directory is not necessarily runnable code.
+
+    A plugin written for the previous stack imports `app.*`, and that package
+    builds and boots an entire web application at module scope - a torch
+    import, database reads, a translation instance, a second hook registry.
+    Importing one to read its metadata would stand all of that up inside this
+    process, and it would get far enough to do so before failing on something
+    else.
+
+    The static manifest answers "can this backend build it" without executing
+    anything, so it is consulted first and an unsupported plugin is refused
+    without being imported at all.
+    """
+    from archihub.plugins.framework import discovery
+
+    plugins = tmp_path / "plugins"
+    (plugins / "legacyish").mkdir(parents=True)
+    (plugins / "legacyish" / "__init__.py").write_text(
+        "raise AssertionError('this plugin must never be executed')\n"
+        "plugin_info = {'name': 'Legacyish'}\n"
+    )
+    monkeypatch.setattr(discovery, "PLUGIN_ROOT", plugins)
+
+    attempted = []
+    real_import = discovery.importlib.import_module
+    monkeypatch.setattr(
+        discovery.importlib,
+        "import_module",
+        lambda name, *a, **k: (attempted.append(name), real_import(name, *a, **k))[1],
+    )
+
+    with pytest.raises(discovery.PluginDiscoveryError) as excinfo:
+        discovery.import_plugin("legacyish")
+
+    assert "cannot be loaded" in str(excinfo.value)
+    assert not [name for name in attempted if "legacyish" in name], (
+        f"the plugin was imported despite being unsupported: {attempted}"
+    )

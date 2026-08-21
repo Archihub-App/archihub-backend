@@ -121,9 +121,41 @@ def _imported() -> dict[str, set[str]]:
     return found
 
 
+def _egg_declared_modules() -> dict[str, list[str]]:
+    """Module -> distribution, for requirements that name it with ``#egg=``.
+
+    ``packages_distributions()`` reads INSTALLED metadata, so a dependency this
+    machine does not have cannot be mapped from it - and a plugin's heavyweight
+    ML packages routinely are not installed in a development environment.
+
+    ``#egg=`` exists to state that name where nothing else can supply it, so an
+    egg-declared distribution is used as a fallback mapping. This does not
+    weaken the check: the declaration still has to be there, and it still has to
+    match what the code imports. It only stops "not installed here" being
+    reported as "undeclared".
+    """
+    extra: dict[str, list[str]] = {}
+    for slug in sorted(p.name for p in PLUGIN_ROOT.iterdir() if p.is_dir()):
+        if slug in PLUGIN_RESERVED:
+            continue
+        manifest = PLUGIN_ROOT / slug / "requirements.txt"
+        if not manifest.is_file():
+            continue
+        for raw in manifest.read_text().splitlines():
+            if "#egg=" not in raw:
+                continue
+            distribution = raw.split("#egg=")[1].strip()
+            # The importable module is conventionally the distribution with
+            # separators removed; both spellings are accepted so a plugin need
+            # not know which one this check uses.
+            for module in {distribution, distribution.replace("-", "_"), distribution.split("-")[0]}:
+                extra.setdefault(module, []).append(distribution)
+    return extra
+
+
 DECLARED = _declared()
 IMPORTED = _imported()
-DISTRIBUTIONS = packages_distributions()
+DISTRIBUTIONS = {**_egg_declared_modules(), **packages_distributions()}
 
 
 def test_the_scan_found_something_to_check():

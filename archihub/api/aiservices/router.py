@@ -447,6 +447,15 @@ def ask_assistant(
     `/providers/{id}/chat` emits.
     """
     try:
+        # A conversation type an ACTIVE plugin provides is handed straight to
+        # it: such a conversation is not about a record, so none of the context
+        # the record assistant assembles applies. The type stays a 501 when no
+        # plugin provides it - recognised, but not available here.
+        handler = assistant.plugin_handler(body.get("type"))
+        if handler is not None:
+            provider, _model = assistant.provider_and_model(body)
+            return handler(body, provider, current_user.username)
+
         if assistant.wants_stream(body):
             return streaming.plain_response(assistant.stream(body, current_user.username))
         return _respond(assistant.answer(body, current_user.username))

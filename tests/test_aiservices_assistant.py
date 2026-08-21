@@ -831,3 +831,66 @@ def test_a_gallery_conversation_never_needed_one(gallery):
     messages, _conversation, _applied = assistant.build_messages(body, "someone@test.com")
 
     assert messages[0]["content"] == assistant.prompts.IMAGE_GALLERY
+
+
+# ---------------------------------------------------------------------------
+# Conversation types an active plugin provides
+# ---------------------------------------------------------------------------
+
+
+def test_a_plugin_conversation_type_is_501_when_no_plugin_provides_it():
+    """Recognised, but not available here - which is what 501 means.
+
+    The type stays in KNOWN_TYPES so the refusal names it, rather than reading
+    as a client sending nonsense.
+    """
+    from archihub.api.aiservices import assistant
+    from archihub.plugins.framework import interop
+
+    interop.reset()
+
+    assert assistant.plugin_handler("atlas") is None
+
+
+def test_a_plugin_conversation_type_resolves_once_the_plugin_provides_it():
+    """The dependency follows ACTIVATION, not the presence of a directory: a
+    plugin registers its entry point when it is built."""
+    from archihub.api.aiservices import assistant
+    from archihub.plugins.framework import interop
+
+    interop.reset()
+    interop.provide("atlas_conversation", "atlas", lambda body, provider, user: "answered")
+
+    handler = assistant.plugin_handler("atlas")
+
+    assert handler is not None
+    assert handler({}, {}, "alice") == "answered"
+
+    interop.reset()
+
+
+def test_a_record_conversation_type_is_never_treated_as_a_plugin_type():
+    """The record assistant must keep answering the types it implements even
+    while a plugin is registered - the dispatch is per type, not a mode."""
+    from archihub.api.aiservices import assistant
+    from archihub.plugins.framework import interop
+
+    interop.reset()
+    interop.provide("atlas_conversation", "atlas", lambda *a: "atlas")
+
+    for kind in assistant.IMPLEMENTED_TYPES:
+        assert assistant.plugin_handler(kind) is None, f"{kind} was diverted to a plugin"
+
+    interop.reset()
+
+
+def test_every_plugin_type_is_a_known_type():
+    """A type that dispatches to a plugin but is not in KNOWN_TYPES would be
+    refused as unknown before the dispatch could ever run."""
+    from archihub.api.aiservices import assistant
+
+    for kind in assistant.PLUGIN_TYPES:
+        assert kind in assistant.KNOWN_TYPES
+        assert kind not in assistant.IMPLEMENTED_TYPES, (
+            f"{kind} is claimed by both the record assistant and a plugin"
+        )

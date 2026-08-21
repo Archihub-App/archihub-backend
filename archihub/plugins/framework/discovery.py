@@ -287,6 +287,34 @@ def _declared_manifest(tree: ast.Module) -> dict:
     return {}
 
 
+#: Names a plugin may wrap a display string in. Unwrapped when reading the
+#: manifest statically, because the value inside is what a reader needs and the
+#: call cannot be evaluated without executing the module.
+_TRANSLATION_CALLS = frozenset({"_", "gettext", "lazy_gettext"})
+
+
+def _unwrap_translation(node: ast.expr) -> ast.expr:
+    """``_("Atlas Wiki")`` -> ``"Atlas Wiki"``.
+
+    Declaring a plugin's display strings translated is the documented pattern,
+    and the template does it - so a manifest read that cannot see through the
+    call reports the plugin with NO NAME. It is then listed as a blank row in
+    the admin table: present, unnameable, and impossible to tell apart from
+    another one in the same state.
+
+    The untranslated text is the right answer here regardless of locale: this
+    reader must not execute plugin code, and a name is better than nothing.
+    """
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id in _TRANSLATION_CALLS
+        and len(node.args) == 1
+    ):
+        return node.args[0]
+    return node
+
+
 def _literal_items(node: ast.expr) -> dict:
     """The entries of a dict literal whose key and value are both literals."""
     if not isinstance(node, ast.Dict):
@@ -298,7 +326,7 @@ def _literal_items(node: ast.expr) -> dict:
             continue
         try:
             key = ast.literal_eval(key_node)
-            items[key] = ast.literal_eval(value_node)
+            items[key] = ast.literal_eval(_unwrap_translation(value_node))
         except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
             continue
     return items
@@ -454,6 +482,25 @@ def import_plugin(slug: str) -> ModuleType:
     framework into the Celery worker or the ASGI process.
     """
     _validate_slug(slug)
+
+    # A package sitting in this directory is not necessarily code this backend
+    # can run, and importing one to find out is not free: a plugin package
+    # written for another framework pulls that framework in at module scope,
+    # standing a second application up inside this process - heavyweight
+    # imports, database reads, a competing event registry - as a side effect of
+    # reading a metadata dictionary. It gets far enough to do all of that
+    # before failing on something else.
+    #
+    # The static manifest answers "can this backend build it" without executing
+    # anything, so it is consulted first. Refusing here is what makes
+    # `read_manifest`'s guarantee - that listing plugins never runs their code -
+    # hold for every caller rather than only the listing route.
+    manifest = read_manifest(slug)
+    if not manifest.mountable:
+        raise PluginDiscoveryError(
+            f"Plugin {slug!r} cannot be loaded by this backend: "
+            f"{manifest.problem or 'it is not supported'}"
+        )
 
     try:
         return importlib.import_module(f"{PLUGIN_PACKAGE}.{slug}")
