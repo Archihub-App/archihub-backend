@@ -516,3 +516,35 @@ def test_importing_an_unsupported_plugin_is_refused_before_it_executes(tmp_path,
     assert not [name for name in attempted if "legacyish" in name], (
         f"the plugin was imported despite being unsupported: {attempted}"
     )
+
+
+def test_the_static_and_imported_manifests_agree_on_capabilities():
+    """`plugin_info` is read TWO ways and both answers must match.
+
+    `GET /system/get-settings` imports the module; the plugins listing parses
+    the file with `ast` and never executes it. A value written as a name
+    reference — `'capabilities': [CAPABILITY]` — resolves for the first and
+    reads as ABSENT for the second, so the same plugin reports different
+    capabilities depending on which route asked.
+
+    Capabilities specifically, because the interface is gated on them: a menu
+    entry, a screen or a button simply is not rendered when one is missing, with
+    no request, no status and nothing logged.
+    """
+    from archihub.plugins.framework import discovery
+
+    mismatched = []
+    for slug in discovery.list_installed_plugins():
+        manifest = discovery.read_manifest(slug)
+        if not manifest.mountable:
+            continue
+        static = sorted(manifest.info.get("capabilities") or [])
+        imported = sorted(discovery.get_plugin_info(slug).get("capabilities") or [])
+        if static != imported:
+            mismatched.append(f"  {slug}: parsed {static}, imported {imported}")
+
+    assert not mismatched, (
+        "plugin_info capabilities differ between the parsed and imported reads. "
+        "Write them as literals, not as references to a module constant:\n"
+        + "\n".join(mismatched)
+    )

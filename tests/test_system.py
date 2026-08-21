@@ -109,13 +109,15 @@ def test_set_first_time_checks_the_password_confirmation(mongo, monkeypatch):
 def test_set_first_time_answers_201(mongo, monkeypatch):
     """The route declares 201; the service tuple is what actually sets it.
 
-    The account creation itself is stubbed - this pins the status onboarding
-    reports, not the registration path, which `test_users_lifecycle` covers.
+    The account creation and the catalogue seeding are stubbed - this pins the
+    status onboarding reports, not either of those paths, which have their own
+    tests below and in `test_users_lifecycle`.
     """
     import archihub.api.users.services as users_services
 
     mongo.counts["users"] = 0
     monkeypatch.setattr(services, "set_system_setting", lambda: None)
+    monkeypatch.setattr(services, "seed_starter_catalogue", lambda template, user: None)
     monkeypatch.setattr(
         users_services, "register_user", lambda payload: ({"msg": "ok"}, 201)
     )
@@ -129,6 +131,34 @@ def test_set_first_time_answers_201(mongo, monkeypatch):
         }
     )
     assert status == 201
+
+
+def test_onboarding_reports_a_catalogue_it_could_not_provision(mongo, monkeypatch):
+    """An instance with an administrator and nothing to catalogue into is not
+    configured. Onboarding cannot be retried once the account exists, so the
+    failure has to say what is missing rather than answer success."""
+    import archihub.api.users.services as users_services
+
+    mongo.counts["users"] = 0
+    monkeypatch.setattr(services, "set_system_setting", lambda: None)
+    monkeypatch.setattr(
+        users_services, "register_user", lambda payload: ({"msg": "ok"}, 201)
+    )
+    monkeypatch.setattr(
+        services, "seed_starter_catalogue", lambda template, user: "the form could not be created"
+    )
+
+    payload, status = services.set_first_time(
+        {
+            "username": "admin@x.test",
+            "password": "one",
+            "confirmPassword": "one",
+            "typeTemplate": "basic",
+        }
+    )
+
+    assert status == 500
+    assert "form" in payload["msg"]
 
 
 # ---------------------------------------------------------------------------
@@ -384,3 +414,166 @@ def test_unknown_roles_are_rejected_not_dropped(mongo, monkeypatch):
 
     with pytest.raises(ValueError):
         roles_module.verify_roles_exist([{"id": "root"}])
+
+
+# ---------------------------------------------------------------------------
+# Onboarding provisions a usable instance, not just an account
+# ---------------------------------------------------------------------------
+
+
+class SeedMongo:
+    """A store with just enough behaviour to run the seeder."""
+
+    def __init__(self):
+        self.collections: dict[str, list[dict]] = {}
+        self._next = 0
+
+    def get_record(self, collection, filters=None, fields=None):
+        for row in self.collections.get(collection, []):
+            if all(row.get(k) == v for k, v in (filters or {}).items()):
+                return row
+        return None
+
+    def get_all_records(self, collection, filters=None, **kwargs):
+        return list(self.collections.get(collection, []))
+
+    def insert_record(self, collection, record):
+        self._next += 1
+        row = dict(record)
+        row.setdefault("_id", f"id{self._next}")
+        self.collections.setdefault(collection, []).append(row)
+        return row["_id"]
+
+    def update_record(self, collection, filters, update):
+        row = self.get_record(collection, filters)
+        if row:
+            row.update(update if isinstance(update, dict) else update.model_dump())
+
+    def count(self, collection, filters=None):
+        return len(self.collections.get(collection, []))
+
+
+@pytest.fixture
+def seeded(monkeypatch):
+    """The seeder over a fake store, with the create services stubbed.
+
+    The services are stubbed rather than run so this stays a test of the
+    SEQUENCE - what gets provisioned, and what gets wired to what - which is the
+    part that was missing. Each service has its own tests.
+    """
+    from archihub.api.system import services
+
+    store = SeedMongo()
+    monkeypatch.setattr(services, "_mongo", lambda: store)
+    services.set_system_setting()
+
+    def make(collection):
+        def create(body, user):
+            store.insert_record(collection, body)
+            return {"msg": "ok"}, 201
+
+        return create
+
+    monkeypatch.setattr("archihub.api.forms.services.create", make("forms"))
+    monkeypatch.setattr("archihub.api.types.services.create", make("post_types"))
+    monkeypatch.setattr("archihub.api.lists.services.create", make("lists"))
+    return store
+
+
+def test_onboarding_provisions_a_form_a_type_and_the_vocabularies(seeded):
+    """An instance with settings and an administrator but none of this cannot
+    be used: nothing to catalogue into, and no roles to grant."""
+    from archihub.api.system import services
+
+    assert services.seed_starter_catalogue("basic", "admin") is None
+
+    assert [t["slug"] for t in seeded.collections["post_types"]] == ["carpeta"]
+    assert [f["slug"] for f in seeded.collections["forms"]] == ["formulario"]
+    assert {l["name"] for l in seeded.collections["lists"]} == {"Roles", "Niveles de acceso"}
+
+
+def test_the_detailed_template_provisions_its_own_set(seeded):
+    from archihub.api.system import services
+
+    assert services.seed_starter_catalogue("detailed", "admin") is None
+
+    assert [t["slug"] for t in seeded.collections["post_types"]] == [
+        "archivo", "fondo", "unidad-documental"
+    ]
+    assert [f["slug"] for f in seeded.collections["forms"]] == ["isadg", "dublin-core"]
+
+
+def test_the_access_rights_setting_is_pointed_at_the_vocabulary_LISTS(seeded):
+    """THE STEP WHOSE ABSENCE IS HARDEST TO DIAGNOSE.
+
+    Roles and access levels are resolved by looking up a list id stored in the
+    `access_rights` setting. Creating the lists is not enough - without this
+    wiring both vocabularies come back empty while the lists themselves sit in
+    the database looking perfectly correct.
+    """
+    from archihub.api.system import services
+
+    services.seed_starter_catalogue("basic", "admin")
+
+    ids = {l["name"]: str(l["_id"]) for l in seeded.collections["lists"]}
+    wiring = {
+        entry["id"]: entry.get("value")
+        for entry in seeded.get_record("system", {"name": "access_rights"})["data"]
+        if entry.get("id") in ("user_roles_list", "access_rights_list")
+    }
+
+    assert wiring["user_roles_list"] == ids["Roles"]
+    assert wiring["access_rights_list"] == ids["Niveles de acceso"]
+
+
+def test_the_default_cataloguing_type_is_set(seeded):
+    """The cataloguing screen routes to `/cataloging/<value>`, so an empty one
+    sends it to `/cataloging/undefined`."""
+    from archihub.api.system import services
+
+    services.seed_starter_catalogue("basic", "admin")
+
+    values = [
+        entry.get("value")
+        for entry in seeded.get_record("system", {"name": "post_types_settings"})["data"]
+        if entry.get("id") == "tipo_defecto"
+    ]
+    assert values == ["carpeta"]
+
+
+def test_forms_are_created_before_the_types_that_name_them(seeded, monkeypatch):
+    """A content type names its metadata form by slug, so seeding the type
+    first leaves it pointing at something that does not exist yet."""
+    from archihub.api.system import services
+
+    order = []
+    monkeypatch.setattr(
+        "archihub.api.forms.services.create",
+        lambda body, user: (order.append("form"), seeded.insert_record("forms", body), ({}, 201))[-1],
+    )
+    monkeypatch.setattr(
+        "archihub.api.types.services.create",
+        lambda body, user: (order.append("type"), seeded.insert_record("post_types", body), ({}, 201))[-1],
+    )
+
+    services.seed_starter_catalogue("basic", "admin")
+
+    assert order.index("form") < order.index("type")
+
+
+def test_seeding_twice_does_not_duplicate(seeded):
+    """A partially seeded instance must be completable, not doubled."""
+    from archihub.api.system import services
+
+    services.seed_starter_catalogue("basic", "admin")
+    services.seed_starter_catalogue("basic", "admin")
+
+    assert len(seeded.collections["post_types"]) == 1
+    assert len(seeded.collections["forms"]) == 1
+    assert len(seeded.collections["lists"]) == 2
+
+
+def test_an_unknown_template_is_refused(seeded):
+    from archihub.api.system import services
+
+    assert services.seed_starter_catalogue("nonsense", "admin") is not None

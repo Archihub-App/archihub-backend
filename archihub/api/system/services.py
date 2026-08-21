@@ -321,8 +321,141 @@ def set_first_time(body: dict) -> tuple[dict, int]:
     if status != 201:
         return {"msg": result.get("msg", _("Could not create the administrator"))}, status
 
-    logger.info("Instance configured; initial administrator created")
+    error = seed_starter_catalogue(body["typeTemplate"], body["username"])
+    if error:
+        # The administrator exists by now, so onboarding is over and cannot be
+        # retried through this route. Say what is missing rather than a generic
+        # failure: the remedy is to create the missing pieces by hand.
+        logger.error("Instance configured but the starter catalogue is incomplete: %s", error)
+        return {"msg": error}, 500
+
+    logger.info("Instance configured; administrator created and starter catalogue seeded")
     return {"msg": _("System configured successfully")}, 201
+
+
+#: What each onboarding template provisions: the content types, the metadata
+#: forms, and the content type the cataloguing screen opens on.
+TYPE_TEMPLATES = {
+    "basic": {"types": "simple_post_type", "forms": ("simple_form",), "default_type": "carpeta"},
+    "detailed": {
+        "types": "detailed_post_type",
+        "forms": ("isadg_form", "dublin_form"),
+        "default_type": "unidad-documental",
+    },
+}
+
+#: The two controlled vocabularies the authorisation layer resolves through.
+ROLES_LIST_NAME = "Roles"
+ACCESS_RIGHTS_LIST_NAME = "Niveles de acceso"
+
+
+def seed_starter_catalogue(template: str, user: str) -> str | None:
+    """Provision the content types, forms and vocabularies a new instance needs.
+
+    Returns an error message, or ``None``.
+
+    WHY THIS IS NOT OPTIONAL. An instance with settings and an administrator but
+    none of this cannot be used at all: there is no content type to catalogue
+    into, no form to describe anything with, and - most easily missed - no roles
+    or access levels, because BOTH ARE RESOLVED THROUGH LIST IDS STORED IN THE
+    ``access_rights`` SETTING. Creating the lists is not enough; the setting has
+    to be pointed at them, or every role lookup resolves an id that is not
+    there and the vocabularies come back empty.
+
+    Idempotent: each piece is created only when it is absent, so a partially
+    seeded instance can be completed rather than duplicated.
+    """
+    from archihub.api.forms.services import create as create_form
+    from archihub.api.lists.services import create as create_list
+    from archihub.api.system import default_settings
+    from archihub.api.types.services import create as create_type
+
+    plan = TYPE_TEMPLATES.get(template)
+    if plan is None:
+        return _("Unknown type template")
+
+    mongo = _mongo()
+
+    # Forms first: a content type names its form by slug, so seeding the type
+    # first leaves it pointing at something that does not exist yet.
+    for form_name in plan["forms"]:
+        form = getattr(default_settings, form_name)
+        if mongo.get_record("forms", {"slug": form["slug"]}):
+            continue
+        payload, status = create_form(dict(form), user)
+        if status != 201:
+            return payload.get("msg", _("Could not create the metadata form"))
+
+    declared = getattr(default_settings, plan["types"])
+    for post_type in declared if isinstance(declared, list) else [declared]:
+        if mongo.get_record("post_types", {"slug": post_type["slug"]}):
+            continue
+        payload, status = create_type(dict(post_type), user)
+        if status != 201:
+            return payload.get("msg", _("Could not create the content type"))
+
+    for vocabulary in default_settings.roles_rights_settings:
+        if mongo.get_record("lists", {"name": vocabulary["name"]}):
+            continue
+        payload, status = create_list(dict(vocabulary), user)
+        if status != 201:
+            return payload.get("msg", _("Could not create the list"))
+
+    _set_default_cataloguing_type(plan["default_type"])
+    return _link_authorisation_vocabularies()
+
+
+def _set_default_cataloguing_type(slug: str) -> None:
+    """Point `tipo_defecto` at the template's main content type.
+
+    The cataloguing screen routes to `/cataloging/<value>`, so leaving it empty
+    sends it to `/cataloging/undefined`. Only filled when unset, so an operator
+    who has already chosen keeps their choice.
+    """
+    mongo = _mongo()
+    record = mongo.get_record(COLLECTION, {"name": "post_types_settings"})
+    if not record:
+        return
+
+    data = record.get("data") or []
+    for entry in data:
+        if entry.get("id") == "tipo_defecto" and not entry.get("value"):
+            entry["value"] = slug
+            mongo.update_record(COLLECTION, {"name": "post_types_settings"}, {"data": data})
+            return
+
+
+def _link_authorisation_vocabularies() -> str | None:
+    """Point the `access_rights` setting at the two vocabulary lists.
+
+    This is the step whose absence is hardest to diagnose: roles and access
+    levels are read by resolving the list id stored here, so without it both
+    come back empty while the lists themselves sit in the database looking
+    correct.
+    """
+    mongo = _mongo()
+
+    roles = mongo.get_record("lists", {"name": ROLES_LIST_NAME})
+    rights = mongo.get_record("lists", {"name": ACCESS_RIGHTS_LIST_NAME})
+    if not roles or not rights:
+        return _("Could not create the list")
+
+    record = mongo.get_record(COLLECTION, {"name": "access_rights"})
+    if not record:
+        return _("The access_rights settings document does not exist")
+
+    wanted = {"user_roles_list": str(roles["_id"]), "access_rights_list": str(rights["_id"])}
+    data = record.get("data") or []
+    changed = False
+    for entry in data:
+        target = wanted.get(entry.get("id"))
+        if target and not entry.get("value"):
+            entry["value"] = target
+            changed = True
+
+    if changed:
+        mongo.update_record(COLLECTION, {"name": "access_rights"}, {"data": data})
+    return None
 
 
 # ---------------------------------------------------------------------------
