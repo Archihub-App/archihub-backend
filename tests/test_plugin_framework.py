@@ -2,7 +2,7 @@
 
 The single most important thing asserted here is that **a plugin route's role
 requirement cannot be discarded**. In the legacy framework it could, and at
-all twenty-one of its call sites it was — see ``S32`` and the docstring of
+all twenty-one of its call sites it was — see the docstring of
 ``archihub/plugins/framework/base.py``. A dependency has no return value for a
 handler to drop, which is why the fix is structural rather than a patch to
 twenty-one call sites.
@@ -53,7 +53,7 @@ def build(slug: str):
 
 @pytest.mark.parametrize("slug", PLUGINS)
 def test_every_plugin_route_states_a_role_requirement(slug):
-    """S32. The legacy `validate_roles` returned a refusal tuple that all 21 of
+    """The legacy `validate_roles` returned a refusal tuple that all 21 of
     its call sites dropped, so those routes had no authorisation beyond a valid
     session - and `scheduleSystemTasks`' settings ARE a task scheduler.
 

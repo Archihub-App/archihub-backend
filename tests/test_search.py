@@ -1,6 +1,6 @@
 """Search.
 
-The first section is the regression for BACKEND_FINDINGS S28, the one finding in
+The first section is the regression for , the one finding in
 this migration that was *demonstrated* against a real index rather than inferred:
 the public route let the caller choose a publication state, and every resource is
 indexed whatever its state with `accessRights` defaulting to `public`, so asking
@@ -21,7 +21,7 @@ from archihub.api.search import query, rss, services
 
 @pytest.mark.parametrize("requested", ["draft", "created", "updated", "deleted", "published", None, {"$ne": None}])
 def test_a_public_caller_always_gets_published_whatever_they_ask_for(requested):
-    """BACKEND_FINDINGS S28. 16 real drafts were reachable this way."""
+    """16 real drafts were reachable this way."""
     assert query.resolve_status(
         requested, public=True, may_see_drafts=True, may_see_deleted=True
     ) == ["published"]

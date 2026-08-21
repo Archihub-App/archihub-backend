@@ -8,7 +8,7 @@ WHAT THIS IS. ArchiHUB's content model is defined at runtime: an administrator
 builds a Form, a content type points at it, and the fields it declares are what
 a resource of that type may carry. Nothing about that is expressible as a static
 Pydantic schema, which is why this is hand-written validation rather than a
-request model (PLAN_FASTAPI.md section 7).
+request model.
 
 ``validate_fields`` RETURNS ``(body, errors)``. Both halves come back together
 so a caller cannot act on one and forget the other - which is what happens when

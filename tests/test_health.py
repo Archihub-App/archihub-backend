@@ -1,8 +1,7 @@
 """Health endpoints and the live-route inventory.
 
 The readiness payload shape is a contract: ``ArchiHUBTestRunner`` preflight reads
-it, and the Docker healthcheck added in PLAN_FASTAPI.md section 11 depends on
-the status codes.
+it, and the container healthcheck depends on the status codes.
 """
 
 from __future__ import annotations

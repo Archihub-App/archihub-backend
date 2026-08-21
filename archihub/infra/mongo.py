@@ -2,7 +2,7 @@
 
 Port of ``app/utils/MongoConector.py`` + ``app/utils/DatabaseHandler.py``.
 
-Synchronous on purpose (PLAN_FASTAPI.md decision 6): the same client serves
+Synchronous on purpose: the same client serves
 FastAPI route handlers - which run in Starlette's threadpool, because they are
 declared ``def`` - and Celery task bodies, which have no event loop at all.
 

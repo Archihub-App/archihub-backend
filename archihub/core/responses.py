@@ -1,7 +1,6 @@
 """Serving stored files, and rendering JSON the way the frontend already reads it.
 
-Replaces Flask's ``send_file`` at the ~20 sites that use it. The question
-PLAN_FASTAPI.md section 6 raised was whether Starlette preserves the Range
+Serving a stored file has one requirement that is easy to lose: the Range
 behaviour ``upgrade_front``'s audio and video players depend on for seeking.
 
 IT DOES, natively, in the installed version (Starlette 1.4.1): ``FileResponse``

@@ -164,7 +164,7 @@ def test_a_filtered_run_does_not_empty_the_index(stubbed):
 
 
 def test_a_filtered_run_keeps_its_filter_on_every_page(stubbed, monkeypatch):
-    """BACKEND_FINDINGS F44. The original applied the caller's filter to the
+    """The original applied the caller's filter to the
     first page and queried `{}` for every page after it, so a filter matching
     more than one page walked the entire collection from page two onward."""
     monkeypatch.setattr(indexing, "PAGE_SIZE", 2)
@@ -351,7 +351,7 @@ def _shapes(count: int) -> list[dict]:
 
 
 def test_indexing_shapes_clears_the_index_it_then_writes_to(stubbed):
-    """BACKEND_FINDINGS F45. The original wrote to `<prefix>-shapes` and cleared
+    """The original wrote to `<prefix>-shapes` and cleared
     `shapes` - an unprefixed name that exists on no real instance - so every
     rerun added a second copy of every boundary instead of replacing it."""
     mongo, client = stubbed(FakeMongo(shapes=_shapes(3)), FakeSearch())

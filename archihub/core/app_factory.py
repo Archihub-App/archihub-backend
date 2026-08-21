@@ -12,7 +12,7 @@ belongs in this factory; ``lifespan`` is reserved for warming resources -
 connections, the embedding model - that do not alter routing.
 
 Only the health router is mounted so far - the remaining domains land through
-Phase 3 (see PLAN_FASTAPI.md section 2).
+Phase 3.
 """
 
 from __future__ import annotations

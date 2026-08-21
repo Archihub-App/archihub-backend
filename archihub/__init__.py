@@ -10,7 +10,7 @@ Starlette run them in a worker threadpool. That is a deliberate decision, not an
 oversight: HTTP routes and Celery tasks call the *same* service functions and
 share the *same* client singletons, so a split async-web/sync-worker design
 would require every service module to bind its client to two different types at
-once. See PLAN_FASTAPI.md decision 6.
+once.
 """
 
-__version__ = "1.4.1 beta"
+__version__ = "2.0.0"

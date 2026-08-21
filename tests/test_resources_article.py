@@ -134,7 +134,7 @@ def test_datetimes_inside_blocks_are_serialised(mongo):
 
 
 def test_a_stranger_cannot_rewrite_an_article(mongo):
-    """THE hole (S17).
+    """THE hole.
 
     The original checked only the content type's editRoles. A type that
     declares none - the common case, including the default seeded type - meant
@@ -216,7 +216,7 @@ def test_nobody_may_edit_what_they_cannot_read(mongo, monkeypatch):
 
 
 def test_only_the_article_and_its_audit_fields_are_written(mongo):
-    """THE other half of S17.
+    """The other half of the same rule.
 
     The original built its update from the whole request body and
     ``ResourceUpdate`` accepts ``status``, ``accessRights``, ``post_type``,

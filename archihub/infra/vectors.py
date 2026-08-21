@@ -1,7 +1,7 @@
 """Qdrant vector database access.
 
 FOUR THINGS THIS PATH MUST GET RIGHT, each of which fails silently rather than
-loudly (PLAN_FASTAPI.md section 4):
+loudly:
 
 1. ``insert_vector`` called ``qdrant.upsert(collection_name=..., points=vector[0],
    payload=...)``. ``points`` must be a list of ``PointStruct`` (or a Batch);

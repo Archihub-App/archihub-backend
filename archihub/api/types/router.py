@@ -16,7 +16,7 @@ WIRE CONTRACT IS PRESERVED EXACTLY, including one thing that is arguably wrong:
 Responses are returned as explicit ``JSONResponse`` objects with no
 ``response_model``: a response model would *filter* undeclared fields, silently
 dropping data while still returning 200. Models are introduced per route once the
-diff harness confirms parity (PLAN_FASTAPI.md section 7).
+diff harness confirms parity.
 """
 
 from __future__ import annotations

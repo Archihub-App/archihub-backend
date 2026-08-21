@@ -28,7 +28,7 @@ def boundary_tree(tmp_path):
 
 
 def test_a_plain_file_beside_the_level_directories_does_not_stop_the_load(boundary_tree):
-    """BACKEND_FINDINGS F47. `int(f.split('admin_')[1])` over `os.listdir`
+    """`int(f.split('admin_')[1])` over `os.listdir`
     raised IndexError on `world.json` before reading anything, so
     `/system/geo-load` answered 500 against the shipped data."""
     levels = services._boundary_levels(boundary_tree)

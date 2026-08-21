@@ -154,7 +154,7 @@ def test_ancestors_are_returned_nearest_first_with_their_level(mongo):
 
 
 def test_a_cycle_does_not_recurse_forever(mongo):
-    """THE bug (S15).
+    """THE bug.
 
     The original walked each parent with no memory of where it had been, so a
     two-node cycle raised RecursionError - and every read that resolves a
@@ -300,7 +300,7 @@ def test_a_resource_may_not_be_its_own_parent(hierarchical_types):
 
 
 def test_a_resource_may_not_be_placed_under_its_own_descendant(hierarchical_types):
-    """THE cycle-creation half of S15.
+    """The cycle-creation half of the same rule.
 
     The original refused only a resource naming itself, so naming a child - or
     any deeper descendant - was accepted, and that is precisely what produced
@@ -355,9 +355,7 @@ def test_a_same_type_parent_is_allowed_when_the_type_is_hierarchical(hierarchica
 
 
 def test_a_parent_of_an_undeclared_type_is_refused(hierarchical_types):
-    """F20.
-
-    ``serie`` declares ``fondo`` as its only acceptable parent. Placing one
+    """``serie`` declares ``fondo`` as its only acceptable parent. Placing one
     under a ``foto`` was accepted by the original: the check ran only when
     parent and child shared a type, and the branch that would have caught this
     was unreachable.
@@ -557,9 +555,7 @@ def test_draft_mode_shows_the_published_structure_around_the_draft(tree_data):
 
 
 def test_a_folder_whose_children_are_published_is_expandable_in_draft_mode(tree_data):
-    """F21.
-
-    The level query matched drafts *and* published resources while the
+    """The level query matched drafts *and* published resources while the
     has-children probe matched drafts only, so a folder holding nothing but
     published children was drawn as a leaf - unopenable, with its contents
     unreachable from the draft view.

@@ -2,11 +2,11 @@
 
 Two rules, with different reasons.
 
-**No finding identifiers.** This repository is public. `S14`, `F27` and their
-neighbours index a private security review that is deliberately kept outside the
-tree; naming one in a comment advertises that the review exists and hands a
-reader its index. State the rule being enforced instead - a reader needs to know
-what must hold, never what the ticket was called.
+**No finding identifiers.** This repository is public. A short letter-and-digits
+reference indexes a private review kept deliberately outside the tree; naming one
+in a comment advertises that the review exists and hands a reader its index.
+State the rule being enforced instead - a reader needs to know what must hold,
+never what the ticket was called.
 
 **No archaeology.** A comment explaining what some earlier implementation got
 wrong is unreadable the moment that implementation is gone, and it is the wrong
@@ -26,9 +26,11 @@ import re
 import tokenize
 
 PACKAGE_ROOT = pathlib.Path(__file__).resolve().parent.parent / "archihub"
+TESTS_ROOT = pathlib.Path(__file__).resolve().parent
+TOOLS_ROOT = pathlib.Path(__file__).resolve().parent.parent / "tools"
 
-#: `S14`, `F27`, `P11`. Bounded to two digits so `F401` (a linter code) and
-#: HTTP-ish tokens do not match.
+#: One capital letter and one or two digits. Bounded to two digits so linter
+#: codes (`F401`) and HTTP-ish tokens do not match.
 FINDING_ID = re.compile(r"(?<![A-Za-z0-9_])[SFP]\d{1,2}(?![A-Za-z0-9_])")
 
 #: Phrases that introduce a comparison with an implementation the reader cannot
@@ -69,13 +71,14 @@ def _prose(path: pathlib.Path) -> list[tuple[int, str]]:
     return lines
 
 
-def _hits(pattern: re.Pattern) -> list[str]:
+def _hits(pattern: re.Pattern, roots: tuple[pathlib.Path, ...] = (PACKAGE_ROOT,)) -> list[str]:
     problems = []
-    for path in sorted(PACKAGE_ROOT.rglob("*.py")):
-        for lineno, text in _prose(path):
-            if pattern.search(text):
-                relative = path.relative_to(PACKAGE_ROOT.parent)
-                problems.append(f"  {relative}:{lineno}  {text.strip()[:96]}")
+    for root in roots:
+        for path in sorted(root.rglob("*.py")):
+            for lineno, text in _prose(path):
+                if pattern.search(text):
+                    relative = path.relative_to(PACKAGE_ROOT.parent)
+                    problems.append(f"  {relative}:{lineno}  {text.strip()[:96]}")
     return problems
 
 
@@ -86,7 +89,13 @@ def test_the_scan_reads_real_prose():
 
 
 def test_no_comment_names_a_finding_identifier():
-    problems = _hits(FINDING_ID)
+    """Every published file, not only the application package.
+
+    The tests are published too, and a regression test is the most natural place
+    to write down which report a defect came from - so they are where these
+    accumulate.
+    """
+    problems = _hits(FINDING_ID, (PACKAGE_ROOT, TESTS_ROOT, TOOLS_ROOT))
     assert not problems, (
         f"{len(problems)} comment(s) name a private finding identifier. This "
         "repository is public; state the rule being enforced instead:\n"

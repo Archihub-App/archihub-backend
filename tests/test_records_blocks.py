@@ -1,6 +1,6 @@
 """Editing the OCR block layout of a page.
 
-The first section is the regression test for BACKEND_FINDINGS S19: a global
+The first section is the regression test for : a global
 role was the only check the originals made, so any editor could rewrite the OCR
 of any record in the archive - including one filed under a series they cannot
 open. Keep those tests.

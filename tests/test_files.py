@@ -1,9 +1,8 @@
 """File storage and delivery.
 
-The foundation the remaining `resources` and `records` routes are built on, and
-the place where the three deferred decisions from PLAN_FASTAPI.md section 6 are
-made concrete: uploads are bounded, durability applies to the file we write, and
-Range handling is Starlette's.
+The foundation the `resources` and `records` routes are built on, and where
+three decisions are made concrete: uploads are bounded, durability applies to the
+file being written, and Range handling is Starlette's.
 """
 
 from __future__ import annotations

@@ -8,8 +8,7 @@ would capture them - a GET of `/users/me` would look up a user whose id is the
 string "me".
 
 API-KEY ROUTES: the value returned is the only copy. The server stores a hash,
-so nothing can reproduce it afterwards. See core/security/api_keys.py and
-API_KEYS_FRONTEND_NOTES.md.
+so nothing can reproduce it afterwards. See core/security/api_keys.py.
 """
 
 from __future__ import annotations

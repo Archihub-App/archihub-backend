@@ -5,7 +5,7 @@ the same way: the payload is a hand-picked subset of each plugin's `plugin_info`
 where the legacy route returned the whole dict, so a field the port did not think
 to pick simply vanished.
 
-* **F38** — the port returned a bare array where both callers read
+* the listing must be an object, not a bare array: both callers read
   `response.plugins`.
 * **The `type` omission** — `/processing` renders one button per entry of
   `plugin.type` and routes to `/processing/{type}/{slug}`. With the field gone,
@@ -68,7 +68,7 @@ def _listing(payload):
 
 
 def test_the_payload_is_wrapped_not_a_bare_array(plugins):
-    """F38. Both callers read `response.plugins`."""
+    """Both callers read `response.plugins`."""
     payload, status = services.get_plugins()
 
     assert status == 200

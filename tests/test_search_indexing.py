@@ -130,7 +130,7 @@ def test_a_multi_select_entry_with_no_term_is_skipped_not_fatal():
 
 def test_a_repeater_is_not_indexed():
     """DELIBERATE, and reproduced from the legacy behaviour - see
-    _apply_repeater_dates. Recorded as F46 rather than changed, because turning
+    _apply_repeater_dates. Reproduced deliberately rather than changed, because turning
     it on risks mapping conflicts that would REMOVE resources from the index."""
     resource = {
         "status": "published",

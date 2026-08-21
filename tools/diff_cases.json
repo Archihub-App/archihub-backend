@@ -380,7 +380,7 @@
       "_note": [
         "New in the port - there is no legacy route to diff against. Keys are",
         "hashed at rest and shown once at creation; a listing that could return",
-        "one would defeat the redesign. See API_KEYS_FRONTEND_NOTES.md."
+        "one would defeat the redesign."
       ]
     },
     {
@@ -1664,7 +1664,7 @@
     "  records: transcription (both)  legacy 500 -> 400 naming the missing field",
     "  geosystem: polygon             legacy 404 -> 400 with a reason",
     "",
-    "-- legacy defects the harness surfaced, recorded in BACKEND_FINDINGS --",
+    "-- defects this harness surfaced in the stack being replaced --",
     "  records: public page images    legacy 500s unconditionally - it calls",
     "                                 public_services.get_document_pages, which does",
     "                                 not exist. The public document viewer has never",

@@ -1,6 +1,6 @@
 """`/adminApi` and `/publicApi` — the surfaces other organisations script against.
 
-The first section is BACKEND_FINDINGS S29: the lookup used the whole request
+The first section is : the lookup used the whole request
 body as a Mongo filter. It needs an admin API token, which bounds who can reach
 it — but an API token is a long-lived credential handed to an integration, and
 "the caller is trusted" is what turns a leaked token from annoying into
@@ -58,7 +58,7 @@ def mongo(monkeypatch):
     ],
 )
 def test_an_operator_never_reaches_the_query(mongo, body):
-    """BACKEND_FINDINGS S29. The legacy lookup was `get_record('resources', body)`."""
+    """The legacy lookup was `get_record('resources', body)`."""
     payload, status = services.find_resource(body)
 
     assert status == 400
@@ -338,7 +338,7 @@ def test_the_plugin_proxy_refuses_rather_than_reaching_a_route_that_is_not_there
     ],
 )
 def test_a_traversal_string_resolves_to_nothing(monkeypatch, endpoint):
-    """S30. Resolution is against the plugin's OWN route list, so a traversal
+    """Resolution is against the plugin's OWN route list, so a traversal
     string simply matches none of them - there is nothing to filter because the
     only reachable values come from a table the application built."""
     from archihub.api.external import router

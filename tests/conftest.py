@@ -1,6 +1,4 @@
-"""Shared pytest fixtures.
-
-Per PLAN_FASTAPI.md decision 4, unit tests deliberately cover only the pieces
+"""Shared pytest fixtures. unit tests deliberately cover only the pieces
 with no existing end-to-end coverage - auth dependencies, hooks, Celery context
 acquisition and the plugin framework. Broad per-domain behaviour is verified by
 ``tools/diff_harness.py`` against the running legacy backend instead.

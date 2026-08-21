@@ -11,7 +11,7 @@ Against a normally configured instance that returned `[]`, which hid **all four
 download buttons and both AI assistant entry points** — reported as "now I don't
 see the Pregúntale a la IA button".
 
-The route had no tests at all, which is the same gap that let F56 through in the
+The route had no tests at all, which is the same gap that let a defect through in the
 neighbouring `/system/plugins`.
 """
 

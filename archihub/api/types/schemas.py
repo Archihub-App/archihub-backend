@@ -25,7 +25,7 @@ collection. The field is simply not reproduced here - MongoDB generates ids.
 
 Response models are intentionally NOT declared. FastAPI's ``response_model``
 *filters* the payload to declared fields, so anything undeclared silently
-disappears while still returning 200. Per PLAN_FASTAPI.md section 7, responses
+disappears while still returning 200. responses
 stay unfiltered until a route's diff-harness run confirms field-for-field parity.
 """
 

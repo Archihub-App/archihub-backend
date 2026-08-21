@@ -325,7 +325,7 @@ def test_a_file_already_on_disk_can_be_attached(mongo, tmp_path):
 
 
 def test_a_file_on_disk_is_deduplicated_the_same_way(mongo, tmp_path):
-    """THE bug this replaces (BACKEND_FINDINGS F26).
+    """THE bug this replaces .
 
     In the legacy non-upload branch, the duplicate case returned
     ``str(new_record.inserted_id)`` - a variable only bound when a record was
@@ -348,7 +348,7 @@ def test_a_file_on_disk_is_deduplicated_the_same_way(mongo, tmp_path):
 
 
 def test_a_duplicate_in_the_middle_of_a_batch_reports_its_own_record(mongo, tmp_path):
-    """The precise shape of F26: the wrong id was reported only for files after
+    """The precise shape of the defect: the wrong id was reported only for files after
     the first, which is why it would look like intermittent mis-association
     rather than an outright failure."""
     first = tmp_path / "first.pdf"

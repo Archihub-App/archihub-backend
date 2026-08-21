@@ -2,7 +2,7 @@
 
 The rule under test is `access.is_public`: a record is public only when it
 restricts nothing itself and every resource it is filed under is *published* and
-unrestricted. The published half is BACKEND_FINDINGS S20 - the legacy public
+unrestricted. The published half is  - the legacy public
 route checked access rights but never publication state, so a file attached to
 an unpublished draft was served anonymously.
 """
@@ -97,7 +97,7 @@ def test_a_record_under_a_published_unrestricted_resource_is_public(mongo):
 
 
 def test_a_record_under_an_unpublished_draft_is_not_public(mongo):
-    """BACKEND_FINDINGS S20. The legacy rule never looked at publication state.
+    """The legacy rule never looked at publication state.
 
     A cataloguer's work in progress, with no access right set because none has
     been chosen yet, was downloadable by anyone who knew the record id.

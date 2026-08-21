@@ -1,8 +1,8 @@
 """The public resource mirror, and the shared file/presentation machinery.
 
-The bulk download is where the weight is: BACKEND_FINDINGS S23 (the archive
+The bulk download is where the weight is:  (the archive
 path was built from the request, a file write to wherever the caller pointed it)
-and S24 (files the caller could not see went into the archive anyway).
+and that files the caller cannot see are excluded from the archive.
 """
 
 from __future__ import annotations
@@ -237,9 +237,7 @@ def test_counting_images_reports_how_many(mongo):
     "kind", ["../../../../../../tmp/pwned", "../../evil", "/etc/passwd", "", "zip"]
 )
 def test_a_download_kind_outside_the_allowlist_is_refused(mongo, media_root, kind):
-    """BACKEND_FINDINGS S23.
-
-    The archive path was ``os.path.join(WEB_FILES_PATH, 'zipfiles', user + '-' +
+    """The archive path was ``os.path.join(WEB_FILES_PATH, 'zipfiles', user + '-' +
     body['id'] + '-' + body['type'] + '.zip')``, so this was a file write to
     wherever the caller pointed it - verified resolving to ``/tmp/evil.zip`` -
     and the public route reached it unauthenticated.
@@ -283,9 +281,7 @@ def _place(media_root, name):
 
 
 def test_an_archive_excludes_files_the_caller_may_not_see(mongo, media_root):
-    """BACKEND_FINDINGS S24.
-
-    The original kept restricted records in the list, only blanking the display
+    """The original kept restricted records in the list, only blanking the display
     name, and then wrote them into the archive by ``filepath`` - so a public
     bulk download shipped reserved files under a placeholder name.
     """

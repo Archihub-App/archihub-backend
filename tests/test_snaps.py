@@ -2,7 +2,7 @@
 
 Two properties carry the weight here. **A snap is not a capability** - owning
 one is not permission to read what it points at, and creating one requires being
-able to see the record in the first place (BACKEND_FINDINGS S22). And the stored
+able to see the record in the first place . And the stored
 coordinates are validated at creation, because they are read back later by other
 code, sometimes on another user's screen.
 """
@@ -125,9 +125,7 @@ def test_a_snap_of_a_visible_record_is_created(mongo, visible_record):
 
 
 def test_a_snap_of_an_invisible_record_is_refused(mongo, invisible_record):
-    """BACKEND_FINDINGS S22.
-
-    The original fetched the record by id with no access check at all, so any
+    """The original fetched the record by id with no access check at all, so any
     authenticated user could snap anything in the archive - and store its
     filename along with it.
     """

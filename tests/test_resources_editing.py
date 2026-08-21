@@ -438,7 +438,7 @@ def reclassify(mongo, monkeypatch):
 
 
 def test_a_resource_is_reclassified_and_written(reclassify):
-    """The legacy service returned success having written nothing - F25."""
+    """Reporting success while writing nothing is the failure this guards."""
     payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "fondo"}, "alice")
 
     assert status == 200

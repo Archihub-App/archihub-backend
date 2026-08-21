@@ -3,9 +3,9 @@
 `POST /aiservices/conversation` is the ASK endpoint. The rewrite gave that path
 to a create-or-append handler for conversation *records*, so every chat turn in
 the product answered **404 "Conversation not found"**: the frontend sends `id`
-meaning the record being discussed, and it was looked up as a conversation id
-(F64). The first test here is that regression, stated as a property rather than
-a status.
+meaning the record being discussed, and it was looked up as a conversation id.
+The first test here is that regression, stated as a property rather than a
+status.
 
 The stream shape is tested for the same reason it exists. `AIservice.tsx`
 branches on a `type` field, and a payload carrying neither `type` nor `response`

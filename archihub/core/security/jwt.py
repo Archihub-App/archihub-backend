@@ -29,7 +29,7 @@ Two things change on purpose, and only one of them is visible on the wire.
 * **Role failures return 403, not 401.** 401 means "I don't know who you are",
   which signing in fixes; 403 means "I know, and no", which it does not. Almost
   every check here runs on an already-authenticated caller, so 403 is the honest
-  answer. See PLAN_FASTAPI.md section 7.
+  answer.
 """
 
 from __future__ import annotations

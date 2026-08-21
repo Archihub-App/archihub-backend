@@ -1,5 +1,5 @@
 """Infrastructure clients (MongoDB, Redis, Elasticsearch, Qdrant).
 
 All clients here are synchronous - see the architecture note in
-``archihub/__init__.py`` and PLAN_FASTAPI.md decision 6.
+``archihub/__init__.py``.
 """

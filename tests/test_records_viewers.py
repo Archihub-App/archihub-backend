@@ -2,7 +2,7 @@
 
 The centre of gravity here is that a client-supplied string never becomes a
 path component. ``test_a_traversing_size_is_refused`` and its neighbours are the
-regression tests for BACKEND_FINDINGS S18 - keep them.
+regression tests for  - keep them.
 """
 
 from __future__ import annotations

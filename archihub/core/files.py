@@ -1,8 +1,8 @@
 """File storage and delivery.
 
-This module is the answer to the file-handling questions PLAN_FASTAPI.md section
-6 left open, and it is a prerequisite for every remaining route in ``resources``
-and ``records`` - each of them either accepts an upload or serves a stored file.
+Every route in ``resources`` and ``records`` either accepts an upload or serves
+a stored file, so all of them depend on the rules this module fixes in one
+place.
 
 THE THREE DECISIONS, and the evidence behind them:
 

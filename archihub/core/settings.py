@@ -163,8 +163,10 @@ class Settings(BaseSettings):
     llm_skills_path: str = Field(default="skills", validation_alias="LLM_SKILLS_PATH")
 
     # Upload ceiling. A deliberate number: "unbounded" is a decision too, and a
-    # far worse one to arrive at by omission. See PLAN_FASTAPI.md section 6.
-    max_upload_bytes: int = Field(default=5 * 1024 * 1024 * 1024, validation_alias="MAX_UPLOAD_BYTES")
+    # far worse one to arrive at by omission.
+    max_upload_bytes: int = Field(
+        default=5 * 1024 * 1024 * 1024, validation_alias="MAX_UPLOAD_BYTES"
+    )
 
     # How many characters of transcript one page of the transcription viewer
     # holds. Typed and bounded, so a non-integer or non-positive value is a

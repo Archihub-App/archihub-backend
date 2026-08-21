@@ -126,7 +126,7 @@ def test_holding_the_right_grants_access(mongo):
 
 
 def test_an_administrator_may_read_a_restricted_record(mongo, as_admin):
-    """THE fix (F27).
+    """THE fix.
 
     The original wrote `has_right(current_user, 'admin')` - but `has_right`
     resolves **access rights**, and `admin` is a *role*. No instance defines an
@@ -190,7 +190,7 @@ def test_a_malformed_id_is_404_not_500(mongo):
 
 
 def test_a_permission_failure_is_not_reported_as_a_server_error(mongo):
-    """F27's other half.
+    """The other half of the same rule.
 
     Eight functions opened with `if status != 200: return {...}, 500`, so a 404
     and a 401 both reached the client as 500. The message survived; the status

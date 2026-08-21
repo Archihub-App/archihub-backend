@@ -81,7 +81,7 @@ def _parse_data(data: str) -> dict:
 
     Kept as hand-parsed JSON rather than a Pydantic model: the metadata inside
     it is validated against the content type's runtime-defined form, which no
-    static schema can express. See PLAN_FASTAPI.md section 7.
+    static schema can express.
     """
     try:
         parsed = json.loads(data)

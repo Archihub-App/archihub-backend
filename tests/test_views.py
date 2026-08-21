@@ -1,7 +1,7 @@
 """Saved views.
 
 Two of the six routes are unauthenticated, and that is what shapes the tests.
-The thumbnail section is the regression for BACKEND_FINDINGS S25: `filesObj` was
+The thumbnail section is the regression for : `filesObj` was
 client-settable and the thumbnail it named was base64-encoded into a public
 response, with no check on the record it pointed at.
 """
@@ -138,9 +138,7 @@ def test_a_views_own_thumbnail_is_served_inline(mongo, media_root):
 
 
 def test_a_record_not_attached_to_the_view_is_never_served(mongo, media_root):
-    """BACKEND_FINDINGS S25.
-
-    `filesObj` used to be client-settable and the thumbnail it named was
+    """`filesObj` used to be client-settable and the thumbnail it named was
     base64-encoded into `GET /views`, which is unauthenticated - so pointing a
     view at any record published that image.
     """

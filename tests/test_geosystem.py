@@ -1,8 +1,8 @@
 """Administrative boundary shapes.
 
 Both routes are unauthenticated, so the tests concentrate on what an anonymous
-caller can make the server do: BACKEND_FINDINGS S27 (request values became Mongo
-operators) and P10 (unbounded results, and a disk cache keyed on a client float).
+caller can make the server do:  (request values became Mongo
+operators, unbounded result sets, and a disk cache keyed on a client float.
 """
 
 from __future__ import annotations
@@ -80,9 +80,7 @@ def shape_document(**overrides):
     ],
 )
 def test_an_operator_in_place_of_an_identifier_is_refused(mongo, no_cache, payload):
-    """BACKEND_FINDINGS S27.
-
-    The originals assigned these into the filter as-is, so a JSON object arrived
+    """The originals assigned these into the filter as-is, so a JSON object arrived
     as a Mongo operator - `{"ident": {"$ne": null}}` returns every shape in the
     collection and simplifies all of them, with no account needed.
     """

@@ -110,7 +110,7 @@ def test_model_hallucinated_credits_are_left_out_of_the_text(hallucination):
 
 
 def test_the_credit_filter_is_case_sensitive_and_so_misses_most_real_ones():
-    """Carried over deliberately, not fixed. Documented as BACKEND_FINDINGS F29.
+    """Carried over deliberately, not fixed. Documented as .
 
     The pattern is applied without ``re.IGNORECASE``, so the capitalised form
     these models actually emit is not matched and the credit stays in the text.

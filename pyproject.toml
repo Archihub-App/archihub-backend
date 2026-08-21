@@ -1,27 +1,24 @@
 [project]
 name = "archihub-backend"
-version = "1.4.1b0"
+version = "2.0.0"
 description = "ArchiHUB: a comprehensive tool for organizing and connecting information"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = { text = "MIT" }
 authors = [{ name = "BITSOL", email = "contact@bit-sol.com.co" }]
 
-# NOTE ON PINNING (see PLAN_FASTAPI.md section 9)
-# ----------------------------------------------
-# The requirements.txt this replaced had ZERO version constraints on ANY package, so
-# two deployments building on different days could end up on different versions
-# of everything. Reproducibility here comes from `uv.lock` (exact, hash-pinned,
-# committed), while this file declares the compatible ranges uv resolves within.
+# NOTE ON PINNING
+# ---------------
+# This file declares the compatible RANGES. Reproducibility is meant to come
+# from a committed `uv.lock` (exact and hash-pinned), which does not exist yet -
+# until it does, two deployments building on different days can resolve
+# different versions.
 #
 # To (re)generate the lockfile:      uv lock
 # To install exactly the lockfile:   uv sync --frozen
 #
-# Before the first `uv lock`, run the baseline capture described in
-# PLAN_FASTAPI.md section 9 (`pip install -r requirements.txt && pip freeze`
-# inside a python:3.11 container matching the Dockerfile) so the ranges below
-# can be tightened to what production is *actually* running today, rather than
-# to whatever resolves newest.
+# The lower bounds are not decoration: several are security floors, chosen so a
+# resolve cannot pick a version carrying a known advisory.
 # SECURITY FLOORS (pip-audit, 2026-08-19)
 # ---------------------------------------
 # Several floors above are set to the first release that carries a published
@@ -77,10 +74,10 @@ dependencies = [
     "PyJWT>=2.13.0,<3.0",
     "cryptography>=50.0.0",
     "bcrypt>=4.2,<6.0",
-    # LDAP: the old requirements.txt declared `ldap3`, but app/api/auth/services.py
-    # does `import ldap`, which is python-ldap - a different package with a
-    # different API. python-ldap additionally needs libldap2-dev/libsasl2-dev at
-    # build time (added to the Dockerfile). See PLAN_FASTAPI.md decision 1.
+    # LDAP: this is python-ldap, which `import ldap` resolves to. `ldap3` is a
+    # different package with an incompatible API and is NOT a substitute.
+    # python-ldap needs libldap2-dev/libsasl2-dev at build time - the Dockerfile
+    # installs both.
     "python-ldap>=3.4.5,<4.0",
 
     # --- Datastores / infra ---

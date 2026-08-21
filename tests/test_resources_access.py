@@ -132,7 +132,7 @@ def test_draft_visibility_matches_legacy_exactly(mongo, is_publisher, is_admin, 
     It is preserved rather than fixed because the bug fails CLOSED - it shows
     people less than intended, never more - and correcting it would widen who
     can read other people's unpublished work. That is a policy decision, not a
-    migration one. See BACKEND_FINDINGS F18.
+    migration one. See .
     """
     filters, _error = access.build_listing_filters(
         {}, username="alice", is_admin=is_admin, is_publisher=is_publisher, status="draft"

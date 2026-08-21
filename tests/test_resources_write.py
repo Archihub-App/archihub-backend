@@ -357,7 +357,7 @@ def test_moving_a_resource_rewrites_its_descendants_ancestry(mongo):
 
 
 def test_a_resource_cannot_be_moved_under_its_own_descendant(mongo):
-    """The cycle guard from S15, reached through the real update path."""
+    """The cycle guard, reached through the real update path."""
     mongo.resources[RESOURCE_ID] = resource()
     mongo.resources[CHILD_ID] = resource(
         _id=ObjectId(CHILD_ID), parent=[{"id": RESOURCE_ID, "post_type": "carpeta"}]
@@ -426,7 +426,7 @@ def test_delete_requires_a_list_of_string_ids(mongo, bad):
 
 
 def test_deleting_retires_the_files_nothing_else_holds(mongo):
-    """THE dead-code bug (F28).
+    """THE dead-code bug.
 
     The original read `resource['files']`, but the stored field is `filesObj` -
     `files` is not a field of the Resource model at all, so the condition was
@@ -573,7 +573,7 @@ def related(mongo, monkeypatch):
 
 
 def test_creating_with_a_relation_links_the_other_side(related):
-    """THE F22 fix, reached through the real path.
+    """The same rule, reached through the real path.
 
     The original ran this *before* the insert and dereferenced `body['_id']`,
     which did not exist yet - so creating a resource with a populated same-type

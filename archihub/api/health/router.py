@@ -8,10 +8,9 @@ hand - it is derived from the dependency's signature.
 
 Responses are returned through explicit ``JSONResponse`` objects because these
 endpoints signal state through their status code (200 vs 503, 404 vs 403 vs 401)
-and must not be reshaped by a response model. Per PLAN_FASTAPI.md section 7,
-``response_model`` stays off until a route's diff-harness run has confirmed
-field-for-field parity - a response model silently *filters* undeclared fields,
-which would be an invisible regression.
+and must not be reshaped by a response model. ``response_model`` stays off
+until a route has been confirmed field-for-field, because it silently *filters*
+undeclared fields - an invisible regression.
 """
 
 from __future__ import annotations

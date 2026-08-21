@@ -75,7 +75,7 @@ def wire(client, responses=None) -> Recorder:
 
 
 def test_every_document_operation_resolves_the_instance_prefix(client):
-    """BACKEND_FINDINGS F45: the geometry indexer wrote to `<prefix>-shapes` and
+    """the geometry indexer wrote to `<prefix>-shapes` and
     cleared `shapes`, because the name was pasted together at each call site."""
     recorder = wire(client)
 

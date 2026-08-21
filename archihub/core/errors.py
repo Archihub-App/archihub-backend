@@ -1,6 +1,6 @@
 """Error handling and the HTTP status-code policy.
 
-Two problems this module exists to prevent (PLAN_FASTAPI.md section 7):
+Two problems this module exists to prevent:
 
 * ~233 sites do ``except Exception as e: return {'msg': str(e)}, 500``, leaking
   raw exception text - stack-adjacent internals, sometimes connection strings -
@@ -95,7 +95,7 @@ class InvalidTokenError(BusinessError):
     change smuggled in under a framework swap. If this should become 401 (which
     is arguably more correct, and would make the frontend redirect to login
     instead of showing an error), that is a deliberate contract change to make
-    alongside a frontend audit - see PLAN_FASTAPI.md decision 2.
+    alongside a frontend audit.
     """
 
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY

@@ -336,7 +336,7 @@ def test_a_hidden_conditional_field_is_cleared():
 
 
 def test_a_condition_on_the_first_field_of_the_form_is_honoured():
-    """THE bug (F23).
+    """THE bug.
 
     ``conditionField`` is an index, and index 0 is falsy - so the original's
     ``if hasCondition`` guard treated a field conditioned on the *first* field
