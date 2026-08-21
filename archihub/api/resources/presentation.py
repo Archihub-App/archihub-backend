@@ -83,7 +83,31 @@ def describe(resource: dict, user: str | None, *, public: bool = False) -> dict:
             resource["files"] = None
 
     resource["fields"] = build_fields(resource, user, public=public)
+    resource["metadata"] = _dates_as_iso(resource.get("metadata"))
     return resource
+
+
+def _dates_as_iso(value):
+    """Every ``datetime`` inside a metadata block as an ISO 8601 string.
+
+    The detail response carries the raw ``metadata`` alongside the rendered
+    ``fields``, and the cataloguing form is populated from the raw block, not
+    from ``fields``. Both strings parse in a browser, but they do not parse to
+    the same instant: ``2025-10-24T05:00:00`` has no offset and is read as LOCAL
+    time, while an HTTP date is explicitly UTC. Opening a resource and saving it
+    unchanged would therefore shift the stored value by the viewer's offset, and
+    for a date recorded at midnight it moves the calendar day.
+
+    Applied to the whole block rather than to the fields a form declares as
+    dates, so a date inside a repeater row is covered too.
+    """
+    if isinstance(value, datetime.datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {k: _dates_as_iso(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_dates_as_iso(v) for v in value]
+    return value
 
 
 def _icon_of(post_type: str | None):

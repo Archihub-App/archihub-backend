@@ -210,7 +210,7 @@
       "name": "lists: unknown id",
       "path": "/lists/000000000000000000000000",
       "auth": true,
-      "_note": "Legacy returns 200 with an array body here; the port returns 404. Expected - see BACKEND_FINDINGS F13."
+      "_note": "Legacy answers 200 with an array body where the port answers 404. Expected."
     },
     {
       "name": "lists: unauthenticated is 401",
@@ -276,7 +276,7 @@
       "name": "users: me",
       "path": "/users/me",
       "auth": true,
-      "_note": "F37: this route lost `requests` to the authentication projection. Diffed here so it cannot happen again."
+      "_note": "The authentication projection and the profile response are different questions; diffed here so a field this route owes its caller cannot be lost to the projection it happens to share."
     },
     {
       "name": "users: me never returns the password hash",
@@ -497,7 +497,7 @@
         "page": 0
       },
       "auth": true,
-      "_note": "F37: this listing lost metadata.firstLevel.title from its projection. Diffed so it cannot recur."
+      "_note": "Diffed so the listing projection cannot quietly stop carrying metadata.firstLevel.title, which is what the browse table renders."
     },
     {
       "name": "resources: listing with the column set the browser actually sends",
@@ -530,7 +530,7 @@
         ]
       },
       "auth": true,
-      "_note": "F53. activeColumns is a list of column DESCRIPTORS, not names - the label is what the table header renders. Every earlier listing case omitted the field entirely, so the whole column path went undiffed and the port read the descriptors as strings. Keep the real shape here: a case that sends bare strings agrees with a wrong implementation."
+      "_note": "activeColumns is a list of column DESCRIPTORS, not names - the label is what the table header renders. Send the shape a browser really sends: a case built from bare strings can only agree with an implementation that reads bare strings, and then test and code are wrong together."
     },
     {
       "name": "resources: listing keeps the title the browse screen renders",
@@ -545,7 +545,7 @@
       "expect_present": [
         "title"
       ],
-      "_note": "F37 as a contract, so it outlives legacy."
+      "_note": "The same property as a contract, so it outlives the stack it is diffed against."
     },
     {
       "name": "resources: wrong-shaped listing body",
@@ -782,12 +782,7 @@
       },
       "auth": true,
       "expect_status": 400,
-      "_note": [
-        "BACKEND_FINDINGS S18 - arbitrary file read for any authenticated user,",
-        "verified resolving to /etc on the legacy stack. `size` indexes a fixed",
-        "map and anything not in it is refused before a path is built. A parity",
-        "case here would assert the vulnerability."
-      ]
+      "_note": "`size` indexes a fixed map, and a value that is not a key is refused before any path is built - a client-supplied string never becomes a path component. Contract rather than parity: parity here would demand the behaviour this replaces."
     },
     {
       "name": "records: a public viewer size outside the allowlist is refused",
@@ -801,7 +796,7 @@
       },
       "auth": false,
       "expect_status": 400,
-      "_note": "S18 again - the public mirror was equally exposed and unauthenticated."
+      "_note": "The same rule on the public mirror, which is unauthenticated and so has to enforce it independently."
     },
     {
       "name": "records: a negative page index is refused",
@@ -897,11 +892,7 @@
         "filesObj",
         "filepath"
       ],
-      "_note": [
-        "S25 - the legacy models declared filesObj, so editing one field could",
-        "publish any image in the archive. GET /views is unauthenticated, so",
-        "this is an anonymous exposure. filesObj is absent from CLIENT_FIELDS."
-      ]
+      "_note": "GET /views is unauthenticated, so a view's thumbnail is server-owned: filesObj is absent from CLIENT_FIELDS and the thumbnail route independently refuses any record that is not parented to that view or that carries access rights."
     },
     {
       "name": "snaps: unknown snap is 404",
@@ -943,11 +934,7 @@
       },
       "auth": false,
       "expect_status": 400,
-      "_note": [
-        "S27 - both geosystem routes are unauthenticated by design (the explore",
-        "map draws before anyone signs in), so the input check IS the injection",
-        "defence. Legacy assigned ident into the filter as-is."
-      ]
+      "_note": "Both geosystem routes are unauthenticated by design - the explore map draws before anyone signs in - so type-checking the identifiers IS the defence: they reach a Mongo filter, and a JSON object arriving there is an operator."
     },
     {
       "name": "geosystem: an out-of-range level is refused",
@@ -1060,16 +1047,7 @@
       },
       "auth": false,
       "expect_status": 503,
-      "_note": [
-        "S28 - DEMONSTRATED on the legacy stack: 16 real drafts returned to an",
-        "anonymous caller, because the builder read body['status'] and the",
-        "indexer indexes every resource whatever its state. The port decides the",
-        "publication state from who is asking and no request field can influence",
-        "it. This asserts 503 only because indexing is off on this instance;",
-        "with indexing ON, change to 200 and add expect_absent for draft rows.",
-        "HOTFIX_S28_legacy.patch is ready for the legacy stack.",
-        "activeColumns carries the column set the browser really sends: `_source` is an allowlist derived from it, so a case that omits it asks for a narrower response than any client ever receives and reports the difference as a regression."
-      ]
+      "_note": "A public caller does not choose what is searched. The publication state and the access-rights clause are decided from who is asking, and no request field can influence either - which matters because the indexer indexes every resource whatever its state. This asserts 503 only because indexing is off on the instance it was written against; with indexing ON, change it to 200 and add expect_absent for draft rows. activeColumns carries the column set the browser really sends: `_source` is an allowlist derived from it, so a case that omits it asks for a narrower response than any client receives and reports the difference as a regression."
     },
     {
       "name": "search: public rss",
@@ -1154,27 +1132,14 @@
       },
       "auth": false,
       "expect_status": 404,
-      "_note": [
-        "S29 - the legacy lookup was get_record('resources', body), so this ran",
-        "server-side JavaScript. It is an allowlist now (ident, post_type,",
-        "metadata.firstLevel.*, string equality only). The token gate answers",
-        "first, which is why this asserts 401: the point is that it does NOT",
-        "reach the database and does not hang. tests/test_external_api.py",
-        "asserts the allowlist itself directly, past the token gate."
-      ]
+      "_note": "The lookup filter is an allowlist - ident, post_type, metadata.firstLevel.*, string equality only - so an operator in the body matches nothing rather than being filtered out. The token gate answers first, which is why this asserts 401: the point is that the body does not reach the database and does not hang. tests/test_external_api.py asserts the allowlist itself, past the token gate."
     },
     {
       "name": "adminApi: the plugin proxy refuses rather than resolving a path",
       "path": "/adminApi/plugins/x/..%2F..%2Fusers%2Fdelete",
       "auth": false,
       "expect_status": 404,
-      "_note": [
-        "S30 - the legacy proxy built its target as f'/{plugin}/{endpoint}' from",
-        "a path converter, so `..` reached any route in the application, then",
-        "re-entered the WSGI stack and copied the inner response's headers out",
-        "verbatim. It is an explicit 501 until Phase 5 resolves the target",
-        "against the plugin registry. Unauthenticated it is 401, as here."
-      ]
+      "_note": "The proxy resolves its target against the mounted plugin registry, so a traversal string matches nothing - there is nothing to filter when the only reachable values come from a table the application built. It answers an explicit 501 because re-dispatching under a second identity is a separate decision. Unauthenticated it is 401, as here."
     },
     {
       "name": "publicApi: listing without a Fernet token",
@@ -1262,17 +1227,7 @@
       "body": {},
       "auth": false,
       "expect_status": 401,
-      "_note": [
-        "CONTRACT, and the unauthenticated case throughout this group. A plugin",
-        "route with a token would queue real work against the shared database,",
-        "and firing it at both backends would queue it twice.",
-        "",
-        "What these DO establish is BACKEND_FINDINGS S32: the legacy framework's",
-        "validate_roles returned a refusal tuple that all eleven of its call",
-        "sites discarded, so those routes were guarded by nothing but a valid",
-        "session. In the port the role is a dependency - there is no return",
-        "value to drop - and that is what a 401 here demonstrates end to end."
-      ]
+      "_note": "CONTRACT, and the unauthenticated case throughout this group. A plugin route with a token would queue real work against the shared database, and firing it at both backends would queue it twice. What these establish is that a plugin route's role check is a DEPENDENCY, resolved before the handler body - there is no return value for a handler to drop - and a 401 here demonstrates that end to end."
     },
     {
       "name": "plugins: liquidText save needs a role",
@@ -1353,17 +1308,7 @@
       },
       "auth": false,
       "expect_status": 400,
-      "_note": [
-        "Deliberately malformed, so it is refused BEFORE anything is generated -",
-        "the route is unauthenticated and does write a workbook to the web files",
-        "volume when it succeeds.",
-        "",
-        "The behaviour that changed and is NOT covered here is S33: the legacy",
-        "filter was content type plus published status and nothing else, so a",
-        "resource under embargo appeared in an inventory anyone could download.",
-        "Verifying that needs an instance with a reserved resource in a public",
-        "view; tests/test_plugin_framework.py covers the rule itself."
-      ]
+      "_note": "Deliberately malformed, so it is refused BEFORE anything is generated - the route is unauthenticated and writes a workbook to the web files volume when it succeeds. The rule NOT covered here is that the export applies access rights, so a reserved resource stays out of a public inventory; verifying that needs an instance with a reserved resource in a public view, and tests/test_plugin_framework.py covers the rule itself."
     },
     {
       "name": "system: plugin activation needs administrator",
@@ -1439,7 +1384,7 @@
         "active",
         "type"
       ],
-      "_note": "Contract, not parity: legacy returns each plugin's whole `plugin_info`, the port a chosen subset. `type` is what /processing maps over to build its buttons and route to /processing/{type}/{slug}; omitting it crashed the page on undefined.map. `plugins` guards F38, where the payload was a bare array."
+      "_note": "Contract, not parity: legacy returns each plugin's whole `plugin_info`, the port a chosen subset. `type` is what /processing maps over to build its buttons and route to /processing/{type}/{slug}; omitting it crashed the page on undefined.map. `plugins` pins the envelope, which both callers read as response.plugins rather than as a bare array."
     },
     {
       "name": "records: an image record is servable by the document reader",
@@ -1486,7 +1431,7 @@
       },
       "auth": true,
       "expect_status": 400,
-      "_note": "S18. Serving images from this route must not turn the size check into a pass-through."
+      "_note": "Serving images from this route must not turn the size check into a pass-through."
     },
     {
       "name": "records: EXIF never states where the file lives",
@@ -1579,7 +1524,7 @@
       },
       "auth": true,
       "expect_status": 200,
-      "_note": "F66. `AImessaging.tsx` does `Array.isArray(response) ? response : []`, so an envelope reads as NO RESULTS - a 200 that renders 'No results' for a user who has conversations. The status alone cannot see it; this case exists so the shape is asserted even when the instance has none for this record."
+      "_note": "`AImessaging.tsx` does `Array.isArray(response) ? response : []`, so an envelope reads as NO RESULTS - a 200 that renders 'No results' for a user who has conversations. The status alone cannot see it; this case exists so the shape is asserted even when the instance has none for this record."
     },
     {
       "name": "aiservices: conversation history needs a token",
@@ -1630,7 +1575,7 @@
       "path": "/filesProcessing/settings/settings",
       "auth": true,
       "expect_status": 200,
-      "_note": "The processing screen renders its form from this. S32's fix made every plugin role check a dependency rather than a discarded return value, so a route that used to be guarded by nothing now refuses - this asserts it did not overshoot into refusing everyone."
+      "_note": "The processing screen renders its form from this. Making every plugin role check a dependency means a route that previously refused nobody now refuses - this asserts it did not overshoot into refusing everyone."
     },
     {
       "name": "plugins: a plugin declaring no settings is 404, not a traceback",
@@ -1670,7 +1615,7 @@
       "path": "/massiveUpdater/image",
       "auth": false,
       "expect_status": 401,
-      "_note": "Each plugin declares its own routes, so the guard is asserted per plugin rather than assumed from the framework - S32 was 21 call sites that each looked fine on their own."
+      "_note": "Each plugin declares its own routes, so the guard is asserted per plugin rather than assumed from the framework: the checks that fail are the ones that each looked fine on their own."
     },
     {
       "name": "plugins: massiveUpdater settings need a role",
@@ -1699,10 +1644,11 @@
     }
   ],
   "_expected_differences": [
-    "Parity cases that differ ON PURPOSE. Re-triaged 2026-08-19 against both",
-    "running backends, with the three legacy hotfixes (S18/S28/S31) applied and",
-    "every fixture resolving - so for the first time NOTHING is skipped and the",
-    "public routes are exercised against genuinely public data.",
+    "Parity cases that differ ON PURPOSE. Re-triaged 2026-08-20 against both",
+    "running backends, with the three legacy hotfixes applied and every fixture",
+    "resolving - so nothing is skipped and the public routes are exercised",
+    "against genuinely public data. 162 cases: 61/89 parity identical, 69/73",
+    "contract met, and all 32 differences are classified below.",
     "",
     "-- the port returns the right code where legacy faults --",
     "  types: unknown slug            legacy 500 -> 404",
@@ -1722,14 +1668,14 @@
     "  records: public page images    legacy 500s unconditionally - it calls",
     "                                 public_services.get_document_pages, which does",
     "                                 not exist. The public document viewer has never",
-    "                                 worked. The port returns the pages. (F41)",
+    "                                 worked. The port returns the pages.",
     "  resources: public listing      legacy 401s the WHOLE request when any one of",
     "                                 the requested types declares viewRoles, so the",
     "                                 public explore screen is dead for any mixed",
     "                                 selection. The port serves the types that are",
     "                                 public and omits the rest.",
     "",
-    "-- the public rule, applied where legacy over-discloses (S20) --",
+    "-- the public rule, applied where legacy over-discloses --",
     "  Legacy serves a record to an anonymous caller on the strength of the record",
     "  alone. The port requires the whole ancestry to be public: published,",
     "  unrestricted after inheritance, and the content type declaring no viewRoles.",
@@ -1742,7 +1688,7 @@
     "  listing tested the refusal while looking like it tested the document.",
     "",
     "-- deliberate shape changes --",
-    "  records: get by filters        `filepath` no longer returned",
+    "  records: get by filters        `filepath` no longer returned, and neither\n                                 are the EXIF keys that restate it -\n                                 SourceFile, File:Directory, File:FileName\n                                 are the absolute path ExifTool read from",
     "  records: detail (both)         adds `mime`/`status`; drops a parent's",
     "                                 `accessRights: null` (absent vs null); EXIF is",
     "                                 reduced to the presentable subset, which drops",
@@ -1816,7 +1762,7 @@
     "",
     "-- order-dependent --",
     "  auth: byte-identical           passes alone; in a full run the port's login",
-    "                                 throttle (S2, which legacy lacks) trips and",
+    "                                 throttle, which legacy lacks) trips and",
     "                                 the statuses diverge. Run it with",
     "                                 --only byte-identical, or after a Redis flush."
   ]

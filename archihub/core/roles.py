@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 
 from archihub.core.i18n import gettext as _
+from archihub.infra.cache import cached
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,7 @@ def get_access_rights_id():
     return (_settings_entry(ACCESS_RIGHTS_LIST_ENTRY, ACCESS_RIGHTS_LIST_INDEX) or {}).get("value")
 
 
+@cached("system", "lists")
 def get_roles() -> dict:
     """Every assignable role: the configured vocabulary plus the built-ins."""
     options = list(_list_options(get_roles_id()))
@@ -108,6 +110,7 @@ def get_roles() -> dict:
     return {"options": options}
 
 
+@cached("system", "lists")
 def get_access_rights() -> dict:
     """The configured access-rights vocabulary.
 

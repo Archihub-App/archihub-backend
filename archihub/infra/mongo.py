@@ -93,8 +93,18 @@ class MongoClientWrapper:
         return self.db[collection].aggregate(pipeline)
 
     # -- writes ---------------------------------------------------------
+    # -- writes ---------------------------------------------------------
+    # EVERY method below invalidates the collection it writes. That is the only
+    # place cache invalidation happens in this application: a cached read
+    # declares the collections it depends on, and writing to one of them makes
+    # those entries unreachable. Keeping it here rather than at the call sites
+    # is what makes it impossible to forget - forgetting would mean not writing
+    # to the database. If you add a write method, invalidate in it.
+
     def insert_record(self, collection: str, record: Any):
-        return self.db[collection].insert_one(_to_payload(record))
+        result = self.db[collection].insert_one(_to_payload(record))
+        _invalidate(collection)
+        return result
 
     def insert_records(self, collection: str, records: list[Any]):
         """Insert many documents in one round trip.
@@ -106,10 +116,18 @@ class MongoClientWrapper:
         """
         if not records:
             return None
-        return self.db[collection].insert_many([_to_payload(r) for r in records], ordered=False)
+        try:
+            return self.db[collection].insert_many([_to_payload(r) for r in records], ordered=False)
+        finally:
+            # In a `finally` because a partially applied batch has still
+            # changed the collection, and a BulkWriteError must not leave the
+            # cache describing the state before it.
+            _invalidate(collection)
 
     def update_record(self, collection: str, filters: dict, update_model: Any):
-        return self.db[collection].update_one(filters, {"$set": _to_payload(update_model)})
+        result = self.db[collection].update_one(filters, {"$set": _to_payload(update_model)})
+        _invalidate(collection)
+        return result
 
     def upsert_record(self, collection: str, filters: dict, update_model: Any):
         """Write, creating the document if it is not there.
@@ -119,24 +137,51 @@ class MongoClientWrapper:
         creating on a mistyped filter is a way to grow a collection of
         near-duplicates.
         """
-        return self.db[collection].update_one(
+        result = self.db[collection].update_one(
             filters, {"$set": _to_payload(update_model)}, upsert=True
         )
+        _invalidate(collection)
+        return result
 
     def update_records(self, collection: str, filters: dict, update_fields: dict):
-        return self.db[collection].update_many(filters, {"$set": update_fields})
+        result = self.db[collection].update_many(filters, {"$set": update_fields})
+        _invalidate(collection)
+        return result
 
     def update_record_operator(self, collection: str, filters: dict, operator: dict, **kwargs):
-        return self.db[collection].update_one(filters, operator, **kwargs)
+        result = self.db[collection].update_one(filters, operator, **kwargs)
+        _invalidate(collection)
+        return result
 
     def increment_record(self, collection: str, filters: dict, field: str, value: int):
-        return self.db[collection].update_one(filters, {"$inc": {field: value}})
+        result = self.db[collection].update_one(filters, {"$inc": {field: value}})
+        _invalidate(collection)
+        return result
 
     def delete_record(self, collection: str, filters: dict):
-        return self.db[collection].delete_one(filters)
+        result = self.db[collection].delete_one(filters)
+        _invalidate(collection)
+        return result
 
     def delete_records(self, collection: str, filters: dict):
-        return self.db[collection].delete_many(filters)
+        result = self.db[collection].delete_many(filters)
+        _invalidate(collection)
+        return result
+
+
+def _invalidate(collection: str) -> None:
+    """Invalidate cached reads of ``collection``.
+
+    Imported inside the call rather than at module scope: the cache imports
+    settings, this module is imported by almost everything, and a write must
+    not be able to fail because the cache module could not be loaded.
+    """
+    try:
+        from archihub.infra.cache import bump
+
+        bump(collection)
+    except Exception:  # pragma: no cover - defensive
+        logger.warning("Cache invalidation unavailable for %s", collection, exc_info=True)
 
 
 _mongo: MongoClientWrapper | None = None

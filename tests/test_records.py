@@ -631,3 +631,53 @@ def test_valid_fragment_bounds_are_parsed():
 def test_an_unusable_fragment_range_is_rejected(start, end):
     with pytest.raises(ValueError):
         media.parse_fragment_bounds(start, end)
+
+
+# ---------------------------------------------------------------------------
+# The server's own paths, on the route that returns the RAW processing block
+# ---------------------------------------------------------------------------
+
+
+def test_the_admin_filter_route_does_not_disclose_where_the_file_lives():
+    """Removing `filepath` while leaving the EXIF path keys is cosmetic.
+
+    ExifTool records the absolute path it read from, so `SourceFile`,
+    `File:Directory` and `File:FileName` are the same fact through a second
+    door. The detail route drops them by omission - its allowlist never
+    included them - but this route returns the raw block, so it has to remove
+    them explicitly.
+    """
+    from archihub.api.records.services import strip_server_paths
+
+    cleaned = strip_server_paths(
+        {
+            "fileProcessing": {
+                "type": "image",
+                "path": "2025/10/29/uuid",
+                "metadata": {
+                    "SourceFile": "/srv/original/2025/10/29/uuid.jpg",
+                    "File:Directory": "/srv/original/2025/10/29",
+                    "File:FileName": "uuid.jpg",
+                    "EXIF:Make": "motorola",
+                    "File:ImageWidth": 2304,
+                },
+            }
+        }
+    )
+
+    metadata = cleaned["fileProcessing"]["metadata"]
+    assert "SourceFile" not in metadata
+    assert "File:Directory" not in metadata
+    assert "File:FileName" not in metadata
+    assert metadata["EXIF:Make"] == "motorola", "only the paths go"
+    assert metadata["File:ImageWidth"] == 2304, "a File: key that is not a path stays"
+
+
+def test_stripping_server_paths_does_not_mutate_the_stored_document():
+    """The document comes from a Mongo cursor and may be read again."""
+    from archihub.api.records.services import strip_server_paths
+
+    original = {"fileProcessing": {"metadata": {"SourceFile": "/srv/x.jpg"}}}
+    strip_server_paths(original)
+
+    assert original["fileProcessing"]["metadata"] == {"SourceFile": "/srv/x.jpg"}

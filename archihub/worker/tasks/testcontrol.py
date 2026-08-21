@@ -185,7 +185,10 @@ def reset_task(run_id: str) -> dict:
     try:
         from archihub.infra.cache import get_cache
 
-        get_cache().clear_cache()
+        # The whole database, not just the cache: a job queued before the wipe
+        # names documents that no longer exist, and running it after the reseed
+        # would write against the new instance.
+        get_cache().flush_database()
     except Exception:
         logger.exception("Could not flush the cache during reset")
 

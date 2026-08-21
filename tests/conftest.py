@@ -29,6 +29,14 @@ os.environ.setdefault("FERNET_KEY", "kC5s3s1ZQ0dGmZ6l8Xh9Yq2vN4bP7tR0uW1xA3cE5gI
 # tests/test_plugin_guard.py.
 os.environ.setdefault("ARCHIHUB_ALLOW_UNPORTED_PLUGINS", "true")
 
+# The memoisation layer reaches Redis, and this suite must run with nothing
+# running. Forced rather than `setdefault`: a developer with a local Redis would
+# otherwise get a DIFFERENT suite from CI, and worse, cache keys are shared
+# across processes - a run would read entries left by the application and leave
+# its own behind for the next one. The cache is covered directly in
+# tests/test_cache.py against an in-memory client.
+os.environ["CACHE_ENABLED"] = "false"
+
 
 @pytest.fixture
 def settings_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:

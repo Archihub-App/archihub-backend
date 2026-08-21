@@ -63,6 +63,38 @@ IMPORTANT_EXIF = (
 )
 
 
+#: Where the file sits on the server's own disk. These are the same fact as
+#: ``filepath``, arriving through a second door: an EXIF block written by
+#: ExifTool records the absolute path it read from. Any route that removes
+#: ``filepath`` must remove these too, or the removal is cosmetic.
+SERVER_PATH_EXIF = ("SourceFile", "Directory", "FileName")
+
+
+def strip_server_paths(processing):
+    """Remove the server's own paths from a processing block, in place-safe copy.
+
+    For routes that return the raw block rather than the presentable summary.
+    ``important_exif`` already excludes these by omission; this is the same rule
+    where an allowlist would be too narrow to apply.
+    """
+    if not isinstance(processing, dict):
+        return processing
+
+    cleaned: dict = {}
+    for key, value in processing.items():
+        if not isinstance(value, dict):
+            cleaned[key] = value
+            continue
+        entry = dict(value)
+        metadata = entry.get("metadata")
+        if isinstance(metadata, dict):
+            entry["metadata"] = {
+                k: v for k, v in metadata.items() if _exif_name(k) not in SERVER_PATH_EXIF
+            }
+        cleaned[key] = entry
+    return cleaned
+
+
 def _mongo():
     from archihub.infra.mongo import get_mongo
 
@@ -307,6 +339,8 @@ def get_by_filters(body: dict, user: str) -> tuple[list | dict, int]:
         record["id"] = str(record.pop("_id"))
         record["total"] = total
         record.pop("filepath", None)
+        if "processing" in record:
+            record["processing"] = strip_server_paths(record["processing"])
 
     _audit(user, "record_get_all", {"filters": filters})
 

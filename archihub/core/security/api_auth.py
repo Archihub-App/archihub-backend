@@ -9,7 +9,7 @@ see ``core/security/api_keys.py`` for why that shape.
 and collapsing them into one parameterised helper is how that distinction gets
 lost:
 
-    authenticate_admin_api    any scope; the ROLE check is at the route
+    authenticate_admin_api    the `admin` scope only, and administrators only
     authenticate_public_api   the ``public`` scope only, and metered
     authenticate_node_api     the ``node`` scope only, administrators only,
                               and never metered
@@ -116,12 +116,19 @@ def _authenticate(
 
 
 def authenticate_admin_api(authorization: str | None = None) -> ApiIdentity:
-    """Authenticate a caller of ``/adminApi``.
+    """Authenticate a caller of ``/adminApi``: ``admin`` scope, administrators only.
 
-    Scope is not constrained here; the administrator requirement is applied by
-    the route's own dependency, which is where the refusal is meaningful.
+    Scope is constrained HERE and not left to the route. A scope exists to bound
+    what one credential can reach, so accepting any live key held by an
+    administrator would make every other scope a full administrative API key -
+    including the ``node`` key, which is deployed to every worker machine and
+    presented over the network on each cache broadcast. Administrators are the
+    only accounts that may hold an ``admin``-scope key, so the role check that
+    follows at the route is a second, independent gate rather than a duplicate.
     """
-    return _authenticate(authorization, scope=None)
+    from archihub.core.security import api_keys
+
+    return _authenticate(authorization, scope=api_keys.SCOPE_ADMIN, admin_only=True)
 
 
 def authenticate_public_api(authorization: str | None = None) -> ApiIdentity:

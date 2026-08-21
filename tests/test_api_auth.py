@@ -106,12 +106,28 @@ def test_an_admin_node_key_authenticates(keys):
     assert identity.is_admin is True
 
 
-def test_the_admin_api_does_not_constrain_scope(keys):
-    """The administrator requirement lives on the route, not here - so this
-    layer accepts any live key and reports whether the holder is an admin."""
+def test_an_admin_key_authenticates_against_the_admin_api(keys):
     identity = api_auth.authenticate_admin_api(f"Bearer {issue('boss', api_keys.SCOPE_ADMIN)}")
 
     assert identity.is_admin is True
+
+
+@pytest.mark.parametrize("scope", [api_keys.SCOPE_PUBLIC, api_keys.SCOPE_NODE, api_keys.SCOPE_VIZ])
+def test_another_scope_is_refused_by_the_admin_api_even_for_an_admin(keys, scope):
+    """A scope bounds what one credential can reach, so holding an
+    administrator account must not turn every key that account owns into an
+    administrative API key. The `node` key makes this concrete: it lives on
+    every worker machine and goes over the network on each cache broadcast.
+    """
+    with pytest.raises(AuthenticationError):
+        api_auth.authenticate_admin_api(f"Bearer {issue('boss', scope)}")
+
+
+def test_the_admin_api_refuses_a_non_administrator_holding_an_admin_key(keys):
+    """Two independent gates, not one written twice: the scope says which door
+    the key opens, the role says who the holder is."""
+    with pytest.raises(AuthenticationError):
+        api_auth.authenticate_admin_api(f"Bearer {issue('alice', api_keys.SCOPE_ADMIN)}")
 
 
 # ---------------------------------------------------------------------------

@@ -1,36 +1,21 @@
 """``ArchiPlugin`` — the base every ported plugin builds on.
 
-Replaces ``app/utils/PluginClass.py``'s ``PluginClass(Blueprint)``.
+COMPOSITION, NOT AN ``APIRouter`` SUBCLASS, AND THAT IS WHAT MAKES THE
+AUTHORISATION RULE ENFORCEABLE
+----------------------------------------------------------------------
 
-THE ONE STRUCTURAL CHANGE, AND IT IS A SECURITY FIX
----------------------------------------------------
+A plugin holds a router; it is not one. That is the whole reason a plugin's
+routes can be ordinary functions with ordinary dependencies.
 
-``PluginClass.validate_roles`` returned a refusal tuple:
-
-```python
-def validate_roles(self, user, roles):
-    temp = [role for role in roles if has_role(user, role)]
-    if len(temp) == 0:
-        return {'msg': _('You do not have sufficient permissions')}, 401
-```
-
-**All twenty-one of its call sites discard the return value.** Not most —
-every one, across twelve plugins:
-
-```python
-current_user = get_jwt_identity()
-self.validate_roles(current_user, ['admin', 'processing'])   # <- result dropped
-task = self.bulk.delay(body, current_user)
-```
-
-So those routes have no authorisation beyond `@jwt_required()`. It reads
-correctly, it is even indented as though it guards what follows, and it does
-nothing. The same is true of ``validate_fields``, whose refusals are discarded
-at the same sites.
-
-Here a role requirement is a **FastAPI dependency**, so it is resolved before
-the handler body runs and its result cannot be dropped: there is no value to
-drop. ``require_roles`` below is the only way a ported plugin states one.
+**A role requirement on a plugin route is a DEPENDENCY.** It is resolved before
+the handler body runs, so there is no return value for a handler to inspect,
+forget to inspect, or drop. ``require_roles`` below is the only way a ported
+plugin states one, and two guards hold that shape: a test walks every plugin
+route's dependency list, and an AST scan asserts no handler calls a role check
+itself. The scan exists because a *call* is the shape that fails — a check whose
+refusal is returned rather than raised reads exactly like a guard, is indented
+as though it guards what follows, and protects nothing. The same reasoning
+applies to field validation, which is likewise declared rather than called.
 
 WHAT ELSE THIS CLASS OWNS
 
@@ -40,9 +25,8 @@ WHAT ELSE THIS CLASS OWNS
   ``/settings/{type}`` and ``POST /settings``.
 
 Cross-collection writes (``update_data``) and the node cache broadcast live in
-``framework/data.py`` — they were ``@classmethod``s here that needed no instance,
-and ``filesProcessing`` re-instantiated its whole plugin inside a Celery task
-purely to reach them.
+``framework/data.py`` — they need no instance, and a plugin should not have to
+construct itself inside a Celery task merely to reach them.
 """
 
 from __future__ import annotations

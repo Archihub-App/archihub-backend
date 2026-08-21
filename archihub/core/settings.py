@@ -120,6 +120,12 @@ class Settings(BaseSettings):
     # registration is NOT gated on it - every process registers.
     celery_worker: bool = Field(default=False, validation_alias="CELERY_WORKER")
 
+    # Memoisation of authorisation and vocabulary reads. Off switches the
+    # decorator to a straight call, which is what the test suite runs with -
+    # the suite must need no infrastructure, and a cached read reaches Redis.
+    # Also the first thing to switch off when diagnosing a stale-data report.
+    cache_enabled: bool = Field(default=True, validation_alias="CACHE_ENABLED")
+
     # ------------------------------------------------------------------
     # Elasticsearch
     # ------------------------------------------------------------------

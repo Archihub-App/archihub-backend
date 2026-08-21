@@ -32,6 +32,7 @@ import logging
 
 from archihub.core.errors import NotFoundError, RateLimitError
 from archihub.core.i18n import gettext as _
+from archihub.infra.cache import cached
 
 logger = logging.getLogger(__name__)
 
@@ -146,8 +147,15 @@ def register_user(body: dict) -> tuple[dict, int]:
     return {"msg": _("User created successfully")}, 201
 
 
+@cached("users", "system")
 def has_role(username: str, role: str) -> bool:
-    """Whether ``username`` holds ``role``. Always a real bool - see module docstring."""
+    """Whether ``username`` holds ``role``. Always a real bool - see module docstring.
+
+    Cached on `users` AND `system`: the answer reads the account document, but
+    it also consults the scheduled-task configuration through
+    `_is_valid_system_user`. Declaring only `users` would keep answering from
+    before a scheduled task was removed.
+    """
     if _is_valid_system_user(username):
         return True
 
@@ -157,8 +165,12 @@ def has_role(username: str, role: str) -> bool:
     return role in (user.get("roles") or [])
 
 
+@cached("users", "system")
 def has_right(username: str, right: str) -> bool:
-    """Whether ``username`` holds ``right``. Always a real bool."""
+    """Whether ``username`` holds ``right``. Always a real bool.
+
+    Same two collections as `has_role`, for the same reason.
+    """
     if _is_valid_system_user(username):
         return True
 
