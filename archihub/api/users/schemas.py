@@ -152,6 +152,14 @@ class ApiKeyRequest(BaseModel):
     name: str | None = None
 
 
-class AdminApiKeyRequest(ApiKeyRequest):
-    # Days. `false` means "no expiry", matching the legacy contract.
+class NamedApiKeyRequest(ApiKeyRequest):
+    """Creating an API key: a scope, an optional name, an expiry.
+
+    `scope` is validated against the known set in the service rather than by an
+    enum here, so an unknown value is a 400 with a message rather than a 422
+    describing a schema the caller never saw.
+    """
+
+    scope: str = "public"
+    # Days. `false` means no expiry.
     duration: int | bool = 2

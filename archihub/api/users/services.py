@@ -1,10 +1,7 @@
-"""User lookups and authorisation checks.
+"""The users domain: accounts, authorisation checks, profile, API keys.
 
-PARTIAL PORT. Only the helpers the authentication layer needs are here -
-``get_by_username``, ``has_role``, ``has_right``, ``add_request``. The rest of
-the users domain (CRUD, tokens, profile, favourites) lands in Phase 3 step 2.
-Auth has to come first because every other domain's routes depend on it, so
-these few functions are pulled forward.
+``has_role``, ``has_right`` and ``add_request`` are what the authentication
+layer reaches for, and they are used from almost every other domain's routes.
 
 INVARIANTS THIS MODULE ENFORCES. Both are easy to get wrong and both are
 security-relevant, so they are stated as rules rather than left implicit.
@@ -79,27 +76,6 @@ def _is_valid_system_user(username: str) -> bool:
     plugin_settings = (settings or {}).get("plugins_settings") or {}
     scheduled = (plugin_settings.get("scheduleSystemTasks") or {}).get("schedule_tasks") or []
     return any(task.get("task") == task_name for task in scheduled)
-
-
-def get_by_username(username: str) -> dict:
-    """Return the token-bearing fields of a user.
-
-    Raises ``NotFoundError`` when the user does not exist. The legacy version
-    returned a ``({'msg': ...}, 404)`` tuple and callers then probed it with
-    ``if 'msg' in current_user`` - which is why an exception is clearer: there
-    is no way to accidentally treat the error as a user object.
-    """
-    user = _mongo().get_record(
-        "users",
-        {"username": username},
-        fields={"token": 1, "adminToken": 1, "requests": 1, "lastRequest": 1, "nodeToken": 1},
-    )
-    if not user:
-        raise NotFoundError(_("User not found"), status_code=404)
-
-    user["_id"] = str(user["_id"])
-    user.setdefault("favorites", [])
-    return user
 
 
 def get_user(username: str) -> dict | None:
@@ -757,6 +733,22 @@ def issue_api_key(
     if not _verify_current_password(username, password):
         return {"msg": _("Incorrect password")}, 400
 
+    # ISSUING REPLACES THE KEY OF THE SAME NAME, and only that one.
+    #
+    # A person identifies a key by its name, so "regenerate" has to mean "retire
+    # the one I am replacing". Keyed on (user, scope, name), that single rule
+    # covers both shapes the product needs: the profile screen's per-scope
+    # buttons send no name and therefore replace that scope's default key -
+    # matching their own description, "valid for two days or until a new one is
+    # generated" - while a key named for an integration coexists with it.
+    #
+    # Revoking by scope alone would break every other integration under that
+    # scope. Revoking nothing leaves credentials the user cannot see piling up.
+    #
+    # Done BEFORE the new key exists, so a failure part-way through leaves the
+    # account with no working key rather than two.
+    api_keys.revoke_all(username, scope, name=name or api_keys.default_name(scope))
+
     try:
         key = api_keys.create_key(
             username,
@@ -774,6 +766,60 @@ def issue_api_key(
         # time the value exists.
         "msg": _("Store this key now - it will not be shown again"),
     }, 200
+
+
+#: Which role a scope requires. The four per-scope routes each pin this with a
+#: dependency; the one general creation route cannot, because the scope arrives
+#: in the body and a dependency is resolved before the body is read. Stated once
+#: here so the two paths cannot drift into granting different things.
+SCOPE_ROLES: dict[str, tuple[str, ...]] = {
+    "public": (),                 # any authenticated user
+    "admin": ("admin",),
+    "node": ("admin",),
+    "viz": ("visualizer",),
+}
+
+
+def may_issue_scope(username: str, scope: str) -> bool:
+    """Whether this caller may hold a key of this scope."""
+    required = SCOPE_ROLES.get(scope)
+    if required is None:
+        return False
+    if not required:
+        return True
+    return any(has_role(username, role) for role in required)
+
+
+def create_named_key(
+    username: str,
+    password: str,
+    scope: str,
+    *,
+    name: str | None = None,
+    expires_in=None,
+) -> tuple[dict, int]:
+    """Create a key of any scope the caller is entitled to.
+
+    The general entry point behind ``POST /users/api-keys``. The four per-scope
+    routes remain and go through ``issue_api_key`` with the same rules; this one
+    exists so a user can name a key, which is what makes holding more than one
+    of a scope usable.
+
+    THE SCOPE CHECK IS HERE, not in a dependency, because the scope is in the
+    body. That makes it a decision in a handler path rather than a declared
+    requirement, so it is written once and tested directly - a caller must not
+    be able to mint an admin key by asking for one.
+    """
+    from archihub.core.security import api_keys
+    from archihub.core.security.jwt import ROLE_FAILURE_STATUS
+
+    if scope not in api_keys.SCOPES:
+        return {"msg": _("Unknown API key scope")}, 400
+
+    if not may_issue_scope(username, scope):
+        return {"msg": _("You do not have sufficient permissions")}, ROLE_FAILURE_STATUS
+
+    return issue_api_key(username, password, scope, name=name, expires_in=expires_in)
 
 
 def list_api_keys(username: str) -> tuple[list, int]:

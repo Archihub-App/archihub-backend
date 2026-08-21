@@ -154,7 +154,7 @@ def create_key(
             "secret_hash": hash_secret(secret),
             "user": username,
             "scope": scope,
-            "name": name or scope,
+            "name": name or default_name(scope),
             "created_at": now,
             "last_used_at": None,
             "expires_at": (now + expires_in) if expires_in else None,
@@ -179,12 +179,37 @@ def revoke_key(key_id: str, username: str | None = None) -> bool:
     return revoked
 
 
-def revoke_all(username: str, scope: str | None = None) -> None:
-    """Revoke every live key for a user - used when disabling an account."""
+def revoke_all(username: str, scope: str | None = None, name: str | None = None) -> None:
+    """Revoke a user's live keys, narrowed by scope and name.
+
+    With neither filter it revokes everything, which is what disabling an
+    account needs.
+
+    ``name`` is what makes regeneration precise. A key is identified to a person
+    by its name, so re-issuing "the admin key" must retire the previous *admin
+    key* and leave a key called "CI pipeline" alone. Revoking by scope alone
+    would silently break every other integration the user has under that scope;
+    revoking nothing leaves credentials nobody can see accumulating.
+    """
     filters: dict = {"user": username, "revoked_at": None}
     if scope:
         filters["scope"] = scope
+    if name:
+        filters["name"] = name
     _mongo().update_records(COLLECTION, filters, {"revoked_at": datetime.now()})
+    logger.info(
+        "Revoked live keys for %s (scope=%s, name=%s)", username, scope or "*", name or "*"
+    )
+
+
+def default_name(scope: str) -> str:
+    """The name a key gets when the caller does not choose one.
+
+    Shared with ``create_key`` so "regenerate the default key for this scope"
+    and "store this key under its default name" cannot disagree about which
+    name that is.
+    """
+    return scope
 
 
 def list_keys(username: str) -> list[dict]:

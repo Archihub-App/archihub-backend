@@ -1,0 +1,11 @@
+# SYSTEM packages this plugin needs, one apt package name per line.
+# Installed at image build time by scripts/install_plugin_deps.sh.
+
+# Web-quality derivatives of audio and video originals.
+ffmpeg
+
+# Converts office documents to PDF. This plugin registers that conversion as a
+# capability other plugins consume through the interop registry, so an image
+# without it breaks PDF export in liquidText and transcribeWhisperX too, not
+# only here.
+libreoffice

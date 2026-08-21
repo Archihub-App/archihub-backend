@@ -1,0 +1,60 @@
+# What must never reach a built image.
+#
+# There was no .dockerignore at all, and the Dockerfile ends with `COPY . .`, so
+# the build context was whatever happened to be in the working tree. Two
+# consequences, both real:
+#
+#   * `.env` was copied into a layer. It holds SECRET_KEY, JWT_SECRET_KEY,
+#     FERNET_KEY and the database credentials. Anyone who can pull the image can
+#     read them, and deleting the file in a later layer does not remove it from
+#     the earlier one. Configuration is injected at run time; it is never built in.
+#
+#   * Plugin directories are gitignored but NOT dockerignored, so a build run
+#     from a developer's tree silently included plugins that a clean checkout
+#     does not have - which is how a build could fail on a dependency nobody
+#     had deliberately installed.
+#
+# Plugins are still installable: the Dockerfile copies the plugin trees
+# explicitly, so putting a directory there and rebuilding works exactly as the
+# install documentation describes. What this file stops is the *accidental*
+# inclusion of everything else.
+
+# ---- secrets and local configuration ----
+.env
+.env.*
+*.pem
+*.key
+
+# ---- version control and editor state ----
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# ---- runtime data mounts, not code ----
+/original
+/webfiles
+/userfiles
+/temporal
+/uploads
+
+# ---- build and test artefacts ----
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+htmlcov
+.coverage
+
+# ---- not needed to run the service ----
+tests
+tools
+node_modules
+requirements.txt.bak
+
+# ---- documentation and notes ----
+*.md
+!README.md

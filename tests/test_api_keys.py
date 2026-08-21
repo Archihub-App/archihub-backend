@@ -222,3 +222,166 @@ def test_bookkeeping_failure_does_not_fail_the_request(mongo, monkeypatch):
 
     monkeypatch.setattr(mongo, "update_record", _explode)
     assert api_keys.verify_key(key) is not None
+
+
+# ---------------------------------------------------------------------------
+# Issuing REPLACES the previous key of the same scope
+# ---------------------------------------------------------------------------
+#
+# Each of these scopes is a single credential in the product: the profile
+# screen offers "generate", and its own description tells the user the token
+# lasts "two days or until a new one is generated". Before this, pressing that
+# button left the previous key live - so an account accumulated admin
+# credentials that no screen listed and no screen could revoke.
+
+
+@pytest.fixture
+def issuing(monkeypatch, mongo):
+    """`issue_api_key` with the password check and the audit log stubbed."""
+    from archihub.api.users import services
+
+    monkeypatch.setattr(services, "_verify_current_password", lambda u, p: True)
+    monkeypatch.setattr(services, "_register_log", lambda *a, **k: None)
+    return services
+
+
+def _live(mongo, scope=None):
+    return [
+        r for r in mongo.rows
+        if r["revoked_at"] is None and (scope is None or r["scope"] == scope)
+    ]
+
+
+def test_issuing_a_second_key_revokes_the_first(issuing, mongo):
+    issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN)
+    issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN)
+
+    assert len(mongo.rows) == 2, "the old row is kept, as an audit trail"
+    assert len(_live(mongo, api_keys.SCOPE_ADMIN)) == 1
+
+
+def test_the_key_left_live_is_the_NEW_one(issuing, mongo):
+    """Revoking the wrong one would be worse than revoking neither."""
+    first, _status = issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN)
+    second, _status = issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN)
+
+    assert api_keys.verify_key(second["access_token"]) is not None
+    assert api_keys.verify_key(first["access_token"]) is None
+
+
+def test_another_scope_is_not_touched(issuing, mongo):
+    """Regenerating the admin key must not sign the user out of the public API."""
+    public, _status = issuing.issue_api_key("alice", "pw", api_keys.SCOPE_PUBLIC)
+    issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN)
+
+    assert api_keys.verify_key(public["access_token"]) is not None
+
+
+def test_another_users_key_is_not_touched(issuing, mongo):
+    bob, _status = issuing.issue_api_key("bob", "pw", api_keys.SCOPE_ADMIN)
+    issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN)
+
+    assert api_keys.verify_key(bob["access_token"]) is not None
+
+
+def test_a_wrong_password_revokes_nothing(issuing, mongo, monkeypatch):
+    """The refusal must not be a way to disable someone's key."""
+    existing, _status = issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN)
+    monkeypatch.setattr(issuing, "_verify_current_password", lambda u, p: False)
+
+    _payload, status = issuing.issue_api_key("alice", "wrong", api_keys.SCOPE_ADMIN)
+
+    assert status == 400
+    assert api_keys.verify_key(existing["access_token"]) is not None
+
+
+# ---------------------------------------------------------------------------
+# Replacement is keyed on (user, scope, NAME)
+# ---------------------------------------------------------------------------
+#
+# A person tells keys apart by name, so "regenerate" has to mean "retire the one
+# I am replacing". Revoking by scope alone would break every other integration
+# the user runs under that scope; revoking nothing leaves credentials they
+# cannot see accumulating.
+
+
+def test_a_named_key_survives_regenerating_the_default_one(issuing, mongo):
+    """The case the whole rule exists for: a CI key must not be collateral."""
+    ci, _s = issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN, name="CI pipeline")
+    issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN)          # the default one
+
+    assert api_keys.verify_key(ci["access_token"]) is not None
+
+
+def test_regenerating_a_named_key_replaces_only_that_name(issuing, mongo):
+    first, _s = issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN, name="CI pipeline")
+    default, _s = issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN)
+    second, _s = issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN, name="CI pipeline")
+
+    assert api_keys.verify_key(first["access_token"]) is None
+    assert api_keys.verify_key(second["access_token"]) is not None
+    assert api_keys.verify_key(default["access_token"]) is not None
+
+
+def test_an_unnamed_key_is_stored_under_the_scope_name(issuing, mongo):
+    """`create_key` and `revoke_all` must agree on what the default name is, or
+    regeneration silently stops matching."""
+    issuing.issue_api_key("alice", "pw", api_keys.SCOPE_ADMIN)
+
+    assert mongo.rows[0]["name"] == api_keys.default_name(api_keys.SCOPE_ADMIN)
+
+
+# ---------------------------------------------------------------------------
+# A caller cannot mint a scope they are not entitled to
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def scoped(monkeypatch, mongo):
+    from archihub.api.users import services
+
+    monkeypatch.setattr(services, "_verify_current_password", lambda u, p: True)
+    monkeypatch.setattr(services, "_register_log", lambda *a, **k: None)
+
+    def roles(username, role):
+        return username == "boss" and role == "admin"
+
+    monkeypatch.setattr(services, "has_role", roles)
+    return services
+
+
+def test_a_plain_user_cannot_create_an_admin_key(scoped, mongo):
+    """The scope is in the BODY, so no dependency guards it - this check is the
+    only thing standing between any account and an admin credential."""
+    _payload, status = scoped.create_named_key("alice", "pw", api_keys.SCOPE_ADMIN)
+
+    assert status == 403
+    assert mongo.rows == []
+
+
+def test_an_admin_can_create_an_admin_key(scoped, mongo):
+    payload, status = scoped.create_named_key("boss", "pw", api_keys.SCOPE_ADMIN)
+
+    assert status == 200
+    assert api_keys.verify_key(payload["access_token"]) is not None
+
+
+def test_any_authenticated_user_can_create_a_public_key(scoped, mongo):
+    _payload, status = scoped.create_named_key("alice", "pw", api_keys.SCOPE_PUBLIC)
+
+    assert status == 200
+
+
+def test_an_unknown_scope_is_refused_before_the_password_is_even_right(scoped, mongo):
+    _payload, status = scoped.create_named_key("boss", "pw", "superuser")
+
+    assert status == 400
+    assert mongo.rows == []
+
+
+def test_every_scope_has_a_role_rule():
+    """A scope with no entry is refused by `may_issue_scope`, but silently -
+    adding a scope and forgetting the rule should be caught here instead."""
+    from archihub.api.users import services
+
+    assert set(services.SCOPE_ROLES) == set(api_keys.SCOPES)

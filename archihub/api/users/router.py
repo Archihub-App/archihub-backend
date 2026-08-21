@@ -23,8 +23,7 @@ from fastapi.responses import JSONResponse
 
 from archihub.api.users import services
 from archihub.api.users.schemas import (
-    AdminApiKeyRequest,
-    ApiKeyRequest,
+    NamedApiKeyRequest,
     DeleteUserRequest,
     FavoriteListRequest,
     FavoriteRequest,
@@ -301,82 +300,47 @@ def accept_compromise(current_user: CurrentUser = Depends(get_current_user)) -> 
 # ---------------------------------------------------------------------------
 
 
-def _issue(scope: str, username: str, body, expires_in=None) -> JSONResponse:
-    return _respond(
-        services.issue_api_key(
-            username, body.password, scope, name=getattr(body, "name", None), expires_in=expires_in
-        )
-    )
-
-
 @router.post(
-    "/token",
+    "/api-keys",
+    status_code=201,
     responses={
-        200: {"description": "Key issued - THIS IS THE ONLY TIME IT IS RETURNED"},
-        400: {"description": "Incorrect password"},
+        201: {"description": "Key created - THIS IS THE ONLY TIME IT IS RETURNED"},
+        400: {"description": "Incorrect password, or an unknown scope"},
+        403: {"description": "The caller may not hold a key of that scope"},
         **_ROLE_RESPONSES,
     },
 )
-def generate_token(
-    body: ApiKeyRequest = Body(...),
+def create_api_key(
+    body: NamedApiKeyRequest = Body(...),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> JSONResponse:
-    """Issue a public-API key for the caller.
+    """Create an API key of any scope the caller is entitled to.
 
-    The response carries the only copy; the server keeps a hash.
-    """
-    from archihub.core.security import api_keys
+    The general form of the four per-scope routes above, and the one that lets a
+    key be NAMED - which is what makes holding more than one usable, since a
+    person tells keys apart by name and re-issuing replaces the one with the
+    same name.
 
-    return _issue(api_keys.SCOPE_PUBLIC, current_user.username, body)
-
-
-@router.post(
-    "/admin-token",
-    responses={200: {"description": "Key issued - only returned once"}, **_ROLE_RESPONSES},
-)
-def generate_admin_token(
-    body: AdminApiKeyRequest = Body(...),
-    current_user: CurrentUser = Depends(require_admin),
-) -> JSONResponse:
-    """Issue an administrative API key.
-
-    ``duration`` is in days; ``false`` means no expiry, matching the legacy
-    contract.
+    The scope requirement is enforced in `services.create_named_key`, not by a
+    dependency here: the scope arrives in the body, and dependencies resolve
+    before the body is read.
     """
     from datetime import timedelta
 
-    from archihub.core.security import api_keys
-
-    expires_in = timedelta(days=body.duration) if isinstance(body.duration, int) and body.duration else None
-    return _issue(api_keys.SCOPE_ADMIN, current_user.username, body, expires_in=expires_in)
-
-
-@router.post(
-    "/node-token",
-    responses={200: {"description": "Key issued - only returned once"}, **_ROLE_RESPONSES},
-)
-def generate_node_token(
-    body: ApiKeyRequest = Body(...),
-    current_user: CurrentUser = Depends(require_admin),
-) -> JSONResponse:
-    """Issue a node-to-node API key."""
-    from archihub.core.security import api_keys
-
-    return _issue(api_keys.SCOPE_NODE, current_user.username, body)
-
-
-@router.post(
-    "/viz-token",
-    responses={200: {"description": "Key issued - only returned once"}, **_ROLE_RESPONSES},
-)
-def generate_viz_token(
-    body: ApiKeyRequest = Body(...),
-    current_user: CurrentUser = Depends(require_visualizer),
-) -> JSONResponse:
-    """Issue a visualisation API key."""
-    from archihub.core.security import api_keys
-
-    return _issue(api_keys.SCOPE_VIZ, current_user.username, body)
+    expires_in = (
+        timedelta(days=body.duration)
+        if isinstance(body.duration, int) and body.duration
+        else None
+    )
+    return _respond(
+        services.create_named_key(
+            current_user.username,
+            body.password,
+            body.scope,
+            name=body.name,
+            expires_in=expires_in,
+        )
+    )
 
 
 @router.get(

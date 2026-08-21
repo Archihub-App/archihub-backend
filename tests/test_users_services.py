@@ -112,26 +112,6 @@ def test_scheduler_prefix_with_no_plugin_settings(mongo):
 
 
 # ---------------------------------------------------------------------------
-# get_by_username
-# ---------------------------------------------------------------------------
-
-
-def test_get_by_username_returns_the_user(mongo):
-    from bson import ObjectId
-
-    mongo.records["users"] = {"_id": ObjectId(), "token": "t"}
-    user = services.get_by_username("alice")
-    assert isinstance(user["_id"], str)
-    assert user["favorites"] == []
-
-
-def test_get_by_username_raises_for_unknown_user(mongo):
-    mongo.records["users"] = None
-    with pytest.raises(NotFoundError):
-        services.get_by_username("ghost")
-
-
-# ---------------------------------------------------------------------------
 # add_request (weekly quota)
 # ---------------------------------------------------------------------------
 

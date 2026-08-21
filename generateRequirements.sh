@@ -1,4 +1,21 @@
 #!/bin/bash
+#
+# DEPRECATED - NOT PART OF THE IMAGE BUILD ANY MORE. Do not run it.
+#
+# It merged every plugin's requirements into the tracked requirements.txt and
+# rewrote that file in place, so the manifest governing an install was a build
+# artefact rather than something a reader could check. It also stripped comment
+# lines - which is where plugin authors had been declaring the SYSTEM packages
+# they need - and copied tessdata to a hardcoded Tesseract 4 path that does not
+# exist on the current base image.
+#
+# Replaced by:
+#   scripts/export_core_requirements.py   core deps, read from pyproject.toml
+#   scripts/install_plugin_deps.sh        per-plugin requirements.txt/packages.txt
+#
+# Kept only so an existing local workflow does not break without warning; it
+# will be removed with the legacy stack.
+
 
 # get the current directory
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"

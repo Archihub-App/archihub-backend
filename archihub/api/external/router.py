@@ -38,10 +38,10 @@ from archihub.api.external import services
 from archihub.api.records.storage import IncomingFile, UnsupportedFileType
 from archihub.core.files import UnsupportedFile, UploadTooLarge
 from archihub.core.i18n import gettext as _
-from archihub.core.security.fernet import (
-    FernetIdentity,
-    fernet_authenticate,
-    public_fernet_authenticate,
+from archihub.core.security.api_auth import (
+    ApiIdentity,
+    authenticate_admin_api,
+    authenticate_public_api,
 )
 from archihub.core.responses import json_response
 
@@ -120,9 +120,9 @@ def _require_public_api() -> None:
 def admin_identity(
     _gate: None = Depends(_require_admin_api),
     authorization: str | None = Header(default=None),
-) -> FernetIdentity:
+) -> ApiIdentity:
     """An admin API token, and it must belong to an administrator."""
-    identity = fernet_authenticate(authorization)
+    identity = authenticate_admin_api(authorization)
     if not identity.is_admin:
         from archihub.core.errors import PermissionDeniedError
 
@@ -133,8 +133,8 @@ def admin_identity(
 def public_identity(
     _gate: None = Depends(_require_public_api),
     authorization: str | None = Header(default=None),
-) -> FernetIdentity:
-    return public_fernet_authenticate(authorization)
+) -> ApiIdentity:
+    return authenticate_public_api(authorization)
 
 
 def _incoming(uploads: list[UploadFile] | None, body: dict) -> list[IncomingFile]:
@@ -175,7 +175,7 @@ def _parse_data(data: str) -> dict:
 
 
 @admin_router.get("/get_system_info", responses={200: {"description": "Instance information"}})
-def get_system_info(identity: FernetIdentity = Depends(admin_identity)) -> JSONResponse:
+def get_system_info(identity: ApiIdentity = Depends(admin_identity)) -> JSONResponse:
     """Content types, active capabilities and a couple of counts."""
     if not _enabled(ADMIN_SETTING):
         return _unavailable()
@@ -186,7 +186,7 @@ def get_system_info(identity: FernetIdentity = Depends(admin_identity)) -> JSONR
 def create_resource(
     data: str = Form(..., description="JSON document describing the resource"),
     files: list[UploadFile] = File(default_factory=list),
-    identity: FernetIdentity = Depends(admin_identity),
+    identity: ApiIdentity = Depends(admin_identity),
 ) -> JSONResponse:
     """Create a resource, filling in the fields an integration may omit."""
     if not _enabled(ADMIN_SETTING):
@@ -207,7 +207,7 @@ def update_resource(
     data: str = Form(..., description="JSON document with the fields to change"),
     id: str = Form(..., description="Id of the resource to update"),
     files: list[UploadFile] = File(default_factory=list),
-    identity: FernetIdentity = Depends(admin_identity),
+    identity: ApiIdentity = Depends(admin_identity),
 ) -> JSONResponse:
     """Update a resource.
 
@@ -231,7 +231,7 @@ def update_resource(
 @admin_router.post("/get_id", responses={200: {"description": "The matching resource"}})
 def get_resource_id(
     body: dict = Body(default_factory=dict),
-    identity: FernetIdentity = Depends(admin_identity),
+    identity: ApiIdentity = Depends(admin_identity),
 ) -> JSONResponse:
     """Find a published resource by an identifier you already hold.
 
@@ -247,7 +247,7 @@ def get_resource_id(
 @admin_router.post("/get_opts_id", responses={200: {"description": "The matching option"}})
 def get_option_id(
     body: dict = Body(default_factory=dict),
-    identity: FernetIdentity = Depends(admin_identity),
+    identity: ApiIdentity = Depends(admin_identity),
 ) -> JSONResponse:
     """Find a controlled-vocabulary option by its display term."""
     if not _enabled(ADMIN_SETTING):
@@ -258,7 +258,7 @@ def get_option_id(
 @admin_router.post("/create_type", responses={201: {"description": "Content type created"}})
 def create_type(
     body: dict = Body(default_factory=dict),
-    identity: FernetIdentity = Depends(admin_identity),
+    identity: ApiIdentity = Depends(admin_identity),
 ) -> JSONResponse:
     """Create a content type."""
     if not _enabled(ADMIN_SETTING):
@@ -272,7 +272,7 @@ def create_type(
 @admin_router.post("/update_type", responses={200: {"description": "Content type updated"}})
 def update_type(
     body: dict = Body(default_factory=dict),
-    identity: FernetIdentity = Depends(admin_identity),
+    identity: ApiIdentity = Depends(admin_identity),
 ) -> JSONResponse:
     """Update a content type.
 
@@ -292,7 +292,7 @@ def update_type(
 
 
 @admin_router.get("/get_type/{slug}", responses={200: {"description": "The content type"}})
-def get_type(slug: str, identity: FernetIdentity = Depends(admin_identity)) -> JSONResponse:
+def get_type(slug: str, identity: ApiIdentity = Depends(admin_identity)) -> JSONResponse:
     """One content type by slug."""
     if not _enabled(ADMIN_SETTING):
         return _unavailable()
@@ -311,7 +311,7 @@ def get_type(slug: str, identity: FernetIdentity = Depends(admin_identity)) -> J
 def plugin_proxy(
     plugin: str,
     plugin_endpoint: str,
-    identity: FernetIdentity = Depends(admin_identity),
+    identity: ApiIdentity = Depends(admin_identity),
 ) -> JSONResponse:
     """Reach a plugin's endpoint with an admin API token instead of a JWT.
 
@@ -389,7 +389,7 @@ def resolve_plugin_route(plugin: str, plugin_endpoint: str) -> str | None:
 @public_router.post("", responses={200: {"description": "Matching published resources"}})
 def list_resources(
     body: dict = Body(default_factory=dict),
-    identity: FernetIdentity = Depends(public_identity),
+    identity: ApiIdentity = Depends(public_identity),
 ) -> JSONResponse:
     """Search or list published resources.
 
@@ -412,7 +412,7 @@ def list_resources(
 
 
 @public_router.get("/types", responses={200: {"description": "Every content type"}})
-def list_types(identity: FernetIdentity = Depends(public_identity)) -> JSONResponse:
+def list_types(identity: ApiIdentity = Depends(public_identity)) -> JSONResponse:
     """The instance's content types."""
     if not _enabled(PUBLIC_SETTING):
         return _unavailable()
@@ -425,7 +425,7 @@ def list_types(identity: FernetIdentity = Depends(public_identity)) -> JSONRespo
 
 @public_router.get("/resources/{resource_id}", responses={200: {"description": "The resource"}})
 def get_resource(
-    resource_id: str, identity: FernetIdentity = Depends(public_identity)
+    resource_id: str, identity: ApiIdentity = Depends(public_identity)
 ) -> JSONResponse:
     """One published resource, through the public visibility rule."""
     if not _enabled(PUBLIC_SETTING):

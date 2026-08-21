@@ -28,7 +28,7 @@ from fastapi.responses import JSONResponse
 
 from archihub.api.system import services
 from archihub.core.i18n import gettext as _
-from archihub.core.security.fernet import FernetIdentity, node_fernet_auth_dependency
+from archihub.core.security.api_auth import ApiIdentity, node_api_dependency
 from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
@@ -376,7 +376,7 @@ def inventory_files_delete(current_user: CurrentUser = Depends(require_admin)) -
     "/node-clear-cache",
     responses={200: {"description": "Cache cleared"}, 401: {"description": "Invalid node key"}},
 )
-def node_clear_cache(identity: FernetIdentity = Depends(node_fernet_auth_dependency)) -> JSONResponse:
+def node_clear_cache(identity: ApiIdentity = Depends(node_api_dependency)) -> JSONResponse:
     """Flush the cache on this node.
 
     Authenticated with a node API key rather than a session, because the caller
