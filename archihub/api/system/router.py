@@ -104,6 +104,23 @@ def get_all(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
     return _respond(services.get_all_settings())
 
 
+@router.get(
+    "/info",
+    responses={200: {"description": "Operational facts about this instance"}, **_ROLE_RESPONSES},
+)
+def get_info(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """What this instance holds and how much room is left.
+
+    ADMINISTRATORS ONLY, and deliberately not folded into `/system/get-settings`
+    - that route is unauthenticated, and how much material an archive holds and
+    how full its disk is are facts about the institution, not a login screen's
+    bootstrap.
+    """
+    from archihub.api.system import storage
+
+    return json_response({"storage": storage.storage_report()}, 200)
+
+
 @router.put("", responses={200: {"description": "Settings updated"}, **_ROLE_RESPONSES})
 def update(
     body: dict = Body(...),

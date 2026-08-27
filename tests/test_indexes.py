@@ -15,9 +15,24 @@ from archihub.infra.indexes import INDEXES, IndexSpec, ensure_indexes
 
 
 class FakeCollection:
+    """Stands in for a pymongo collection.
+
+    `list_indexes` reports a `key` document as the real driver does. Without it
+    the redefinition check below has nothing to compare and every index looks
+    unchanged - a fake that answers a narrower question than the thing it
+    replaces is how a rebuild goes untested.
+    """
+
     def __init__(self, existing=(), fail_with=None):
-        self._existing = [{"name": n} for n in existing]
+        # `existing` is either a name, or a (name, keys) pair for an index whose
+        # stored definition is being described exactly.
+        self._existing = [
+            {"name": e, "key": dict(_declared_keys(e))} if isinstance(e, str)
+            else {"name": e[0], "key": dict(e[1])}
+            for e in existing
+        ]
         self.created: list[dict] = []
+        self.dropped: list[str] = []
         self._fail_with = fail_with
 
     def list_indexes(self):
@@ -28,6 +43,17 @@ class FakeCollection:
             raise self._fail_with
         self.created.append({"keys": keys, **kwargs})
         return kwargs.get("name")
+
+    def drop_index(self, name):
+        self.dropped.append(name)
+
+
+def _declared_keys(name):
+    """The keys the declaration gives this index, so a fake matches by default."""
+    for spec in INDEXES:
+        if spec.name == name:
+            return list(spec.keys)
+    return []
 
 
 class FakeDb:
@@ -138,6 +164,63 @@ def test_existing_indexes_are_left_alone():
     assert len(result["existing"]) == len(INDEXES)
     for collection in collections.values():
         assert collection.created == []
+
+
+def test_an_index_whose_declaration_changed_is_rebuilt():
+    """Matching on the NAME alone leaves a corrected spec unapplied forever.
+
+    The index goes on covering whatever it was first created for while the
+    declaration says otherwise, and nothing reports the disagreement - which is
+    how two of these came to be indexing fields no document has ever had.
+    """
+    spec = next(s for s in INDEXES if s.name == "ix_logs_user_date")
+    collections = {
+        "logs": FakeCollection(existing=[(spec.name, [("user", 1), ("date", -1)])])
+    }
+    mongo = FakeMongo(collections)
+
+    ensure_indexes(mongo)
+
+    # Only this index: the same run also creates the other logs indexes, which
+    # the fake was not given.
+    rebuilt = [c for c in collections["logs"].created if c["name"] == spec.name]
+    assert collections["logs"].dropped == [spec.name]
+    assert [c["keys"] for c in rebuilt] == [spec.keys]
+
+
+def test_an_index_matching_its_declaration_is_not_rebuilt():
+    """Rebuilding on every startup would drop a live index for no reason."""
+    spec = next(s for s in INDEXES if s.name == "ix_logs_user_date")
+    collections = {"logs": FakeCollection(existing=[(spec.name, list(spec.keys))])}
+    mongo = FakeMongo(collections)
+
+    ensure_indexes(mongo)
+
+    assert collections["logs"].dropped == []
+    assert [c for c in collections["logs"].created if c["name"] == spec.name] == []
+
+
+def test_a_listing_without_key_information_leaves_the_index_alone():
+    """Nothing to compare is not evidence of a mismatch."""
+    collections = {"logs": FakeCollection()}
+    collections["logs"]._existing = [{"name": "ix_logs_user_date"}]
+    mongo = FakeMongo(collections)
+
+    ensure_indexes(mongo)
+
+    assert collections["logs"].dropped == []
+
+
+def test_the_logs_indexes_name_fields_the_collection_actually_stores():
+    """An index on a field no document has is an index of nothing.
+
+    `register_log` writes `username`, and the resource id lives at
+    `metadata.resource._id` - both verified against a populated instance.
+    """
+    keys = {s.name: [f for f, _direction in s.keys] for s in INDEXES if s.collection == "logs"}
+
+    assert keys["ix_logs_user_date"] == ["username", "date"]
+    assert keys["ix_logs_resource_date"] == ["metadata.resource._id", "date"]
 
 
 def test_all_builds_are_backgrounded():

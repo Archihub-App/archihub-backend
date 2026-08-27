@@ -387,6 +387,7 @@ DECLARED = {
     ("archihub.api.users.services", "has_right"): ("users", "system"),
     ("archihub.core.roles", "get_roles"): ("system", "lists"),
     ("archihub.core.roles", "get_access_rights"): ("system", "lists"),
+    ("archihub.api.system.storage", "catalogued_files"): ("records",),
 }
 
 

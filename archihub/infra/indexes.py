@@ -195,6 +195,17 @@ INDEXES: list[IndexSpec] = [
         sparse=True,
         reason="Duplicate detection on upload.",
     ),
+    IndexSpec(
+        collection="records",
+        keys=[("status", ASC), ("size", ASC)],
+        name="ix_records_status_size",
+        reason=(
+            "The storage report sums every stored file's size. Both fields are "
+            "in the key, so the total is read from the index without touching a "
+            "document - which is what keeps it a few milliseconds on an archive "
+            "with hundreds of thousands of files."
+        ),
+    ),
     # ----------------------------------------------------------------- logs
     IndexSpec(
         collection="logs",
@@ -204,9 +215,14 @@ INDEXES: list[IndexSpec] = [
     ),
     IndexSpec(
         collection="logs",
-        keys=[("user", ASC), ("date", DESC)],
+        keys=[("username", ASC), ("date", DESC)],
         name="ix_logs_user_date",
-        reason="Per-user audit history, newest first.",
+        reason=(
+            "Per-user audit history, newest first - the audit screen's user "
+            "filter, and the whole of what a non-privileged caller may see in "
+            "the recent-activity feed. The field is `username`; an index on "
+            "`user` matches no document this collection has ever held."
+        ),
     ),
     IndexSpec(
         collection="logs",
@@ -216,10 +232,14 @@ INDEXES: list[IndexSpec] = [
     ),
     IndexSpec(
         collection="logs",
-        keys=[("resource", ASC), ("date", DESC)],
+        keys=[("metadata.resource._id", ASC), ("date", DESC)],
         name="ix_logs_resource_date",
         sparse=True,
-        reason="Change history for one resource - drives the field-level diff view.",
+        reason=(
+            "Change history for one resource - drives the field-level diff "
+            "view, which queries `metadata.resource._id`. A top-level "
+            "`resource` key is not where the id is stored."
+        ),
     ),
     # ---------------------------------------------------------------- snaps
     IndexSpec(
@@ -338,14 +358,39 @@ def ensure_indexes(mongo=None, *, dry_run: bool = False) -> dict[str, list[str]]
         label = f"{spec.collection}.{spec.name}"
 
         try:
-            existing = {idx["name"] for idx in mongo.db[spec.collection].list_indexes()}
+            # `key` is a SON of (field, direction). Absent only from a driver
+            # that does not report it, in which case the name is all there is to
+            # match on and an index is left alone rather than rebuilt blindly.
+            existing = {idx["name"]: list((idx.get("key") or {}).items())
+                        for idx in mongo.db[spec.collection].list_indexes()}
         except Exception:
             logger.warning("Could not list indexes on %s", spec.collection, exc_info=True)
-            existing = set()
+            existing = {}
 
         if spec.name in existing:
-            result["existing"].append(label)
-            continue
+            declared = [(field, direction) for field, direction in spec.keys]
+            if not existing[spec.name] or existing[spec.name] == declared:
+                result["existing"].append(label)
+                continue
+
+            # SAME NAME, DIFFERENT KEYS. Matching on the name alone would leave
+            # a corrected spec permanently unapplied - the index would go on
+            # covering whatever it was first created for while the declaration
+            # said otherwise, and nothing would report the disagreement. The old
+            # one is dropped so the correction actually lands.
+            logger.warning(
+                "Index %s no longer matches its declaration (%s -> %s); rebuilding",
+                label, existing[spec.name], spec.keys,
+            )
+            if dry_run:
+                result["created"].append(label)
+                continue
+            try:
+                mongo.db[spec.collection].drop_index(spec.name)
+            except Exception:
+                result["failed"].append(label)
+                logger.error("Could not drop the stale index %s", label, exc_info=True)
+                continue
 
         if dry_run:
             result["created"].append(label)

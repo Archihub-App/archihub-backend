@@ -41,6 +41,112 @@ msgstr "Se han indexado %(count)s documentos"
 msgid "%(field)s must be at most %(limit)s characters"
 msgstr "%(field)s debe tener como máximo %(limit)s caracteres"
 
+msgid "%(user)s added a file to the archive"
+msgstr "%(user)s añadió un archivo al repositorio"
+
+msgid "%(user)s changed the system settings"
+msgstr "%(user)s cambió la configuración del sistema"
+
+msgid "%(user)s created a content type"
+msgstr "%(user)s creó un tipo de contenido"
+
+msgid "%(user)s created a form"
+msgstr "%(user)s creó un formulario"
+
+msgid "%(user)s created a list"
+msgstr "%(user)s creó una lista"
+
+msgid "%(user)s created a view"
+msgstr "%(user)s creó una vista"
+
+msgid "%(user)s created the resource “%(title)s”"
+msgstr "%(user)s creó el recurso “%(title)s”"
+
+msgid "%(user)s deleted a content type"
+msgstr "%(user)s eliminó un tipo de contenido"
+
+msgid "%(user)s deleted a form"
+msgstr "%(user)s eliminó un formulario"
+
+msgid "%(user)s deleted a fragment"
+msgstr "%(user)s eliminó un fragmento"
+
+msgid "%(user)s deleted a list"
+msgstr "%(user)s eliminó una lista"
+
+msgid "%(user)s deleted a stored file"
+msgstr "%(user)s eliminó un archivo almacenado"
+
+msgid "%(user)s deleted a view"
+msgstr "%(user)s eliminó una vista"
+
+msgid "%(user)s duplicated a form"
+msgstr "%(user)s duplicó un formulario"
+
+msgid "%(user)s edited the article of “%(title)s”"
+msgstr "%(user)s editó el artículo de “%(title)s”"
+
+msgid "%(user)s moved the resource “%(title)s” to the recycle bin"
+msgstr "%(user)s envió el recurso “%(title)s” a la papelera"
+
+msgid "%(user)s opened the resource “%(title)s”"
+msgstr "%(user)s abrió el recurso “%(title)s”"
+
+msgid "%(user)s performed the action %(action)s"
+msgstr "%(user)s ejecutó la acción %(action)s"
+
+msgid "%(user)s ran a document segmentation over %(count)s file(s)"
+msgstr ""
+"%(user)s ejecutó una segmentación de documento sobre %(count)s archivo(s)"
+
+msgid "%(user)s ran a text extraction over %(count)s file(s)"
+msgstr "%(user)s ejecutó una extracción de texto sobre %(count)s archivo(s)"
+
+msgid "%(user)s ran a transcription over %(count)s file(s)"
+msgstr "%(user)s ejecutó una transcripción sobre %(count)s archivo(s)"
+
+msgid "%(user)s ran an image analysis over %(count)s file(s)"
+msgstr "%(user)s ejecutó un análisis de imagen sobre %(count)s archivo(s)"
+
+msgid "%(user)s reordered the files of “%(title)s”"
+msgstr "%(user)s reordenó los archivos de “%(title)s”"
+
+msgid "%(user)s restored the resource “%(title)s”"
+msgstr "%(user)s restauró el recurso “%(title)s”"
+
+msgid "%(user)s saved a fragment"
+msgstr "%(user)s guardó un fragmento"
+
+msgid "%(user)s searched the archive"
+msgstr "%(user)s realizó una búsqueda en el repositorio"
+
+msgid "%(user)s signed in"
+msgstr "%(user)s inició sesión"
+
+msgid "%(user)s updated a content type"
+msgstr "%(user)s actualizó un tipo de contenido"
+
+msgid "%(user)s updated a form"
+msgstr "%(user)s actualizó un formulario"
+
+msgid "%(user)s updated a list"
+msgstr "%(user)s actualizó una lista"
+
+msgid "%(user)s updated a stored file"
+msgstr "%(user)s actualizó un archivo almacenado"
+
+msgid "%(user)s updated a view"
+msgstr "%(user)s actualizó una vista"
+
+msgid "%(user)s updated fields of the resource “%(title)s”"
+msgstr "%(user)s actualizó campos del recurso “%(title)s”"
+
+msgid "%(user)s updated the resource “%(title)s”"
+msgstr "%(user)s actualizó el recurso “%(title)s”"
+
+msgid "(untitled)"
+msgstr "(sin título)"
+
 #: api/resources/services.py:2125 api/resources/services.py:2183
 msgid "A list of resource ids is required"
 msgstr "resourceId o recordId es requerido"
@@ -579,6 +685,12 @@ msgstr "Índice de bloque inválido"
 
 msgid "Invalid bounds"
 msgstr "Límites geográficos inválidos"
+
+msgid "Invalid category"
+msgstr "Categoría inválida"
+
+msgid "Invalid date"
+msgstr "Fecha inválida"
 
 msgid "Invalid dzi_payload type, expected xml or tile"
 msgstr "Tipo de dzi_payload inválido, se esperaba xml o tile"
@@ -1920,6 +2032,9 @@ msgstr "Archivos zip eliminados"
 
 msgid "[image]"
 msgstr "[imagen]"
+
+msgid "a restricted resource"
+msgstr "un recurso restringido"
 
 msgid "bbox is missing"
 msgstr "bbox está faltando"
