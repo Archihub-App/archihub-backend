@@ -397,6 +397,17 @@ def test_media_types_cover_the_formats_an_archive_holds(filename, expected):
     assert responses.guess_media_type(filename) == expected
 
 
+def test_a_type_is_named_even_where_the_system_lists_no_mime_types(monkeypatch):
+    """`mimetypes` reads /etc/mime.types, which a slim image does not ship, so a
+    name known only from there resolves on a developer's machine and to the
+    generic binary type in production - where a browser downloads it instead of
+    showing it."""
+    monkeypatch.setattr(responses.mimetypes, "guess_type", lambda name: (None, None))
+
+    assert responses.guess_media_type("photo.jfif") == "image/jpeg"
+    assert responses.guess_media_type("a.unknown") == "application/octet-stream"
+
+
 def test_an_in_memory_payload_is_served_without_touching_disk():
     """The two snaps routes render a single JPEG frame; there is nothing to
     range over and nothing to write."""

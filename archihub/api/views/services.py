@@ -333,7 +333,7 @@ def _one_image(incoming) -> tuple[object | None, str | None]:
 
 #: Extensions a view thumbnail may have. Narrower than the record allowlist:
 #: this is a card image, not archival material.
-IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "tif", "tiff", "heic", "bmp", "webp"}
+IMAGE_EXTENSIONS = {"jpg", "jpeg", "jfif", "png", "gif", "tif", "tiff", "heic", "bmp", "webp"}
 
 
 def _derive_thumbnail(attached: list, user: str) -> str | None:

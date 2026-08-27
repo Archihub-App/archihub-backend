@@ -157,6 +157,9 @@ def guess_media_type(filename: str) -> str:
 
 
 _EXTRA_TYPES = {
+    # A JPEG under the name some cameras and Windows write. `mimetypes` knows it
+    # only where the system ships a mime.types file, which a slim image does not.
+    "jfif": "image/jpeg",
     "jp2": "image/jp2",
     "jpf": "image/jpx",
     "webm": "video/webm",

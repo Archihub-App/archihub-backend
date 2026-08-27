@@ -163,6 +163,13 @@ def test_the_extension_check_is_case_insensitive(mongo):
     assert len(mongo.records) == 1
 
 
+def test_a_jpeg_named_jfif_is_accepted(mongo):
+    """Windows and several cameras write a JPEG under this name, so refusing it
+    rejects a file the archive can already read and derive from."""
+    storage.attach_files(RESOURCE_ID, [upload(b"x", "photo.jfif")], "alice")
+    assert len(mongo.records) == 1
+
+
 def test_a_refused_file_is_not_written_to_disk(mongo):
     with pytest.raises(storage.UnsupportedFileType):
         storage.attach_files(RESOURCE_ID, [upload(b"x", "a.exe")], "alice")

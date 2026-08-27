@@ -371,6 +371,12 @@ def test_the_task_picker_is_found_by_id_not_by_position(monkeypatch, mongo):
         # LibreOffice was asked to convert a CSV.
         ("text/plain", "a/b/interview.final.csv", "csv"),
         ("application/vnd.ms-excel", "a/b/book.xls", "spreadsheet"),
+        # A JPEG under a name `mimetypes` knows only from a system mime.types
+        # file. The extension decides, so no derivative depends on libmagic
+        # being installed or on what the uploader called the type.
+        ("image/jpeg", "a/b/photo.jfif", "image"),
+        ("application/octet-stream", "a/b/photo.jfif", "image"),
+        (None, "a/b/photo.jfif", "image"),
         ("application/octet-stream", "a/b/thing.bin", None),
         (None, "a/b/thing", None),
     ],

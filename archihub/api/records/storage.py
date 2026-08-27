@@ -39,7 +39,7 @@ COLLECTION = "records"
 #: deployments accept, and widening it is a decision for whoever runs the
 #: instance, not a side effect of a port.
 ALLOWED_EXTENSIONS = frozenset({
-    "txt", "pdf", "png", "jpg", "jpeg", "gif", "oga", "ogg", "ogv", "tif", "tiff", "heic",
+    "txt", "pdf", "png", "jpg", "jpeg", "jfif", "gif", "oga", "ogg", "ogv", "tif", "tiff", "heic",
     "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "zip", "rar", "7z", "mp4",
     "mp3", "wav", "avi", "mkv", "flv", "mov", "wmv", "m4a", "mxf", "cr2", "arw", "mts",
     "nef", "json", "html", "wma", "aac", "flac",

@@ -99,8 +99,11 @@ _MIME_CONTAINS = (
 )
 
 #: Extensions that override the MIME type. A CSV is served as `text/plain` by
-#: many uploaders, and treating it as a document sends it to LibreOffice.
+#: many uploaders, and treating it as a document sends it to LibreOffice. A
+#: `.jfif` is a JPEG, but the name is unknown to `mimetypes` without a system
+#: mime.types file, so without this it would be classified from that alone.
 _EXTENSION_OVERRIDES = {
+    ".jfif": "image",
     ".csv": "csv",
     ".tsv": "csv",
     ".xls": "spreadsheet",
