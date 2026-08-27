@@ -235,6 +235,13 @@ _LIST_PROJECTION = {
     "password": 0, "status": 0, "photo": 0, "compromise": 0,
     "token": 0, "adminToken": 0, "nodeToken": 0, "vizToken": 0,
     "requests": 0, "lastRequest": 0, "favorites": 0,
+    # Server bookkeeping, not a field a client reads - `avatar_url` is.
+    "avatar": 0,
+    # A telephone number is a personal contact detail rather than an
+    # administrative one, and the user table renders nothing from it. Every
+    # editor can read this listing, so it is left out deliberately rather than
+    # by omission.
+    "phone": 0,
 }
 
 PAGE_SIZE = 20
@@ -285,7 +292,110 @@ def get_all(body: dict, current_user: str) -> tuple[list | dict, int]:
         return {"msg": str(exc)}, 500
 
 
-def get_profile(username: str) -> tuple[dict, int]:
+# ---------------------------------------------------------------------------
+# Profile shape
+# ---------------------------------------------------------------------------
+
+# The personal fields, with the names they are BOTH stored and returned under.
+# Stored under the same names they are served under so there is no presenter to
+# forget: a route that reads the document and returns it cannot answer with a
+# field spelled differently from the one the interface reads.
+PROFILE_FIELDS = ("first_name", "last_name", "phone")
+
+# The longest each may be. These are rendered in tables and headers, and a value
+# with no ceiling is a value that can break the screen it appears on.
+FIELD_LIMITS = {"first_name": 120, "last_name": 120, "phone": 40, "name": 240}
+
+# Resources in the recycle bin are excluded from the profile counters: a
+# cataloguer who deleted their work has not created it twice.
+_NOT_DELETED = {"$ne": "deleted"}
+
+
+def clean_text(value, field: str) -> str:
+    """A single-line, bounded string, or raise ``ValueError``.
+
+    Control characters are removed rather than rejected: a name pasted out of a
+    spreadsheet routinely carries a trailing newline, and refusing the save
+    teaches nothing. Length is a refusal, because silently truncating someone's
+    name is worse than telling them it is too long.
+    """
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError(_("Invalid identifier in {field}", field=field))
+
+    cleaned = " ".join(value.split())
+    if len(cleaned) > FIELD_LIMITS[field]:
+        raise ValueError(
+            _("%(field)s must be at most %(limit)s characters",
+              field=field, limit=FIELD_LIMITS[field])
+        )
+    return cleaned
+
+
+def display_name(first: str, last: str) -> str:
+    """The single display name the rest of the product shows.
+
+    `name` is what the user listing sorts by, what the editor picker offers and
+    what a resource records as its cataloguer, so it has to stay in step with
+    the two halves the profile screen edits rather than becoming a third thing
+    the same person is called.
+    """
+    return " ".join(part for part in (first.strip(), last.strip()) if part)
+
+
+def profile_stats(username: str) -> dict:
+    """What this account has catalogued.
+
+    Two questions over one index (`createdBy`, `status`, `post_type`): how much
+    they have made, and how many content types they have worked in. Both are
+    bounded by that index, because this is read on every profile load.
+    """
+    filters = {"createdBy": username, "status": _NOT_DELETED}
+    try:
+        mongo = _mongo()
+        return {
+            "records_created": mongo.count("resources", filters),
+            "collections_count": len(mongo.distinct("resources", "post_type", filters)),
+        }
+    except Exception:
+        # A profile that cannot be opened is worse than one whose counters read
+        # zero, and these are the only part of it that queries another
+        # collection at all.
+        logger.warning("Could not read the profile counters for %s", username, exc_info=True)
+        return {"records_created": 0, "collections_count": 0}
+
+
+def present_profile(user: dict) -> dict:
+    """Fill in every field the profile contract promises.
+
+    Each is stated even when the account predates it, so a consumer never has to
+    tell "this person has no telephone number" apart from "this version of the
+    server does not have that field" - one renders as blank, the other as a
+    crash.
+    """
+    for field in PROFILE_FIELDS:
+        user.setdefault(field, "")
+
+    user.setdefault("avatar_url", None)
+
+    # `created_at` beside the stored `createdAt` rather than instead of it: the
+    # camelCase spelling is what this route has always answered with, and it
+    # carries the `{"$date": ...}` form every other endpoint here returns.
+    #
+    # THE TWO ARE ENCODED DIFFERENTLY ON PURPOSE. This one is a plain ISO
+    # string, because it is read by `new Date(...)`, which does not understand
+    # the wrapped form and yields an invalid date from it without failing.
+    #
+    # No trailing `Z` and no offset: the value is stored naive and in local
+    # time, so stamping it as UTC would move it by the server's offset - and for
+    # a timestamp near midnight, move the day the interface reports.
+    created = user.get("createdAt")
+    user["created_at"] = created.isoformat() if hasattr(created, "isoformat") else created
+    return user
+
+
+def get_profile(username: str, *, with_stats: bool = False) -> tuple[dict, int]:
     """The caller's own profile, without the password hash.
 
     The existence check comes before any use of the record. The legacy handler
@@ -307,7 +417,12 @@ def get_profile(username: str) -> tuple[dict, int]:
     user = _mongo().get_record(
         "users",
         {"username": username},
-        fields={"password": 0, "status": 0, "photo": 0, "requests": 0, "lastRequest": 0},
+        fields={
+            "password": 0, "status": 0, "photo": 0, "requests": 0, "lastRequest": 0,
+            # The stored avatar FILENAME is server bookkeeping - what replacing
+            # one has to delete. `avatar_url` is the half a client uses.
+            "avatar": 0,
+        },
     )
     if not user:
         return {"msg": _("User does not exist")}, 400
@@ -321,6 +436,11 @@ def get_profile(username: str) -> tuple[dict, int]:
     # `verified` is absent on accounts created before the flag existed, and
     # absent means verified - the same reading `get_user` applies.
     user.setdefault("verified", True)
+
+    present_profile(user)
+    if with_stats:
+        user["stats"] = profile_stats(username)
+
     # `{"$oid": ...}`, not a bare string: the legacy route serialises through
     # json_util and every other endpoint returns the wrapped form.
     return serialise(user), 200
@@ -458,6 +578,7 @@ SYSTEM_ROLES = frozenset({"admin", "editor", "user"})
 _DETAIL_PROJECTION = {
     "password": 0, "status": 0, "photo": 0, "compromise": 0,
     "token": 0, "adminToken": 0, "nodeToken": 0, "vizToken": 0,
+    "avatar": 0,
 }
 
 
@@ -650,7 +771,11 @@ def update_me(body: dict, current_user: str) -> tuple[dict, int]:
     import bcrypt as _bcrypt
 
     mongo = _mongo()
-    user = mongo.get_record("users", {"username": current_user}, fields={"password": 1, "name": 1})
+    user = mongo.get_record(
+        "users",
+        {"username": current_user},
+        fields={"password": 1, "name": 1, "first_name": 1, "last_name": 1, "phone": 1},
+    )
     if not user:
         return {"msg": _("User not found")}, 404
 
@@ -661,8 +786,33 @@ def update_me(body: dict, current_user: str) -> tuple[dict, int]:
 
     update: dict = {}
 
-    if body.get("name") and body["name"] != user.get("name"):
-        update["name"] = body["name"]
+    try:
+        for field in PROFILE_FIELDS:
+            if field not in body:
+                continue
+            value = clean_text(body[field], field)
+            if value != (user.get(field) or ""):
+                update[field] = value
+
+        if body.get("name") is not None:
+            named = clean_text(body["name"], "name")
+            if named and named != user.get("name"):
+                update["name"] = named
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    # The display name follows the two halves unless this request set it
+    # explicitly. Left to drift, an account edited through the new profile
+    # screen keeps whatever name it was created with, and the user listing, the
+    # editor picker and every resource this person catalogues from now on go on
+    # showing it.
+    if "name" not in update and ({"first_name", "last_name"} & update.keys()):
+        derived = display_name(
+            update.get("first_name", user.get("first_name") or ""),
+            update.get("last_name", user.get("last_name") or ""),
+        )
+        if derived and derived != user.get("name"):
+            update["name"] = derived
 
     new_password = body.get("new_password") or ""
     if new_password:
@@ -691,6 +841,69 @@ def update_me(body: dict, current_user: str) -> tuple[dict, int]:
             logger.error("Could not revoke API keys after a password change", exc_info=True)
 
     return {"msg": _("User updated successfully")}, 200
+
+
+# ---------------------------------------------------------------------------
+# Profile photograph
+# ---------------------------------------------------------------------------
+
+
+def set_avatar(username: str, source, original_filename: str) -> tuple[dict, int]:
+    """Replace the caller's profile photograph.
+
+    The new file is written before the account is changed and the old one is
+    removed only after: at no point does the stored `avatar_url` name a file
+    that is not there. An interruption can leave an unreferenced image on disk,
+    which is the harmless direction to fail in.
+    """
+    from archihub.api.users import avatars
+
+    mongo = _mongo()
+    user = mongo.get_record("users", {"username": username}, fields={"avatar": 1})
+    if not user:
+        return {"msg": _("User does not exist")}, 400
+
+    # Read before the write, not after: what is being replaced is a fact about
+    # the account as it was, and taking it from the record afterwards makes the
+    # deletion depend on whether the update happened to return a fresh document
+    # or the one that was just changed.
+    previous = user.get("avatar")
+    stored = avatars.store(source, original_filename)
+
+    try:
+        mongo.update_record(
+            "users",
+            {"username": username},
+            {"avatar": stored, "avatar_url": avatars.url_for(stored)},
+        )
+    except Exception:
+        avatars.remove(stored)
+        raise
+
+    avatars.remove(previous)
+    return {
+        "msg": _("Profile photo updated successfully"),
+        "avatar_url": avatars.url_for(stored),
+    }, 200
+
+
+def clear_avatar(username: str) -> tuple[dict, int]:
+    """Remove the caller's profile photograph.
+
+    The account is changed first here, the reverse of setting one and for the
+    same reason: nothing may be left naming a file that has been deleted.
+    """
+    from archihub.api.users import avatars
+
+    mongo = _mongo()
+    user = mongo.get_record("users", {"username": username}, fields={"avatar": 1})
+    if not user:
+        return {"msg": _("User does not exist")}, 400
+
+    previous = user.get("avatar")
+    mongo.update_record("users", {"username": username}, {"avatar": None, "avatar_url": None})
+    avatars.remove(previous)
+    return {"msg": _("Profile photo removed successfully"), "avatar_url": None}, 200
 
 
 def accept_compromise(username: str) -> tuple[dict, int]:

@@ -108,6 +108,7 @@ def file_response(
     media_type: str | None = None,
     delete_after: bool = False,
     max_age: int | None = None,
+    headers: dict[str, str] | None = None,
 ) -> Response:
     """Serve a file from disk, with Range support.
 
@@ -120,6 +121,10 @@ def file_response(
     extractors use to clean up transcoded clips. It runs as a Starlette
     background task, i.e. **after** the last byte reaches the client, so a
     seeking player is not served a file that has already been deleted.
+
+    ``headers`` are merged last, so a caller that serves the same bytes to
+    anonymous browsers can replace the private ``Cache-Control`` this builds and
+    add the ones a shared, browser-rendered file needs.
     """
     resolved = Path(path)
     if not resolved.is_file():
@@ -129,15 +134,16 @@ def file_response(
     name = download_name or resolved.name
     resolved_media_type = media_type or guess_media_type(name)
 
-    headers = {}
+    built: dict[str, str] = {}
     if max_age is not None:
-        headers["Cache-Control"] = f"private, max-age={max_age}"
+        built["Cache-Control"] = f"private, max-age={max_age}"
+    built.update(headers or {})
 
     return FileResponse(
         resolved,
         media_type=resolved_media_type,
         filename=name if as_attachment else None,
-        headers=headers or None,
+        headers=built or None,
         background=BackgroundTask(remove_quietly, resolved) if delete_after else None,
     )
 

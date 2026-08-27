@@ -159,6 +159,18 @@ INDEXES: list[IndexSpec] = [
         name="ix_resources_favCount",
         reason="'Most favourited' ordering.",
     ),
+    IndexSpec(
+        collection="resources",
+        keys=[("createdBy", ASC), ("status", ASC), ("post_type", ASC)],
+        name="ix_resources_createdBy_status_type",
+        reason=(
+            "The profile counters: how much this account has catalogued, and in "
+            "how many content types. Read on every profile load, and both "
+            "questions are answered from this index alone - the count from the "
+            "(createdBy, status) prefix, the distinct post_type from the whole "
+            "key without touching a document."
+        ),
+    ),
     # -------------------------------------------------------------- records
     IndexSpec(
         collection="records",

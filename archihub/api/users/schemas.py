@@ -135,12 +135,24 @@ class SelfUpdateRequest(BaseModel):
 
     The current password is required even to change a display name, because this
     same endpoint can change the password.
+
+    `extra="ignore"` is the load-bearing part: this is the one write a user makes
+    to their own account, so anything not declared here - roles, access rights,
+    the verification flag, the avatar - must not be settable by adding it to the
+    body. The avatar is deliberately absent: it is a file, and it has a route of
+    its own that re-encodes what it is given.
+
+    The personal fields are optional, and `None` is distinct from `""` - the
+    first leaves a value alone, the second clears it.
     """
 
     model_config = ConfigDict(extra="ignore")
 
     password: str
     name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    phone: str | None = None
     new_password: str | None = None
     new_password_confirmation: str | None = None
 

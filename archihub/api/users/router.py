@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Body, Depends
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Body, Depends, File, UploadFile
+from fastapi.responses import JSONResponse, Response
 
 from archihub.api.users import services
 from archihub.api.users.schemas import (
@@ -37,7 +37,9 @@ from archihub.core.security.jwt import (
     get_current_user,
     require_role_any,
 )
-from archihub.core.responses import json_response
+from archihub.core.files import UnsupportedFile, UploadTooLarge
+from archihub.core.i18n import gettext as _
+from archihub.core.responses import file_response, json_response
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +103,104 @@ def get_requests(current_user: CurrentUser = Depends(get_current_user)) -> JSONR
     },
 )
 def get_me(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
-    """The caller's own profile, without the password hash."""
-    return _respond(services.get_profile(current_user.username))
+    """The caller's own profile, without the password hash.
+
+    Carries the personal fields and the catalogue counters the profile screen
+    renders. The counters are read here rather than from a route of their own
+    because they are drawn with the rest of the profile and would otherwise be a
+    second request for the same screen.
+    """
+    return _respond(services.get_profile(current_user.username, with_stats=True))
+
+
+# ---------------------------------------------------------------------------
+# Profile photograph
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/me/avatar",
+    responses={
+        200: {"description": "Photo stored; the response carries its URL"},
+        400: {"description": "Not a usable image"},
+        413: {"description": "The image exceeds the size limit"},
+        **_ROLE_RESPONSES,
+    },
+)
+async def set_avatar(
+    file: UploadFile = File(..., description="PNG, JPG or WEBP, at most 5 MB"),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Upload or replace the caller's profile photograph.
+
+    200 rather than 201: the account already exists and this replaces a field on
+    it, so there is no new resource for a caller to have been given.
+
+    The upload is decoded and re-encoded before anything is kept, which is what
+    lets the stored file be served to anonymous browsers - see `avatars.py`.
+    """
+    if not file or not file.filename:
+        return json_response({"msg": _("No file was uploaded")}, 400)
+
+    try:
+        return _respond(
+            services.set_avatar(current_user.username, file.file, file.filename)
+        )
+    except UploadTooLarge as exc:
+        return json_response({"msg": str(exc)}, 413)
+    except UnsupportedFile as exc:
+        return json_response({"msg": str(exc)}, 400)
+
+
+@router.delete(
+    "/me/avatar",
+    responses={200: {"description": "Photo removed"}, **_ROLE_RESPONSES},
+)
+def clear_avatar(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
+    """Remove the caller's profile photograph."""
+    return _respond(services.clear_avatar(current_user.username))
+
+
+@router.get(
+    "/avatar/{filename}",
+    responses={
+        200: {"description": "The image"},
+        404: {"description": "No such photo"},
+    },
+)
+def get_avatar(filename: str) -> Response:
+    """Serve a stored profile photograph.
+
+    UNAUTHENTICATED, deliberately. A browser sends no token with an `<img>`, so
+    an authenticated avatar could not be rendered by the interface that needs
+    it. What that costs is bounded by the name: it is a UUID this server chose,
+    it is not derived from the account, and it changes whenever the photo does -
+    so holding one discloses one image and nothing about who else has an
+    account.
+
+    The name is refused unless it is a bare filename carrying an extension this
+    directory writes, and the type served is read from that extension rather
+    than sniffed, so no stored file can be handed to a browser as a document.
+    """
+    from archihub.api.users import avatars
+
+    try:
+        path = avatars.path_for(filename)
+        return file_response(
+            path,
+            media_type=avatars.media_type_for(filename),
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                # The type above is authoritative. Without this a browser may
+                # sniff the bytes and decide otherwise, which is the whole
+                # reason a re-encoded image is safe to serve from this origin.
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+    except (UnsupportedFile, FileNotFoundError):
+        # One answer for "not a name we serve" and "no such file": neither tells
+        # an anonymous caller anything about what is stored here.
+        return json_response({"msg": _("File not found")}, 404)
 
 
 # ---------------------------------------------------------------------------
