@@ -94,7 +94,7 @@ def get_by_gallery_index(body: dict) -> tuple[dict, int]:
     if error is not None:
         return error
 
-    images = viewers.gallery_records(resource)
+    images = viewers.gallery_records(resource, public=True)
     if index >= len(images):
         return {"msg": _(MSG_NOT_FOUND)}, 404
 

@@ -292,6 +292,7 @@ def get_pages(
     try:
         if body.get("gallery") is True:
             from archihub.api.resources.services import load_visible as load_resource
+            from archihub.api.users.services import has_role
 
             resource, error = load_resource(
                 record_id, current_user.username, fields={"filesObj": 1}
@@ -299,13 +300,23 @@ def get_pages(
             if error is not None:
                 return _respond(error)
 
+            is_admin = has_role(current_user.username, "admin")
             if body.get("dzi") and body.get("dzi_payload"):
                 return JSONResponse(
                     status_code=200,
-                    content=viewers.dzi_data(resource, pages, body["dzi_payload"]),
+                    content=viewers.dzi_data(
+                        resource,
+                        pages,
+                        body["dzi_payload"],
+                        user=current_user.username,
+                        is_admin=is_admin,
+                    ),
                 )
             return JSONResponse(
-                status_code=200, content=viewers.gallery_images(resource, pages, size)
+                status_code=200,
+                content=viewers.gallery_images(
+                    resource, pages, size, user=current_user.username, is_admin=is_admin
+                ),
             )
 
         record, error = services.load_visible(record_id, current_user.username)

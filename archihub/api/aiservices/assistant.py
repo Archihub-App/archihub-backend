@@ -438,10 +438,12 @@ def gallery_image(resource_id: str, index: int, user: str) -> tuple[str, dict]:
     """
     from archihub.api.records import viewers
     from archihub.api.resources.services import load_visible as load_resource
+    from archihub.api.users.services import has_role
 
-    # THE RESOURCE IS THE SUBJECT, so the resource's access rule is the one that
-    # applies - the same load the gallery viewer route uses, with the same
-    # projection.
+    # The resource's access rule gates entry - the same load the gallery
+    # viewer route uses, with the same projection. Each image record is then
+    # filtered on its own right by `gallery_records` below, since a record can
+    # be individually restricted regardless of the resource it is filed under.
     resource, error = load_resource(resource_id, user, fields={"filesObj": 1})
     if error is not None:
         payload, status = error
@@ -451,7 +453,7 @@ def gallery_image(resource_id: str, index: int, user: str) -> tuple[str, dict]:
     # through `records.get_by_gallery_index` would return the *presented*
     # record instead, and presentation deliberately strips `filepath` and
     # summarises `processing` - so the path simply would not be there.
-    records = viewers.gallery_records(resource)
+    records = viewers.gallery_records(resource, user=user, is_admin=has_role(user, "admin"))
     if index < 0 or index >= len(records):
         raise AssistantError(_("Record does not exist"), 404)
 
@@ -783,6 +785,8 @@ def provider_and_model(body: dict) -> tuple[dict, str]:
     provider = providers.load(str(provider_id))
     if provider is None:
         raise AssistantError(_("Provider not found"), 404)
+    if not provider.get("enabled", True):
+        raise AssistantError(_("This provider has been disabled"), 403)
 
     model_ref = body.get("model")
     model = model_ref.get("id") if isinstance(model_ref, dict) else model_ref

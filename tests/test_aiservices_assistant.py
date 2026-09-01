@@ -632,7 +632,10 @@ def gallery(monkeypatch, tmp_path):
         "archihub.api.resources.services.load_visible",
         lambda resource_id, user, fields=None: ({"_id": resource_id, "filesObj": []}, None),
     )
-    monkeypatch.setattr("archihub.api.records.viewers.gallery_records", lambda resource: records)
+    monkeypatch.setattr("archihub.api.users.services.has_role", lambda user, role: False)
+    monkeypatch.setattr(
+        "archihub.api.records.viewers.gallery_records", lambda resource, **kwargs: records
+    )
     return records
 
 
@@ -680,6 +683,28 @@ def test_a_resource_the_caller_cannot_see_keeps_its_status(monkeypatch, gallery)
         assistant.build_messages(_gallery_body(), "someone@test.com")
 
     assert caught.value.status_code == 403
+
+
+def test_a_gallery_conversation_asks_for_the_callers_own_visible_images(monkeypatch, gallery):
+    """The resource rule alone is not enough - each image is its own record.
+
+    ``gallery_image`` must forward the caller's identity and admin status into
+    ``gallery_records`` rather than reading every attached image unfiltered.
+    """
+    captured = {}
+
+    def fake_gallery_records(resource, **kwargs):
+        captured.update(kwargs)
+        return gallery
+
+    monkeypatch.setattr("archihub.api.records.viewers.gallery_records", fake_gallery_records)
+    monkeypatch.setattr(
+        "archihub.api.users.services.has_role", lambda user, role: role == "admin"
+    )
+
+    assistant.build_messages(_gallery_body(opts={"page": 0}), "curator@test.com")
+
+    assert captured == {"user": "curator@test.com", "is_admin": True}
 
 
 def test_the_stored_turn_holds_a_path_not_the_bytes(gallery, mongo):
@@ -981,3 +1006,43 @@ def test_every_plugin_type_is_a_known_type():
         assert kind not in assistant.IMPLEMENTED_TYPES, (
             f"{kind} is claimed by both the record assistant and a plugin"
         )
+
+
+# ---------------------------------------------------------------------------
+# A disabled provider must not be usable through the record assistant
+# ---------------------------------------------------------------------------
+
+
+def test_provider_and_model_refuses_a_disabled_provider(monkeypatch):
+    monkeypatch.setattr(
+        "archihub.api.aiservices.providers.load",
+        lambda provider_id: {"_id": provider_id, "enabled": False},
+    )
+
+    with pytest.raises(assistant.AssistantError) as caught:
+        assistant.provider_and_model({"provider": {"id": "p1"}, "model": {"id": "m1"}})
+
+    assert caught.value.status_code == 403
+
+
+def test_provider_and_model_allows_an_enabled_provider(monkeypatch):
+    monkeypatch.setattr(
+        "archihub.api.aiservices.providers.load",
+        lambda provider_id: {"_id": provider_id, "enabled": True},
+    )
+
+    provider, model = assistant.provider_and_model({"provider": {"id": "p1"}, "model": {"id": "m1"}})
+
+    assert provider["_id"] == "p1"
+    assert model == "m1"
+
+
+def test_provider_and_model_defaults_a_missing_enabled_field_to_true(monkeypatch):
+    """A provider created before the switch existed must not become unusable."""
+    monkeypatch.setattr(
+        "archihub.api.aiservices.providers.load", lambda provider_id: {"_id": provider_id}
+    )
+
+    provider, _model = assistant.provider_and_model({"provider": {"id": "p1"}, "model": {"id": "m1"}})
+
+    assert provider["_id"] == "p1"

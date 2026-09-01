@@ -271,6 +271,10 @@ def send_chat(
     provider = providers.load(provider_id)
     if provider is None:
         return JSONResponse(status_code=404, content={"msg": _("Provider not found")})
+    if not provider.get("enabled", True):
+        return JSONResponse(
+            status_code=403, content={"msg": _("This provider has been disabled")}
+        )
 
     messages = body.get("messages")
     message = conversations.validate_messages(messages)

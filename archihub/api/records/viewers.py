@@ -31,6 +31,7 @@ import base64
 import logging
 import os
 
+from archihub.api.records import access
 from archihub.core import files as filestore
 from archihub.core.i18n import gettext as _
 from archihub.core.settings import get_settings
@@ -281,13 +282,22 @@ def _gallery_page(stored_path: str, size: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def gallery_records(resource: dict) -> list[dict]:
-    """A resource's image records, in the curator's display order.
+def gallery_records(
+    resource: dict, *, user: str | None = None, is_admin: bool = False, public: bool = False
+) -> list[dict]:
+    """A resource's image records the caller may see, in the curator's order.
 
     The order map is keyed by the string ids held in ``filesObj`` and looked up
     with the record's own ``_id``, which is an ``ObjectId`` - so it is
     stringified before the lookup. The original compared the two directly,
     every lookup missed, and every gallery fell back to Mongo's natural order.
+
+    A gallery is derived from the resource's ``filesObj``, but each image is
+    still its own record with its own ``accessRights`` - one filed under an
+    otherwise-visible resource can still be individually reserved. So every
+    entry is filtered through the same rule the standalone record routes use
+    (``access.is_public`` for an anonymous caller, ``access.may_view_record``
+    otherwise) before position, count or content ever depends on it.
     """
     files = [f for f in (resource.get("filesObj") or []) if isinstance(f, dict) and f.get("id")]
     if not files:
@@ -300,10 +310,17 @@ def gallery_records(resource: dict) -> list[dict]:
         _mongo().get_all_records(
             "records",
             {"_id": {"$in": object_ids}, "processing.fileProcessing.type": "image"},
-            fields={"processing": 1},
+            fields={"processing": 1, "accessRights": 1, "parent": 1},
         )
     )
     records.sort(key=lambda record: order_of.get(str(record["_id"]), float("inf")))
+
+    if public:
+        records = [record for record in records if access.is_public(record)]
+    else:
+        records = [
+            record for record in records if access.may_view_record(user, record, is_admin)
+        ]
     return records
 
 
@@ -316,7 +333,15 @@ def _object_id(value):
         return None
 
 
-def gallery_images(resource: dict, pages, size: str) -> list[dict]:
+def gallery_images(
+    resource: dict,
+    pages,
+    size: str,
+    *,
+    user: str | None = None,
+    is_admin: bool = False,
+    public: bool = False,
+) -> list[dict]:
     """Base64 renderings of a slice of a resource's image gallery.
 
     ``pages`` is the frontend's window into the gallery: its first entry is the
@@ -330,7 +355,7 @@ def gallery_images(resource: dict, pages, size: str) -> list[dict]:
     if suffix is None:
         raise ViewerError(_('Unknown size "{size}"', size=str(size)[:40]), 400)
 
-    records = gallery_records(resource)
+    records = gallery_records(resource, user=user, is_admin=is_admin, public=public)
     offset = _validate_offset(pages[0])
     window = records[offset : offset + len(pages)]
 
@@ -366,7 +391,15 @@ def _validate_offset(value) -> int:
 # ---------------------------------------------------------------------------
 
 
-def dzi_data(resource: dict, pages, payload: dict) -> dict:
+def dzi_data(
+    resource: dict,
+    pages,
+    payload: dict,
+    *,
+    user: str | None = None,
+    is_admin: bool = False,
+    public: bool = False,
+) -> dict:
     """The ``.dzi`` descriptor, or one tile, of a gallery image.
 
     OpenSeadragon asks for the descriptor once and then for tiles by level, row
@@ -379,7 +412,7 @@ def dzi_data(resource: dict, pages, payload: dict) -> dict:
 
     records = [
         record
-        for record in gallery_records(resource)
+        for record in gallery_records(resource, user=user, is_admin=is_admin, public=public)
         if (record.get("processing") or {}).get("fileProcessing", {}).get("dzi")
     ]
     if index >= len(records):

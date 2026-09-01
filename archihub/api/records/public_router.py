@@ -137,10 +137,13 @@ def get_pages(record_id: str, body: dict = Body(default_factory=dict)) -> JSONRe
             if body.get("dzi") and body.get("dzi_payload"):
                 return JSONResponse(
                     status_code=200,
-                    content=viewers.dzi_data(resource, pages, body["dzi_payload"]),
+                    content=viewers.dzi_data(
+                        resource, pages, body["dzi_payload"], public=True
+                    ),
                 )
             return JSONResponse(
-                status_code=200, content=viewers.gallery_images(resource, pages, size)
+                status_code=200,
+                content=viewers.gallery_images(resource, pages, size, public=True),
             )
 
         record, error = public.load_public(record_id)

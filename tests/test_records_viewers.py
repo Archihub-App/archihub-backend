@@ -389,6 +389,59 @@ def test_a_resource_with_no_files_has_an_empty_gallery(mongo, web_root):
 
 
 # ---------------------------------------------------------------------------
+# Per-record access rights - a record filed under a visible resource can still
+# be individually restricted, and the gallery must not hand out its bytes to a
+# caller who could not open the record directly.
+# ---------------------------------------------------------------------------
+
+
+def test_a_restricted_gallery_image_is_excluded_for_a_caller_without_the_right(gallery, mongo):
+    mongo.records[IMAGE_A]["accessRights"] = "reserved"
+
+    result = viewers.gallery_images(gallery, [0, 1], "small", user=None, is_admin=False)
+
+    assert [base64.b64decode(entry["data"]).decode() for entry in result] == ["b_small.jpg"]
+
+
+def test_an_admin_still_sees_a_restricted_gallery_image(gallery, mongo):
+    mongo.records[IMAGE_A]["accessRights"] = "reserved"
+
+    result = viewers.gallery_images(gallery, [0, 1], "small", user=None, is_admin=True)
+
+    assert [base64.b64decode(entry["data"]).decode() for entry in result] == [
+        "b_small.jpg",
+        "a_small.jpg",
+    ]
+
+
+def test_gallery_records_defaults_to_the_authenticated_rule_not_wide_open(gallery, mongo):
+    """Calling with no access context is a mistake, not "everyone may see it".
+
+    A restricted record must not leak just because a caller forgot to pass
+    ``user``/``is_admin`` - the default is the same refusal an anonymous,
+    non-admin caller would get.
+    """
+    mongo.records[IMAGE_A]["accessRights"] = "reserved"
+
+    result = viewers.gallery_images(gallery, [0, 1], "small")
+
+    assert [base64.b64decode(entry["data"]).decode() for entry in result] == ["b_small.jpg"]
+
+
+def test_a_public_gallery_only_returns_records_the_public_rule_admits(gallery, monkeypatch):
+    """``public=True`` must use ``access.is_public``, not the authenticated rule."""
+    from archihub.api.records import access
+
+    monkeypatch.setattr(
+        access, "is_public", lambda record: str(record["_id"]) != IMAGE_A
+    )
+
+    result = viewers.gallery_images(gallery, [0, 1], "small", public=True)
+
+    assert [base64.b64decode(entry["data"]).decode() for entry in result] == ["b_small.jpg"]
+
+
+# ---------------------------------------------------------------------------
 # Deep zoom
 # ---------------------------------------------------------------------------
 
@@ -458,6 +511,23 @@ def test_a_dzi_index_past_the_end_is_a_404(pyramid):
         viewers.dzi_data(pyramid, [5], {"type": "xml"})
 
     assert exc.value.status_code == 404
+
+
+def test_a_restricted_pyramid_is_refused_to_a_caller_without_the_right(pyramid, mongo):
+    mongo.records[IMAGE_A]["accessRights"] = "reserved"
+
+    with pytest.raises(viewers.ViewerError) as exc:
+        viewers.dzi_data(pyramid, [0], {"type": "xml"}, user=None, is_admin=False)
+
+    assert exc.value.status_code == 404
+
+
+def test_an_admin_still_reaches_a_restricted_pyramid(pyramid, mongo):
+    mongo.records[IMAGE_A]["accessRights"] = "reserved"
+
+    result = viewers.dzi_data(pyramid, [0], {"type": "xml"}, user=None, is_admin=True)
+
+    assert result == {"type": "xml", "data": "<Image/>"}
 
 
 # ---------------------------------------------------------------------------
