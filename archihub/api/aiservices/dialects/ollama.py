@@ -142,6 +142,15 @@ class OllamaDialect:
 
         if options.get("tools"):
             body["tools"] = options["tools"]
+
+        if options.get("thinking"):
+            # Top-level, not nested under `options` like the generation
+            # parameters above - Ollama's own request shape for it. A model
+            # that does not support thinking ignores the field.
+            body["think"] = True
+
+        # No native web-search tool exists for a local Ollama model.
+        # `options.get("web_search")` is deliberately not read here.
         return body
 
     def chat(self, messages: list[dict], **options) -> ChatResult:

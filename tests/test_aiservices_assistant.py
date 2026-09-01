@@ -412,16 +412,21 @@ def test_the_page_is_at_least_one(opts, expected):
 
 @pytest.fixture
 def document_record(monkeypatch, tmp_path):
-    """A processed document whose page images exist on disk."""
+    """A processed document whose page images and original PDF exist on disk."""
     # A real stored path, not "": an empty one is refused, and rightly so -
     # it would resolve to the web root and list whatever is there.
-    pages = tmp_path / "2026" / "08" / "doc" / "web" / "big"
+    pages = tmp_path / "web" / "2026" / "08" / "doc" / "web" / "big"
     pages.mkdir(parents=True)
     for index in (1, 2, 3):
         (pages / f"{index:04d}.jpg").write_bytes(b"\xff\xd8\xff" + bytes([index]) * 40)
 
+    originals = tmp_path / "original" / "2026" / "08"
+    originals.mkdir(parents=True)
+    (originals / "doc.pdf").write_bytes(b"%PDF-1.4\n" + b"x" * 64)
+
     record = {
         "_id": RECORD_ID,
+        "filepath": "2026/08/doc.pdf",
         "processing": {
             "fileProcessing": {"type": "document", "path": "2026/08/doc"},
             "ocr": {"type": "lt_extraction", "result": [
@@ -431,7 +436,10 @@ def document_record(monkeypatch, tmp_path):
     }
     monkeypatch.setattr(
         "archihub.core.settings.get_settings",
-        lambda: type("S", (), {"web_files_path": str(tmp_path)})(),
+        lambda: type("S", (), {
+            "web_files_path": str(tmp_path / "web"),
+            "original_files_path": str(tmp_path / "original"),
+        })(),
     )
     monkeypatch.setattr(
         "archihub.api.records.services.load_visible", lambda rid, user: (record, None)
@@ -514,6 +522,85 @@ def test_a_record_that_is_not_a_document_has_no_page_image(document_record):
         assistant.page_image_part(document_record, 1)
 
     assert caught.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# The whole-document ("full_pdf") input mode
+# ---------------------------------------------------------------------------
+
+ANTHROPIC_PROVIDER = {"dialect": "anthropic"}
+OPENAI_PROVIDER = {"dialect": "openai-compatible"}
+OLLAMA_PROVIDER = {"dialect": "ollama"}
+
+
+def test_document_part_sends_the_original_file_whole(document_record):
+    part = assistant.document_part(document_record)
+
+    assert part["type"] == "document_url"
+    assert part["document_url"]["url"].startswith("data:application/pdf;base64,")
+    assert part["document_url"]["name"] == "doc.pdf"
+
+
+def test_document_part_refuses_a_record_with_no_original(document_record):
+    document_record["filepath"] = None
+
+    with pytest.raises(assistant.AssistantError) as caught:
+        assistant.document_part(document_record)
+
+    assert caught.value.status_code == 404
+
+
+def test_an_oversized_document_is_refused_before_it_is_sent(monkeypatch, document_record):
+    monkeypatch.setattr(assistant, "MAX_DOCUMENT_BYTES", 4)
+
+    with pytest.raises(assistant.AssistantError) as caught:
+        assistant.document_part(document_record)
+
+    assert caught.value.status_code == 413
+
+
+def test_full_pdf_mode_sends_the_whole_document_for_a_capable_dialect(document_record):
+    messages, _conversation, _applied = assistant.build_messages(
+        _doc_body(opt="full_pdf", opts={"page": 1}), "someone@test.com", ANTHROPIC_PROVIDER
+    )
+
+    parts = messages[-1]["content"]
+    assert isinstance(parts, list)
+    assert parts[0]["type"] == "document_url"
+    assert "page one" not in json.dumps(messages)
+
+
+def test_full_pdf_mode_works_for_openai_compatible_too(document_record):
+    """OpenAI itself speaks this dialect and has a native `file` part - the
+    dialect fronts other servers too, but excluding OpenAI's own to be safe
+    about the rest would refuse the one provider this was built for."""
+    messages, _conversation, _applied = assistant.build_messages(
+        _doc_body(opt="full_pdf", opts={"page": 1}), "someone@test.com", OPENAI_PROVIDER
+    )
+
+    assert messages[-1]["content"][0]["type"] == "document_url"
+
+
+def test_full_pdf_mode_is_refused_for_a_dialect_with_no_document_part(document_record):
+    """A silent fallback to OCR text would answer from a source the caller did
+    not choose, with nothing on the response to say so."""
+    with pytest.raises(assistant.AssistantError) as caught:
+        assistant.build_messages(
+            _doc_body(opt="full_pdf"), "someone@test.com", OLLAMA_PROVIDER
+        )
+
+    assert caught.value.status_code == 422
+
+
+def test_full_pdf_mode_does_not_need_a_processing_slug(document_record):
+    body = _doc_body(opt="full_pdf")
+    body.pop("slug")
+
+    messages, _conversation, _applied = assistant.build_messages(
+        body, "someone@test.com", ANTHROPIC_PROVIDER
+    )
+
+    assert messages[-1]["content"][0]["type"] == "document_url"
 
 
 # ---------------------------------------------------------------------------

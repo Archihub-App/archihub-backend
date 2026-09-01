@@ -22,7 +22,10 @@ WHAT EACH TYPE SHOWS THE MODEL
 
 ``document``       the OCR blocks of ONE page, ordered top to bottom and
                    overlap-filtered, combined with the question into a single
-                   user turn for the same reason.
+                   user turn for the same reason - or, per the caller's
+                   ``opt``, that page rendered as an image, or the whole
+                   original file, for a dialect whose protocol can carry one
+                   (see ``DOCUMENT_CAPABLE_DIALECTS``).
 
 ``image_gallery``     the image at a position in a resource's gallery, as an
                    ``image_url`` part. Only the NEWEST stored image is re-sent
@@ -301,11 +304,28 @@ def _transcription_context(record: dict, slug: str, message: str) -> list[dict]:
 
 
 #: What the viewer's "Input mode" radio can be set to.
-DOCUMENT_INPUTS = ("document_ocr", "image")
+DOCUMENT_INPUTS = ("document_ocr", "image", "full_pdf")
+
+#: Dialects whose wire protocol has a native document/file content part.
+#: Structural - a trait of the protocol, not something a provider's `/models`
+#: reports about a model - so it lives here rather than in `ModelInfo.capabilities`.
+#: "openai-compatible" fronts many servers besides OpenAI itself, and not all of
+#: them understand a `file` part - but OpenAI does, it is the dialect's own
+#: namesake, and the alternative is refusing the one provider this was built
+#: for. A server that does not understand the part answers with its own error,
+#: same as an unsupported `tools`/`reasoning_effort` value already does here.
+DOCUMENT_CAPABLE_DIALECTS = {"anthropic", "google", "openai-compatible"}
+
+#: The whole PDF, base64'd, inflates the request by a third and is counted
+#: against the model's context the same way a page image is. Anthropic accepts
+#: up to 32 MB per document and Gemini's inline (non-File-API) request body is
+#: capped at 20 MB; capping here at the lower of the two keeps one limit that
+#: is honest for either.
+MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
 
 
 def _document_input(body: dict) -> str:
-    """Which of the two the caller asked for.
+    """Which of the input modes the caller asked for.
 
     An unrecognised value falls back to the OCR text rather than being refused:
     the setting is a display preference, and losing the answer over it is worse
@@ -315,17 +335,64 @@ def _document_input(body: dict) -> str:
     return requested if requested in DOCUMENT_INPUTS else "document_ocr"
 
 
+def document_part(record: dict) -> dict:
+    """The record's original PDF, whole, as a ``document_url`` content part.
+
+    Sibling of `page_image_part`: read once here and hand on a part shape every
+    document-capable dialect already knows how to convert, rather than making
+    each one responsible for opening files. Unlike a page image, this reads the
+    stored master directly rather than a rendered-page listing, so a record
+    with no processed pages yet can still be sent whole.
+    """
+    import base64
+
+    from archihub.core import files as filestore
+    from archihub.core.settings import get_settings
+
+    stored = record.get("filepath")
+    if not stored:
+        raise AssistantError(_("Record does not have files"), 404)
+
+    path = filestore.resolve_within(get_settings().original_files_path, stored)
+    if not path.is_file():
+        raise AssistantError(_("Record does not have files"), 404)
+
+    size = path.stat().st_size
+    if size > MAX_DOCUMENT_BYTES:
+        raise AssistantError(_("The document is too large to send"), 413)
+
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return {
+        "type": "document_url",
+        "document_url": {"url": f"data:application/pdf;base64,{encoded}", "name": path.name},
+    }
+
+
 def _document_context(
-    record: dict, slug: str, message: str, page: int, mode: str = "document_ocr"
+    record: dict, slug: str, message: str, page: int, mode: str, dialect: str
 ) -> list[dict]:
-    """The page as OCR text, or as the rendered image the user chose instead.
+    """The page as OCR text, the rendered page image, or the whole original PDF.
 
     THE MODE IS NOT DECORATION. The viewer's "Input mode" radio selects which of
-    the two the model is shown. Ignoring it and always sending the OCR text is a
-    200 in which the model answers confidently from a source the user did not
+    the three the model is shown. Ignoring it and always sending the OCR text is
+    a 200 in which the model answers confidently from a source the user did not
     choose - the kind of failure no status code can show.
     """
     from archihub.api.records import blocks as record_blocks
+
+    if mode == "full_pdf":
+        if dialect not in DOCUMENT_CAPABLE_DIALECTS:
+            raise AssistantError(
+                _("This provider cannot be sent a whole document; choose OCR text or an image instead"),
+                422,
+            )
+        return [
+            {"role": "system", "content": prompts.DOCUMENT},
+            {
+                "role": "user",
+                "content": [document_part(record), {"type": "text", "text": message}],
+            },
+        ]
 
     if mode == "image":
         return [
@@ -489,13 +556,18 @@ def _replay(messages: list[dict], conversation: dict) -> list[dict]:
     return prior
 
 
-def build_messages(body: dict, user: str) -> tuple[list[dict], dict, dict]:
+def build_messages(body: dict, user: str, provider: dict | None = None) -> tuple[list[dict], dict, dict]:
     """``(messages, conversation, applied)`` for this request.
 
     ``conversation`` is the stored document being resumed, or ``{}``.
     ``applied`` records what shaped the request and has to be stored with the
     turn - the skills that were resolved, and the image a gallery turn refers
     to (by path, never by its bytes).
+
+    ``provider`` is only consulted for ``full_pdf`` mode, to refuse before any
+    file is read when the caller's dialect has no document part - every other
+    conversation type is provider-agnostic, so callers that already know they
+    are not building a document conversation may omit it.
     """
     from archihub.api.records import blocks as record_blocks
     from archihub.api.records import services as record_services
@@ -565,7 +637,8 @@ def build_messages(body: dict, user: str) -> tuple[list[dict], dict, dict]:
             messages = _transcription_context(record, slug, question)
         elif kind == "document":
             messages = _document_context(
-                record, slug, question, _page(body), _document_input(body)
+                record, slug, question, _page(body), _document_input(body),
+                (provider or {}).get("dialect"),
             )
         else:
             index = _page(body) - 1 if _gallery_index(body) is None else _gallery_index(body)
@@ -719,17 +792,35 @@ def provider_and_model(body: dict) -> tuple[dict, str]:
     return provider, str(model)
 
 
+def _model_options(body: dict) -> dict:
+    """Generic, dialect-agnostic switches read from the request.
+
+    ``thinking``/``web_search`` travel through `chat.complete`/`chat.stream` as
+    plain ``options`` and are translated to whatever the provider's own wire
+    shape needs inside that dialect's ``_body`` - the same way ``tools``
+    already does. Neither is refused here for a provider that cannot honour
+    it: a model that ignores an unknown request field answers as normal, and
+    that is a better failure than losing the turn over a checkbox.
+    """
+    options: dict = {}
+    if body.get("thinking"):
+        options["thinking"] = True
+    if body.get("web_search"):
+        options["web_search"] = True
+    return options
+
+
 def _frame(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def answer(body: dict, user: str) -> tuple[dict, int]:
     """One complete answer, stored, for a caller that did not ask to stream."""
-    messages, conversation, applied = build_messages(body, user)
     provider, model = provider_and_model(body)
+    messages, conversation, applied = build_messages(body, user, provider)
     question = body["message"].strip()
 
-    result = chat.complete(provider, messages, model=model)
+    result = chat.complete(provider, messages, model=model, **_model_options(body))
     text = _answer_text(result)
     conversation_id = store_turn(body, user, conversation, question, text, applied)
 
@@ -750,15 +841,16 @@ def stream(body: dict, user: str):
     generator is iterated - `build_messages` and `provider_and_model` run in
     `respond()` while the response line can still be chosen.
     """
-    messages, conversation, applied = build_messages(body, user)
     provider, model = provider_and_model(body)
+    messages, conversation, applied = build_messages(body, user, provider)
     question = body["message"].strip()
+    model_options = _model_options(body)
 
     def generate():
         parts: list[str] = []
         steps = thinking.ThinkingSteps()
         try:
-            for chunk in chat.stream(provider, messages, model=model):
+            for chunk in chat.stream(provider, messages, model=model, **model_options):
                 # Reasoning first: a step that opens should appear before the
                 # text produced under it, which is the order it happened in.
                 reasoning = getattr(chunk, "reasoning", "")

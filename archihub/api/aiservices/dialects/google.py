@@ -147,8 +147,22 @@ class GoogleDialect:
             config["maxOutputTokens"] = options["max_tokens"]
         if options.get("top_p") is not None:
             config["topP"] = options["top_p"]
+        if options.get("thinking"):
+            # No budget given: the model chooses one dynamically. Gemini's
+            # thinking models reason by default already - this only asks that
+            # the summary come back so `reasoning` on the chunk has something
+            # to carry.
+            config["thinkingConfig"] = {"includeThoughts": True}
         if config:
             body["generationConfig"] = config
+
+        tools = list(options.get("tools") or [])
+        if options.get("web_search"):
+            # Grounding with Google Search - the model issues the search
+            # itself, the same way `web_search` does for other dialects.
+            tools.append({"google_search": {}})
+        if tools:
+            body["tools"] = tools
 
         return body
 
@@ -219,6 +233,12 @@ def _parts(content) -> list[dict]:
                 if url.startswith("data:"):
                     header, _, data = url.partition(",")
                     media_type = header[5:].split(";")[0] or "image/jpeg"
+                    parts.append({"inlineData": {"mimeType": media_type, "data": data}})
+            elif item.get("type") == "document_url":
+                url = (item.get("document_url") or {}).get("url", "")
+                if url.startswith("data:"):
+                    header, _, data = url.partition(",")
+                    media_type = header[5:].split(";")[0] or "application/pdf"
                     parts.append({"inlineData": {"mimeType": media_type, "data": data}})
     return parts
 

@@ -272,6 +272,12 @@ msgstr "Caché limpiada con éxito"
 msgid "Checkbox"
 msgstr "Verdadero/Falso"
 
+msgid "Choose a logo and a signature"
+msgstr "Elige un logo y una firma"
+
+msgid "Choose a valid row"
+msgstr "Elige una fila válida"
+
 #: api/resources/services.py:1839
 msgid "Comment is required"
 msgstr "comentario es requerido"
@@ -286,6 +292,13 @@ msgid ""
 msgstr ""
 "Configure el proveedor de IA y el modelo que Atlas Wiki usará para generar "
 "artículos"
+
+msgid ""
+"Configure the content type, the logos resource and the signatures resource "
+"in this plugin's settings before signing a PDF"
+msgstr ""
+"Configura el tipo de contenido, el recurso de logos y el recurso de firmas "
+"en los ajustes de este plugin antes de firmar un PDF"
 
 msgid "Configured model ({id})"
 msgstr "Modelo configurado ({id})"
@@ -848,6 +861,9 @@ msgstr ""
 "No se pudo actualizar ningún recurso padre (permisos, esquema o no "
 "encontrado)"
 
+msgid "No resource was specified"
+msgstr "No se especificó ningún recurso"
+
 msgid "No resources matched the filters"
 msgstr "No se encontraron recursos con los filtros especificados"
 
@@ -904,6 +920,12 @@ msgstr "Solo se permiten imágenes para las vistas de consulta"
 #: api/adminApi/services.py:55 api/lists/services.py:146
 msgid "Option not found"
 msgstr "Opción no encontrada"
+
+msgid "PDF signed"
+msgstr "PDF firmado"
+
+msgid "PDF signed; approved by %(signer)s"
+msgstr "PDF firmado; aprobado por %(signer)s"
 
 #: api/records/services.py:262
 msgid "Parent deleted"
@@ -1351,6 +1373,18 @@ msgstr "El registro de ajustes access_rights no existe"
 msgid "The base URL must be an http or https address"
 msgstr "La URL base debe ser una dirección http o https"
 
+msgid "The chosen logo has no image attached"
+msgstr "El logo elegido no tiene una imagen adjunta"
+
+msgid "The chosen signature has no image attached"
+msgstr "La firma elegida no tiene una imagen adjunta"
+
+msgid "The configured content type has no repeater field"
+msgstr "El tipo de contenido configurado no tiene un campo repetidor"
+
+msgid "The configured logos or signatures resource no longer exists"
+msgstr "El recurso de logos o de firmas configurado ya no existe"
+
 msgid "The content type is required"
 msgstr "El tipo de contenido es obligatorio"
 
@@ -1520,6 +1554,9 @@ msgstr "El tipo de nodo '{type}' no está instalado."
 
 msgid "The page image is too large to send"
 msgstr "La imagen de la página es demasiado grande para enviarla"
+
+msgid "The PDF could not be signed"
+msgstr "No se pudo firmar el PDF"
 
 #: api/resources/services.py:851
 msgid "The parent resource does not exist"

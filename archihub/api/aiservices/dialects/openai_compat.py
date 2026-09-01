@@ -134,7 +134,7 @@ class OpenAICompatibleDialect:
     def _body(self, messages: list[dict], options: dict, *, stream: bool) -> dict:
         body: dict = {
             "model": options["model"],
-            "messages": messages,
+            "messages": _translated(messages),
             "stream": stream,
         }
 
@@ -150,6 +150,17 @@ class OpenAICompatibleDialect:
         for key in ("temperature", "top_p", "stop", "seed", "response_format", "reasoning_effort"):
             if options.get(key) is not None:
                 body[key] = options[key]
+
+        # `reasoning_effort` is the OpenAI-family spelling of "think harder".
+        # Only filled when the caller did not already choose a level, and only
+        # sent for a server that speaks it - one that does not is expected to
+        # ignore an unrecognised field, the same as any other unsupported one.
+        if options.get("thinking") and "reasoning_effort" not in body:
+            body["reasoning_effort"] = "medium"
+
+        # No native web-search tool exists for this dialect across the
+        # providers it fronts - unlike `tools`, there is nothing to inject.
+        # `options.get("web_search")` is deliberately not read here.
 
         if options.get("tools"):
             body["tools"] = options["tools"]
@@ -222,6 +233,46 @@ class OpenAICompatibleDialect:
             finish_reason=first.get("finish_reason"),
             usage=_usage(payload.get("usage")),
         )
+
+
+# ---------------------------------------------------------------------------
+# Shared request helpers
+# ---------------------------------------------------------------------------
+
+
+def _translated(messages: list[dict]) -> list[dict]:
+    """Messages with any ``document_url`` part rewritten to this wire format's
+    own ``file`` part.
+
+    Every other part type (``text``, ``image_url``) already matches what this
+    protocol expects and passes through untouched - only the document part is
+    an internal convention with no native counterpart of the same name here.
+    """
+    translated = []
+    for message in messages:
+        content = message.get("content")
+        if not isinstance(content, list):
+            translated.append(message)
+            continue
+
+        parts = []
+        changed = False
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "document_url":
+                changed = True
+                document = part.get("document_url") or {}
+                parts.append({
+                    "type": "file",
+                    "file": {
+                        "filename": document.get("name") or "document.pdf",
+                        "file_data": document.get("url"),
+                    },
+                })
+            else:
+                parts.append(part)
+
+        translated.append({**message, "content": parts} if changed else message)
+    return translated
 
 
 # ---------------------------------------------------------------------------

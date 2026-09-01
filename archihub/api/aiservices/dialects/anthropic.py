@@ -33,6 +33,15 @@ API_VERSION = "2023-06-01"
 #: so that a missing option is not a hard failure; any real caller sets it.
 FALLBACK_MAX_TOKENS = 4096
 
+#: Extended thinking's token allowance, when the caller asks for it but does not
+#: say how much. The API requires `max_tokens` to exceed this, so `_body` grows
+#: `max_tokens` to make room rather than sending a request the provider refuses.
+THINKING_BUDGET_TOKENS = 4096
+
+#: Anthropic's own server-side tool - the model issues the search itself, mid
+#: turn, rather than a function call this backend would have to execute.
+WEB_SEARCH_TOOL = {"type": "web_search_20250305", "name": "web_search"}
+
 
 class AnthropicDialect:
     """Chat over the Anthropic Messages API."""
@@ -103,19 +112,38 @@ class AnthropicDialect:
                 "content": _blocks(message.get("content")),
             })
 
+        max_tokens = options.get("max_tokens") or FALLBACK_MAX_TOKENS
+        thinking_on = bool(options.get("thinking"))
+        if thinking_on:
+            # `max_tokens` must exceed the thinking budget or the API refuses
+            # the request outright.
+            max_tokens = max(max_tokens, THINKING_BUDGET_TOKENS + FALLBACK_MAX_TOKENS)
+
         body: dict = {
             "model": options["model"],
             "messages": turns,
-            "max_tokens": options.get("max_tokens") or FALLBACK_MAX_TOKENS,
+            "max_tokens": max_tokens,
             "stream": stream,
         }
         if system:
             body["system"] = system
-        for ours, theirs in (("temperature", "temperature"), ("top_p", "top_p"), ("stop", "stop_sequences")):
-            if options.get(ours) is not None:
-                body[theirs] = options[ours]
-        if options.get("tools"):
-            body["tools"] = options["tools"]
+        if thinking_on:
+            body["thinking"] = {"type": "enabled", "budget_tokens": THINKING_BUDGET_TOKENS}
+            # Extended thinking requires `temperature` at its default (1) and
+            # `top_p`/`top_k` unset - sending either is a request the API
+            # refuses, not a value it adjusts for you.
+        else:
+            for ours, theirs in (("temperature", "temperature"), ("top_p", "top_p")):
+                if options.get(ours) is not None:
+                    body[theirs] = options[ours]
+        if options.get("stop") is not None:
+            body["stop_sequences"] = options["stop"]
+
+        tools = list(options.get("tools") or [])
+        if options.get("web_search"):
+            tools.append(WEB_SEARCH_TOOL)
+        if tools:
+            body["tools"] = tools
         return body
 
     def chat(self, messages: list[dict], **options) -> ChatResult:
@@ -208,6 +236,15 @@ def _blocks(content) -> list[dict]:
                     media_type = header[5:].split(";")[0] or "image/jpeg"
                     blocks.append({
                         "type": "image",
+                        "source": {"type": "base64", "media_type": media_type, "data": data},
+                    })
+            elif item.get("type") == "document_url":
+                url = (item.get("document_url") or {}).get("url", "")
+                if url.startswith("data:"):
+                    header, _, data = url.partition(",")
+                    media_type = header[5:].split(";")[0] or "application/pdf"
+                    blocks.append({
+                        "type": "document",
                         "source": {"type": "base64", "media_type": media_type, "data": data},
                     })
     return blocks
