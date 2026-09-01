@@ -184,6 +184,30 @@ def test_a_dangling_parent_reference_does_not_publish_a_record(mongo):
     assert access.is_public(record(parents=[{"id": RESOURCE_ID}])) is False
 
 
+def test_a_view_thumbnail_backreference_does_not_withhold_an_otherwise_public_record(mongo):
+    """A file used as a saved view's thumbnail also carries a bookkeeping
+
+    entry pointing at that view, added by the same attach machinery resources
+    use. A view is never a member of the resources hierarchy - it lives in its
+    own collection - so that entry can never resolve as a resource. It must be
+    ignored, not read as one more parent the record needs to be public through.
+    """
+    mongo.resources[RESOURCE_ID] = resource()
+
+    assert access.is_public(
+        record(parents=[{"id": RESOURCE_ID, "post_type": "doc"}, {"id": "6a70b833497d4440325c9ff", "post_type": "view"}])
+    ) is True
+
+
+def test_a_record_filed_only_under_a_view_thumbnail_reference_is_not_public(mongo):
+    """The view backreference is ignored, not treated as a free pass.
+
+    A record attached to nothing but a view's thumbnail slot has no genuine
+    resource parent at all, so it falls back to the "filed nowhere" rule.
+    """
+    assert access.is_public(record(parents=[{"id": "6a70b833497d4440325c9ff", "post_type": "view"}])) is False
+
+
 # ---------------------------------------------------------------------------
 # What the routes return
 # ---------------------------------------------------------------------------

@@ -69,7 +69,7 @@ def may_view_record(username: str, record: dict, is_admin: bool) -> bool:
     if not holds(username, record.get("accessRights")):
         return False
 
-    return all(_parent_permits(username, parent) for parent in record.get("parent") or [])
+    return all(_parent_permits(username, parent) for parent in _containing_parents(record))
 
 
 def is_public(record: dict) -> bool:
@@ -89,13 +89,34 @@ def is_public(record: dict) -> bool:
     if record.get("accessRights"):
         return False
 
-    parents = record.get("parent") or []
+    parents = _containing_parents(record)
     if not parents:
         # A record filed nowhere is reachable through no public resource, so
         # nothing publishes it. The legacy code treated this as public.
         return False
 
     return all(_parent_is_public(parent) for parent in parents)
+
+
+def _containing_parents(record: dict) -> list:
+    """The entries in ``record["parent"]`` that actually place it in the archive.
+
+    Attaching a file as a saved view's thumbnail reuses the same attach
+    machinery resources use, so it appends an entry here too - but a view
+    lives in its own collection, is never a member of the resources
+    hierarchy, and grants no access right of its own. Left in, it reads to
+    both rules above as an ordinary parent that can never be resolved, which
+    denies (`is_public`) or is silently permitted (`may_view_record`) for the
+    wrong reason - a record used as a view's thumbnail must be judged solely
+    by the resources it is genuinely filed under.
+    """
+    from archihub.api.views.services import VIEW_POST_TYPE
+
+    return [
+        parent
+        for parent in record.get("parent") or []
+        if not (isinstance(parent, dict) and parent.get("post_type") == VIEW_POST_TYPE)
+    ]
 
 
 def _parent_is_public(parent) -> bool:
