@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import datetime
 import logging
+import shutil
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,6 +50,7 @@ ALLOWED_EXTENSIONS = frozenset({
 STATUS_UPLOADED = "uploaded"
 STATUS_PROCESSED = "processed"
 STATUS_DELETED = "deleted"
+STATUS_TEMPORARY = "temporary"
 
 
 def _mongo():
@@ -373,3 +376,202 @@ def _call_hook(name: str, payload: dict) -> None:
         # The file is stored and the record written; a failing side effect must
         # not undo that or fail the upload.
         logger.exception("%s hook failed", name)
+
+
+# ---------------------------------------------------------------------------
+# Temporary files staging and promotion
+# ---------------------------------------------------------------------------
+
+
+def _temporal_directory() -> Path:
+    settings = get_settings()
+    root = settings.temporal_files_path or str(Path(settings.original_files_path) / "temporal")
+    return filestore.dated_directory(root)
+
+
+def store_temporary_file(item: IncomingFile, user: str | None) -> dict:
+    """Store an uploaded file as a temporary record, not yet attached to any resource.
+
+    The file is written to the temporal directory and recorded with
+    ``status="temporary"`` and ``temporary=True``.
+    """
+    safe_name = filestore.secure_name(item.filename)
+    if not filestore.is_allowed(safe_name, ALLOWED_EXTENSIONS):
+        raise UnsupportedFileType(safe_name)
+
+    temp_dir = _temporal_directory()
+    if item.path is not None:
+        stored = filestore.store_existing_file(item.path, temp_dir, safe_name)
+    else:
+        if item.stream is None:
+            raise ValueError(_("The file has no content"))
+        stored = filestore.store_upload(item.stream, temp_dir, safe_name)
+
+    mime = filestore.sniff_media_type(stored.path) or _media_type_from_name(safe_name)
+
+    record = {
+        "name": safe_name,
+        "hash": stored.sha256,
+        "size": stored.size,
+        "filepath": str(stored.path),
+        "mime": mime,
+        "parent": [],
+        "parents": [],
+        "status": STATUS_TEMPORARY,
+        "temporary": True,
+        "tag": item.tag,
+        "order": item.order,
+        "favCount": 0,
+        "createdBy": user or "system",
+        "updatedBy": user or "system",
+        "createdAt": _now(),
+        "updatedAt": _now(),
+    }
+
+    inserted = _mongo().insert_record(COLLECTION, record)
+    record_id = str(inserted.inserted_id)
+
+    return {
+        "id": record_id,
+        "name": safe_name,
+        "size": stored.size,
+        "hash": stored.sha256,
+        "mime": mime,
+        "tag": item.tag,
+        "order": item.order,
+    }
+
+
+def promote_temporary_records(
+    resource_id: str,
+    resource: dict,
+    temporary_files: list[dict],
+    user: str | None,
+) -> list[dict]:
+    """Promote staged temporary records into permanent attachments of a resource.
+
+    For each temporary record:
+    - If another permanent record already holds the identical content (same hash),
+      re-use that permanent record, remove the staged file and temp record doc.
+    - Otherwise, move the file from the temporal folder to the original_files_path
+      dated directory, update filepath to be relative to originals root, set
+      status='uploaded' and temporary=False, and wire parent and parents.
+    """
+    attached: list[AttachedFile] = []
+    mongo = _mongo()
+    orig_root = Path(get_settings().original_files_path)
+
+    for item in temporary_files or []:
+        if not isinstance(item, dict):
+            continue
+        temp_id = item.get("id")
+        if not temp_id:
+            continue
+
+        tag = item.get("filetag") or item.get("tag") or "file"
+        order = item.get("order")
+
+        object_id = None
+        try:
+            object_id = ObjectId(temp_id)
+        except Exception:
+            continue
+
+        record = mongo.get_record(COLLECTION, {"_id": object_id, "temporary": True})
+        if not record:
+            continue
+
+        content_hash = record.get("hash")
+        temp_path = Path(record.get("filepath", ""))
+
+        # Check if a permanent record already has this hash
+        existing = mongo.get_record(
+            COLLECTION,
+            {"hash": content_hash, "temporary": {"$ne": True}, "status": {"$ne": STATUS_DELETED}},
+        )
+
+        if existing:
+            # Deduplicated: permanent copy exists. Discard temp file and temp document.
+            if temp_path.is_file():
+                filestore.remove_quietly(temp_path)
+            mongo.delete_record(COLLECTION, {"_id": object_id})
+            _add_parent(existing, resource_id, resource, user)
+            attached.append(AttachedFile(id=str(existing["_id"]), tag=tag, order=order))
+            continue
+
+        # Move to originals directory
+        dest_dir = filestore.dated_directory(orig_root)
+        dest_path = dest_dir / (temp_path.name if temp_path.name else f"{uuid.uuid4()}")
+        if temp_path.is_file() and temp_path.resolve() != dest_path.resolve():
+            shutil.move(str(temp_path), str(dest_path))
+
+        try:
+            rel_path = str(dest_path.relative_to(orig_root))
+        except ValueError:
+            rel_path = dest_path.name
+
+        update = {
+            "filepath": rel_path,
+            "parent": [{"id": resource_id, "post_type": resource.get("post_type")}],
+            "parents": list(resource.get("parents") or []),
+            "status": STATUS_UPLOADED,
+            "temporary": False,
+            "updatedBy": user or "system",
+            "updatedAt": _now(),
+        }
+
+        mongo.update_record(COLLECTION, {"_id": object_id}, update)
+
+        _audit(user, "record_create", {
+            "record": {
+                "name": record.get("name"),
+                "hash": record.get("hash"),
+                "size": record.get("size"),
+                "filepath": rel_path,
+            }
+        })
+        _call_hook("record_create", {**record, **update, "_id": str(object_id)})
+        attached.append(AttachedFile(id=str(object_id), tag=tag, order=order))
+
+    return [entry.as_dict() for entry in attached]
+
+
+def delete_temporary_record(record_id: str, user: str, is_admin: bool = False) -> tuple[dict, int]:
+    """Delete a temporary record and its staged file from disk."""
+    object_id = None
+    try:
+        object_id = ObjectId(record_id)
+    except Exception:
+        return {"msg": _("Record does not exist")}, 404
+
+    record = _mongo().get_record(COLLECTION, {"_id": object_id, "temporary": True})
+    if not record:
+        return {"msg": _("Record does not exist")}, 404
+
+    if not is_admin and record.get("createdBy") != user and record.get("updatedBy") != user:
+        return {"msg": _("You do not have permission to view this record")}, 403
+
+    filepath = record.get("filepath")
+    if filepath:
+        filestore.remove_quietly(filepath)
+
+    _mongo().delete_record(COLLECTION, {"_id": object_id})
+    return {"msg": _("Temporary record deleted successfully")}, 200
+
+
+def cleanup_temporary_records(max_age_seconds: int = 86400) -> int:
+    """Purge temporary records older than max_age_seconds (default 24 hours / 1 day)."""
+    cutoff = _now() - datetime.timedelta(seconds=max_age_seconds)
+    query = {"temporary": True, "createdAt": {"$lt": cutoff}}
+    records = list(_mongo().get_all_records(COLLECTION, query))
+    count = 0
+    for record in records:
+        filepath = record.get("filepath")
+        if filepath:
+            filestore.remove_quietly(filepath)
+        _mongo().delete_record(COLLECTION, {"_id": record["_id"]})
+        count += 1
+    if count > 0:
+        logger.info("Cleaned up %d temporary records older than %s seconds", count, max_age_seconds)
+    return count
+

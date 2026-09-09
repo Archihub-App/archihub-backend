@@ -66,6 +66,9 @@ def may_view_record(username: str, record: dict, is_admin: bool) -> bool:
     if is_admin:
         return True
 
+    if record.get("temporary"):
+        return record.get("createdBy") == username or record.get("updatedBy") == username
+
     if not holds(username, record.get("accessRights")):
         return False
 

@@ -160,7 +160,8 @@ def create(body: dict, user: str, incoming_files=None) -> tuple[dict, int]:
     if errors:
         return {"msg": _("Error validating fields"), "errors": errors}, 400
 
-    file_errors = validation.validate_files(_tags_of(incoming_files), metadata)
+    temp_files = _extract_temporary_files(body)
+    file_errors = validation.validate_files([*_tags_of(incoming_files), *_temp_tags_of(temp_files)], metadata)
     if file_errors:
         return {"msg": _("Error validating files"), "errors": file_errors}, 400
 
@@ -181,6 +182,9 @@ def create(body: dict, user: str, incoming_files=None) -> tuple[dict, int]:
 
     try:
         attached = _attach(payload, incoming_files, user, resource_id)
+        if temp_files:
+            promoted = _promote_temporary(payload, temp_files, user, resource_id)
+            attached.extend(promoted)
     except Exception:
         # Storage refused the upload (too large, wrong type). Take the resource
         # back out rather than leaving an empty one behind for a save the user
@@ -226,6 +230,35 @@ def create(body: dict, user: str, incoming_files=None) -> tuple[dict, int]:
 
 def _tags_of(incoming_files) -> list[dict]:
     return [{"tag": item.tag} for item in (incoming_files or [])]
+
+
+def _temp_tags_of(temporary_files: list[dict]) -> list[dict]:
+    return [{"tag": item.get("filetag") or item.get("tag") or "file"} for item in (temporary_files or [])]
+
+
+def _extract_temporary_files(body: dict) -> list[dict]:
+    temp = body.get("temporaryFiles") or body.get("temporalFiles") or []
+    if isinstance(temp, list) and temp:
+        return [item for item in temp if isinstance(item, dict) and item.get("id")]
+    return [
+        item for item in (body.get("filesIds") or [])
+        if isinstance(item, dict) and item.get("id")
+    ]
+
+
+def _promote_temporary(resource: dict, temp_files: list[dict], user: str, resource_id: str) -> list[dict]:
+    """Promote staged temporary records and attach them to this resource."""
+    from archihub.api.records import storage
+
+    if not temp_files:
+        return []
+
+    return storage.promote_temporary_records(
+        resource_id,
+        {"post_type": resource.get("post_type"), "parents": resource.get("parents") or []},
+        temp_files,
+        user,
+    )
 
 
 def _attach(resource: dict, incoming_files, user: str, resource_id: str) -> list[dict]:
@@ -295,11 +328,17 @@ def update(resource_id: str, body: dict, user: str, incoming_files=None) -> tupl
         return {"msg": _("Error validating fields"), "errors": errors}, 400
 
     kept = _surviving_files(existing, body.get("deletedFiles") or [])
-    file_errors = validation.validate_files([*kept, *_tags_of(incoming_files)], metadata)
+    temp_files = _extract_temporary_files(body)
+    file_errors = validation.validate_files(
+        [*kept, *_tags_of(incoming_files), *_temp_tags_of(temp_files)], metadata
+    )
     if file_errors:
         return {"msg": _("Error validating files"), "errors": file_errors}, 400
 
     attached = _attach(payload, incoming_files, user, resource_id)
+    if temp_files:
+        promoted = _promote_temporary(payload, temp_files, user, resource_id)
+        attached.extend(promoted)
     files = _apply_order(kept + attached, body.get("updatedFiles") or [])
 
     payload.pop("_id", None)

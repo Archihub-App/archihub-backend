@@ -15,6 +15,7 @@ at import time and that is the whole point of them.
 
 from archihub.worker.tasks import geometries as geometries  # noqa: F401
 from archihub.worker.tasks import indexing as indexing  # noqa: F401
+from archihub.worker.tasks import records as records  # noqa: F401
 from archihub.worker.tasks import testcontrol as testcontrol  # noqa: F401
 
 #: Every task name this backend registers. Asserted against Celery's own
@@ -28,5 +29,6 @@ REGISTERED_TASK_NAMES = frozenset(
         "geosystem.regenerate_index_shapes",
         "geosystem.index_shapes",
         "testcontrol.reset",
+        "records.cleanup_temporary_records",
     }
 )

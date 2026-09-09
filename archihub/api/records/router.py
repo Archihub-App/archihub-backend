@@ -14,12 +14,14 @@ A role failure answers 403; 401 is reserved for "I do not know who you are".
 
 from __future__ import annotations
 
+import json
 import logging
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends, File, Form, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
 
-from archihub.api.records import blocks, media, services, transcription, viewers
+from archihub.api.records import blocks, media, services, storage, transcription, viewers
+from archihub.core import files as filestore
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
@@ -93,6 +95,81 @@ def get_by_gallery_index(
 ) -> JSONResponse:
     """The nth image of a resource's gallery, in the curator's display order."""
     return _respond(services.get_by_gallery_index(body, current_user.username))
+
+
+@router.post(
+    "/temporary",
+    status_code=201,
+    responses={
+        201: {"description": "Temporary records created"},
+        400: {"description": "Validation failed, or an unusable file"},
+        413: {"description": "A file exceeds the upload ceiling"},
+        **_RESPONSES,
+    },
+)
+def upload_temporary(
+    files: list[UploadFile] = File(...),
+    data: str | None = Form(None, description="Optional JSON document with filesIds"),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Upload files temporarily before creating or updating a resource.
+
+    Files are stored in the temporary staging folder, recorded with
+    `status='temporary'`, and returned with their temporary record IDs.
+    """
+    parsed = {}
+    if data:
+        try:
+            parsed = json.loads(data)
+        except Exception:
+            pass
+
+    tags = parsed.get("filesIds") if isinstance(parsed, dict) else []
+    results = []
+
+    try:
+        for index, upload in enumerate(files):
+            tag_info = tags[index] if isinstance(tags, list) and index < len(tags) else {}
+            if not isinstance(tag_info, dict):
+                tag_info = {}
+            incoming = storage.IncomingFile.from_upload(
+                upload,
+                tag=tag_info.get("filetag") or tag_info.get("tag") or "file",
+                order=tag_info.get("order"),
+            )
+            created = storage.store_temporary_file(incoming, current_user.username)
+            results.append(created)
+    except filestore.UploadTooLarge as exc:
+        return JSONResponse(status_code=413, content={"msg": str(exc)})
+    except (storage.UnsupportedFileType, filestore.UnsupportedFile) as exc:
+        return JSONResponse(status_code=400, content={"msg": str(exc)})
+    except ValueError as exc:
+        return JSONResponse(status_code=400, content={"msg": str(exc)})
+
+    return json_response(results, 201)
+
+
+@router.delete(
+    "/temporary/{record_id}",
+    responses={
+        200: {"description": "Temporary record deleted"},
+        403: {"description": "Permission denied"},
+        404: {"description": "No such temporary record"},
+        **_RESPONSES,
+    },
+)
+def delete_temporary(
+    record_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Delete a staged temporary file and its record."""
+    from archihub.api.users.services import has_role
+
+    is_admin = has_role(current_user.username, "admin")
+    result, status = storage.delete_temporary_record(
+        record_id, current_user.username, is_admin=is_admin
+    )
+    return json_response(result, status)
 
 
 @router.post(

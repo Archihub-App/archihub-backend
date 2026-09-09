@@ -482,4 +482,5 @@ def test_the_registered_names_are_the_legacy_ones():
         "geosystem.regenerate_index_shapes",
         "geosystem.index_shapes",
         "testcontrol.reset",
+        "records.cleanup_temporary_records",
     }
