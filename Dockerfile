@@ -17,7 +17,7 @@
 # PINNED. `python:3.11` is a moving tag and has already carried this image
 # across a Debian major release, changing package names and the Tesseract
 # tessdata path underneath a build that did not change at all.
-FROM python:3.11.14-slim-bookworm
+FROM python:3.11.14
 
 WORKDIR /app
 
