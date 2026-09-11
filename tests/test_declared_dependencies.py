@@ -103,10 +103,17 @@ def _plugin_declared(slug: str) -> tuple[set[str], list[str]]:
     return names, unreadable
 
 
+from archihub.plugins.framework import discovery
+
 def _imported() -> dict[str, set[str]]:
     """Third-party top-level module -> the files importing it."""
     found: dict[str, set[str]] = {}
     for path in PACKAGE_ROOT.rglob("*.py"):
+        if path.name.startswith("test_") or path.name.endswith("_test.py"):
+            continue
+        slug = _plugin_of(path)
+        if slug and not discovery.is_mountable(slug):
+            continue
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -136,7 +143,7 @@ def _egg_declared_modules() -> dict[str, list[str]]:
     """
     extra: dict[str, list[str]] = {}
     for slug in sorted(p.name for p in PLUGIN_ROOT.iterdir() if p.is_dir()):
-        if slug in PLUGIN_RESERVED:
+        if slug in PLUGIN_RESERVED or not discovery.is_mountable(slug):
             continue
         manifest = PLUGIN_ROOT / slug / "requirements.txt"
         if not manifest.is_file():
@@ -199,7 +206,10 @@ def _installed_plugins() -> list[str]:
     return sorted(
         d.name
         for d in PLUGIN_ROOT.iterdir()
-        if d.is_dir() and d.name not in PLUGIN_RESERVED and (d / "__init__.py").is_file()
+        if d.is_dir()
+        and d.name not in PLUGIN_RESERVED
+        and (d / "__init__.py").is_file()
+        and discovery.is_mountable(d.name)
     )
 
 

@@ -641,13 +641,7 @@ class DiffHarness:
         )
 
 
-def load_cases(path: Path) -> tuple[list[Case], list[Fixture]]:
-    """Load enabled cases and the fixtures they draw identifiers from.
-
-    Entries with no ``name``, or whose name starts with ``_``, are inactive
-    templates for domains not yet ported - firing those before their route
-    exists would only report 404-vs-200 and bury real differences in noise.
-    """
+def _read_case_file(path: Path) -> tuple[list[Case], list[Fixture]]:
     raw = json.loads(path.read_text(encoding="utf-8"))
     entries = raw["cases"] if isinstance(raw, dict) else raw
     cases = [
@@ -660,6 +654,27 @@ def load_cases(path: Path) -> tuple[list[Case], list[Fixture]]:
         for entry in (raw.get("fixtures") or [] if isinstance(raw, dict) else [])
         if entry.get("name") and not entry["name"].startswith("_")
     ]
+    return cases, fixtures
+
+
+def load_cases(path: Path) -> tuple[list[Case], list[Fixture]]:
+    """Load enabled cases and the fixtures they draw identifiers from.
+
+    Entries with no ``name``, or whose name starts with ``_``, are inactive
+    templates for domains not yet ported - firing those before their route
+    exists would only report 404-vs-200 and bury real differences in noise.
+    """
+    cases, fixtures = _read_case_file(path)
+
+    # When loading the main cases file, also discover and include each plugin's diff_cases.json
+    if path.name == "diff_cases.json" and path.parent.name == "tools":
+        plugin_root = path.parent.parent / "archihub" / "plugins"
+        if plugin_root.is_dir():
+            for plugin_file in sorted(plugin_root.glob("*/diff_cases.json")):
+                p_cases, p_fixtures = _read_case_file(plugin_file)
+                cases.extend(p_cases)
+                fixtures.extend(p_fixtures)
+
     _assert_next_fixtures_feed_contract_cases(cases, fixtures)
     return cases, fixtures
 

@@ -1,0 +1,35 @@
+{
+  "cases": [
+    {
+      "name": "plugins: liquidText generation needs a role",
+      "method": "POST",
+      "path": "/liquidText/bulk",
+      "body": {},
+      "auth": false,
+      "expect_status": 401,
+      "_note": "CONTRACT, and the unauthenticated case throughout this group. A plugin route with a token would queue real work against the shared database, and firing it at both backends would queue it twice. What these establish is that a plugin route's role check is a DEPENDENCY, resolved before the handler body - there is no return value for a handler to drop - and a 401 here demonstrates that end to end."
+    },
+    {
+      "name": "plugins: liquidText save needs a role",
+      "method": "POST",
+      "path": "/liquidText/save",
+      "body": {},
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: liquidText export needs a role",
+      "method": "POST",
+      "path": "/liquidText/download",
+      "body": {},
+      "auth": false,
+      "expect_status": 401
+    },
+    {
+      "name": "plugins: the icon needs a role",
+      "path": "/liquidText/image",
+      "auth": false,
+      "expect_status": 401
+    }
+  ]
+}
