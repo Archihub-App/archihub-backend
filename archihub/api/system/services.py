@@ -810,13 +810,18 @@ def regenerate_index(user: str) -> tuple[dict, int]:
     if refusal:
         return refusal
 
-    schema = get_setting("resources-schema")
-    if not schema:
-        # Checked before use: a missing schema is a configuration problem the
-        # operator can act on, not an internal error.
-        return {"msg": _("The field for the index management doesn't exists in the system")}, 404
+    from archihub.api.forms.services import resources_schema
+    from archihub.core.errors import ValidationError
 
-    mapping = build_resources_mapping(schema.get("data") or {})
+    # Built from the forms as they are now, never from a stored copy: the
+    # mapping must describe the fields the forms declare at the moment of the
+    # rebuild, and a copy is only as current as whatever last wrote it.
+    try:
+        schema = resources_schema()
+    except ValidationError as exc:
+        return {"msg": exc.message}, 400
+
+    mapping = build_resources_mapping(schema)
 
     return _queue(
         regenerate_index_task,

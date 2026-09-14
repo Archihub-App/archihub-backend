@@ -9,6 +9,7 @@ neither of them.
 
 from __future__ import annotations
 
+import base64
 import logging
 
 from archihub.api.search import query as query_builder
@@ -173,7 +174,13 @@ def search(body: dict, user: str | None, *, public: bool) -> tuple[dict, int]:
         # and field mappings.
         return {"msg": _("The search could not be completed")}, 502
 
-    response = shape(raw, body, view=body.get("viewType") or "list")
+    view = body.get("viewType") or "list"
+    response = shape(raw, body, view=view)
+    try:
+        attach_previews(response["resources"], view, user=user, public=public)
+    except Exception:
+        # A card without its images is still a result; the search stands.
+        logger.warning("Could not attach image previews to search results", exc_info=True)
     _audit(user, body)
     return response, 200
 
@@ -237,6 +244,154 @@ def shape(raw: dict, body: dict, *, view: str) -> dict:
                 resource["article"] = article[: query_builder.ARTICLE_EXCERPT] + "..."
 
     return {"total": total, "resources": resources}
+
+
+# ---------------------------------------------------------------------------
+# Image previews
+# ---------------------------------------------------------------------------
+
+#: How many images a gallery card stacks.
+GALLERY_PREVIEWS = 3
+
+#: Derivative suffix per preview size, as filesProcessing writes them.
+PREVIEW_SUFFIXES = {"small": "_small.jpg", "medium": "_medium.jpg"}
+
+#: Record fields the preview needs: the derivative's path, and what the record
+#: access rules read.
+_PREVIEW_FIELDS = {
+    "processing.fileProcessing": 1,
+    "accessRights": 1,
+    "parent": 1,
+    "temporary": 1,
+    "createdBy": 1,
+    "updatedBy": 1,
+}
+
+
+def attach_previews(resources: list[dict], view: str, *, user: str | None, public: bool) -> None:
+    """Embed the images gallery and blog cards draw, as ``data:`` URIs.
+
+    A card cannot fetch them itself: they are CSS backgrounds, which carry no
+    Authorization header. So each image is read here, and only when the record
+    access rules let this caller see it. In the gallery a record the caller may
+    not see is removed from ``records``, not merely left without an image, so
+    its id is not disclosed either.
+    """
+    if view not in ("gallery", "blog") or not resources:
+        return
+
+    visible = _record_visibility(user, public)
+
+    if view == "gallery":
+        candidates = []
+        for resource in resources:
+            images = [e for e in _record_entries(resource) if e.get("type") == "image"]
+            resource["files"] = len(images)
+            candidates.append(images)
+        found = _collect_previews(candidates, GALLERY_PREVIEWS, "small", visible)
+        for resource, previews in zip(resources, found):
+            resource["records"] = previews
+        return
+
+    candidates = [
+        [e for e in _record_entries(resource) if e.get("tag") == "thumbnail"]
+        for resource in resources
+    ]
+    found = _collect_previews(candidates, 1, "medium", visible)
+    for resource, previews in zip(resources, found):
+        if previews:
+            resource["thumbnail"] = previews[0]["file"]
+
+
+def _record_entries(resource: dict) -> list[dict]:
+    return [e for e in resource.get("records") or [] if isinstance(e, dict) and e.get("id")]
+
+
+def _record_visibility(user: str | None, public: bool):
+    from archihub.api.records import access
+
+    if public or user is None:
+        return access.is_public
+
+    from archihub.api.users.services import has_role
+
+    is_admin = has_role(user, "admin")
+    return lambda record: access.may_view_record(user, record, is_admin)
+
+
+def _collect_previews(candidates: list[list[dict]], wanted: int, size: str, visible) -> list[list[dict]]:
+    """Up to ``wanted`` visible entries with a readable image, per resource, in order.
+
+    Records are read in one batch per round: each round asks only for as many
+    of each resource's next candidates as it still lacks, so a resource whose
+    first images are hidden is topped up from the ones after them, and a
+    resource with hundreds of images costs no more than it needs.
+    """
+    queues = [list(entries) for entries in candidates]
+    found: list[list[dict]] = [[] for _ in candidates]
+
+    while True:
+        batch: dict[int, list[dict]] = {}
+        for index, queue in enumerate(queues):
+            missing = wanted - len(found[index])
+            if missing > 0 and queue:
+                batch[index], queue[:] = queue[:missing], queue[missing:]
+        if not batch:
+            return found
+
+        records = _load_records([str(e["id"]) for entries in batch.values() for e in entries])
+        for index, entries in batch.items():
+            for entry in entries:
+                record = records.get(str(entry["id"]))
+                if record is None or not visible(record):
+                    continue
+                data = _preview_data(record, size)
+                if data is not None:
+                    found[index].append({**entry, "file": data})
+
+
+def _load_records(ids: list[str]) -> dict[str, dict]:
+    from bson.objectid import ObjectId
+
+    object_ids = []
+    for record_id in ids:
+        try:
+            object_ids.append(ObjectId(record_id))
+        except Exception:
+            continue
+    if not object_ids:
+        return {}
+
+    found = _mongo().get_all_records(
+        "records", {"_id": {"$in": object_ids}}, fields=_PREVIEW_FIELDS
+    )
+    return {str(record["_id"]): record for record in found}
+
+
+def _preview_data(record: dict, size: str) -> str | None:
+    """The image derivative at ``size`` as a data URI, or ``None``.
+
+    The stored path is resolved under the web files root and the suffix comes
+    from a fixed map, so nothing read from the record can name a file outside it.
+    """
+    from archihub.core import files as filestore
+    from archihub.core.settings import get_settings
+
+    processing = record.get("processing")
+    entry = processing.get("fileProcessing") if isinstance(processing, dict) else None
+    if not isinstance(entry, dict) or entry.get("type") != "image":
+        return None
+    stored = entry.get("path")
+    if not isinstance(stored, str) or not stored:
+        return None
+
+    try:
+        path = filestore.resolve_within(get_settings().web_files_path, stored + PREVIEW_SUFFIXES[size])
+        data = path.read_bytes()
+    except (filestore.UnsupportedFile, OSError):
+        return None
+
+    return "data:image/jpeg;base64," + base64.b64encode(data).decode("ascii")
 
 
 def _right_terms() -> dict[str, str]:

@@ -393,6 +393,85 @@ def test_a_file_is_classified_by_allowlist_not_by_substring(mime, path, expected
     assert classify(mime, path) == expected
 
 
+@pytest.fixture
+def processing_run(monkeypatch):
+    """filesProcessing with processing and the reindex it triggers stubbed."""
+    import types
+
+    import archihub.plugins.filesProcessing as files_processing
+    from archihub.worker.tasks import indexing
+
+    state = types.SimpleNamespace(reindexed=[], outcome={})
+
+    def process(record):
+        outcome = state.outcome.get(record["_id"], True)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(files_processing, "process_record", process)
+    monkeypatch.setattr("archihub.api.search.services.indexing_enabled", lambda: True)
+    monkeypatch.setattr(indexing, "index_resources_task", lambda body: state.reindexed.append(body))
+    state.run = files_processing._process_all
+    return state
+
+
+def _file(record_id, *parents):
+    return {"_id": record_id, "parent": [{"id": p, "post_type": "gallery"} for p in parents]}
+
+
+def test_resources_are_reindexed_once_their_files_are_processed(processing_run):
+    """A resource's search document lists only processed files, and it is
+    written when the resource is saved - before processing - so an image search
+    cannot find the resource until the document is rebuilt."""
+    from bson.objectid import ObjectId
+
+    first, second = str(ObjectId()), str(ObjectId())
+
+    processed = processing_run.run([_file("r1", first), _file("r2", first, second)])
+
+    assert processed == 2
+    assert processing_run.reindexed == [{"_id": {"$in": sorted([ObjectId(first), ObjectId(second)])}}]
+
+
+def test_only_resources_with_a_processed_file_are_reindexed(processing_run):
+    from bson.objectid import ObjectId
+
+    from archihub.plugins.filesProcessing import media
+
+    done, skipped, failed = str(ObjectId()), str(ObjectId()), str(ObjectId())
+    processing_run.outcome = {"r2": False, "r3": media.ProcessingFailed("no")}
+
+    processing_run.run([_file("r1", done), _file("r2", skipped), _file("r3", failed)])
+
+    assert processing_run.reindexed == [{"_id": {"$in": [ObjectId(done)]}}]
+
+
+def test_nothing_is_reindexed_when_nothing_was_processed_or_indexing_is_off(processing_run, monkeypatch):
+    from bson.objectid import ObjectId
+
+    processing_run.outcome = {"r1": False}
+    processing_run.run([_file("r1", str(ObjectId()))])
+    assert processing_run.reindexed == []
+
+    monkeypatch.setattr("archihub.api.search.services.indexing_enabled", lambda: False)
+    processing_run.run([_file("r2", str(ObjectId()))])
+    assert processing_run.reindexed == []
+
+
+def test_a_failed_reindex_does_not_fail_the_processing_run(processing_run, monkeypatch):
+    from bson.objectid import ObjectId
+
+    from archihub.worker.tasks import indexing
+
+    def unavailable(body):
+        raise ConnectionError("search is down")
+
+    monkeypatch.setattr(indexing, "index_resources_task", unavailable)
+
+    assert processing_run.run([_file("r1", str(ObjectId()))]) == 1
+
+
 def test_a_raw_image_is_derived_from_decoded_sensor_data(tmp_path, monkeypatch):
     """A RAW file never reaches vips' file loaders, which cannot decode it."""
     import sys

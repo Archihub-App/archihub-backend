@@ -257,14 +257,19 @@ def _apply_filters(query: dict, body: dict) -> None:
         filters.append({"range": {destiny: {"gte": span[0], "lte": span[1]}}})
 
 
+#: The field gallery and blog cards are labelled with. Those views render it
+#: whatever columns are active, so it is always part of what they fetch.
+TITLE_FIELD = "metadata.firstLevel.title"
+
+
 def _apply_view(query: dict, body: dict, view: str, size: int, offset: int) -> None:
     """Each view adds the fields it renders and the filter that makes it meaningful."""
     if view == "gallery":
-        query["_source"] = [*query["_source"], "records"]
+        query["_source"] = list(dict.fromkeys([*query["_source"], TITLE_FIELD, "records"]))
         query["query"]["bool"]["filter"].append({"term": {"records.type.keyword": "image"}})
 
     elif view == "blog":
-        query["_source"] = [*query["_source"], "article", "records"]
+        query["_source"] = list(dict.fromkeys([*query["_source"], TITLE_FIELD, "article", "records"]))
         query["query"]["bool"]["filter"].append(
             {
                 "bool": {

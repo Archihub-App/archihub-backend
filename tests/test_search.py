@@ -229,6 +229,21 @@ def test_the_gallery_view_filters_to_images():
     assert {"term": {"records.type.keyword": "image"}} in built["query"]["bool"]["filter"]
 
 
+@pytest.mark.parametrize("view", ["gallery", "blog"])
+def test_a_card_view_fetches_the_title_whatever_columns_are_active(view):
+    """The card is labelled with the title; without it every card reads 'untitled'."""
+    built = _build({"post_type": ["x"], "viewType": view})
+
+    assert query.TITLE_FIELD in built["_source"]
+    assert len(built["_source"]) == len(set(built["_source"]))
+
+
+def test_the_list_view_returns_only_the_columns_asked_for():
+    built = _build({"post_type": ["x"], "viewType": "list"})
+
+    assert query.TITLE_FIELD not in built["_source"]
+
+
 def test_the_blog_view_requires_an_article_and_sorts_newest_first():
     built = _build({"post_type": ["x"], "viewType": "blog"})
 
@@ -296,6 +311,143 @@ def test_a_blog_article_is_excerpted_unless_the_caller_asked_for_all_of_it(right
 
 def test_an_empty_response_is_a_zero_total(rights):
     assert services.shape({}, {}, view="list") == {"total": 0, "resources": []}
+
+
+# ---------------------------------------------------------------------------
+# Image previews on gallery and blog cards
+# ---------------------------------------------------------------------------
+
+
+def _image(record_id, visible=True, kind="image"):
+    return {
+        "_id": record_id,
+        "visible": visible,
+        "processing": {"fileProcessing": {"type": kind, "path": f"2026/09/{record_id}"}},
+    }
+
+
+@pytest.fixture
+def previews(monkeypatch, tmp_path):
+    """Stored records, their derivatives on disk, and the record access rules."""
+    import types
+
+    from archihub.api.records import access
+    from archihub.core import settings as settings_module
+
+    state = types.SimpleNamespace(records={}, batches=[])
+
+    def load(ids):
+        state.batches.append(list(ids))
+        return {i: state.records[i] for i in ids if i in state.records}
+
+    def add(*records):
+        for record in records:
+            state.records[record["_id"]] = record
+            for suffix in services.PREVIEW_SUFFIXES.values():
+                path = tmp_path / f"{record['processing']['fileProcessing']['path']}{suffix}"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(f"{record['_id']}{suffix}".encode())
+
+    state.add = add
+    monkeypatch.setattr(services, "_load_records", load)
+    monkeypatch.setattr(settings_module, "get_settings", lambda: types.SimpleNamespace(web_files_path=str(tmp_path)))
+    monkeypatch.setattr(access, "may_view_record", lambda user, record, is_admin: record["visible"])
+    monkeypatch.setattr(access, "is_public", lambda record: record["visible"])
+    monkeypatch.setattr("archihub.api.users.services.has_role", lambda user, role: False)
+    return state
+
+
+def _data_uri(record_id, suffix):
+    import base64
+
+    return "data:image/jpeg;base64," + base64.b64encode(f"{record_id}{suffix}".encode()).decode()
+
+
+def _entries(*ids, kind="image", tag="Archivos asociados"):
+    return [{"id": i, "type": kind, "tag": tag} for i in ids]
+
+
+def test_a_gallery_card_gets_its_first_three_visible_images_as_data(previews):
+    previews.add(_image("a"), _image("b", visible=False), _image("c"), _image("d"), _image("e"))
+    resource = {"records": [*_entries("a", "b"), *_entries("doc", kind="document"), *_entries("c", "d", "e")]}
+
+    services.attach_previews([resource], "gallery", user="someone", public=False)
+
+    assert [r["id"] for r in resource["records"]] == ["a", "c", "d"]
+    assert resource["records"][0]["file"] == _data_uri("a", "_small.jpg")
+    assert resource["files"] == 5
+
+
+def test_a_record_the_caller_may_not_see_is_not_disclosed(previews):
+    previews.add(_image("hidden", visible=False))
+    resource = {"records": _entries("hidden")}
+
+    services.attach_previews([resource], "gallery", user="someone", public=False)
+
+    assert resource["records"] == []
+
+
+def test_images_hidden_from_the_caller_are_topped_up_from_the_ones_after_them(previews):
+    previews.add(*(_image(i, visible=False) for i in "abc"), _image("d"), _image("e"))
+    resource = {"records": _entries("a", "b", "c", "d", "e")}
+
+    services.attach_previews([resource], "gallery", user="someone", public=False)
+
+    assert [r["id"] for r in resource["records"]] == ["d", "e"]
+    assert previews.batches == [["a", "b", "c"], ["d", "e"]]
+
+
+def test_one_read_serves_every_card_on_the_page(previews):
+    previews.add(*(_image(i) for i in "abcdef"))
+    resources = [{"records": _entries("a", "b", "c")}, {"records": _entries("d", "e", "f")}]
+
+    services.attach_previews(resources, "gallery", user="someone", public=False)
+
+    assert len(previews.batches) == 1
+
+
+def test_an_anonymous_caller_is_judged_by_the_public_rule(previews, monkeypatch):
+    from archihub.api.records import access
+
+    def refuse(*args):
+        raise AssertionError("the authenticated rule was applied to an anonymous caller")
+
+    monkeypatch.setattr(access, "may_view_record", refuse)
+    previews.add(_image("a"), _image("b", visible=False))
+    resource = {"records": _entries("a", "b")}
+
+    services.attach_previews([resource], "gallery", user=None, public=True)
+
+    assert [r["id"] for r in resource["records"]] == ["a"]
+
+
+def test_a_stored_path_outside_the_web_root_yields_no_image(previews):
+    record = _image("a")
+    previews.add(record)
+    record["processing"]["fileProcessing"]["path"] = "../../../etc/passwd"
+    resource = {"records": _entries("a")}
+
+    services.attach_previews([resource], "gallery", user="someone", public=False)
+
+    assert resource["records"] == []
+
+
+def test_a_blog_card_gets_its_thumbnail_at_medium_size(previews):
+    previews.add(_image("cover"), _image("other"))
+    resource = {"records": [*_entries("other"), *_entries("cover", tag="thumbnail")]}
+
+    services.attach_previews([resource], "blog", user="someone", public=False)
+
+    assert resource["thumbnail"] == _data_uri("cover", "_medium.jpg")
+    assert len(resource["records"]) == 2
+
+
+def test_the_list_view_reads_no_images(previews):
+    resource = {"records": _entries("a")}
+
+    services.attach_previews([resource], "list", user="someone", public=False)
+
+    assert previews.batches == []
 
 
 # ---------------------------------------------------------------------------

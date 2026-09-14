@@ -88,7 +88,9 @@ def index_resources_task(body: dict | None = None) -> str:
     from archihub.core.i18n import gettext as _
 
     body = body or {}
-    filters = {"_id": ObjectId(body["_id"])} if "_id" in body else dict(body)
+    # A string `_id` names one resource; anything else under `_id` is already a
+    # filter clause (an `$in` over several) and is passed through as one.
+    filters = {"_id": ObjectId(body["_id"])} if isinstance(body.get("_id"), str) else dict(body)
     full_rebuild = not filters
 
     client = _client()

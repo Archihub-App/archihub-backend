@@ -402,7 +402,7 @@ def automatic_task(type_config: dict, body: dict) -> str:
                 "parent.id": {"$in": [str(resource_id)]},
                 f"processing.{PROCESSING_KEY}": {"$exists": False},
             },
-            fields={"_id": 1, "mime": 1, "filepath": 1},
+            fields={"_id": 1, "mime": 1, "filepath": 1, "parent": 1},
         )
     )
 
@@ -444,19 +444,68 @@ def bulk_task(body: dict, user: str) -> str:
 
 
 def _process_all(records: list[dict]) -> int:
-    """Process each record, counting successes. One failure does not stop the rest."""
+    """Process each record, counting successes. One failure does not stop the rest.
+
+    The resources whose files were processed are reindexed afterwards.
+    """
     processed = 0
+    touched: set[str] = set()
     for record in records:
         try:
             if process_record(record):
                 processed += 1
+                touched.update(_parent_ids(record))
         except media.ProcessingFailed as exc:
             # Logged with the record id, which the original's bare `print(str(e))`
             # did not carry - so a failed derivative could not be traced to a file.
             logger.warning("Record %s: %s", record.get("_id"), exc)
         except Exception:
             logger.exception("Unexpected failure processing record %s", record.get("_id"))
+
+    _reindex(touched)
     return processed
+
+
+def _parent_ids(record: dict) -> list[str]:
+    return [
+        str(parent["id"])
+        for parent in record.get("parent") or []
+        if isinstance(parent, dict) and parent.get("id")
+    ]
+
+
+def _reindex(resource_ids: set[str]) -> None:
+    """Rebuild the search documents of resources whose files were just processed.
+
+    A resource's search document lists its files by processing type, and an
+    unprocessed file is left out of that list. The document is written when the
+    resource is saved - normally before its files have been processed - so
+    until it is rebuilt here, a gallery search, which finds resources through
+    their image files, does not find it.
+
+    Never fatal: the derivatives are written either way, and a stale document
+    is corrected by the next save or a full reindex.
+    """
+    if not resource_ids:
+        return
+
+    try:
+        from bson.objectid import ObjectId
+
+        from archihub.api.search.services import indexing_enabled
+
+        if not indexing_enabled():
+            return
+
+        object_ids = [ObjectId(i) for i in sorted(resource_ids) if ObjectId.is_valid(i)]
+        if not object_ids:
+            return
+
+        from archihub.worker.tasks.indexing import index_resources_task
+
+        index_resources_task({"_id": {"$in": object_ids}})
+    except Exception:
+        logger.warning("Could not reindex resources after processing their files", exc_info=True)
 
 
 def _records_for(resources: list[dict], *, overwrite: bool) -> list[dict]:
@@ -466,7 +515,7 @@ def _records_for(resources: list[dict], *, overwrite: bool) -> list[dict]:
 
     return list(
         _mongo().get_all_records(
-            "records", filters, fields={"_id": 1, "mime": 1, "filepath": 1}
+            "records", filters, fields={"_id": 1, "mime": 1, "filepath": 1, "parent": 1}
         )
     )
 

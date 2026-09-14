@@ -214,6 +214,28 @@ def test_a_single_id_run_indexes_only_that_resource(stubbed, monkeypatch):
     assert [doc_id for doc_id, _ in client.written] == [str(oid)]
 
 
+def test_an_id_clause_is_used_as_a_filter_rather_than_parsed_as_one_id(stubbed, monkeypatch):
+    """Reindexing several resources at once passes `{"_id": {"$in": [...]}}`."""
+    from bson.objectid import ObjectId
+
+    wanted = [ObjectId(), ObjectId()]
+    rows = [{"_id": oid, "post_type": "fondo", "status": "published"} for oid in wanted]
+    mongo, client = stubbed(FakeMongo(resources=rows), FakeSearch())
+    seen = []
+
+    def get_all_records(collection, query, **kwargs):
+        seen.append(query)
+        return rows if kwargs.get("limit") and "$and" not in query else []
+
+    monkeypatch.setattr(mongo, "get_all_records", get_all_records)
+
+    indexing.index_resources_task({"_id": {"$in": wanted}})
+
+    assert client.cleared == []
+    assert {doc_id for doc_id, _ in client.written} == {str(oid) for oid in wanted}
+    assert seen[0] == {"_id": {"$in": wanted}}
+
+
 # ---------------------------------------------------------------------------
 # What happens to what fails
 # ---------------------------------------------------------------------------

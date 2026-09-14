@@ -29,19 +29,23 @@ def recorded(monkeypatch):
     return state
 
 
-def _indexing(monkeypatch, *, present=True, enabled=True, schema=True):
-    """Stub the two settings lookups the guards read."""
+def _indexing(monkeypatch, *, present=True, enabled=True, schema=None):
+    """Stub the settings lookups the guards read, and the forms' combined schema."""
     def get_setting(name):
         if name == "index_management":
             return {"name": name, "data": []} if present else None
-        if name == "resources-schema":
-            return {"name": name, "data": {}} if schema else None
         return None
+
+    def combined_schema():
+        if isinstance(schema, Exception):
+            raise schema
+        return schema or {}
 
     monkeypatch.setattr(services, "get_setting", get_setting)
     monkeypatch.setattr(
         services, "get_setting_value", lambda name, entry, fallback=None: enabled
     )
+    monkeypatch.setattr("archihub.api.forms.services.resources_schema", combined_schema)
 
 
 # ---------------------------------------------------------------------------
@@ -64,12 +68,27 @@ def test_regenerating_with_indexing_switched_off_is_a_400(monkeypatch, recorded)
     assert services.regenerate_index("root")[1] == 400
 
 
-def test_regenerating_without_a_stored_schema_is_a_404_not_a_500(monkeypatch, recorded):
-    """The original subscripted the record straight away, so a missing schema
-    was a TypeError reported as a 500 with the raw message."""
-    _indexing(monkeypatch, schema=False)
+def test_regenerating_needs_no_stored_schema_document(monkeypatch, recorded):
+    """The mapping is built from the forms, so an instance whose schema was never
+    written to the `system` collection can still regenerate its index."""
+    _indexing(monkeypatch, schema={"metadata": {"firstLevel": {"title": {"type": "text"}}}})
+    monkeypatch.setattr(
+        "archihub.worker.tasks.indexing.regenerate_index_task.delay", lambda *a: Queued()
+    )
 
-    assert services.regenerate_index("root")[1] == 404
+    assert services.regenerate_index("root")[1] == 200
+
+
+def test_forms_that_conflict_refuse_the_rebuild_with_the_reason(monkeypatch, recorded):
+    from archihub.core.errors import ValidationError
+
+    _indexing(monkeypatch, schema=ValidationError("the field metadata.x has two different types"))
+
+    payload, status = services.regenerate_index("root")
+
+    assert status == 400
+    assert "metadata.x" in payload["msg"]
+    assert recorded["recorded"] == []
 
 
 def test_indexing_resources_with_indexing_switched_off_is_a_400(monkeypatch, recorded):
@@ -144,7 +163,7 @@ def test_bookkeeping_failure_does_not_fail_a_job_that_is_already_queued(monkeypa
 
 
 def test_regenerating_passes_the_built_mapping_to_the_task(monkeypatch, recorded):
-    _indexing(monkeypatch)
+    _indexing(monkeypatch, schema={"metadata": {"firstLevel": {"title": {"type": "text"}}}})
     sent = {}
 
     def capture(mapping, user):
@@ -157,6 +176,7 @@ def test_regenerating_passes_the_built_mapping_to_the_task(monkeypatch, recorded
     services.regenerate_index("root")
 
     assert "properties" in sent["mapping"]
+    assert "metadata" in sent["mapping"]["properties"]
     assert sent["user"] == "root"
 
 

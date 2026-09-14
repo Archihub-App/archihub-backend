@@ -324,6 +324,37 @@ def update_main_schema(new_form: dict | None = None, updated_form: dict | None =
     return schema
 
 
+def resources_schema() -> dict:
+    """Every form's fields combined, nested by destiny: ``{"metadata": {"firstLevel": {"title": {"type": "text"}}}}``.
+
+    What the resources index mapping is built from. It is read from the forms at
+    the moment it is needed, so a form created, changed or deleted since is
+    reflected without anything having to keep a stored copy current.
+
+    Raises ``ValidationError`` when two forms declare one destiny with
+    conflicting types, as saving either form would.
+    """
+    nested: dict = {}
+    for destiny, field_type in update_main_schema().items():
+        if field_type in INTERCHANGEABLE_TYPES:
+            field_type = "select"
+
+        *groups, leaf = destiny.split(".")
+        node = nested
+        for key in groups:
+            child = node.get(key)
+            if not isinstance(child, dict):
+                child = node[key] = {}
+            node = child
+        entry = node.get(leaf)
+        if isinstance(entry, dict):
+            entry["type"] = field_type
+        else:
+            node[leaf] = {"type": field_type}
+
+    return nested
+
+
 # ---------------------------------------------------------------------------
 # Writes
 # ---------------------------------------------------------------------------

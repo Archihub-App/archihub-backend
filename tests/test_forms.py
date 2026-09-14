@@ -225,6 +225,40 @@ def test_a_form_does_not_conflict_with_its_own_previous_definition(mongo):
     services.update_main_schema(updated_form=updated)  # must not raise
 
 
+def test_the_resources_schema_nests_every_forms_fields_by_destiny(mongo):
+    """What the index mapping is built from, read straight from the forms."""
+    mongo.collections["forms"] = [
+        {"slug": "a", "fields": [title_field(), {"destiny": "metadata.firstLevel.date", "type": "simple-date"}]},
+        {"slug": "b", "fields": [
+            {"destiny": "metadata.secondLevel.place", "type": "location"},
+            {"destiny": "metadata.firstLevel.kind", "type": "select-multiple2"},
+            {"name": "sep", "type": "separator"},
+            {"destiny": "files", "type": "file"},
+        ]},
+    ]
+
+    assert services.resources_schema() == {
+        "metadata": {
+            "firstLevel": {
+                "title": {"type": "text"},
+                "date": {"type": "simple-date"},
+                "kind": {"type": "select"},
+            },
+            "secondLevel": {"place": {"type": "location"}},
+        }
+    }
+
+
+def test_the_resources_schema_refuses_forms_that_conflict(mongo):
+    mongo.collections["forms"] = [
+        {"slug": "a", "fields": [{"destiny": "metadata.x", "type": "text"}]},
+        {"slug": "b", "fields": [{"destiny": "metadata.x", "type": "number"}]},
+    ]
+
+    with pytest.raises(ValidationError):
+        services.resources_schema()
+
+
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------

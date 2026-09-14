@@ -6,9 +6,9 @@ as one 130-line function that built a mapping and dispatched a Celery task; they
 are separated here because the mapping is a pure function of the stored schema
 and is the only part worth testing.
 
-WHERE THE SCHEMA COMES FROM. The `resources-schema` document in the `system`
-collection is maintained by the forms builder: it records, for every metadata
-field any content type declares, what kind of field it is. This turns that into
+WHERE THE SCHEMA COMES FROM. ``forms.services.resources_schema`` combines every
+stored form into one nested schema recording, for every metadata field any
+content type declares, what kind of field it is. This turns that into
 Elasticsearch field types. A field kind this does not recognise is DROPPED from
 the mapping rather than guessed at - Elasticsearch would otherwise infer a type
 from the first document that carried it, and the guess sticks until the next
@@ -110,7 +110,7 @@ def _map_field(definition: object, path: str) -> dict | None:
 def build_resources_mapping(schema: dict) -> dict:
     """The full ``mappings`` body for the resources index.
 
-    ``schema`` is the ``data`` of the `resources-schema` system document.
+    ``schema`` is what ``forms.services.resources_schema`` returns.
     """
     properties = {
         key: mapped
