@@ -442,6 +442,25 @@ def test_a_blog_card_gets_its_thumbnail_at_medium_size(previews):
     assert len(resource["records"]) == 2
 
 
+def test_a_blog_card_without_a_tagged_thumbnail_uses_its_first_visible_image(previews):
+    """No form in a default install declares a `thumbnail` file tag, so without
+    this fallback no blog card would ever have an image."""
+    previews.add(_image("hidden", visible=False), _image("first"), _image("second"))
+    resource = {"records": [*_entries("doc", kind="document"), *_entries("hidden", "first", "second")]}
+
+    services.attach_previews([resource], "blog", user=None, public=True)
+
+    assert resource["thumbnail"] == _data_uri("first", "_medium.jpg")
+
+
+def test_a_blog_card_with_no_image_has_no_thumbnail(previews):
+    resource = {"records": _entries("doc", kind="document")}
+
+    services.attach_previews([resource], "blog", user=None, public=True)
+
+    assert "thumbnail" not in resource
+
+
 def test_the_list_view_reads_no_images(previews):
     resource = {"records": _entries("a")}
 

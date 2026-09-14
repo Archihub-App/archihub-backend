@@ -26,6 +26,7 @@ class FakeMongo:
         self.type: dict | None = None
         self.user: dict | None = None
         self.writes: list[tuple[dict, dict]] = []
+        self.hooks: list[tuple[str, dict]] = []
 
     def get_record(self, collection, filters=None, fields=None):
         if collection == "post_types":
@@ -48,6 +49,7 @@ def mongo(monkeypatch):
     monkeypatch.setattr(article.access, "_mongo", lambda: fake)
     monkeypatch.setattr(article.hierarchy, "_mongo", lambda: fake)
     monkeypatch.setattr(article, "_audit", lambda user, details: None)
+    monkeypatch.setattr(article, "_call_hook", lambda name, payload: fake.hooks.append((name, payload)))
     return fake
 
 
@@ -246,6 +248,39 @@ def test_only_the_article_and_its_audit_fields_are_written(mongo):
     _filters, written = mongo.writes[0]
     assert set(written) == {"articleBody", "updatedAt", "updatedBy"}
     assert written["updatedBy"] == "alice"
+
+
+def test_saving_an_article_fires_the_resource_update_hook(mongo):
+    """The search document carries the article's text; without the hook it is
+    never rebuilt, and the blog view - which lists only indexed articles - does
+    not find the resource."""
+    mongo.resource = resource(createdBy="alice")
+    mongo.user = {"accessRights": []}
+    mongo.type = {"editRoles": [], "viewRoles": []}
+
+    _payload, status = article.update_article_body(VALID_ID, {"articleBody": [{"id": "b1"}]}, "alice")
+
+    assert status == 200
+    assert mongo.hooks == [("resource_update", {"_id": VALID_ID, "post_type": "foto"})]
+
+
+@pytest.mark.parametrize("body", [{}, {"articleBody": "text"}])
+def test_a_rejected_article_save_fires_no_hook(mongo, body):
+    mongo.resource = resource(createdBy="alice")
+
+    article.update_article_body(VALID_ID, body, "alice")
+
+    assert mongo.hooks == []
+
+
+def test_a_refused_article_save_fires_no_hook(mongo):
+    mongo.resource = resource(createdBy="owner")
+    mongo.user = {"accessRights": []}
+    mongo.type = {"editRoles": [], "viewRoles": []}
+
+    article.update_article_body(VALID_ID, {"articleBody": [{"id": "b1"}]}, "stranger")
+
+    assert mongo.hooks == []
 
 
 def test_a_missing_article_body_is_rejected(mongo):

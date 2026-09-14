@@ -179,6 +179,10 @@ def update_article_body(resource_id: str, body: dict, user: str) -> tuple[dict, 
 
     _write(resource_id, serialise(article_body), user)
     _audit(user, {"resource": resource_id, "articleBody": article_body})
+    # An article save is a resource update like any other to its subscribers:
+    # the search document carries the article's text, and the blog view lists
+    # only resources whose indexed article is not empty.
+    _call_hook("resource_update", {"_id": str(resource_id), "post_type": resource.get("post_type")})
 
     return {"msg": _("Article body updated")}, 200
 
@@ -305,6 +309,16 @@ def _audit(user: str, details: dict) -> None:
     register_log(user, "resource_article_update", details)
 
 
+def _call_hook(name: str, payload: dict) -> None:
+    """Fire a write hook. Never fatal: the article is already saved."""
+    from archihub.core.hooks import get_hook_handler
+
+    try:
+        get_hook_handler().call(name, payload)
+    except Exception:
+        logger.exception("%s hook failed", name)
+
+
 # ---------------------------------------------------------------------------
 # Reading references out of block content
 # ---------------------------------------------------------------------------
@@ -321,7 +335,9 @@ def _audit(user: str, details: dict) -> None:
 # value propagate - each helper returns empty rather than raising, because one
 # bad block must not take down the article around it.
 
-_DATA_ATTRIBUTE = r'{attribute}="(\[.*?\])"'
+# Either quote character: the editor writes `data-records='[{"id": ...}]'`, JSON
+# inside single quotes, while a sanitiser round trip can re-quote it as `"`.
+_DATA_ATTRIBUTE = r"""{attribute}=(["'])(\[.*?\])\1"""
 _FAVORITE_ID = r'data-favorite-id="([^"]+)"'
 _FAVORITE_SOURCE = r'data-favorite-source="([^"]+)"'
 
@@ -330,7 +346,8 @@ def extract_ids(content, attribute: str) -> list[str]:
     """The id list held in a ``data-…`` attribute of a block's HTML.
 
     Handles both the escaped and unescaped forms, because the value survives a
-    round trip through the editor's sanitiser either way.
+    round trip through the editor's sanitiser either way. Entries are objects
+    carrying an ``id`` (``{"id": ..., "name": ...}``) or bare ids.
     """
     if not content or not isinstance(content, str):
         return []
@@ -346,11 +363,17 @@ def extract_ids(content, attribute: str) -> list[str]:
         if not match:
             continue
         try:
-            parsed = json.loads(html_module.unescape(match.group(1)))
+            parsed = json.loads(html_module.unescape(match.group(2)))
         except (ValueError, TypeError):
             continue
         if isinstance(parsed, list):
-            return [str(item) for item in parsed if isinstance(item, (str, int))]
+            ids = []
+            for item in parsed:
+                if isinstance(item, dict):
+                    item = item.get("id") or item.get("_id")
+                if isinstance(item, (str, int)) and not isinstance(item, bool) and str(item):
+                    ids.append(str(item))
+            return ids
 
     return []
 

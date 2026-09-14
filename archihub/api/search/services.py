@@ -293,10 +293,14 @@ def attach_previews(resources: list[dict], view: str, *, user: str | None, publi
             resource["records"] = previews
         return
 
-    candidates = [
-        [e for e in _record_entries(resource) if e.get("tag") == "thumbnail"]
-        for resource in resources
-    ]
+    # The file tagged `thumbnail` when a form provides one, otherwise the first
+    # image - the same fallback a favourited resource's card uses.
+    candidates = []
+    for resource in resources:
+        entries = _record_entries(resource)
+        tagged = [e for e in entries if e.get("tag") == "thumbnail"]
+        images = [e for e in entries if e.get("type") == "image" and e.get("tag") != "thumbnail"]
+        candidates.append(tagged + images)
     found = _collect_previews(candidates, 1, "medium", visible)
     for resource, previews in zip(resources, found):
         if previews:
