@@ -109,6 +109,7 @@ _EXTENSION_OVERRIDES = {
     ".xls": "spreadsheet",
     ".xlsx": "spreadsheet",
     ".ods": "spreadsheet",
+    **{extension: "image" for extension in media.RAW_EXTENSIONS},
 }
 
 

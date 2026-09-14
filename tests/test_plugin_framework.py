@@ -377,6 +377,12 @@ def test_the_task_picker_is_found_by_id_not_by_position(monkeypatch, mongo):
         ("image/jpeg", "a/b/photo.jfif", "image"),
         ("application/octet-stream", "a/b/photo.jfif", "image"),
         (None, "a/b/photo.jfif", "image"),
+        # Camera RAW sniffs as a TIFF, as a vendor type, or as nothing at all
+        # depending on the format and the libmagic version. The extension decides.
+        ("image/tiff", "a/b/shot.nef", "image"),
+        ("image/x-canon-cr2", "a/b/shot.cr2", "image"),
+        ("application/octet-stream", "a/b/shot.cr3", "image"),
+        (None, "a/b/shot.ARW", "image"),
         ("application/octet-stream", "a/b/thing.bin", None),
         (None, "a/b/thing", None),
     ],
@@ -385,6 +391,49 @@ def test_a_file_is_classified_by_allowlist_not_by_substring(mime, path, expected
     from archihub.plugins.filesProcessing import classify
 
     assert classify(mime, path) == expected
+
+
+def test_a_raw_image_is_derived_from_decoded_sensor_data(tmp_path, monkeypatch):
+    """A RAW file never reaches vips' file loaders, which cannot decode it."""
+    import sys
+    import types
+
+    np = pytest.importorskip("numpy")
+    pyvips = pytest.importorskip("pyvips")
+    from archihub.plugins.filesProcessing import media
+
+    # Portrait pixels, as LibRaw returns them once the orientation is applied.
+    pixels = np.full((60, 40, 3), 128, dtype=np.uint8)
+
+    class FakeRaw:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def postprocess(self, **kwargs):
+            return pixels
+
+    monkeypatch.setitem(sys.modules, "rawpy", types.SimpleNamespace(imread=lambda path: FakeRaw()))
+    monkeypatch.setattr(media, "_exif", lambda source: {"Model": "test"})
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("a RAW file was handed to a vips file loader")
+
+    monkeypatch.setattr(pyvips.Image, "thumbnail", refuse)
+    monkeypatch.setattr(pyvips.Image, "new_from_file", refuse)
+
+    source = tmp_path / "shot.CR2"
+    source.write_bytes(b"not decodable by vips")
+
+    metadata, has_tiles = media.image(source, tmp_path / "shot")
+
+    assert metadata == {"Model": "test"}
+    assert has_tiles is False
+    for suffix, _edge, _quality in media.IMAGE_SIZES:
+        derived = pyvips.Image.new_from_buffer((tmp_path / f"shot{suffix}.jpg").read_bytes(), "")
+        assert derived.height > derived.width
 
 
 def test_hook_order_is_stored_as_a_number(mongo):

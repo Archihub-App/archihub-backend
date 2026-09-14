@@ -49,6 +49,11 @@ DZI_THRESHOLD = 4096
 #: (suffix, longest edge, JPEG quality) for the flat image derivatives.
 IMAGE_SIZES = (("_large", 2500, 90), ("_medium", 1100, 80), ("_small", 110, 80))
 
+#: Camera RAW formats. libvips has no RAW decoder: it opens most of these as the
+#: TIFF container they are, finds only the embedded preview strips, and fails.
+#: They are demosaiced from the sensor data by LibRaw instead.
+RAW_EXTENSIONS = frozenset({".cr2", ".cr3", ".arw", ".srf", ".nef", ".nrw", ".dng"})
+
 #: Rows a CSV/Excel preview keeps. The viewer paginates beyond this from the
 #: full copy; the preview exists so opening a 400MB spreadsheet is not a
 #: 400MB download.
@@ -169,15 +174,23 @@ def image(source: Path, output_stem: Path) -> tuple[dict | None, bool]:
     try:
         metadata = _exif(source)
 
-        for suffix, edge, quality in IMAGE_SIZES:
-            thumbnail = pyvips.Image.thumbnail(str(source), edge)
-            thumbnail.write_to_file(
-                f"{output_stem}{suffix}.jpg", Q=quality, optimize_coding=True
-            )
+        if source.suffix.lower() in RAW_EXTENSIONS:
+            full = _decode_raw(source)
+            for suffix, edge, quality in IMAGE_SIZES:
+                full.thumbnail_image(edge).write_to_file(
+                    f"{output_stem}{suffix}.jpg", Q=quality, optimize_coding=True
+                )
+        else:
+            for suffix, edge, quality in IMAGE_SIZES:
+                thumbnail = pyvips.Image.thumbnail(str(source), edge)
+                thumbnail.write_to_file(
+                    f"{output_stem}{suffix}.jpg", Q=quality, optimize_coding=True
+                )
 
-        # Sequential access: the tiler streams the image rather than holding it,
-        # which is what makes a 2GB TIFF possible at all.
-        full = pyvips.Image.new_from_file(str(source), access="sequential")
+            # Sequential access: the tiler streams the image rather than holding
+            # it, which is what makes a 2GB TIFF possible at all.
+            full = pyvips.Image.new_from_file(str(source), access="sequential")
+
         needs_tiles = max(full.width, full.height) >= DZI_THRESHOLD
         if needs_tiles:
             full.dzsave(f"{output_stem}_tiles")
@@ -185,6 +198,22 @@ def image(source: Path, output_stem: Path) -> tuple[dict | None, bool]:
         raise ProcessingFailed(f"Could not derive images from {source.name}") from exc
 
     return metadata, needs_tiles
+
+
+def _decode_raw(source: Path):
+    """A camera RAW file as an upright 8-bit sRGB vips image.
+
+    LibRaw applies the camera's white balance and the orientation recorded in
+    the file, so the derivatives face the way the photographer held the camera.
+    The decoded image is held in memory; a 60-megapixel frame is under 200MB.
+    """
+    import pyvips
+    import rawpy
+
+    with rawpy.imread(str(source)) as raw:
+        pixels = raw.postprocess(use_camera_wb=True, output_bps=8)
+
+    return pyvips.Image.new_from_array(pixels, interpretation="srgb")
 
 
 def _exif(source: Path) -> dict | None:
