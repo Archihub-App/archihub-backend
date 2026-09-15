@@ -179,6 +179,47 @@ def test_a_dangling_parent_reference_does_not_deny_access(mongo):
     assert status == 200
 
 
+@pytest.fixture
+def role_lookup_forbidden(monkeypatch):
+    def refuse(username, role):
+        raise AssertionError(f"has_role consulted for {username!r}")
+
+    monkeypatch.setattr("archihub.api.users.services.has_role", refuse)
+
+
+def test_no_user_may_read_an_unrestricted_record(mongo, role_lookup_forbidden):
+    mongo.records[RECORD_ID] = record(parent=[{"id": RESOURCE_ID}])
+    mongo.resources[RESOURCE_ID] = {"_id": ObjectId(RESOURCE_ID), "accessRights": None, "parents": []}
+
+    payload, status = services.get_by_id(RECORD_ID, None)
+    assert status == 200
+    assert payload["name"] == "scan.jpg"
+
+
+def test_no_user_is_refused_a_restricted_record(mongo, role_lookup_forbidden):
+    mongo.records[RECORD_ID] = record(accessRights="reserved")
+
+    _payload, status = services.get_by_id(RECORD_ID, None)
+    assert status == services.ROLE_FAILURE_STATUS
+
+
+def test_no_user_is_refused_a_record_filed_under_a_restricted_resource(mongo, role_lookup_forbidden):
+    mongo.records[RECORD_ID] = record(parent=[{"id": RESOURCE_ID}])
+    mongo.resources[RESOURCE_ID] = {
+        "_id": ObjectId(RESOURCE_ID), "accessRights": "reserved", "parents": [],
+    }
+
+    _payload, status = services.get_by_id(RECORD_ID, None)
+    assert status == services.ROLE_FAILURE_STATUS
+
+
+def test_no_user_is_refused_a_temporary_record_without_an_owner(mongo, role_lookup_forbidden):
+    mongo.records[RECORD_ID] = record(temporary=True)
+
+    _payload, status = services.get_by_id(RECORD_ID, None)
+    assert status == services.ROLE_FAILURE_STATUS
+
+
 def test_a_missing_record_is_404(mongo):
     _payload, status = services.get_by_id(RECORD_ID, "alice")
     assert status == 404

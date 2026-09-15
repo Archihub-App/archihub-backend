@@ -125,12 +125,16 @@ def parse_result(result):
 # ---------------------------------------------------------------------------
 
 
-def load_visible(record_id: str, user: str) -> tuple[dict | None, tuple[dict, int] | None]:
+def load_visible(record_id: str, user: str | None) -> tuple[dict | None, tuple[dict, int] | None]:
     """``(record, error)``. Exactly one of them is not ``None``.
 
     Every route that serves a record or something derived from it starts here,
     so the access rule is applied once and the *real* status is what comes back
     - not the blanket 500 the original produced.
+
+    ``user`` may be ``None`` for a caller acting on nobody's behalf: it holds no
+    role and no access right, so it sees only records that restrict nothing,
+    themselves or through where they are filed.
     """
     from archihub.api.users.services import has_role
 
@@ -142,7 +146,8 @@ def load_visible(record_id: str, user: str) -> tuple[dict | None, tuple[dict, in
     if not record:
         return None, ({"msg": _(MSG_NOT_FOUND)}, 404)
 
-    if not access.may_view_record(user, record, has_role(user, "admin")):
+    is_admin = has_role(user, "admin") if user else False
+    if not access.may_view_record(user, record, is_admin):
         logger.info("Denied %s access to record %s", user, record_id)
         return None, ({"msg": _(MSG_UNAUTHORIZED)}, ROLE_FAILURE_STATUS)
 
@@ -154,7 +159,7 @@ def load_visible(record_id: str, user: str) -> tuple[dict | None, tuple[dict, in
 # ---------------------------------------------------------------------------
 
 
-def get_by_id(record_id: str, user: str, full_fields: bool = False) -> tuple[dict, int]:
+def get_by_id(record_id: str, user: str | None, full_fields: bool = False) -> tuple[dict, int]:
     """One record, with its parents resolved for display."""
     record, error = load_visible(record_id, user)
     if error is not None:

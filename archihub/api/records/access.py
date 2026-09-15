@@ -55,18 +55,21 @@ def holds(username: str, required) -> bool:
     return required in held
 
 
-def may_view_record(username: str, record: dict, is_admin: bool) -> bool:
+def may_view_record(username: str | None, record: dict, is_admin: bool) -> bool:
     """Whether this caller may see a record and its derivatives.
 
     Administrators may. Everyone else must hold the record's own access right,
     if it declares one, **and** the effective right of every resource it is
     filed under - a file reachable from a reserved series is reserved, however
-    it was reached.
+    it was reached. A ``None`` caller holds no right at all.
     """
     if is_admin:
         return True
 
     if record.get("temporary"):
+        # A temporary upload belongs to whoever made it; nobody made it for None.
+        if not username:
+            return False
         return record.get("createdBy") == username or record.get("updatedBy") == username
 
     if not holds(username, record.get("accessRights")):
