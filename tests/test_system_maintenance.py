@@ -1,0 +1,255 @@
+"""The admin maintenance routes that queue background tasks.
+
+These are thin, and what matters about them is the three things a thin route can
+still get wrong: refusing when the feature is switched off, saying so when the
+broker is down rather than reporting success, and not failing the request over
+bookkeeping that happens after the work is already queued.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from archihub.api.system import services
+
+
+class Queued:
+    id = "task-id"
+
+
+@pytest.fixture
+def recorded(monkeypatch):
+    """Capture what gets queued and recorded, without a broker or a database."""
+    state = {"queued": [], "recorded": []}
+
+    def record(task_id, name, user, result_type, params=None):
+        state["recorded"].append((task_id, name, user))
+
+    monkeypatch.setattr("archihub.api.tasks.services.add_task", record)
+    return state
+
+
+def _indexing(monkeypatch, *, present=True, enabled=True, schema=None):
+    """Stub the settings lookups the guards read, and the forms' combined schema."""
+    def get_setting(name):
+        if name == "index_management":
+            return {"name": name, "data": []} if present else None
+        return None
+
+    def combined_schema():
+        if isinstance(schema, Exception):
+            raise schema
+        return schema or {}
+
+    monkeypatch.setattr(services, "get_setting", get_setting)
+    monkeypatch.setattr(
+        services, "get_setting_value", lambda name, entry, fallback=None: enabled
+    )
+    monkeypatch.setattr("archihub.api.forms.services.resources_schema", combined_schema)
+
+
+# ---------------------------------------------------------------------------
+# Guards
+# ---------------------------------------------------------------------------
+
+
+def test_regenerating_without_index_settings_is_a_404(monkeypatch, recorded):
+    _indexing(monkeypatch, present=False)
+
+    payload, status = services.regenerate_index("root")
+
+    assert status == 404
+    assert recorded["recorded"] == []
+
+
+def test_regenerating_with_indexing_switched_off_is_a_400(monkeypatch, recorded):
+    _indexing(monkeypatch, enabled=False)
+
+    assert services.regenerate_index("root")[1] == 400
+
+
+def test_regenerating_needs_no_stored_schema_document(monkeypatch, recorded):
+    """The mapping is built from the forms, so an instance whose schema was never
+    written to the `system` collection can still regenerate its index."""
+    _indexing(monkeypatch, schema={"metadata": {"firstLevel": {"title": {"type": "text"}}}})
+    monkeypatch.setattr(
+        "archihub.worker.tasks.indexing.regenerate_index_task.delay", lambda *a: Queued()
+    )
+
+    assert services.regenerate_index("root")[1] == 200
+
+
+def test_forms_that_conflict_refuse_the_rebuild_with_the_reason(monkeypatch, recorded):
+    from archihub.core.errors import ValidationError
+
+    _indexing(monkeypatch, schema=ValidationError("the field metadata.x has two different types"))
+
+    payload, status = services.regenerate_index("root")
+
+    assert status == 400
+    assert "metadata.x" in payload["msg"]
+    assert recorded["recorded"] == []
+
+
+def test_indexing_resources_with_indexing_switched_off_is_a_400(monkeypatch, recorded):
+    _indexing(monkeypatch, enabled=False)
+
+    assert services.index_resources("root")[1] == 400
+
+
+def test_geometry_routes_are_not_gated_on_resource_indexing(monkeypatch, recorded):
+    """Deliberate: the explore map's boundary layer is drawn from Elasticsearch
+    whether or not resource search is on."""
+    _indexing(monkeypatch, enabled=False)
+    monkeypatch.setattr(
+        "archihub.worker.tasks.geometries.index_shapes.delay", lambda *a: Queued()
+    )
+    monkeypatch.setattr(
+        "archihub.worker.tasks.geometries.regenerate_index_shapes.delay", lambda *a: Queued()
+    )
+
+    assert services.index_geometries("root")[1] == 200
+    assert services.regenerate_index_geometries("root")[1] == 200
+
+
+# ---------------------------------------------------------------------------
+# Queueing
+# ---------------------------------------------------------------------------
+
+
+def test_a_queued_job_is_recorded_under_the_requesting_user(monkeypatch, recorded):
+    _indexing(monkeypatch)
+    monkeypatch.setattr(
+        "archihub.worker.tasks.indexing.index_resources_task.delay", lambda *a: Queued()
+    )
+
+    payload, status = services.index_resources("archivist")
+
+    assert status == 200
+    assert recorded["recorded"] == [("task-id", "system.index_resources", "archivist")]
+
+
+def test_a_broker_that_is_down_answers_503_rather_than_success(monkeypatch, recorded):
+    """A queue outage is reported as one, not as a connection error."""
+    _indexing(monkeypatch)
+
+    def explode(*args):
+        raise ConnectionError("redis unreachable")
+
+    monkeypatch.setattr("archihub.worker.tasks.indexing.index_resources_task.delay", explode)
+
+    payload, status = services.index_resources("root")
+
+    assert status == 503
+    assert "redis" not in payload["msg"]
+
+
+def test_bookkeeping_failure_does_not_fail_a_job_that_is_already_queued(monkeypatch):
+    """Telling the operator it had not started, when it had, gets it started
+    twice."""
+    _indexing(monkeypatch)
+    monkeypatch.setattr(
+        "archihub.worker.tasks.indexing.index_resources_task.delay", lambda *a: Queued()
+    )
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("mongo down")
+
+    monkeypatch.setattr("archihub.api.tasks.services.add_task", explode)
+
+    assert services.index_resources("root")[1] == 200
+
+
+def test_regenerating_passes_the_built_mapping_to_the_task(monkeypatch, recorded):
+    _indexing(monkeypatch, schema={"metadata": {"firstLevel": {"title": {"type": "text"}}}})
+    sent = {}
+
+    def capture(mapping, user):
+        sent["mapping"] = mapping
+        sent["user"] = user
+        return Queued()
+
+    monkeypatch.setattr("archihub.worker.tasks.indexing.regenerate_index_task.delay", capture)
+
+    services.regenerate_index("root")
+
+    assert "properties" in sent["mapping"]
+    assert "metadata" in sent["mapping"]["properties"]
+    assert sent["user"] == "root"
+
+
+# ---------------------------------------------------------------------------
+# Generated-file cleanup
+# ---------------------------------------------------------------------------
+
+
+def test_only_the_two_known_directories_can_be_emptied():
+    """The value would reach a filesystem path, so there is nothing safe to
+    pass."""
+    from archihub.api.resources import files
+
+    for rejected in ("../../originals", "userfiles", "", "."):
+        with pytest.raises(ValueError):
+            files.delete_generated(rejected)
+
+
+def test_emptying_removes_files_but_not_subdirectories(monkeypatch, tmp_path):
+    """A subdirectory does not stop the clean-up."""
+    from archihub.api.resources import files
+
+    web = tmp_path / "web"
+    zips = web / "zipfiles"
+    zips.mkdir(parents=True)
+    (zips / "a.zip").write_text("x")
+    (zips / "b.zip").write_text("x")
+    (zips / "nested").mkdir()
+
+    monkeypatch.setenv("WEB_FILES_PATH", str(web))
+    from archihub.core.settings import get_settings
+
+    get_settings.cache_clear()
+    try:
+        payload, status = files.delete_generated("zipfiles")
+    finally:
+        get_settings.cache_clear()
+
+    assert status == 200
+    assert not (zips / "a.zip").exists()
+    assert (zips / "nested").is_dir()
+
+
+def test_a_symlink_is_unlinked_rather_than_followed(monkeypatch, tmp_path):
+    from archihub.api.resources import files
+
+    web = tmp_path / "web"
+    zips = web / "zipfiles"
+    zips.mkdir(parents=True)
+    outside = tmp_path / "originals"
+    outside.mkdir()
+    (outside / "keep.tif").write_text("original")
+    (zips / "link.zip").symlink_to(outside / "keep.tif")
+
+    monkeypatch.setenv("WEB_FILES_PATH", str(web))
+    from archihub.core.settings import get_settings
+
+    get_settings.cache_clear()
+    try:
+        files.delete_generated("zipfiles")
+    finally:
+        get_settings.cache_clear()
+
+    assert (outside / "keep.tif").is_file()
+    assert not (zips / "link.zip").exists()
+
+
+def test_emptying_a_directory_that_does_not_exist_yet_succeeds(monkeypatch, tmp_path):
+    from archihub.api.resources import files
+
+    monkeypatch.setenv("WEB_FILES_PATH", str(tmp_path))
+    from archihub.core.settings import get_settings
+
+    get_settings.cache_clear()
+    try:
+        assert files.delete_generated("inventoryMaker")[1] == 200
+    finally:
+        get_settings.cache_clear()

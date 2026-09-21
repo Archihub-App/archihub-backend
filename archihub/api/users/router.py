@@ -1,0 +1,479 @@
+"""User routes.
+
+A role failure answers 403; 401 is reserved for "I do not know who you are".
+
+ROUTE ORDER MATTERS HERE. Every literal path (`/me`, `/requests`, `/register`,
+`/favorites`, ...) is declared BEFORE `/{user_id}`, or the parameterised route
+would capture them - a GET of `/users/me` would look up a user whose id is the
+string "me".
+
+API-KEY ROUTES: the value returned is the only copy. The server stores a hash,
+so nothing can reproduce it afterwards. See core/security/api_keys.py.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from fastapi import APIRouter, Body, Depends, File, UploadFile
+from fastapi.responses import JSONResponse, Response
+
+from archihub.api.users import services
+from archihub.api.users.schemas import (
+    NamedApiKeyRequest,
+    DeleteUserRequest,
+    FavoriteListRequest,
+    FavoriteRequest,
+    ForgotPasswordRequest,
+    RegisterMeRequest,
+    RegisterRequest,
+    SelfUpdateRequest,
+    UpdateUserRequest,
+    UserListRequest,
+)
+from archihub.core.security.jwt import (
+    ROLE_FAILURE_STATUS,
+    CurrentUser,
+    get_current_user,
+    require_role_any,
+)
+from archihub.core.files import UnsupportedFile, UploadTooLarge
+from archihub.core.i18n import gettext as _
+from archihub.core.responses import file_response, json_response
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/users", tags=["Users"])
+
+require_admin_or_editor = require_role_any(
+    "admin", "editor"
+)
+require_admin = require_role_any("admin")
+require_visualizer = require_role_any("visualizer")
+
+_ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
+        403: {"description": "Insufficient role"}}
+
+
+def _respond(result) -> JSONResponse:
+    """Render a service's ``(payload, status)`` result.
+
+    Through ``core.responses`` rather than ``JSONResponse`` directly: a
+    payload carrying a ``datetime`` or an ``ObjectId`` must not 500.
+    """
+    payload, status_code = result
+    return json_response(payload, status_code)
+
+
+@router.post(
+    "",
+    responses={200: {"description": "Paginated users"}, **_ROLE_RESPONSES},
+)
+def get_all(
+    body: UserListRequest = Body(...),
+    current_user: CurrentUser = Depends(require_admin_or_editor),
+) -> JSONResponse:
+    """List users, filtered and paginated.
+
+    A POST because the filter travels in the body, which is what the frontend
+    sends.
+
+    Filters are reduced to an allowlist of string-equality fields before they
+    reach a query: a client-supplied filter document passed through unchecked
+    lets the caller express arbitrary query operators.
+    """
+    return _respond(services.get_all(body.model_dump(exclude_unset=True), current_user.username))
+
+
+@router.get(
+    "/requests",
+    responses={200: {"description": "The caller's weekly quota usage"}, **_ROLE_RESPONSES},
+)
+def get_requests(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
+    """How much of the caller's weekly public-API quota is used."""
+    return _respond(services.get_requests(current_user.username))
+
+
+@router.get(
+    "/me",
+    responses={
+        200: {"description": "The caller's own profile"},
+        400: {"description": "User does not exist"},
+        **_ROLE_RESPONSES,
+    },
+)
+def get_me(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
+    """The caller's own profile, without the password hash.
+
+    Carries the personal fields and the catalogue counters the profile screen
+    renders. The counters are read here rather than from a route of their own
+    because they are drawn with the rest of the profile and would otherwise be a
+    second request for the same screen.
+    """
+    return _respond(services.get_profile(current_user.username, with_stats=True))
+
+
+# ---------------------------------------------------------------------------
+# Profile photograph
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/me/avatar",
+    responses={
+        200: {"description": "Photo stored; the response carries its URL"},
+        400: {"description": "Not a usable image"},
+        413: {"description": "The image exceeds the size limit"},
+        **_ROLE_RESPONSES,
+    },
+)
+async def set_avatar(
+    file: UploadFile = File(..., description="PNG, JPG or WEBP, at most 5 MB"),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Upload or replace the caller's profile photograph.
+
+    200 rather than 201: the account already exists and this replaces a field on
+    it, so there is no new resource for a caller to have been given.
+
+    The upload is decoded and re-encoded before anything is kept, which is what
+    lets the stored file be served to anonymous browsers - see `avatars.py`.
+    """
+    if not file or not file.filename:
+        return json_response({"msg": _("No file was uploaded")}, 400)
+
+    try:
+        return _respond(
+            services.set_avatar(current_user.username, file.file, file.filename)
+        )
+    except UploadTooLarge as exc:
+        return json_response({"msg": str(exc)}, 413)
+    except UnsupportedFile as exc:
+        return json_response({"msg": str(exc)}, 400)
+
+
+@router.delete(
+    "/me/avatar",
+    responses={200: {"description": "Photo removed"}, **_ROLE_RESPONSES},
+)
+def clear_avatar(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
+    """Remove the caller's profile photograph."""
+    return _respond(services.clear_avatar(current_user.username))
+
+
+@router.get(
+    "/avatar/{filename}",
+    responses={
+        200: {"description": "The image"},
+        404: {"description": "No such photo"},
+    },
+)
+def get_avatar(filename: str) -> Response:
+    """Serve a stored profile photograph.
+
+    UNAUTHENTICATED, deliberately. A browser sends no token with an `<img>`, so
+    an authenticated avatar could not be rendered by the interface that needs
+    it. What that costs is bounded by the name: it is a UUID this server chose,
+    it is not derived from the account, and it changes whenever the photo does -
+    so holding one discloses one image and nothing about who else has an
+    account.
+
+    The name is refused unless it is a bare filename carrying an extension this
+    directory writes, and the type served is read from that extension rather
+    than sniffed, so no stored file can be handed to a browser as a document.
+    """
+    from archihub.api.users import avatars
+
+    try:
+        path = avatars.path_for(filename)
+        return file_response(
+            path,
+            media_type=avatars.media_type_for(filename),
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                # The type above is authoritative. Without this a browser may
+                # sniff the bytes and decide otherwise, which is the whole
+                # reason a re-encoded image is safe to serve from this origin.
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+    except (UnsupportedFile, FileNotFoundError):
+        # One answer for "not a name we serve" and "no such file": neither tells
+        # an anonymous caller anything about what is stored here.
+        return json_response({"msg": _("File not found")}, 404)
+
+
+# ---------------------------------------------------------------------------
+# Favourites
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/favorites",
+    responses={
+        200: {"description": "Favourite added"},
+        400: {"description": "Invalid type, or the resource is not published"},
+        404: {"description": "Resource not found"},
+        **_ROLE_RESPONSES,
+    },
+)
+def set_favorite(
+    body: FavoriteRequest = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Add a resource, record or snap to the caller's favourites.
+
+    ``type`` is a fixed enumeration because it selects the collection to read.
+    """
+    return _respond(services.set_favorite(current_user.username, body.model_dump()))
+
+
+@router.delete(
+    "/favorites",
+    responses={200: {"description": "Favourite removed"}, **_ROLE_RESPONSES},
+)
+def delete_favorite(
+    body: FavoriteRequest = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Remove one of the caller's favourites."""
+    return _respond(services.delete_favorite(current_user.username, body.model_dump()))
+
+
+@router.post(
+    "/favorites_list",
+    responses={200: {"description": "The caller's favourites of one type"}, **_ROLE_RESPONSES},
+)
+def get_favorites(
+    body: FavoriteListRequest = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """List the caller's favourites of a given type."""
+    return _respond(services.get_favorites(current_user.username, body.model_dump()))
+
+
+@router.post(
+    "/snaps",
+    responses={
+        200: {"description": "One page of the caller's snaps of that type"},
+        400: {"description": "Unsupported snap type"},
+        **_ROLE_RESPONSES,
+    },
+)
+def get_snaps(
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """List the caller's own snaps of a given kind, newest first.
+
+    Lives under ``/users`` rather than ``/snaps`` because it is scoped to the
+    caller. The implementation is in the ``snaps`` domain, since that is what it
+    reads.
+    """
+    from archihub.api.snaps import services as snap_services
+
+    return _respond(snap_services.list_for_user(current_user.username, body))
+
+
+# ---------------------------------------------------------------------------
+# Account lifecycle
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/register",
+    status_code=201,
+    responses={201: {"description": "Account created"}, 400: {"description": "Invalid input"}, **_ROLE_RESPONSES},
+)
+def register(
+    body: RegisterRequest = Body(...),
+    current_user: CurrentUser = Depends(require_admin),
+) -> JSONResponse:
+    """Create an account (administrative)."""
+    return _respond(services.register_user(body.model_dump(exclude_unset=True)))
+
+
+@router.post(
+    "/register-me",
+    status_code=201,
+    responses={
+        201: {"description": "Account created, pending verification"},
+        400: {"description": "Registration is disabled, or the account exists"},
+    },
+)
+def register_me(body: RegisterMeRequest = Body(...)) -> JSONResponse:
+    """Self-service registration, when the instance allows it.
+
+    Unauthenticated by necessity. Roles are fixed server-side, so a caller
+    cannot grant themselves anything by what they send.
+    """
+    return _respond(services.register_me(body.model_dump(exclude_unset=True)))
+
+
+@router.post(
+    "/forgot-password",
+    responses={
+        200: {"description": "Processed - the response is the same whether or not the account exists"},
+        400: {"description": "Password recovery is disabled on this instance"},
+    },
+)
+def forgot_password(body: ForgotPasswordRequest = Body(...)) -> JSONResponse:
+    """Begin password recovery.
+
+    Answers identically whether or not the account exists, and whether or not
+    the mail is actually delivered - otherwise the endpoint reports which
+    usernames are registered.
+    """
+    return _respond(services.forgot_password(body.model_dump(exclude_unset=True)))
+
+
+@router.put(
+    "/update",
+    responses={200: {"description": "Account updated"}, 404: {"description": "User not found"}, **_ROLE_RESPONSES},
+)
+def update_user(
+    body: UpdateUserRequest = Body(...),
+    current_user: CurrentUser = Depends(require_admin),
+) -> JSONResponse:
+    """Update another account (administrative)."""
+    payload = body.model_dump(exclude_unset=True, by_alias=True)
+    payload["_id"] = body.id
+    return _respond(services.update_user(payload, current_user.username))
+
+
+@router.delete(
+    "/delete",
+    responses={
+        200: {"description": "Account deleted"},
+        400: {"description": "You cannot delete yourself"},
+        404: {"description": "User does not exist"},
+        **_ROLE_RESPONSES,
+    },
+)
+def delete_user(
+    body: DeleteUserRequest = Body(...),
+    current_user: CurrentUser = Depends(require_admin),
+) -> JSONResponse:
+    """Delete an account and revoke its API keys."""
+    return _respond(services.delete_user(body.model_dump(), current_user.username))
+
+
+@router.put(
+    "/update-me",
+    responses={
+        200: {"description": "Profile updated"},
+        400: {"description": "Incorrect password, or nothing to change"},
+        **_ROLE_RESPONSES,
+    },
+)
+def update_me(
+    body: SelfUpdateRequest = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Update the caller's own profile.
+
+    Requires the current password, and revokes the caller's API keys when the
+    password changes.
+    """
+    return _respond(services.update_me(body.model_dump(exclude_unset=True), current_user.username))
+
+
+@router.get("/compromise", responses={200: {"description": "The caller's profile"}, **_ROLE_RESPONSES})
+def get_compromise(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
+    """Whether the caller has accepted the usage compromise."""
+    return _respond(services.get_profile(current_user.username))
+
+
+@router.get("/acceptcompromise", responses={200: {"description": "Compromise accepted"}, **_ROLE_RESPONSES})
+def accept_compromise(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
+    """Record that the caller accepted the usage compromise."""
+    return _respond(services.accept_compromise(current_user.username))
+
+
+# ---------------------------------------------------------------------------
+# API keys
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/api-keys",
+    status_code=201,
+    responses={
+        201: {"description": "Key created - THIS IS THE ONLY TIME IT IS RETURNED"},
+        400: {"description": "Incorrect password, or an unknown scope"},
+        403: {"description": "The caller may not hold a key of that scope"},
+        **_ROLE_RESPONSES,
+    },
+)
+def create_api_key(
+    body: NamedApiKeyRequest = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Create an API key of any scope the caller is entitled to.
+
+    The general form of the four per-scope routes above, and the one that lets a
+    key be NAMED - which is what makes holding more than one usable, since a
+    person tells keys apart by name and re-issuing replaces the one with the
+    same name.
+
+    The scope requirement is enforced in `services.create_named_key`, not by a
+    dependency here: the scope arrives in the body, and dependencies resolve
+    before the body is read.
+    """
+    from datetime import timedelta
+
+    expires_in = (
+        timedelta(days=body.duration)
+        if isinstance(body.duration, int) and body.duration
+        else None
+    )
+    return _respond(
+        services.create_named_key(
+            current_user.username,
+            body.password,
+            body.scope,
+            name=body.name,
+            expires_in=expires_in,
+        )
+    )
+
+
+@router.get(
+    "/api-keys",
+    responses={200: {"description": "The caller's keys, described but not reproduced"}, **_ROLE_RESPONSES},
+)
+def list_api_keys(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
+    """List the caller's API keys.
+
+    Returns metadata only - the secrets are not stored.
+    """
+    return _respond(services.list_api_keys(current_user.username))
+
+
+@router.delete(
+    "/api-keys/{key_id}",
+    responses={200: {"description": "Key revoked"}, 404: {"description": "Key not found"}, **_ROLE_RESPONSES},
+)
+def revoke_api_key(
+    key_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Revoke one of the caller's own API keys."""
+    return _respond(services.revoke_api_key(current_user.username, key_id))
+
+
+# ---------------------------------------------------------------------------
+# By id - LAST, so the literal paths above are not captured by it
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/{user_id}",
+    responses={200: {"description": "The user"}, 404: {"description": "User not found"}, **_ROLE_RESPONSES},
+)
+def get_by_id(
+    user_id: str,
+    current_user: CurrentUser = Depends(require_admin),
+) -> JSONResponse:
+    """Get one user by id."""
+    return _respond(services.get_by_id(user_id))

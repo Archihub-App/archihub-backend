@@ -1,0 +1,1039 @@
+"""The users domain: accounts, authorisation checks, profile, API keys.
+
+``has_role``, ``has_right`` and ``add_request`` are what the authentication
+layer reaches for, and they are used from almost every other domain's routes.
+
+INVARIANTS THIS MODULE ENFORCES. Both are easy to get wrong and both are
+security-relevant, so they are stated as rules rather than left implicit.
+
+1. AN AUTHORISATION HELPER ALWAYS RETURNS A REAL ``bool`` - never a response
+   object, tuple, dict or ``None``. Callers write ``if not has_role(...): deny``.
+   There must remain exactly ONE implementation of each of these helpers; do not
+   add a variant elsewhere in the tree.
+
+2. Authorisation is decided in ONE place, including the
+   ``_is_valid_system_user`` allowance for scheduled-task pseudo-users. Two
+   functions of the same name with different rules is how the two drift apart.
+
+``has_role`` and ``has_right`` are cached; every write to the collections they
+declare invalidates the cache (see ``archihub/infra/cache.py``).
+"""
+
+from __future__ import annotations
+
+import bcrypt
+import datetime
+import logging
+
+from archihub.core.errors import NotFoundError, RateLimitError
+from archihub.core.i18n import gettext as _
+from archihub.infra.cache import cached
+
+logger = logging.getLogger(__name__)
+
+
+def serialise(result):
+    """Mongo types (``ObjectId``, ``datetime``) into their JSON forms.
+
+    The same ``json_util`` pass every other domain applies, so an ``_id`` is
+    ``{"$oid": ...}`` here as it is everywhere else, and a stray ``datetime``
+    cannot reach the encoder and 500 the route.
+    """
+    import json
+
+    from bson import json_util
+
+    return json.loads(json_util.dumps(result))
+
+# Weekly quota for Fernet-authenticated (public API) callers.
+MAX_REQUESTS_PER_WEEK = 2000
+
+SYSTEM_SCHEDULER_PREFIX = "system_scheduler_"
+
+
+def _mongo():
+    from archihub.infra.mongo import get_mongo
+
+    return get_mongo()
+
+
+def _is_valid_system_user(username: str) -> bool:
+    """True for the pseudo-users that scheduled tasks run as.
+
+    ``scheduleSystemTasks`` runs jobs as ``system_scheduler_<taskname>``. Such a
+    user has no document in ``users``, so it is authorised by checking that a
+    matching scheduled task is actually configured.
+    """
+    if not username or not username.startswith(SYSTEM_SCHEDULER_PREFIX):
+        return False
+
+    task_name = username[len(SYSTEM_SCHEDULER_PREFIX) :]
+    settings = _mongo().get_record("system", {"name": "active_plugins"})
+    plugin_settings = (settings or {}).get("plugins_settings") or {}
+    scheduled = (plugin_settings.get("scheduleSystemTasks") or {}).get("schedule_tasks") or []
+    return any(task.get("task") == task_name for task in scheduled)
+
+
+def get_user(username: str) -> dict | None:
+    """Full user record for authentication, or None.
+
+    Returns None for an unverified account, so an account awaiting verification
+    cannot be logged into. The projection omits fields the login path has no use
+    for; ``password`` IS included, because verifying it is the point.
+    """
+    user = _mongo().get_record(
+        "users",
+        {"username": username},
+        fields={"status": 0, "photo": 0, "requests": 0, "lastRequest": 0},
+    )
+    if not user:
+        return None
+
+    # Absent means "verified" - the flag was introduced after accounts already
+    # existed, so its absence must not lock those accounts out.
+    if user.get("verified") is False:
+        return None
+
+    user.setdefault("favorites", [])
+    user["_id"] = str(user["_id"])
+    return user
+
+
+def register_user(body: dict) -> tuple[dict, int]:
+    """Create a user account.
+
+    Roles and access rights are validated against the configured vocabularies:
+    an unrecognised value is rejected rather than stored, because a role that
+    does not exist would silently grant nothing and look like a configuration
+    that had been applied.
+    """
+    from archihub.core.roles import verify_access_rights_exist, verify_roles_exist
+
+    mongo = _mongo()
+
+    if mongo.get_record("users", {"username": body.get("username")}, {"username": 1}):
+        return {"msg": _("User already exists")}, 400
+
+    try:
+        roles = verify_roles_exist(body.get("roles") or [])
+        rights = verify_access_rights_exist(body.get("accessRights") or [])
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    password = body.get("password") or ""
+    hashed = (
+        bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        if password
+        else ""
+    )
+
+    record = {
+        "username": body.get("username"),
+        "name": body.get("name"),
+        "password": hashed,
+        "roles": roles,
+        "accessRights": rights,
+        "loginType": body.get("loginType", "local"),
+        "verified": body.get("verified", True),
+        "createdAt": datetime.datetime.now(),
+    }
+    mongo.insert_record("users", record)
+    logger.info("Created account %s", record["username"])
+    return {"msg": _("User created successfully")}, 201
+
+
+@cached("users", "system")
+def has_role(username: str, role: str) -> bool:
+    """Whether ``username`` holds ``role``. Always a real bool - see module docstring.
+
+    Cached on `users` AND `system`: the answer reads the account document, but
+    it also consults the scheduled-task configuration through
+    `_is_valid_system_user`. Declaring only `users` would keep answering from
+    before a scheduled task was removed.
+    """
+    if _is_valid_system_user(username):
+        return True
+
+    user = _mongo().get_record("users", {"username": username}, fields={"roles": 1})
+    if not user:
+        return False
+    return role in (user.get("roles") or [])
+
+
+@cached("users", "system")
+def has_right(username: str, right: str) -> bool:
+    """Whether ``username`` holds ``right``. Always a real bool.
+
+    Same two collections as `has_role`, for the same reason.
+    """
+    if _is_valid_system_user(username):
+        return True
+
+    user = _mongo().get_record("users", {"username": username}, fields={"accessRights": 1})
+    if not user:
+        return False
+    return right in (user.get("accessRights") or [])
+
+
+def _is_date_in_current_week(value: datetime.datetime) -> bool:
+    now = datetime.datetime.now()
+    return value.isocalendar()[:2] == now.isocalendar()[:2]
+
+
+def add_request(username: str) -> None:
+    """Count one public-API request against the caller's weekly quota.
+
+    Raises :class:`RateLimitError` once the quota is exhausted. That exception
+    type matters: the Fernet authenticators hide every other failure behind a
+    generic "Invalid or expired token", but this particular message is meant to
+    reach the caller so they understand *why* they are being refused.
+    """
+    mongo = _mongo()
+    user = mongo.get_record(
+        "users", {"username": username}, fields={"requests": 1, "lastRequest": 1}
+    )
+    if not user:
+        raise NotFoundError(_("User not found"), status_code=404)
+
+    last_request = user.get("lastRequest")
+    requests = user.get("requests", 0)
+
+    if not isinstance(last_request, datetime.datetime) or not _is_date_in_current_week(last_request):
+        # First request, or the first of a new week: reset the counter.
+        requests = 1
+    elif requests < MAX_REQUESTS_PER_WEEK:
+        requests += 1
+    else:
+        raise RateLimitError(_("You have reached the limit of requests for this week"))
+
+    mongo.update_record(
+        "users",
+        {"username": username},
+        {"requests": requests, "lastRequest": datetime.datetime.now()},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Listing and profile
+# ---------------------------------------------------------------------------
+
+# Fields a client may filter the user list by. Anything else is dropped before
+# the value reaches a query: a client-supplied filter document that is passed
+# through unchecked lets the caller express arbitrary query operators.
+ALLOWED_USER_FILTER_FIELDS = frozenset({"username", "name"})
+
+# Fields never returned by the listing. Credentials and API keys are the point,
+# but `compromise` and `photo` are simply not needed and are large.
+_LIST_PROJECTION = {
+    "password": 0, "status": 0, "photo": 0, "compromise": 0,
+    "token": 0, "adminToken": 0, "nodeToken": 0, "vizToken": 0,
+    "requests": 0, "lastRequest": 0, "favorites": 0,
+    # Server bookkeeping, not a field a client reads - `avatar_url` is.
+    "avatar": 0,
+    # A telephone number is a personal contact detail rather than an
+    # administrative one, and the user table renders nothing from it. Every
+    # editor can read this listing, so it is left out deliberately rather than
+    # by omission.
+    "phone": 0,
+}
+
+PAGE_SIZE = 20
+
+
+def sanitize_user_filters(filters) -> dict:
+    """Reduce a client filter document to allowed string equality only."""
+    if not isinstance(filters, dict):
+        return {}
+    return {
+        key: value
+        for key, value in filters.items()
+        if key in ALLOWED_USER_FILTER_FIELDS and isinstance(value, str)
+    }
+
+
+def get_all(body: dict, current_user: str) -> tuple[list | dict, int]:
+    """Paginated user listing, with role/right ids resolved to display terms."""
+    try:
+        from archihub.core.roles import get_access_rights, get_roles
+
+        mongo = _mongo()
+        page = int(body.get("page") or 0)
+        filters = sanitize_user_filters(body.get("filters"))
+
+        users = list(
+            mongo.get_all_records(
+                "users", filters, limit=PAGE_SIZE, skip=page * PAGE_SIZE,
+                fields=_LIST_PROJECTION, sort=[("name", 1)],
+            )
+        )
+        total = mongo.count("users", filters)
+
+        rights = {r.get("id"): r.get("term") for r in (get_access_rights().get("options") or [])}
+        roles = {r.get("id"): r.get("term") for r in (get_roles().get("options") or [])}
+
+        for user in users:
+            user["id"] = str(user.pop("_id"))
+            user["total"] = total
+            # Unrecognised ids are dropped rather than shown raw - a stale id is
+            # not a term and would render as noise.
+            user["accessRights"] = [rights[r] for r in (user.get("accessRights") or []) if r in rights]
+            user["roles"] = [roles[r] for r in (user.get("roles") or []) if r in roles]
+
+        return users, 200
+    except Exception as exc:
+        logger.exception("Could not list users")
+        return {"msg": str(exc)}, 500
+
+
+# ---------------------------------------------------------------------------
+# Profile shape
+# ---------------------------------------------------------------------------
+
+# The personal fields, with the names they are BOTH stored and returned under.
+# Stored under the same names they are served under so there is no presenter to
+# forget: a route that reads the document and returns it cannot answer with a
+# field spelled differently from the one the interface reads.
+PROFILE_FIELDS = ("first_name", "last_name", "phone")
+
+# The longest each may be. These are rendered in tables and headers, and a value
+# with no ceiling is a value that can break the screen it appears on.
+FIELD_LIMITS = {"first_name": 120, "last_name": 120, "phone": 40, "name": 240}
+
+# Resources in the recycle bin are excluded from the profile counters: a
+# cataloguer who deleted their work has not created it twice.
+_NOT_DELETED = {"$ne": "deleted"}
+
+
+def clean_text(value, field: str) -> str:
+    """A single-line, bounded string, or raise ``ValueError``.
+
+    Control characters are removed rather than rejected: a name pasted out of a
+    spreadsheet routinely carries a trailing newline, and refusing the save
+    teaches nothing. Length is a refusal, because silently truncating someone's
+    name is worse than telling them it is too long.
+    """
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError(_("Invalid identifier in {field}", field=field))
+
+    cleaned = " ".join(value.split())
+    if len(cleaned) > FIELD_LIMITS[field]:
+        raise ValueError(
+            _("%(field)s must be at most %(limit)s characters",
+              field=field, limit=FIELD_LIMITS[field])
+        )
+    return cleaned
+
+
+def display_name(first: str, last: str) -> str:
+    """The single display name the rest of the product shows.
+
+    `name` is what the user listing sorts by, what the editor picker offers and
+    what a resource records as its cataloguer, so it has to stay in step with
+    the two halves the profile screen edits rather than becoming a third thing
+    the same person is called.
+    """
+    return " ".join(part for part in (first.strip(), last.strip()) if part)
+
+
+def profile_stats(username: str) -> dict:
+    """What this account has catalogued.
+
+    Two questions over one index (`createdBy`, `status`, `post_type`): how much
+    they have made, and how many content types they have worked in. Both are
+    bounded by that index, because this is read on every profile load.
+    """
+    filters = {"createdBy": username, "status": _NOT_DELETED}
+    try:
+        mongo = _mongo()
+        return {
+            "records_created": mongo.count("resources", filters),
+            "collections_count": len(mongo.distinct("resources", "post_type", filters)),
+        }
+    except Exception:
+        # A profile that cannot be opened is worse than one whose counters read
+        # zero, and these are the only part of it that queries another
+        # collection at all.
+        logger.warning("Could not read the profile counters for %s", username, exc_info=True)
+        return {"records_created": 0, "collections_count": 0}
+
+
+def present_profile(user: dict) -> dict:
+    """Fill in every field the profile contract promises.
+
+    Each is stated even when the account predates it, so a consumer never has to
+    tell "this person has no telephone number" apart from "this version of the
+    server does not have that field" - one renders as blank, the other as a
+    crash.
+    """
+    for field in PROFILE_FIELDS:
+        user.setdefault(field, "")
+
+    user.setdefault("avatar_url", None)
+
+    # `created_at` beside the stored `createdAt` rather than instead of it: the
+    # camelCase spelling is what this route has always answered with, and it
+    # carries the `{"$date": ...}` form every other endpoint here returns.
+    #
+    # THE TWO ARE ENCODED DIFFERENTLY ON PURPOSE. This one is a plain ISO
+    # string, because it is read by `new Date(...)`, which does not understand
+    # the wrapped form and yields an invalid date from it without failing.
+    #
+    # No trailing `Z` and no offset: the value is stored naive and in local
+    # time, so stamping it as UTC would move it by the server's offset - and for
+    # a timestamp near midnight, move the day the interface reports.
+    created = user.get("createdAt")
+    user["created_at"] = created.isoformat() if hasattr(created, "isoformat") else created
+    return user
+
+
+def get_profile(username: str, *, with_stats: bool = False) -> tuple[dict, int]:
+    """The caller's own profile, without the password hash.
+
+    An unknown account answers 400.
+    """
+    # `requests`/`lastRequest` are projected out: the profile screen reads the
+    # quota from `/users/requests`, and `lastRequest` is a raw `datetime` that
+    # would not survive JSON encoding here. Keep the projection narrow.
+    user = _mongo().get_record(
+        "users",
+        {"username": username},
+        fields={
+            "password": 0, "status": 0, "photo": 0, "requests": 0, "lastRequest": 0,
+            # The stored avatar FILENAME is server bookkeeping - what replacing
+            # one has to delete. `avatar_url` is the half a client uses.
+            "avatar": 0,
+        },
+    )
+    if not user:
+        return {"msg": _("User does not exist")}, 400
+
+    # Projected out above *and* removed here. Relying on the projection alone
+    # means one edit to that dict leaks the password hash, and this is the
+    # response a user sees; the redundancy costs nothing.
+    user.pop("password", None)
+
+    user.setdefault("favorites", [])
+    # `verified` is absent on accounts created before the flag existed, and
+    # absent means verified - the same reading `get_user` applies.
+    user.setdefault("verified", True)
+
+    present_profile(user)
+    if with_stats:
+        user["stats"] = profile_stats(username)
+
+    # `{"$oid": ...}`, not a bare string, like every other endpoint.
+    return serialise(user), 200
+
+
+def get_requests(username: str) -> tuple[dict, int]:
+    """The caller's weekly public-API quota usage."""
+    user = _mongo().get_record("users", {"username": username}, fields={"requests": 1})
+    if not user:
+        return {"msg": _("User does not exist")}, 400
+    return {"requests": user.get("requests", 0), "limit": MAX_REQUESTS_PER_WEEK}, 200
+
+
+# ---------------------------------------------------------------------------
+# Favourites
+# ---------------------------------------------------------------------------
+#
+# `type` selects the MongoDB collection to read, so it is constrained to a fixed
+# allowlist. The check lives here as well as in the request schema because these
+# functions are importable and a future caller may not come through the router.
+
+FAVORITE_COLLECTIONS = frozenset({"resources", "records", "snaps"})
+
+
+def _favorite_collection(type_name: str) -> str:
+    if type_name not in FAVORITE_COLLECTIONS:
+        raise ValueError(_("Invalid favorite type"))
+    return type_name
+
+
+def set_favorite(username: str, body: dict) -> tuple[dict, int]:
+    from bson.objectid import ObjectId
+
+    try:
+        collection = _favorite_collection(body.get("type"))
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    try:
+        object_id = ObjectId(body.get("id"))
+    except Exception:
+        return {"msg": _("Resource not found")}, 404
+
+    mongo = _mongo()
+    target = mongo.get_record(collection, {"_id": object_id}, {"_id": 1, "status": 1})
+    if not target:
+        return {"msg": _("Resource not found")}, 404
+
+    # Only published resources may be favourited. `.get` rather than `[...]`:
+    # collections other than `resources` have no status field.
+    if collection == "resources" and target.get("status") != "published":
+        return {"msg": _("Resource not published")}, 400
+
+    mongo.update_record_operator(
+        "users",
+        {"username": username},
+        {"$addToSet": {"favorites": {"type": body["type"], "id": body["id"], "view": body.get("view")}}},
+    )
+    return {"msg": _("Favorite added successfully")}, 200
+
+
+def delete_favorite(username: str, body: dict) -> tuple[dict, int]:
+    try:
+        _favorite_collection(body.get("type"))
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    _mongo().update_record_operator(
+        "users",
+        {"username": username},
+        {"$pull": {"favorites": {"type": body["type"], "id": body.get("id")}}},
+    )
+    return {"msg": _("Favorite removed successfully")}, 200
+
+
+def get_favorites(username: str, body: dict) -> tuple[dict | list, int]:
+    """The caller's favourites of one type, resolved to display fields."""
+    from bson.objectid import ObjectId
+
+    try:
+        collection = _favorite_collection(body.get("type"))
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    mongo = _mongo()
+    page = int(body.get("page") or 0)
+
+    user = mongo.get_record("users", {"username": username}, fields={"favorites": 1})
+    favorites = [f for f in ((user or {}).get("favorites") or []) if f.get("type") == body["type"]]
+    total = len(favorites)
+
+    object_ids = []
+    for favorite in favorites:
+        try:
+            object_ids.append(ObjectId(favorite.get("id")))
+        except Exception:
+            continue
+
+    if collection == "resources":
+        fields = {"metadata.firstLevel.title": 1}
+        sort = [("metadata.firstLevel.title", 1)]
+        filters = {"_id": {"$in": object_ids}, "status": "published"}
+    else:
+        fields = {"name": 1, "displayName": 1}
+        sort = [("name", 1)]
+        filters = {"_id": {"$in": object_ids}}
+
+    records = list(
+        mongo.get_all_records(
+            collection, filters, limit=PAGE_SIZE, skip=page * PAGE_SIZE, fields=fields, sort=sort
+        )
+    )
+
+    by_id = {str(f.get("id")): f for f in favorites}
+    resolved = []
+    for record in records:
+        record_id = str(record.pop("_id"))
+        record["id"] = record_id
+        record["view"] = (by_id.get(record_id) or {}).get("view")
+        resolved.append(record)
+
+    return {"total": total, "results": resolved}, 200
+
+
+# ---------------------------------------------------------------------------
+# Account lifecycle
+# ---------------------------------------------------------------------------
+
+# Roles that constitute "a system role". A user must retain at least one, or
+# they would exist with no way to do anything.
+SYSTEM_ROLES = frozenset({"admin", "editor", "user"})
+
+# Never returned by a user lookup, in any projection.
+_DETAIL_PROJECTION = {
+    "password": 0, "status": 0, "photo": 0, "compromise": 0,
+    "token": 0, "adminToken": 0, "nodeToken": 0, "vizToken": 0,
+    "avatar": 0,
+}
+
+
+def get_by_id(user_id: str) -> tuple[dict, int]:
+    from bson.objectid import ObjectId
+
+    try:
+        object_id = ObjectId(user_id)
+    except Exception:
+        # A malformed id is a client error, not a server fault.
+        return {"msg": _("User not found")}, 404
+
+    user = _mongo().get_record("users", {"_id": object_id}, fields=_DETAIL_PROJECTION)
+    if not user:
+        return {"msg": _("User not found")}, 404
+
+    user["_id"] = str(user["_id"])
+    user.setdefault("favorites", [])
+    return user, 200
+
+
+def _user_management_flag(entry_id: str, fallback_index: int) -> bool:
+    """Read a self-service toggle from the `user_management` settings document.
+
+    Looked up by id with a positional fallback, so a reordered settings document
+    does not silently flip a feature on or off.
+    """
+    record = _mongo().get_record("system", {"name": "user_management"})
+    data = (record or {}).get("data") or []
+
+    entry = next((item for item in data if item.get("id") == entry_id), None)
+    if entry is None and len(data) > fallback_index:
+        entry = data[fallback_index]
+
+    return bool((entry or {}).get("value"))
+
+
+def self_registration_enabled() -> bool:
+    return _user_management_flag("user_registration", 0)
+
+
+def password_recovery_enabled() -> bool:
+    return _user_management_flag("user_password_recovery", 1)
+
+
+def register_me(body: dict) -> tuple[dict, int]:
+    """Self-service registration, when the instance allows it.
+
+    The account is created unverified: roles and access rights are fixed here
+    rather than taken from the body, so a self-registering user cannot grant
+    themselves anything.
+    """
+    if not self_registration_enabled():
+        return {"msg": _("User registration disabled")}, 400
+
+    payload = {
+        "username": body.get("username"),
+        "name": body.get("name"),
+        "password": body.get("password") or "",
+        "roles": [{"id": "user"}],
+        "accessRights": [],
+        "verified": False,
+    }
+    return register_user(payload)
+
+
+def forgot_password(body: dict) -> tuple[dict, int]:
+    """Begin password recovery.
+
+    INVARIANT: the response is identical whether or not the account exists, and
+    whether or not the mail actually goes out. A distinct error for an unknown
+    account - or a 500 when SMTP is down for a real one but a 200 for an invented
+    one - turns this endpoint into a way to test which usernames are registered.
+    That is why the send is wrapped in its own handler and its failure only
+    reaches the log.
+    """
+    if not password_recovery_enabled():
+        return {"msg": _("Password recovery disabled")}, 400
+
+    username = body.get("username")
+    user = _mongo().get_record("users", {"username": username}, {"username": 1})
+
+    if user:
+        try:
+            _send_recovery_email(username)
+        except Exception:
+            logger.error("Could not send a password recovery message", exc_info=True)
+
+    return {
+        "msg": _(
+            "If an account exists for this username, a password recovery email has been sent"
+        )
+    }, 200
+
+
+def _send_recovery_email(username: str) -> None:
+    import os
+    from datetime import timedelta
+
+    from cryptography.fernet import Fernet
+
+    from archihub.api.email.services import send_email
+    from archihub.api.email.templates import forgot_password_template
+    from archihub.core.security import tokens
+    from archihub.core.settings import get_settings
+
+    token = tokens.create_access_token(username, expires_delta=timedelta(days=1))
+    cipher = Fernet(get_settings().fernet_key).encrypt(token.encode()).decode()
+
+    link = f"{os.environ.get('REDIRECT_URL', '')}/reset-password?token={cipher}"
+    send_email(username, _("Password recovery"), forgot_password_template(link))
+
+
+def update_user(body: dict, current_user: str) -> tuple[dict, int]:
+    """Administrative update of another account."""
+    from bson.objectid import ObjectId
+
+    from archihub.core.roles import verify_access_rights_exist, verify_roles_exist
+
+    try:
+        object_id = ObjectId(body.get("_id"))
+    except Exception:
+        return {"msg": _("User not found")}, 404
+
+    mongo = _mongo()
+    user = mongo.get_record("users", {"_id": object_id}, fields={"username": 1})
+    if not user:
+        return {"msg": _("User not found")}, 404
+
+    if body.get("username") and user.get("username") != body["username"]:
+        return {"msg": _("You cannot change the username")}, 400
+
+    try:
+        roles = verify_roles_exist(body.get("roles") or [])
+        rights = verify_access_rights_exist(body.get("accessRights") or [])
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    if not SYSTEM_ROLES.intersection(roles):
+        return {"msg": _("You must have at least one system role")}, 400
+
+    update: dict = {"roles": roles, "accessRights": rights}
+    if body.get("name") is not None:
+        update["name"] = body["name"]
+
+    mongo.update_record("users", {"_id": object_id}, update)
+    _register_log(current_user, "user_update", {"user": user.get("username")})
+    return {"msg": _("User updated successfully")}, 200
+
+
+def delete_user(body: dict, current_user: str) -> tuple[dict, int]:
+    """Delete an account, and revoke everything it could still authenticate with.
+
+    Deleting the user document alone is not enough: API keys live in their own
+    collection and a session JWT stays valid until it expires. The keys are
+    revoked here; session tokens are covered by, which is
+    still open.
+    """
+    username = body.get("username")
+
+    if username == current_user:
+        return {"msg": _("You cannot delete yourself")}, 400
+
+    mongo = _mongo()
+    if not mongo.get_record("users", {"username": username}, {"username": 1}):
+        return {"msg": _("User does not exist")}, 404
+
+    mongo.delete_record("users", {"username": username})
+
+    try:
+        from archihub.core.security import api_keys
+
+        api_keys.revoke_all(username)
+    except Exception:
+        logger.error("Could not revoke API keys for a deleted account", exc_info=True)
+
+    _register_log(current_user, "user_delete", {"user": username})
+    return {"msg": _("User deleted successfully")}, 200
+
+
+def update_me(body: dict, current_user: str) -> tuple[dict, int]:
+    """Self-service profile update.
+
+    The current password is required even to change the display name: this
+    endpoint can change the password, so a hijacked session must not be able to
+    take over the account outright.
+    """
+    import bcrypt as _bcrypt
+
+    mongo = _mongo()
+    user = mongo.get_record(
+        "users",
+        {"username": current_user},
+        fields={"password": 1, "name": 1, "first_name": 1, "last_name": 1, "phone": 1},
+    )
+    if not user:
+        return {"msg": _("User not found")}, 404
+
+    current_password = body.get("password") or ""
+    stored = (user.get("password") or "").encode("utf-8")
+    if not stored or not _bcrypt.checkpw(current_password.encode("utf-8"), stored):
+        return {"msg": _("Incorrect password")}, 400
+
+    update: dict = {}
+
+    try:
+        for field in PROFILE_FIELDS:
+            if field not in body:
+                continue
+            value = clean_text(body[field], field)
+            if value != (user.get(field) or ""):
+                update[field] = value
+
+        if body.get("name") is not None:
+            named = clean_text(body["name"], "name")
+            if named and named != user.get("name"):
+                update["name"] = named
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    # The display name follows the two halves unless this request set it
+    # explicitly. Left to drift, an account edited through the new profile
+    # screen keeps whatever name it was created with, and the user listing, the
+    # editor picker and every resource this person catalogues from now on go on
+    # showing it.
+    if "name" not in update and ({"first_name", "last_name"} & update.keys()):
+        derived = display_name(
+            update.get("first_name", user.get("first_name") or ""),
+            update.get("last_name", user.get("last_name") or ""),
+        )
+        if derived and derived != user.get("name"):
+            update["name"] = derived
+
+    new_password = body.get("new_password") or ""
+    if new_password:
+        confirmation = body.get("new_password_confirmation")
+        # Only enforced when supplied: the confirmation is a UI affordance, and
+        # a client that omits it should not silently skip the password change.
+        if confirmation is not None and new_password != confirmation:
+            return {"msg": _("Passwords do not match")}, 400
+        update["password"] = _bcrypt.hashpw(
+            new_password.encode("utf-8"), _bcrypt.gensalt()
+        ).decode("utf-8")
+
+    if not update:
+        return {"msg": _("No changes were made")}, 400
+
+    mongo.update_record("users", {"username": current_user}, update)
+
+    if "password" in update:
+        # A password change must not leave previously issued keys usable - that
+        # is usually the point of changing it.
+        try:
+            from archihub.core.security import api_keys
+
+            api_keys.revoke_all(current_user)
+        except Exception:
+            logger.error("Could not revoke API keys after a password change", exc_info=True)
+
+    return {"msg": _("User updated successfully")}, 200
+
+
+# ---------------------------------------------------------------------------
+# Profile photograph
+# ---------------------------------------------------------------------------
+
+
+def set_avatar(username: str, source, original_filename: str) -> tuple[dict, int]:
+    """Replace the caller's profile photograph.
+
+    The new file is written before the account is changed and the old one is
+    removed only after: at no point does the stored `avatar_url` name a file
+    that is not there. An interruption can leave an unreferenced image on disk,
+    which is the harmless direction to fail in.
+    """
+    from archihub.api.users import avatars
+
+    mongo = _mongo()
+    user = mongo.get_record("users", {"username": username}, fields={"avatar": 1})
+    if not user:
+        return {"msg": _("User does not exist")}, 400
+
+    # Read before the write, not after: what is being replaced is a fact about
+    # the account as it was, and taking it from the record afterwards makes the
+    # deletion depend on whether the update happened to return a fresh document
+    # or the one that was just changed.
+    previous = user.get("avatar")
+    stored = avatars.store(source, original_filename)
+
+    try:
+        mongo.update_record(
+            "users",
+            {"username": username},
+            {"avatar": stored, "avatar_url": avatars.url_for(stored)},
+        )
+    except Exception:
+        avatars.remove(stored)
+        raise
+
+    avatars.remove(previous)
+    return {
+        "msg": _("Profile photo updated successfully"),
+        "avatar_url": avatars.url_for(stored),
+    }, 200
+
+
+def clear_avatar(username: str) -> tuple[dict, int]:
+    """Remove the caller's profile photograph.
+
+    The account is changed first here, the reverse of setting one and for the
+    same reason: nothing may be left naming a file that has been deleted.
+    """
+    from archihub.api.users import avatars
+
+    mongo = _mongo()
+    user = mongo.get_record("users", {"username": username}, fields={"avatar": 1})
+    if not user:
+        return {"msg": _("User does not exist")}, 400
+
+    previous = user.get("avatar")
+    mongo.update_record("users", {"username": username}, {"avatar": None, "avatar_url": None})
+    avatars.remove(previous)
+    return {"msg": _("Profile photo removed successfully"), "avatar_url": None}, 200
+
+
+def accept_compromise(username: str) -> tuple[dict, int]:
+    _mongo().update_record("users", {"username": username}, {"compromise": True})
+    return {"msg": _("Compromise accepted successfully")}, 200
+
+
+def _register_log(user: str, action_key: str, metadata: dict) -> None:
+    try:
+        from archihub.api.logs.services import register_log
+
+        register_log(user, action_key, metadata)
+    except ImportError:
+        logger.debug("logs domain not ported yet; audit entry %s not written", action_key)
+
+
+# ---------------------------------------------------------------------------
+# API keys
+# ---------------------------------------------------------------------------
+#
+# These wrap core/security/api_keys.py. The current password is required to
+# issue one: an API key is a long-lived credential, so minting one from a
+# hijacked session would be a durable takeover that outlives the session itself.
+#
+# The returned value is the ONLY copy - the server stores a hash. Callers must
+# surface it to the user immediately.
+
+
+def _verify_current_password(username: str, password: str) -> bool:
+    import bcrypt as _bcrypt
+
+    user = _mongo().get_record("users", {"username": username}, fields={"password": 1})
+    stored = ((user or {}).get("password") or "").encode("utf-8")
+    if not stored:
+        return False
+    try:
+        return _bcrypt.checkpw((password or "").encode("utf-8"), stored)
+    except (ValueError, TypeError):
+        return False
+
+
+def issue_api_key(
+    username: str,
+    password: str,
+    scope: str,
+    *,
+    name: str | None = None,
+    expires_in=None,
+) -> tuple[dict, int]:
+    from archihub.core.security import api_keys
+
+    if not _verify_current_password(username, password):
+        return {"msg": _("Incorrect password")}, 400
+
+    # ISSUING REPLACES THE KEY OF THE SAME NAME, and only that one.
+    #
+    # A person identifies a key by its name, so "regenerate" has to mean "retire
+    # the one I am replacing". Keyed on (user, scope, name), that single rule
+    # covers both shapes the product needs: the profile screen's per-scope
+    # buttons send no name and therefore replace that scope's default key -
+    # matching their own description, "valid for two days or until a new one is
+    # generated" - while a key named for an integration coexists with it.
+    #
+    # Revoking by scope alone would break every other integration under that
+    # scope. Revoking nothing leaves credentials the user cannot see piling up.
+    #
+    # Done BEFORE the new key exists, so a failure part-way through leaves the
+    # account with no working key rather than two.
+    api_keys.revoke_all(username, scope, name=name or api_keys.default_name(scope))
+
+    try:
+        key = api_keys.create_key(
+            username,
+            scope,
+            name=name,
+            expires_in=expires_in if expires_in is not None else api_keys.DEFAULT_LIFETIME,
+        )
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
+
+    _register_log(username, "user_update", {"api_key": {"scope": scope}})
+    return {
+        "access_token": key,
+        # Stated in the payload as well as the docs: this response is the only
+        # time the value exists.
+        "msg": _("Store this key now - it will not be shown again"),
+    }, 200
+
+
+#: Which role a scope requires. The four per-scope routes each pin this with a
+#: dependency; the one general creation route cannot, because the scope arrives
+#: in the body and a dependency is resolved before the body is read. Stated once
+#: here so the two paths cannot drift into granting different things.
+SCOPE_ROLES: dict[str, tuple[str, ...]] = {
+    "public": (),                 # any authenticated user
+    "admin": ("admin",),
+    "node": ("admin",),
+    "viz": ("visualizer",),
+}
+
+
+def may_issue_scope(username: str, scope: str) -> bool:
+    """Whether this caller may hold a key of this scope."""
+    required = SCOPE_ROLES.get(scope)
+    if required is None:
+        return False
+    if not required:
+        return True
+    return any(has_role(username, role) for role in required)
+
+
+def create_named_key(
+    username: str,
+    password: str,
+    scope: str,
+    *,
+    name: str | None = None,
+    expires_in=None,
+) -> tuple[dict, int]:
+    """Create a key of any scope the caller is entitled to.
+
+    The general entry point behind ``POST /users/api-keys``. The four per-scope
+    routes remain and go through ``issue_api_key`` with the same rules; this one
+    exists so a user can name a key, which is what makes holding more than one
+    of a scope usable.
+
+    THE SCOPE CHECK IS HERE, not in a dependency, because the scope is in the
+    body. That makes it a decision in a handler path rather than a declared
+    requirement, so it is written once and tested directly - a caller must not
+    be able to mint an admin key by asking for one.
+    """
+    from archihub.core.security import api_keys
+    from archihub.core.security.jwt import ROLE_FAILURE_STATUS
+
+    if scope not in api_keys.SCOPES:
+        return {"msg": _("Unknown API key scope")}, 400
+
+    if not may_issue_scope(username, scope):
+        return {"msg": _("You do not have sufficient permissions")}, ROLE_FAILURE_STATUS
+
+    return issue_api_key(username, password, scope, name=name, expires_in=expires_in)
+
+
+def list_api_keys(username: str) -> tuple[list, int]:
+    from archihub.core.security import api_keys
+
+    return api_keys.list_keys(username), 200
+
+
+def revoke_api_key(username: str, key_id: str) -> tuple[dict, int]:
+    from archihub.core.security import api_keys
+
+    if not api_keys.revoke_key(key_id, username):
+        return {"msg": _("API key not found")}, 404
+    return {"msg": _("API key revoked")}, 200

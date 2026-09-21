@@ -1,0 +1,272 @@
+"""Application configuration.
+
+One Pydantic ``BaseSettings`` model, read once at startup.
+
+Three rules the rest of the application depends on:
+
+* ``SECRET_KEY``, ``JWT_SECRET_KEY`` and ``FERNET_KEY`` are **required**, and the
+  process refuses to start without them. **No secret has a fallback value.** A
+  default credential in source is a credential every deployment shares and
+  nobody chose, and it works just well enough that the omission goes unnoticed.
+* ``TEST_SECRET_HEADER_KEY`` is optional with no fallback, which is different:
+  unset simply means ``/health/test-control/*`` authentication can never
+  succeed. That is the safe default for a feature that must stay off anywhere
+  other than a disposable instance.
+* Every field is validated before anything raises, so an operator with three
+  unset variables learns about all three from one startup attempt.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        # The .env file carries many variables consumed directly by plugins and
+        # third-party SDKs (OPENAI_API_KEY, HF_TOKEN, IMAP_*, ...). Ignore them
+        # here instead of failing - this model owns core configuration only.
+        extra="ignore",
+    )
+
+    # ------------------------------------------------------------------
+    # Secrets - required, no fallbacks
+    # ------------------------------------------------------------------
+    jwt_secret_key: str = Field(validation_alias="JWT_SECRET_KEY")
+    fernet_key: str = Field(validation_alias="FERNET_KEY")
+
+    # Optional by design - see module docstring.
+    test_secret_header_key: str | None = Field(
+        default=None, validation_alias="TEST_SECRET_HEADER_KEY"
+    )
+    archihub_test_mode: bool = Field(default=False, validation_alias="ARCHIHUB_TEST_MODE")
+
+    # ------------------------------------------------------------------
+    # Runtime environment
+    # ------------------------------------------------------------------
+    # ENVIRONMENT is the name; FASTAPI_ENV is accepted as a synonym because the
+    # deployment kit passes the mode in under that name. ENVIRONMENT wins when
+    # both are set.
+    environment: Literal["DEV", "PROD"] = Field(default="PROD", validation_alias="ENVIRONMENT")
+    fastapi_env: str | None = Field(default=None, validation_alias="FASTAPI_ENV")
+
+    # ENVIRONMENT_NAME is deliberately NOT a field here. It names the instance
+    # and the deployment substitutes it into MONGO_DATABASE and the index
+    # prefix; the application reads those, so a field for it would be a second,
+    # silently unused copy of the same fact.
+
+    # Per-request access log. Unset follows the environment - on in DEV, off in
+    # PROD - which is what an operator expects without configuring anything.
+    # Set it explicitly to keep the lines in PROD, where they are the only record
+    # of which requests reached the application and what they were answered.
+    access_log: bool | None = Field(default=None, validation_alias="ACCESS_LOG")
+
+    # FASTAPI_RUN_PORT is accepted as a synonym; the deployment kit passes the
+    # published port in under that name, so both are in circulation.
+    backend_port: int = Field(default=5000, validation_alias="BACKEND_PORT")
+    fastapi_run_port: int | None = Field(default=None, validation_alias="FASTAPI_RUN_PORT")
+
+    # How many uvicorn worker processes to run in PROD.
+    uvicorn_workers: int = Field(default=4, validation_alias="UVICORN_WORKERS")
+
+
+    # ------------------------------------------------------------------
+    # MongoDB
+    # ------------------------------------------------------------------
+    mongo_ip_server: str = Field(default="localhost", validation_alias="MONGO_IP_SERVER")
+    mongo_port: str = Field(default="27017", validation_alias="MONGO_PORT")
+    mongo_user: str = Field(default="admin", validation_alias="MONGO_INITDB_ROOT_USERNAME")
+    mongo_password: str = Field(default="", validation_alias="MONGO_INITDB_ROOT_PASSWORD")
+    mongo_database: str = Field(default="archihub-prod", validation_alias="MONGO_DATABASE")
+    mongo_rs: str = Field(default="rs0", validation_alias="MONGO_RS")
+    # How long an operation waits for a reachable server before giving up.
+    # Explicit and configurable, so an unreachable database surfaces as a prompt
+    # error rather than as a request that appears to hang. Leaving it implicit
+    # means the socket timeouts and this one can disagree by minutes.
+    mongo_server_selection_timeout_ms: int = Field(
+        default=10000, validation_alias="MONGO_SERVER_SELECTION_TIMEOUT_MS"
+    )
+    # Create the declared indexes at startup. On by default so a fresh install
+    # is correct without an extra manual step; set false where index changes are
+    # managed deliberately as a migration, and run tools/create_indexes.py
+    # instead. Index builds are backgrounded and idempotent either way.
+    auto_create_indexes: bool = Field(default=True, validation_alias="AUTO_CREATE_INDEXES")
+
+    # ------------------------------------------------------------------
+    # Redis / Celery
+    # ------------------------------------------------------------------
+    celery_broker_url: str = Field(
+        default="redis://localhost", validation_alias="CELERY_BROKER_URL"
+    )
+    celery_broker_host: str = Field(default="localhost", validation_alias="CELERY_BROKER_HOST")
+    celeryd_concurrency: int = Field(default=1, validation_alias="CELERYD_CONCURRENCY")
+    celery_worker_pool: str | None = Field(default=None, validation_alias="CELERY_WORKER_POOL")
+    celery_beat_refresh_interval: int = Field(
+        default=60, validation_alias="CELERY_BEAT_REFRESH_INTERVAL"
+    )
+    # Set by start_celery.sh to mark a worker process. Plugin hook
+    # registration is NOT gated on it - every process registers.
+    celery_worker: bool = Field(default=False, validation_alias="CELERY_WORKER")
+
+    # Memoisation of authorisation and vocabulary reads. Off switches the
+    # decorator to a straight call, which is what the test suite runs with -
+    # the suite must need no infrastructure, and a cached read reaches Redis.
+    # Also the first thing to switch off when diagnosing a stale-data report.
+    cache_enabled: bool = Field(default=True, validation_alias="CACHE_ENABLED")
+
+    # ------------------------------------------------------------------
+    # Elasticsearch
+    # ------------------------------------------------------------------
+    # Elasticsearch is reached through a raw-HTTP client.
+    elastic_domain: str = Field(default="http://localhost", validation_alias="ELASTIC_DOMAIN")
+    elastic_port: str = Field(default="9200", validation_alias="ELASTIC_PORT")
+    elastic_user: str = Field(default="elastic", validation_alias="ELASTIC_USER")
+    elastic_password: str = Field(default="", validation_alias="ELASTIC_PASSWORD")
+    elastic_index_prefix: str = Field(default="archihub", validation_alias="ELASTIC_INDEX_PREFIX")
+    elastic_cert: str | None = Field(default=None, validation_alias="ELASTIC_CERT")
+
+    # ------------------------------------------------------------------
+    # Qdrant
+    # ------------------------------------------------------------------
+    vector_host: str = Field(default="localhost", validation_alias="VECTOR_HOST")
+    vector_port: int = Field(default=6333, validation_alias="VECTOR_PORT")
+    # Typed, because it is handed to Qdrant's `VectorParams(size=...)`, which
+    # requires an int. Read straight from the environment it would be a str
+    # whenever the variable is set and an int when it is not.
+    vector_size: int = Field(default=768, validation_alias="VECTOR_SIZE")
+
+    # ------------------------------------------------------------------
+    # File storage
+    # ------------------------------------------------------------------
+    user_files_path: str = Field(default="", validation_alias="USER_FILES_PATH")
+    web_files_path: str = Field(default="", validation_alias="WEB_FILES_PATH")
+    original_files_path: str = Field(default="", validation_alias="ORIGINAL_FILES_PATH")
+    temporal_files_path: str = Field(default="", validation_alias="TEMPORAL_FILES_PATH")
+
+    # The bundled administrative-boundary GeoJSON. Unset means "the directory
+    # shipped with this checkout" - see geosystem.services.geo_data_directory,
+    # which resolves it relative to the package rather than to the working
+    # directory. An operator only sets this to point at their own boundary set.
+    geo_data_path: str = Field(default="", validation_alias="GEO_DATA_PATH")
+
+    # Where skill Markdown files live. An explicit setting rather than something
+    # derived from the module's own location, which stops being meaningful once
+    # the package is installed rather than run from a checkout.
+    llm_skills_path: str = Field(default="skills", validation_alias="LLM_SKILLS_PATH")
+
+    # Upload ceiling. A deliberate number: "unbounded" is a decision too, and a
+    # far worse one to arrive at by omission.
+    max_upload_bytes: int = Field(
+        default=5 * 1024 * 1024 * 1024, validation_alias="MAX_UPLOAD_BYTES"
+    )
+
+    # How many characters of transcript one page of the transcription viewer
+    # holds. Typed and bounded, so a non-integer or non-positive value is a
+    # startup error naming the variable rather than a silent fall back to the
+    # default that nobody notices until the viewer paginates oddly.
+    transcription_page_char_limit: int = Field(
+        default=6000, gt=0, validation_alias="TRANSCRIPTION_PAGE_CHAR_LIMIT"
+    )
+
+    # ------------------------------------------------------------------
+    # Networking / nodes
+    # ------------------------------------------------------------------
+    url_frontend: str | None = Field(default=None, validation_alias="URL_FRONTEND")
+    master_host: str = Field(default="", validation_alias="MASTER_HOST")
+    node_token: str = Field(default="", validation_alias="NODE_TOKEN")
+
+
+    # ------------------------------------------------------------------
+    # Derived values
+    # ------------------------------------------------------------------
+    @field_validator("archihub_test_mode", "celery_worker", mode="before")
+    @classmethod
+    def _parse_loose_bool(cls, value: object) -> object:
+        """Accept the shell spellings of "true", and nothing else.
+
+        A bare truthiness check on the environment value reads ``"0"`` and
+        ``"false"`` as **enabled**, because both are non-empty strings. That is
+        the wrong way round for flags that gate destructive test-control routes,
+        so only the affirmative spellings count.
+        """
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return value
+
+    @property
+    def is_dev(self) -> bool:
+        """DEV mode, accepting either variable name."""
+        if self.fastapi_env is not None and self.fastapi_env.upper() == "DEV":
+            return True
+        return self.environment == "DEV"
+
+    @property
+    def access_log_enabled(self) -> bool:
+        """Whether to emit one log line per request."""
+        return self.is_dev if self.access_log is None else self.access_log
+
+    @property
+    def effective_port(self) -> int:
+        return self.fastapi_run_port or self.backend_port
+
+    @property
+    def cors_origins(self) -> list[str] | str:
+        """Which origins may call this backend.
+
+        ``*`` unless URL_FRONTEND lists origins, in which case the list applies to
+        every route - ``/adminApi`` and ``/publicApi`` included, which other
+        organisations' scripts call. The wildcard default is intentional.
+        """
+        if self.url_frontend:
+            return [origin.strip() for origin in self.url_frontend.split(",") if origin.strip()]
+        return "*"
+
+    def mongo_uri(self) -> str:
+        """Build the Mongo connection URI.
+
+        Includes ``ssl=false`` and 300s socket/connect timeouts.
+        """
+        hosts = [host.strip() for host in self.mongo_ip_server.split(",") if host.strip()]
+        if not hosts:
+            hosts = ["localhost"]
+
+        credentials = f"{self.mongo_user or 'admin'}:{self.mongo_password}"
+        authority = ",".join(f"{host}:{self.mongo_port}" for host in hosts)
+        # socketTimeoutMS/connectTimeoutMS are long because some queries and
+        # bulk operations here genuinely run for minutes. serverSelectionTimeoutMS
+        # is short (see the field docstring).
+        timeout = (
+            "&socketTimeoutMS=300000&connectTimeoutMS=300000"
+            f"&serverSelectionTimeoutMS={self.mongo_server_selection_timeout_ms}"
+        )
+
+        if len(hosts) > 1:
+            options = (
+                f"?authSource=admin&readPreference=primary&retryWrites=true"
+                f"&w=majority&replicaSet={self.mongo_rs}&ssl=false{timeout}"
+            )
+        else:
+            options = f"?authSource=admin&readPreference=primary&ssl=false{timeout}"
+
+        return f"mongodb://{credentials}@{authority}/{self.mongo_database}{options}"
+
+    @property
+    def elastic_base_url(self) -> str:
+        return f"{self.elastic_domain}:{self.elastic_port}"
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the process-wide settings singleton.
+
+    Cached so the ``.env`` file is parsed once. Call ``get_settings.cache_clear()``
+    in tests that need to re-read the environment.
+    """
+    return Settings()  # type: ignore[call-arg]  # values come from env/.env

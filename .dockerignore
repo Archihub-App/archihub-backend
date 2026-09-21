@@ -1,0 +1,56 @@
+# What must never reach a built image.
+#
+# The Dockerfile ends with `COPY . .`, so anything not excluded here is built in.
+# Configuration - `.env` above all, which holds the signing keys and database
+# credentials - is injected at run time and never built in: a file deleted in a
+# later layer is still readable in the earlier one.
+#
+# Plugins are installable: the Dockerfile copies the plugin trees explicitly, so
+# putting a directory there and rebuilding works as the install documentation
+# describes. Only their `.env` files and tests are excluded.
+
+# ---- secrets and local configuration ----
+.env
+.env.*
+*.pem
+*.key
+
+# ---- version control and editor state ----
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# ---- runtime data mounts, not code ----
+/original
+/webfiles
+/userfiles
+/temporal
+/uploads
+
+# ---- build and test artefacts ----
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+htmlcov
+.coverage
+
+# ---- not needed to run the service ----
+tests
+conftest.py
+archihub/plugins/*/tests
+tools
+node_modules
+
+# ---- documentation and notes ----
+*.md
+!README.md
+
+# A plugin's own settings file, for the same reason as the root `.env`: it holds
+# credentials, and a deployment injects them as environment variables rather
+# than having them baked into an image layer.
+archihub/plugins/*/.env

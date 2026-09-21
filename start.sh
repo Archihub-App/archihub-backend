@@ -45,15 +45,28 @@ else
 fi
 
 # -------- START BACKEND --------
+# `main:app` is the ASGI entrypoint; `archihub/` is the application package.
+#
+# uvicorn runs its own worker processes.
+FASTAPI_ENV="${FASTAPI_ENV:-PROD}"
+FASTAPI_RUN_PORT="${FASTAPI_RUN_PORT:-${BACKEND_PORT:-5000}}"
+UVICORN_WORKERS="${UVICORN_WORKERS:-4}"
+
 echo "Elasticsearch is up!"
+echo "Starting backend in ${FASTAPI_ENV} mode on port ${FASTAPI_RUN_PORT}"
+
 while true; do
-  if [ "$FLASK_ENV" = "DEV" ]; then
-      echo "Running Flask in development mode"
-      flask run --host=0.0.0.0 &
-  elif [ "$FLASK_ENV" = "PROD" ]; then
-      gunicorn -w ${GUNICORN_WORKERS} -b 0.0.0.0:${FLASK_RUN_PORT} app:app &
+  if [ "$FASTAPI_ENV" = "DEV" ]; then
+      uvicorn main:app --host 0.0.0.0 --port "${FASTAPI_RUN_PORT}" --reload &
+  elif [ "$FASTAPI_ENV" = "PROD" ]; then
+      # --no-access-log: the per-request line is emitted by the application's
+      # own middleware instead, which is what carries the correlation id tying
+      # a request to the log lines it produced. uvicorn's is written by the
+      # server, outside that scope.
+      uvicorn main:app --host 0.0.0.0 --port "${FASTAPI_RUN_PORT}" \
+             --workers "${UVICORN_WORKERS}" --no-access-log &
   else
-      echo "Unknown FLASK_ENV: ${FLASK_ENV}"
+      echo "Unknown FASTAPI_ENV: ${FASTAPI_ENV} (expected 'DEV' or 'PROD')"
       exit 1
   fi
 

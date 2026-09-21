@@ -1,0 +1,8 @@
+# Dependencies this plugin adds on top of the backend's own.
+#
+# Installed as a separate layer at image build time. Anything already required
+# by the backend (pyvips, pandas, pypdf, ffmpeg-python) is NOT repeated here.
+
+# Camera RAW decoding (LibRaw). The wheel bundles LibRaw itself, so no system
+# package is needed.
+rawpy

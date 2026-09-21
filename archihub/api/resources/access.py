@@ -1,0 +1,239 @@
+"""Who may see which resources.
+
+The access-control boundary for the archive's main read path, kept apart from
+pagination and sorting so it can be read and tested on its own.
+
+THE MODEL:
+
+* An administrator sees everything.
+* Everyone else sees a resource only if its ``accessRights`` intersect theirs,
+  OR the resource declares no access rights at all. The four "no rights" spellings
+  below are all present in real data, which is why the check enumerates them
+  rather than testing one.
+* Deleted resources are visible only to those who may see them.
+* Drafts are additionally narrowed to the caller's own, unless they hold the
+  privilege to review others' - see :func:`may_see_all_drafts`.
+"""
+
+from __future__ import annotations
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+# A resource with no access rights is public to authenticated users. All four
+# spellings occur in real data - absent, null, empty string, empty list - and a
+# check that misses one silently hides content that should be visible.
+_NO_RIGHTS_CLAUSES = [
+    {"accessRights": None},
+    {"accessRights": {"$exists": False}},
+    {"accessRights": ""},
+    {"accessRights": []},
+]
+
+
+def _mongo():
+    from archihub.infra.mongo import get_mongo
+
+    return get_mongo()
+
+
+def user_access_rights(username: str | None) -> list:
+    if not username:
+        return []
+    user = _mongo().get_record("users", {"username": username}, fields={"accessRights": 1})
+    return (user or {}).get("accessRights") or []
+
+
+def access_rights_clause(username: str | None) -> dict:
+    """The `$or` a non-admin's queries must satisfy."""
+    return {"$or": [{"accessRights": {"$in": user_access_rights(username)}}, *_NO_RIGHTS_CLAUSES]}
+
+
+def effective_access_right(resource: dict) -> str | None:
+    """The access right that actually governs a resource.
+
+    ACCESS RIGHTS ARE INHERITED. A resource that declares none is governed by
+    the nearest ancestor that does - so restricting a fonds restricts everything
+    filed under it, which is how archival access conditions are normally
+    expressed. Missing this is what makes the difference between "this series is
+    reserved" and "this series is reserved, but every item in it is public".
+
+    A resource with no ``parents`` key, or an ancestor with no ``accessRights``
+    key, is handled; both occur in real documents. The stored ``parents`` order
+    decides which ancestor wins - :func:`hierarchy.ancestors` sorts it
+    nearest-first, so the nearest ancestor's condition is the one that applies.
+    """
+    own = resource.get("accessRights")
+    if own:
+        return own
+
+    parents = resource.get("parents") or []
+    parent_ids = [p.get("id") for p in parents if isinstance(p, dict) and p.get("id")]
+    if not parent_ids:
+        return None
+
+    from bson.objectid import ObjectId
+
+    object_ids = []
+    for parent_id in parent_ids:
+        try:
+            object_ids.append(ObjectId(parent_id))
+        except Exception:
+            logger.warning("Resource lists an unusable ancestor id %r", parent_id)
+
+    if not object_ids:
+        return None
+
+    rows = _mongo().get_all_records(
+        "resources", {"_id": {"$in": object_ids}}, fields={"accessRights": 1}
+    )
+    rights = {str(row["_id"]): row.get("accessRights") for row in rows}
+
+    for parent_id in parent_ids:
+        if rights.get(parent_id):
+            return rights[parent_id]
+
+    return None
+
+
+def may_view_resource(username: str, resource: dict, is_admin: bool) -> bool:
+    """Whether this caller may open this resource.
+
+    Administrators always may. Everyone else must hold the governing access
+    right, if there is one.
+    """
+    if is_admin:
+        return True
+
+    required = effective_access_right(resource)
+    if not required:
+        return True
+
+    held = user_access_rights(username)
+    # The field is declared a single id, but list-valued documents exist in real
+    # data - which is why the "no rights" clauses above have to enumerate the
+    # empty list too. A list means any one of them is sufficient.
+    if isinstance(required, list):
+        return bool(set(required) & set(held))
+    return required in held
+
+
+def holds_edit_role(username: str, post_type: str | None, is_admin: bool) -> bool:
+    """Whether the content type's ``editRoles`` admit this caller.
+
+    A type declaring none is unconstrained by this check - which is why it can
+    never be the *only* check on a write path. for what
+    happened where it was.
+    """
+    from archihub.api.resources.hierarchy import type_roles
+    from archihub.api.users.services import has_role
+
+    if is_admin:
+        return True
+
+    edit_roles = type_roles(post_type or "")["editRoles"]
+    if not edit_roles:
+        return True
+
+    return any(has_role(username, role) for role in edit_roles)
+
+
+def owns_or_supervises(username: str, resource: dict, is_admin: bool) -> bool:
+    """The ownership half of the write rule: creator, ``super_editor``, or admin.
+
+    ``createdBy`` is read with ``.get``: documents predating the field exist.
+    """
+    from archihub.api.users.services import has_role
+
+    if is_admin:
+        return True
+    if resource.get("createdBy") == username:
+        return True
+    return has_role(username, "super_editor")
+
+
+def is_public(resource: dict) -> bool:
+    """Whether an anonymous caller may see this resource.
+
+    THREE CONDITIONS, and they mirror the authenticated rule with the caller's
+    rights fixed at "none":
+
+    * it is **published** - a draft is work in progress and the recycle bin is
+      not a public archive;
+    * its **effective** access right is absent, which is inherited, so an item
+      filed under a reserved fonds is not public even if it declares nothing
+      itself;
+    * its content type declares no ``viewRoles`` - a type restricted to some
+      role cannot be visible to someone holding none.
+
+    Stated once here rather than in each public service, so every public route
+    applies the same rule.
+    """
+    if resource.get("status") != "published":
+        return False
+    if effective_access_right(resource):
+        return False
+
+    post_type = resource.get("post_type")
+    if not post_type:
+        return True
+
+    from archihub.api.resources.hierarchy import type_roles
+
+    return not type_roles(post_type).get("viewRoles")
+
+
+def may_see_deleted(username: str | None, is_admin: bool) -> bool:
+    """Only administrators may browse the recycle bin."""
+    return is_admin
+
+
+def may_see_all_drafts(is_publisher: bool, is_admin: bool) -> bool:
+    """Whether the caller may see drafts other than their own.
+
+    ONLY SOMEONE WHO IS BOTH publisher AND admin sees everyone's drafts; anyone
+    else sees their own. This is stricter than "either role", deliberately: it
+    fails closed, and widening who can read other people's unpublished work is a
+    decision for whoever hands out these roles.
+    """
+    return is_publisher and is_admin
+
+
+def build_listing_filters(
+    base: dict,
+    *,
+    username: str | None,
+    is_admin: bool,
+    is_publisher: bool,
+    status: str,
+) -> tuple[dict, str | None]:
+    """Assemble the listing query. Returns ``(filters, error)``.
+
+    ``error`` is non-None when the request should be refused outright, which is
+    the case only for an unprivileged caller asking for deleted resources.
+    """
+    filters = dict(base)
+
+    if status == "deleted" and not may_see_deleted(username, is_admin):
+        return filters, "unauthorized"
+
+    filters["status"] = status
+
+    if not is_admin:
+        filters.setdefault("$and", []).append(access_rights_clause(username))
+
+    if status == "draft":
+        # A "draft" is any of three pre-publication states, so the status test
+        # becomes a disjunction and the rest of the filter is repeated into each
+        # branch.
+        filters.pop("status")
+        branches = [
+            {"status": state, **filters} for state in ("draft", "created", "updated")
+        ]
+        if not may_see_all_drafts(is_publisher, is_admin):
+            for branch in branches:
+                branch["createdBy"] = username
+        filters = {"$or": branches}
+
+    return filters, None

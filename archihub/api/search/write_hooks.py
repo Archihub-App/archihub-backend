@@ -1,0 +1,72 @@
+"""Wiring the search index into the resource write path.
+
+Registered whenever ``index_management.index_activation`` is on. Without these
+registrations, ``resource_create``/``resource_update``/``resource_delete`` fire
+into an empty registry: every write returns 200, nothing is queued, and the search index
+keeps answering with the state it had at the last manual reindex. There is no
+error anywhere - a stale index looks exactly like a correct one until somebody
+searches for something they just catalogued and does not find it.
+
+QUEUE 101 IS LOAD-BEARING. Registrations run in ascending ``queue`` order, and
+plugins register their automatic processing at the order an operator configured
+(0 by default). Indexing sits above all of them deliberately, so a plugin that
+rewrites a resource's metadata does so *before* the document is built. Moving
+these numbers silently reorders every side effect on the write path.
+
+TOGGLING INDEXING NEEDS A RESTART, and that is unavoidable rather than an
+oversight. Registration is a process-local fact, so a setting flipped in one web
+worker cannot reach the others or the Celery workers; this deployment applies
+such changes by restarting, which is what ``/system/restart`` is for. It is
+deliberately NOT the same question as ``search.services.indexing_enabled()``,
+which gates the *routes* and is read per request precisely because a route's
+availability can be answered locally.
+
+Qdrant registrations are not made here: they come from the ``QdrantHandler``
+plugin, which registers them itself when it is built.
+"""
+
+from __future__ import annotations
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+#: Above every plugin's automatic processing, so a document is built from the
+#: metadata those plugins have already finished writing.
+INDEX_QUEUE = 101
+
+
+def register_index_hooks() -> None:
+    """Register the indexing tasks against the resource write hooks.
+
+    A no-op when indexing is switched off, so an instance with no Elasticsearch
+    does not queue a job per write that a worker can only fail.
+
+    Never fatal: a backend that cannot read its own settings should still serve
+    requests, and the consequence of skipping this is a stale index rather than
+    an unavailable archive.
+    """
+    from archihub.core.hooks import get_hook_handler
+
+    try:
+        from archihub.api.search.services import indexing_enabled
+
+        if not indexing_enabled():
+            logger.info("Indexing is off; resource writes will not update the search index")
+            return
+    except Exception:
+        logger.exception("Could not read the indexing setting; leaving the write hooks unregistered")
+        return
+
+    from archihub.worker.tasks.indexing import index_resources_delete_task, index_resources_task
+
+    hooks = get_hook_handler()
+    hooks.register("resource_create", index_resources_task, queue=INDEX_QUEUE)
+    hooks.register("resource_update", index_resources_task, queue=INDEX_QUEUE)
+    hooks.register("resource_delete", index_resources_delete_task, queue=INDEX_QUEUE)
+    # Currently never fired: the only caller (`types.services`) spells the name
+    # in the plural, and the body it sends (`{"slug": ...}`) would match no
+    # resource anyway.
+    hooks.register("resources_update_by_filter", index_resources_task, queue=INDEX_QUEUE)
+
+    logger.info("Search indexing is active; registered the resource write hooks")

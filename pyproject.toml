@@ -1,0 +1,135 @@
+[project]
+name = "archihub-backend"
+version = "2.0.0"
+description = "ArchiHUB: a comprehensive tool for organizing and connecting information"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "BITSOL", email = "contact@bit-sol.com.co" }]
+
+# NOTE ON PINNING
+# ---------------
+# This file declares the compatible RANGES; `uv.lock` pins exactly what they
+# resolve to, with hashes.
+#
+# To (re)generate the lockfile:      uv lock
+# To install exactly the lockfile:   uv sync --frozen
+#
+# The lower bounds are not decoration: several are security floors, chosen so a
+# resolve cannot pick a version carrying a known advisory.
+# SECURITY FLOORS (pip-audit, 2026-08-19)
+# ---------------------------------------
+# Several floors above are set to the first release that carries a published
+# fix, so a fresh resolve on a new machine cannot pick a vulnerable version. A
+# range is only as good as its floor.
+#
+#   PyJWT              >=2.13.0    11 advisories   <- signs and verifies every token
+#   python-multipart   >=0.0.31     5 advisories   <- parses every upload
+#   starlette          >=1.3.1      7 advisories   <- the ASGI layer under fastapi
+#   cryptography       >=50.0.0     1 advisory     <- Fernet API tokens
+#   python-ldap        >=3.4.5      2 advisories   <- directory authentication
+#   pypdf              >=6.15.0     2 advisories   <- parses UNTRUSTED uploaded PDFs
+#   pydantic-settings  >=2.14.2     1 advisory
+#   soupsieve          >=2.8.4      2 advisories   (transitive, via BeautifulSoup4)
+#
+#
+# `torch` reaches the image transitively through sentence-transformers and carries
+# 8 advisories of its own (fixed in 2.9.1). It is only loaded when the vector
+# database is enabled - `archihub/infra/vectors.py` imports it lazily for that
+# reason - so it is not floored here; floor it if you turn vectors on.
+#
+# Re-run:  pip-audit
+dependencies = [
+    # --- Web framework (new: FastAPI stack) ---
+    # FastAPI is pre-1.0 and still ships breaking-ish changes in minor releases,
+    # so the range is wide and `uv.lock` is what actually pins it.
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.32,<1.0",
+    "python-multipart>=0.0.31,<0.1",  # REQUIRED by FastAPI for Form()/File() multipart parsing
+    "pydantic>=2.9,<3.0",
+    "pydantic-settings>=2.14.2,<3.0", # BaseSettings moved out of pydantic core in v2
+
+    # Used DIRECTLY (JSONResponse/FileResponse semantics, Request, middleware) in
+    # five modules of archihub/core, so it is declared rather than inherited from
+    # fastapi. fastapi 0.135 requires `starlette>=0.46.0` with NO upper bound, so
+    # the security floor below is reachable without a fastapi upgrade.
+    "starlette>=1.3.1",
+
+    # RUNTIME, not a test tool. `archihub/api/aiservices/transport.py` is the one
+    # HTTP path every LLM call goes through, and it imports httpx at module level -
+    # `create_app()` raises ModuleNotFoundError without it, so it must not move
+    # to [optional-dependencies].dev.
+    "httpx>=0.27,<0.29",
+
+    # --- Auth ---
+    "PyJWT>=2.13.0,<3.0",
+    "cryptography>=50.0.0",
+    "bcrypt>=4.2,<6.0",
+    # LDAP: this is python-ldap, which `import ldap` resolves to. `ldap3` is a
+    # different package with an incompatible API and is NOT a substitute.
+    # python-ldap needs libldap2-dev/libsasl2-dev at build time - the Dockerfile
+    # installs both.
+    "python-ldap>=3.4.5,<4.0",
+
+    # --- Datastores / infra ---
+    "pymongo>=4.9,<5.0",
+    "redis>=5.0,<7.0",
+    "python-redis-cache>=4.0,<5.0",
+    "qdrant-client>=1.12,<2.0",
+    "Celery>=5.4,<6.0",
+    "requests>=2.32,<3.0",
+    "python-dotenv>=1.0,<2.0",
+
+    # --- Media / document processing (filesProcessing, liquidText, massiveUpdater) ---
+    "pandas>=2.2,<3.0",
+    "numpy>=1.26,<3.0",
+    "openpyxl>=3.1,<4.0",
+    "pillow>=10.4",
+    "ffmpeg-python>=0.2,<0.3",
+    "ffprobe3>=0.1,<0.2",
+    "pyvips>=2.2,<3.0",
+    "PyExifTool>=0.5,<0.6",
+    "pdf2image>=1.17,<2.0",
+    "pypdf>=6.15.0,<7.0",
+    "python-magic>=0.4,<0.5",
+    "python-docx>=1.1,<2.0",
+    "python-dateutil>=2.9,<3.0",
+    "BeautifulSoup4>=4.12,<5.0",
+    "soupsieve>=2.8.4",              # bs4's selector engine; floored for its own advisories
+
+    # --- Geo ---
+    "shapely>=2.0,<3.0",
+    "geopandas>=1.0,<2.0",
+
+    # --- AI / LLM ---
+    # No vendor SDK: aiservices has a single httpx transport and reads model
+    # facts from each provider. `transformers`/`tokenizers` are not declared: sentence-transformers
+    # requires them, and re-declaring a hard transitive only creates a second
+    # place for its range to drift.
+    "sentence-transformers>=3.0",   # archihub/infra/vectors.py, imported lazily
+
+    # --- i18n ---
+    # Babel provides the .po/.mo tooling (compile_translations.sh). The runtime
+    # translator is stdlib `gettext` via archihub/core/i18n.py, so no web
+    # framework's i18n integration is involved.
+    "Babel>=2.16,<3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # httpx is NOT here - it is a runtime dependency (see the note above it).
+    "pytest>=8.3,<9.0",
+    "pytest-asyncio>=0.24,<2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["archihub"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "archihub/plugins"]
+pythonpath = ["."]
+asyncio_mode = "auto"

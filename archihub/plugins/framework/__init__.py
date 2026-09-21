@@ -1,0 +1,1 @@
+"""FastAPI-native plugin framework."""

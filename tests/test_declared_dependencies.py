@@ -1,0 +1,324 @@
+"""Every third-party module the backend imports is declared in pyproject.toml.
+
+A module imported at runtime but declared only as a dev dependency (as `httpx`
+once was) produces a production install that cannot start, while every test
+and every local run passes.
+
+That is the general shape: a manifest is never exercised by the code it
+describes. The tests import from the *environment*, not from the declaration, so
+the two can disagree indefinitely.
+
+Import name to distribution name is resolved from installed metadata
+(`packages_distributions`) rather than a hand-written table, so it cannot drift.
+A module that cannot be resolved is REPORTED rather than skipped silently.
+
+THERE ARE TWO MANIFESTS, because there are two install layers. The backend's own
+dependencies are `pyproject.toml`'s `[project].dependencies`. A **plugin** adds
+its dependencies in its OWN `requirements.txt`, beside its package - that file is
+the published contract with third-party plugin authors, who ship a directory and
+expect the image build to install what it declares. Checking a plugin's imports
+against the backend manifest would demand that every plugin's dependencies be
+core dependencies, which defeats the point of a plugin being separately
+installable.
+
+So a plugin import must be satisfied by the core manifest OR by that plugin's
+own requirements.txt. A VCS requirement must carry `#egg=<distribution>`: the
+distribution name is not derivable from a git URL, so without it the declaration
+cannot be checked and is reported rather than assumed good.
+"""
+
+from __future__ import annotations
+
+import ast
+import pathlib
+import re
+import sys
+import tomllib
+from importlib.metadata import packages_distributions
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
+PACKAGE_ROOT = REPO_ROOT / "archihub"
+
+
+def _sources(root: pathlib.Path = PACKAGE_ROOT):
+    """The application's modules. A plugin's own tests live in its `tests/`
+    folder, travel with the plugin and are not application source."""
+    for path in sorted(root.rglob("*.py")):
+        if "tests" not in path.relative_to(PACKAGE_ROOT).parts:
+            yield path
+PYPROJECT = REPO_ROOT / "pyproject.toml"
+
+#: Ours, not third-party.
+LOCAL = {"archihub", "app", "tools", "tests", "main", "run", "config"}
+
+
+def _normalise(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _declared() -> set[str]:
+    """Distribution names in [project].dependencies, normalised.
+
+    The dev extra is deliberately NOT included: a runtime import satisfied only
+    by a dev dependency is exactly the defect this file exists to catch.
+    """
+    data = tomllib.loads(PYPROJECT.read_text())
+    names = set()
+    for spec in data["project"]["dependencies"]:
+        names.add(_normalise(re.split(r"[<>=!~\[; ]", spec, maxsplit=1)[0]))
+    return names
+
+
+PLUGIN_ROOT = PACKAGE_ROOT / "plugins"
+
+#: Directories under the plugin root that are part of the backend, not plugins.
+PLUGIN_RESERVED = {"framework", "__pycache__"}
+
+
+def _plugin_of(path: pathlib.Path) -> str | None:
+    """The plugin a file belongs to, or None for core code."""
+    try:
+        relative = path.relative_to(PLUGIN_ROOT)
+    except ValueError:
+        return None
+    slug = relative.parts[0] if len(relative.parts) > 1 else None
+    return slug if slug and slug not in PLUGIN_RESERVED else None
+
+
+def _plugin_declared(slug: str) -> tuple[set[str], list[str]]:
+    """One plugin's declared distributions, and the lines that could not be read."""
+    manifest = PLUGIN_ROOT / slug / "requirements.txt"
+    if not manifest.is_file():
+        return set(), []
+
+    names: set[str] = set()
+    unreadable: list[str] = []
+    for raw in manifest.read_text().splitlines():
+        line = raw.split("#egg=")[0].strip() if "#egg=" in raw else raw.strip()
+        if "#egg=" in raw:
+            names.add(_normalise(raw.split("#egg=")[1].strip()))
+            continue
+        if not line or line.startswith(("#", "-")):
+            continue
+        if line.startswith(("git+", "http://", "https://")):
+            unreadable.append(raw.strip())
+            continue
+        names.add(_normalise(re.split(r"[<>=!~\[; ]", line, maxsplit=1)[0]))
+    return names, unreadable
+
+
+from archihub.plugins.framework import discovery
+
+def _imported() -> dict[str, set[str]]:
+    """Third-party top-level module -> the files importing it."""
+    found: dict[str, set[str]] = {}
+    for path in _sources():
+        slug = _plugin_of(path)
+        if slug and not discovery.is_mountable(slug):
+            continue
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name.split(".")[0] for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                names = [(node.module or "").split(".")[0]]
+            else:
+                continue
+            for name in names:
+                if name and name not in sys.stdlib_module_names and name not in LOCAL:
+                    found.setdefault(name, set()).add(str(path.relative_to(REPO_ROOT)))
+    return found
+
+
+def _egg_declared_modules() -> dict[str, list[str]]:
+    """Module -> distribution, for requirements that name it with ``#egg=``.
+
+    ``packages_distributions()`` reads INSTALLED metadata, so a dependency this
+    machine does not have cannot be mapped from it - and a plugin's heavyweight
+    ML packages routinely are not installed in a development environment.
+
+    ``#egg=`` exists to state that name where nothing else can supply it, so an
+    egg-declared distribution is used as a fallback mapping. This does not
+    weaken the check: the declaration still has to be there, and it still has to
+    match what the code imports. It only stops "not installed here" being
+    reported as "undeclared".
+    """
+    extra: dict[str, list[str]] = {}
+    for slug in sorted(p.name for p in PLUGIN_ROOT.iterdir() if p.is_dir()):
+        if slug in PLUGIN_RESERVED or not discovery.is_mountable(slug):
+            continue
+        manifest = PLUGIN_ROOT / slug / "requirements.txt"
+        if not manifest.is_file():
+            continue
+        for raw in manifest.read_text().splitlines():
+            if "#egg=" not in raw:
+                continue
+            distribution = raw.split("#egg=")[1].strip()
+            # The importable module is conventionally the distribution with
+            # separators removed; both spellings are accepted so a plugin need
+            # not know which one this check uses.
+            for module in {distribution, distribution.replace("-", "_"), distribution.split("-")[0]}:
+                extra.setdefault(module, []).append(distribution)
+    return extra
+
+
+DECLARED = _declared()
+IMPORTED = _imported()
+DISTRIBUTIONS = {**_egg_declared_modules(), **packages_distributions()}
+
+
+def test_the_scan_found_something_to_check():
+    """A guard that silently checks nothing is worse than no guard."""
+    assert len(IMPORTED) > 20, f"only found {len(IMPORTED)} third-party imports"
+    assert len(DECLARED) > 20, f"only parsed {len(DECLARED)} declared dependencies"
+
+
+def test_every_imported_module_resolves_to_a_distribution():
+    """An unresolvable module means the map is incomplete, not that it is fine."""
+    unresolved = sorted(name for name in IMPORTED if name not in DISTRIBUTIONS)
+    assert not unresolved, (
+        "These modules could not be mapped to an installed distribution, so their "
+        "declaration cannot be checked:\n  " + "\n  ".join(unresolved)
+    )
+
+
+def test_every_runtime_import_is_a_runtime_dependency():
+    """The BACKEND's imports. Plugin packages are checked separately, below."""
+    problems = []
+    for module, files in sorted(IMPORTED.items()):
+        core_files = [f for f in files if _plugin_of(REPO_ROOT / f) is None]
+        if not core_files:
+            continue
+        dists = {_normalise(d) for d in DISTRIBUTIONS.get(module, [])}
+        if not dists or dists & DECLARED:
+            continue
+        problems.append(
+            f"  {module} (from {', '.join(sorted(dists))}) imported by "
+            f"{', '.join(sorted(core_files)[:3])}"
+        )
+
+    assert not problems, (
+        "Imported at runtime but not in [project].dependencies. A dev-only or "
+        "transitive declaration is not enough - the app must start from a "
+        "production install:\n" + "\n".join(problems)
+    )
+
+
+def _installed_plugins() -> list[str]:
+    return sorted(
+        d.name
+        for d in PLUGIN_ROOT.iterdir()
+        if d.is_dir()
+        and d.name not in PLUGIN_RESERVED
+        and (d / "__init__.py").is_file()
+        and discovery.is_mountable(d.name)
+    )
+
+
+def test_every_plugin_declares_the_dependencies_it_imports():
+    """A plugin's extras live in its own requirements.txt, beside its package.
+
+    This is the file a third-party plugin ships and the image build installs.
+    A plugin that imports something declared nowhere installs fine and then
+    fails at the first task that touches it - inside a worker, as a failed job.
+    """
+    problems = []
+    for slug in _installed_plugins():
+        declared, _unreadable = _plugin_declared(slug)
+        allowed = DECLARED | declared
+        for module, files in sorted(IMPORTED.items()):
+            if not any(_plugin_of(REPO_ROOT / f) == slug for f in files):
+                continue
+            dists = {_normalise(d) for d in DISTRIBUTIONS.get(module, [])}
+            if not dists or dists & allowed:
+                continue
+            problems.append(
+                f"  {slug}: imports {module} (from {', '.join(sorted(dists))}) "
+                f"- add it to archihub/plugins/{slug}/requirements.txt"
+            )
+
+    assert not problems, (
+        "Plugin imports that no manifest declares:\n" + "\n".join(problems)
+    )
+
+
+def test_a_vcs_requirement_names_its_distribution():
+    """`git+https://...` alone cannot be checked against an import.
+
+    pip is happy either way, so the omission is invisible until someone asks
+    whether the declaration matches the code - which is what this file does.
+    """
+    problems = []
+    for slug in _installed_plugins():
+        _declared_names, unreadable = _plugin_declared(slug)
+        for line in unreadable:
+            problems.append(f"  {slug}: {line}  -> append #egg=<distribution>")
+
+    assert not problems, (
+        "VCS requirements with no declared distribution name:\n" + "\n".join(problems)
+    )
+
+
+def test_httpx_specifically_is_a_runtime_dependency():
+    """Named, because it is the one that stops the app booting."""
+    assert "httpx" in DECLARED, (
+        "httpx is imported at module level by archihub/api/aiservices/transport.py; "
+        "create_app() raises ModuleNotFoundError without it."
+    )
+
+
+def test_the_dev_extra_does_not_carry_a_runtime_dependency():
+    """Re-adding httpx to `dev` would satisfy every test while breaking the deploy."""
+    data = tomllib.loads(PYPROJECT.read_text())
+    dev = {
+        _normalise(re.split(r"[<>=!~\[; ]", spec, maxsplit=1)[0])
+        for spec in data["project"]["optional-dependencies"]["dev"]
+    }
+    runtime_modules = {
+        _normalise(d)
+        for module in IMPORTED
+        for d in DISTRIBUTIONS.get(module, [])
+    }
+    leaked = sorted(dev & runtime_modules - DECLARED)
+    assert not leaked, f"declared only under [dev] but imported at runtime: {leaked}"
+
+
+# ---------------------------------------------------------------------------
+# A refusal must carry a refusal status
+# ---------------------------------------------------------------------------
+#
+# `JSONResponse` defaults to **200**. A handler that builds one by hand to
+# refuse a caller therefore says "no" with a success code unless it passes
+# `status_code` explicitly, and nothing about the call looks wrong.
+#
+# This is not hypothetical: removing that one keyword from
+# `tasks/router.py::_authorize` - so one user's task list refuses another user
+# with a 200 - passes the entire suite. Per-object decisions like that one
+# ("may this caller read *these* tasks") cannot be plain dependencies, so they
+# live in handler bodies where no dependency-level guard reaches them.
+
+
+def _json_response_calls() -> list[tuple[str, int]]:
+    import ast
+
+    calls = []
+    for path in _sources():
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "JSONResponse"
+            ):
+                if not any(kw.arg == "status_code" for kw in node.keywords):
+                    calls.append((str(path.relative_to(PACKAGE_ROOT.parent)), node.lineno))
+    return calls
+
+
+def test_every_hand_built_response_states_its_status():
+    problems = _json_response_calls()
+    assert not problems, (
+        "JSONResponse defaults to 200, so a refusal built without an explicit "
+        "status_code succeeds silently:\n"
+        + "\n".join(f"  {path}:{line}" for path, line in problems)
+    )

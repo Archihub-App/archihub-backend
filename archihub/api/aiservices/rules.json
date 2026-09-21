@@ -1,0 +1,90 @@
+{
+  "_comment": [
+    "Classification rules for provider errors, kept as data so a provider whose",
+    "codes we have not seen can be taught to the classifier without a release.",
+    "",
+    "`codes` maps a provider's machine-readable error code or type to a reason.",
+    "`phrases` is the last resort, matched in order: the first entry whose `any`",
+    "list hits, and whose `unless` list does not, wins. Order is significant --",
+    "'token limit' occurs in both context-window and rate-limit messages."
+  ],
+
+  "codes": {
+    "context_length_exceeded": "context_length",
+    "string_above_max_length": "context_length",
+    "max_tokens_exceeded": "context_length",
+    "request_too_large": "context_length",
+    "rate_limit_exceeded": "rate_limited",
+    "rate_limit_error": "rate_limited",
+    "insufficient_quota": "rate_limited",
+    "quota_exceeded": "rate_limited",
+    "resource_exhausted": "rate_limited",
+    "invalid_api_key": "auth",
+    "authentication_error": "auth",
+    "permission_error": "auth",
+    "permission_denied": "auth",
+    "unauthenticated": "auth",
+    "account_deactivated": "auth",
+    "model_not_found": "model_not_found",
+    "not_found_error": "model_not_found",
+    "invalid_request_error": "invalid_request",
+    "unsupported_value": "invalid_request",
+    "unsupported_parameter": "invalid_request",
+    "unsupported_country_region_territory": "auth",
+    "content_filter": "content_filtered",
+    "content_policy_violation": "content_filtered",
+    "responsible_ai_policy_violation": "content_filtered",
+    "safety": "content_filtered",
+    "blocked": "content_filtered",
+    "overloaded_error": "unavailable",
+    "server_error": "unavailable",
+    "api_error": "unavailable",
+    "service_unavailable": "unavailable",
+    "unavailable": "unavailable",
+    "deadline_exceeded": "timeout",
+    "timeout": "timeout"
+  },
+
+  "phrases": [
+    {
+      "reason": "rate_limited",
+      "any": ["rate limit", "too many requests", "quota", "per min", "requests per", "overloaded"],
+      "unless": []
+    },
+    {
+      "reason": "context_length",
+      "any": [
+        "context length", "context window", "context_length", "maximum context",
+        "max context", "too many tokens", "token limit", "prompt is too long",
+        "input is too long", "exceeds the context", "reduce the length",
+        "longer than the model", "input length and max tokens"
+      ],
+      "unless": ["rate limit", "per min"]
+    },
+    {
+      "reason": "auth",
+      "any": ["api key", "unauthorized", "unauthenticated", "invalid authentication", "permission", "forbidden"],
+      "unless": []
+    },
+    {
+      "reason": "model_not_found",
+      "any": ["model not found", "does not exist", "unknown model", "no such model", "is not a valid model"],
+      "unless": []
+    },
+    {
+      "reason": "content_filtered",
+      "any": ["content filter", "content policy", "safety", "blocked by", "responsible ai"],
+      "unless": []
+    },
+    {
+      "reason": "timeout",
+      "any": ["timed out", "timeout", "deadline exceeded"],
+      "unless": []
+    },
+    {
+      "reason": "unavailable",
+      "any": ["service unavailable", "bad gateway", "internal server error", "connection refused", "connection error", "temporarily unavailable"],
+      "unless": []
+    }
+  ]
+}
