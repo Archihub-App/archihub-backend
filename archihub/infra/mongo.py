@@ -1,20 +1,12 @@
 """MongoDB access.
 
-Port of ``app/utils/MongoConector.py`` + ``app/utils/DatabaseHandler.py``.
-
 Synchronous on purpose: the same client serves
 FastAPI route handlers - which run in Starlette's threadpool, because they are
 declared ``def`` - and Celery task bodies, which have no event loop at all.
 
-The generic CRUD surface is preserved method-for-method so ported service
-modules keep the same call shapes. Two deliberate corrections:
-
-* ``update_record`` accepted only Pydantic v1 models (it called ``.dict()``
-  unconditionally). It now accepts v2 models, v1 models and plain dicts, which
-  is what callers were already passing in practice.
-* Connection settings come from ``archihub.core.settings`` rather than being
-  re-read from ``os.environ`` per module, so the hardcoded fallback Mongo
-  password in ``MongoConector`` is gone. See the settings module docstring.
+``update_record`` accepts Pydantic v2 models, v1 models and plain dicts.
+Connection settings come from ``archihub.core.settings``, never from
+``os.environ`` directly.
 """
 
 from __future__ import annotations
@@ -36,7 +28,7 @@ def _to_payload(record: Any, *, exclude_unset: bool = True) -> dict:
         return record
     if hasattr(record, "model_dump"):  # Pydantic v2
         return record.model_dump(exclude_unset=exclude_unset)
-    if hasattr(record, "dict"):  # Pydantic v1 (legacy models still in tree)
+    if hasattr(record, "dict"):  # Pydantic v1
         return record.dict(exclude_unset=exclude_unset)
     raise TypeError(f"Expected a dict or model-like object, got {type(record).__name__}")
 
@@ -70,10 +62,8 @@ class MongoClientWrapper:
     ):
         """Return a cursor.
 
-        NOTE: this returns a live pymongo cursor, matching legacy behaviour.
-        Callers that test it for emptiness must materialise it first - a cursor
-        is always truthy, which is the root of the documented
-        ``logs/routes.py`` "never returns 404" bug.
+        NOTE: this returns a live pymongo cursor. Callers that test it for
+        emptiness must materialise it first - a cursor is always truthy.
         """
         cursor = self.db[collection].find(filters or {}, fields or {})
         if sort:
@@ -191,8 +181,8 @@ def get_mongo() -> MongoClientWrapper:
     """Return the process-wide Mongo client, creating it on first use.
 
     Lazily constructed rather than instantiated at import time so that importing
-    a service module never opens a socket - which is what made the legacy
-    handlers impossible to import in a test or a script without a live database.
+    a service module never opens a socket, so modules import in a test or a
+    script without a live database.
     """
     global _mongo
     if _mongo is None:

@@ -1,12 +1,8 @@
-"""Every third-party module the port imports is declared in pyproject.toml.
+"""Every third-party module the backend imports is declared in pyproject.toml.
 
-The guard exists because of a specific failure: `httpx` is imported at module
-level by `archihub/api/aiservices/transport.py` - the single HTTP path every LLM
-call goes through - but was declared only under `[optional-dependencies].dev`.
-A production install (`uv sync --no-dev`, `pip install .`) therefore produced a
-backend that raised `ModuleNotFoundError` inside `create_app()` and could not
-start at all. Nothing caught it, because the dev environment had httpx installed
-for pytest and the diff harness, so every test and every local run was fine.
+A module imported at runtime but declared only as a dev dependency (as `httpx`
+once was) produces a production install that cannot start, while every test
+and every local run passes.
 
 That is the general shape: a manifest is never exercised by the code it
 describes. The tests import from the *environment*, not from the declaration, so
@@ -264,7 +260,7 @@ def test_a_vcs_requirement_names_its_distribution():
 
 
 def test_httpx_specifically_is_a_runtime_dependency():
-    """The original defect, named, because it is the one that stops the app booting."""
+    """Named, because it is the one that stops the app booting."""
     assert "httpx" in DECLARED, (
         "httpx is imported at module level by archihub/api/aiservices/transport.py; "
         "create_app() raises ModuleNotFoundError without it."

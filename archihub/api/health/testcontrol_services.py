@@ -1,7 +1,7 @@
 """Test-control operations for disposable instances.
 
-Port of ``app/api/health/testcontrol_services.py``. Reachable only through the
-three-part gate in ``archihub/core/security/test_control.py``.
+Reachable only through the three-part gate in
+``archihub/core/security/test_control.py``.
 """
 
 from __future__ import annotations
@@ -30,20 +30,14 @@ def get_routes(app: FastAPI) -> tuple[dict, int]:
     """Live route inventory, for diffing against the OpenAPI spec.
 
     ``ArchiHUBTestRunner``'s ``swagger-inventory`` suite consumes this to prove
-    no route escapes documentation. The legacy implementation walked Flask's
-    ``app.url_map.iter_rules()``; the equivalent here is
+    no route escapes documentation. Routes come from
     ``archihub.core.routing.iter_api_routes`` - see that module for why walking
-    ``app.routes`` directly silently under-reports on modern FastAPI. The three
-    keys are reproduced exactly:
+    ``app.routes`` directly silently under-reports on modern FastAPI. Each entry:
 
         {"endpoint": <handler name>, "path": ..., "methods": [...]}
 
-    ONE FORMAT CHANGE, deliberate: path parameters are rendered in OpenAPI style
-    (``/users/{username}``) rather than Flask's converter syntax
-    (``/users/<username>``), because that is what FastAPI puts in
-    ``/openapi.json``. The suite compares this inventory against that spec, so
-    matching it removes a normalisation step rather than adding one - but the
-    runner's comparison logic should be checked when this backend goes live.
+    Path parameters are rendered in OpenAPI style (``/users/{username}``),
+    matching ``/openapi.json``, which the suite compares this inventory against.
     """
     routes = [
         {
@@ -102,7 +96,7 @@ def poll_reset(task_id: str) -> tuple[dict, int]:
     """Whether a queued reset has finished, and what it produced.
 
     Always 200 - the *request* succeeded; the reset's own outcome is in the
-    body's ``status``. That is the legacy contract and what the runner reads.
+    body's ``status``, which is what the runner reads.
     """
     from archihub.api.tasks.services import _result
 

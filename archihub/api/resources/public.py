@@ -11,10 +11,8 @@ was meant to withhold.
 
 **Content types that restrict viewing are omitted, not refused.** A listing or
 a tree that includes a restricted type simply leaves it out - the caller asked
-about several types and is entitled to an answer about the public ones. The
-original returned 401 for the whole request if *any* requested type had
-``viewRoles``, so one restricted type in a saved view blanked the entire public
-browse page.
+about several types and is entitled to an answer about the public ones, so one
+restricted type in a saved view cannot blank the public browse page.
 """
 
 from __future__ import annotations
@@ -87,8 +85,8 @@ def get_all(body: dict) -> tuple[dict, int]:
     """The public browse listing, restricted to published resources.
 
     Delegates to the authenticated listing with the caller fixed at anonymous:
-    the filters, sorting and column handling are identical and were duplicated
-    in the original, where the two copies had already drifted.
+    the filters, sorting and column handling are identical, so they are not
+    duplicated.
     """
     requested = body.get("post_type") or []
     if isinstance(requested, str):
@@ -108,9 +106,7 @@ def get_all(body: dict) -> tuple[dict, int]:
 def get_tree(body: dict) -> tuple[list | dict, int]:
     """The public navigation tree or flat list.
 
-    ``view`` selects between them. The original had no ``else``, so any other
-    value - or its absence - fell off the end of the function and returned
-    ``None``, which Flask rendered as an empty 500.
+    ``view`` selects between them; any other value, or none, is a 400.
     """
     view = body.get("view")
     if view not in ("tree", "list"):

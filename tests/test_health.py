@@ -96,7 +96,7 @@ def test_unreachable_mongo_is_not_probed_repeatedly(monkeypatch):
     assert payload["checks"]["qdrant"]["status"] == "disabled"
 
 
-def test_readiness_payload_keys_match_legacy_contract(monkeypatch):
+def test_readiness_payload_keys_match_the_contract(monkeypatch):
     monkeypatch.setattr(services, "check_mongo", lambda: (True, None))
     monkeypatch.setattr(services, "load_index_management", lambda: {"data": []})
     monkeypatch.setattr(services, "check_redis", lambda: (True, None))

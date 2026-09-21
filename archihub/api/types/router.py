@@ -1,22 +1,11 @@
 """Content-type routes.
 
-Port of ``app/api/types/routes.py``. The Flasgger YAML docstrings become FastAPI
-metadata: prose moves to the handler docstring, ``tags`` to the router, and the
-``responses`` map to the decorator. Security is derived from the dependency
-rather than hand-declared, so a route can no longer enforce auth while forgetting
-to document it.
+``PUT`` and ``DELETE`` are guarded by ``admin`` OR ``editor``, while ``POST``
+requires ``admin``: an editor can modify or delete a content type but not
+create one.
 
-WIRE CONTRACT IS PRESERVED EXACTLY, including one thing that is arguably wrong:
-
-* ``PUT`` and ``DELETE`` are guarded by ``admin`` OR ``editor``, while ``POST``
-  requires ``admin``. So an editor can modify or delete a content type but not
-  create one, which is a strange privilege shape. Reproduced as-is; changing it
-  is a permissions decision, not a migration one.
-
-Responses are returned as explicit ``JSONResponse`` objects with no
-``response_model``: a response model would *filter* undeclared fields, silently
-dropping data while still returning 200. Models are introduced per route once the
-diff harness confirms parity.
+Responses are returned with no ``response_model``: a response model would
+*filter* undeclared fields, silently dropping data while still returning 200.
 """
 
 from __future__ import annotations
@@ -43,9 +32,8 @@ router = APIRouter(prefix="/types", tags=["Content types"])
 
 MSG_UNAUTHORIZED = "You don't have the required authorization"
 
-# `ROLE_FAILURE_STATUS` is 403 since the coordinated frontend flip; it is
-# still passed explicitly because it marks the routes whose status was chosen for
-# legacy-compatibility reasons. See its comment in core/security/jwt.py.
+# `ROLE_FAILURE_STATUS` is passed explicitly to mark the routes whose refusal
+# status is chosen here; see its comment in core/security/jwt.py.
 require_admin = require_role_any("admin")
 require_admin_or_editor = require_role_any(
     "admin", "editor"
@@ -56,8 +44,7 @@ def _respond(result) -> JSONResponse:
     """Render a service result.
 
     Services return either ``(payload, status)`` or, for ``get_by_slug``, the
-    document itself on success. Both shapes are handled here so the services
-    keep their legacy signatures during the port.
+    document itself on success. Both shapes are handled here.
     """
     if isinstance(result, tuple) and len(result) == 2:
         payload, status_code = result
@@ -133,8 +120,8 @@ def get_type_viz(
     exists today, so nothing currently shadows this.
 
     `type` names one of a fixed table of aggregations rather than describing one;
-    an unrecognised name is answered `{"msg": "ok"}` with 200, as the legacy route
-    did, because the panel requests several charts by name and one it does not
+    an unrecognised name is answered `{"msg": "ok"}` with 200, because the panel
+    requests several charts by name and one it does not
     know must not fail the screen.
     """
     slug = body.get("slug")
@@ -181,11 +168,7 @@ def get_by_slug(
 
     result = services.get_by_slug(slug)
 
-    # The legacy handler only returned the 404 when the message matched
-    # 'Type not found' exactly - and the service actually produces
-    # 'Post type not found'. Every other error fell through the if/else and
-    # returned None, which Flask rejects with a 500 carrying no message.
-    # Here every error shape is returned as the service reported it.
+    # Every error shape is returned as the service reported it.
     return _respond(result)
 
 
@@ -225,9 +208,6 @@ def delete_by_slug(
 ) -> JSONResponse:
     """Delete a content type and soft-delete every resource that used it.
 
-    Returns **200**, not 204, matching the legacy route. `TypesService.deleteType`
-    used to demand exactly 204 and so took its error path on success; it checks
-    `response.ok` now, so both are accepted and this status is free to stay as
-    the legacy contract had it.
+    Returns **200** with a message, like every DELETE.
     """
     return _respond(services.delete_by_slug(slug, current_user.username))

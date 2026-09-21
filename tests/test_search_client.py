@@ -2,8 +2,7 @@
 
 What is worth testing here is not that ``requests`` works. It is that an index
 name can only be produced one way, that a failed write is reported as one, and
-that a regeneration never leaves the alias resolving to two indices at once -
-each of which was a real defect in ``app/utils/IndexHandler.py``.
+that a regeneration never leaves the alias resolving to two indices at once.
 """
 
 from __future__ import annotations
@@ -98,8 +97,7 @@ def test_a_suffix_is_never_double_prefixed(client):
 
 
 def test_a_rejected_write_raises_rather_than_returning_a_response(client):
-    """The original returned the raw `requests.Response` and left the caller to
-    remember `if r.status_code != 201 and != 200`. The shapes indexer did not."""
+    """A failed write raises; no caller has to remember to check the status."""
     wire(
         client,
         {
@@ -204,9 +202,8 @@ def test_regenerating_with_no_existing_alias_creates_the_first_index(client):
 
 
 def test_regenerating_swaps_the_alias_in_one_action_after_the_copy(client):
-    """The original added the new index to the alias BEFORE reindexing into it,
-    so for the duration of the copy the alias resolved to two indices - one
-    full, one filling up - and every search served duplicate hits."""
+    """The alias moves only after the copy, so it never resolves to two indices
+    and a search never serves duplicate hits."""
     recorder = wire(client, {("GET", "/_alias/test-resources"): FakeResponse(200, {"test-resources_3": {}})})
 
     name, created = client.regenerate_index("resources", {"properties": {}})
@@ -226,8 +223,8 @@ def test_regenerating_swaps_the_alias_in_one_action_after_the_copy(client):
 
 
 def test_an_alias_pointing_at_several_indices_is_refused_not_added_to(client):
-    """That state means a previous regeneration was interrupted. The original
-    created yet another index and left the mess growing."""
+    """That state means a previous regeneration was interrupted; it is cleaned
+    up, not added to."""
     wire(
         client,
         {("GET", "/_alias/test-resources"): FakeResponse(200, {"test-resources_1": {}, "test-resources_2": {}})},
@@ -241,9 +238,8 @@ def test_an_alias_pointing_at_several_indices_is_refused_not_added_to(client):
     "current,alias,expected",
     [
         ("test-resources_3", "test-resources", 4),
-        # An instance prefix containing an underscore. The original read the
-        # version with `name.split('_')[1]`, which here is "archive-resources"
-        # and raised ValueError inside a Celery task.
+        # An instance prefix containing an underscore must not confuse the
+        # version parsing.
         ("my_archive-resources_7", "my_archive-resources", 8),
         ("test-resources", "test-resources", 1),
     ],

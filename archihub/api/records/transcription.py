@@ -363,11 +363,7 @@ def may_edit(record_id: str, user: str) -> bool:
     they hold an open task on *this* record - the assignment is the grant, and
     holding the role alone grants nothing.
 
-    The original returned ``None`` for a caller who was none of the three and
-    every caller tested ``if can_edit is False``, so ``None`` passed. That made
-    the route's own role gate the only real check, which is why an editor could
-    edit any transcription anywhere. This returns a real bool; the route states
-    which roles reach it.
+    Always a real bool; the route states which roles reach it.
     """
     from archihub.api.users.services import has_role
 
@@ -515,8 +511,7 @@ def rename_speaker(record_id: str, body: dict, user: str) -> tuple[dict, int]:
             segment["speaker"] = speaker
             renamed += 1
 
-    # The original wrote unconditionally, so a typo'd `oldSpeaker` still bumped
-    # `updatedAt`, fired the reindex hook and regenerated the text for nothing.
+    # Nothing to rename: no write, no reindex.
     if not renamed:
         return {"msg": _("Transcription speaker edited")}, 200
 

@@ -3,11 +3,8 @@
 The headline case is ``test_has_role_returns_a_real_bool_for_unknown_user``.
 
 Authorisation helpers must return a real ``bool`` on every path, including the
-"user does not exist" one. Callers write ``if not has_role(...): deny``, so a
-helper that returns a response-shaped value there (a tuple, a dict) inverts the
-guard - a non-empty tuple is truthy. These tests assert the bool contract
-directly so a future refactor cannot quietly reintroduce a variant that returns
-something else.
+"user does not exist" one: callers rely on it. These tests assert the bool
+contract directly.
 """
 
 from __future__ import annotations
@@ -55,11 +52,10 @@ def test_has_role_false_when_user_lacks_it(mongo):
 
 
 def test_has_role_returns_a_real_bool_for_unknown_user(mongo):
-    """The bug fix. Must be exactly False - never a truthy tuple.
+    """Exactly False - an authorisation helper returns a real bool.
 
-    `is False` rather than `== False` on purpose: a `(response, 400)` tuple
-    would satisfy neither, but `assert not x` would also catch an empty tuple,
-    which is not what we want to permit either.
+    `is False` rather than `assert not x` on purpose: the latter would also
+    accept an empty tuple or None.
     """
     mongo.records["users"] = None
     result = services.has_role("ghost", "admin")

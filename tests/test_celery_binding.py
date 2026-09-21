@@ -12,8 +12,8 @@ actions.
 calling it.** Building the application reads the active plugin list from Mongo,
 and this suite must run with no infrastructure (see `conftest.py`). Importing the
 Celery app inside this test process would also make any "is it bound?" assertion
-pass by its own doing, whatever `create_app` does. The regression that actually
-happened is a missing import in one module, so that is what is asserted.
+pass by its own doing, whatever `create_app` does. A missing import is what
+breaks it, so that is what is asserted.
 """
 
 from __future__ import annotations
@@ -82,8 +82,8 @@ def test_a_shared_task_resolves_to_the_configured_broker():
 
 def test_the_broker_the_web_process_would_publish_to_is_reachable_in_principle():
     """Not that the broker is *up* - this suite runs with nothing running - but
-    that the URL names a scheme this deployment actually uses. The bug produced
-    `None`, which Celery silently reads as its AMQP default."""
+    that the URL names a scheme this deployment actually uses. `None` would be
+    read silently as Celery's AMQP default."""
     import archihub.worker.celery_app  # noqa: F401
 
     broker = current_app.conf.broker_url

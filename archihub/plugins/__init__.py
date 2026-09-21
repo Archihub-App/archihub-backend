@@ -1,1 +1,1 @@
-"""Plugin framework and the ported plugins."""
+"""Plugin framework and the installed plugins."""

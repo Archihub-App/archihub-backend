@@ -41,9 +41,7 @@ def indexing_enabled() -> bool:
     """Whether this instance has search switched on.
 
     Read at request time rather than at import: an operator turning indexing on
-    should not need a restart to make the routes work, and the legacy design —
-    where the whole blueprint was registered or not at construction — meant they
-    did.
+    should not need a restart to make the routes work.
     """
     from archihub.api.system.services import get_setting_value
 
@@ -61,8 +59,7 @@ def visible_types(post_types: list[str], user: str | None) -> tuple[list[str], s
     A type restricted by ``viewRoles`` is **refused**, not silently dropped:
     unlike a browse listing, a search asks a direct question and answering it
     with fewer types than were asked for looks like "no results" rather than
-    "not for you". The legacy version raised a bare exception here, which its
-    own caller turned into a 500 — documented in its Swagger as such.
+    "not for you".
     """
     from archihub.api.resources.hierarchy import type_roles
     from archihub.api.users.services import has_role

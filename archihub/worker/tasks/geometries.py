@@ -1,7 +1,6 @@
 """Geometry-index maintenance tasks.
 
-Port of the two ``@shared_task`` functions at the end of
-``app/api/geosystem/services.py``:
+Two tasks:
 
     geosystem.regenerate_index_shapes   rebuild the shapes index
     geosystem.index_shapes              (re)index the stored boundaries
@@ -10,8 +9,7 @@ These back the explore map's boundary layer. Both are admin-triggered from the
 system settings screen and both are long-running: an administrative-boundary set
 is tens of thousands of polygons.
 
-TWO DEFECTS FIXED HERE, both invisible from outside
----------------------------------------------------
+TWO THINGS THAT FAIL INVISIBLY -----------------------------
 
 **THE INDEX NAME MUST CARRY THE INSTANCE PREFIX, on the clear as well as the
 write.** Writing to ``<prefix>-shapes`` while clearing ``shapes`` targets an
@@ -20,8 +18,8 @@ value is discarded, and the clear silently does nothing - so every rerun adds a
 second copy of every boundary instead of replacing the first. This is why
 ``resolve_index`` is the only way to name an index.
 
-**Write failures were discarded.** ``index_document``'s response was not looked
-at, so a rejected mapping produced a partially-filled index and a message saying
+**Write failures are checked.** Discarding ``index_document``'s response would
+turn a rejected mapping into a partially-filled index and a message saying
 indexing had finished.
 """
 
@@ -68,12 +66,8 @@ def regenerate_index_shapes() -> str:
 def index_shapes(body: dict | None = None) -> str:
     """Index the stored boundary shapes.
 
-    ``body`` is accepted because the legacy signature took it and a queued
-    message may carry one, but it has never selected anything: the original
-    built ``filters = {}`` and then never read ``body`` again except to decide
-    whether to empty the index first. That is preserved - an empty body means a
-    full rebuild - rather than quietly giving the parameter a new meaning that
-    an existing caller would not expect.
+    ``body`` selects nothing; it only decides whether the index is emptied
+    first - an empty body means a full rebuild.
     """
     from archihub.core.i18n import gettext as _
 

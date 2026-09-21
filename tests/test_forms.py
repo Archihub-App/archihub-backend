@@ -77,10 +77,7 @@ def title_field(**overrides):
 def test_unique_slug_does_not_accumulate_suffixes(mongo):
     """Regression guard for slugs like `test-1-2-3`.
 
-    The legacy loop reassigned the suffixed value back into the variable it was
-    suffixing, so the third form named "Test" became `test-1-2` and the fourth
-    `test-1-2-3`. The types domain kept a separate base and got this right;
-    forms did not.
+    The suffix replaces the previous one, as for content types.
     """
     taken = {"test", "test-1", "test-2"}
     mongo.records["forms"] = lambda filters: {"slug": filters["slug"]} if filters["slug"] in taken else None
@@ -276,7 +273,7 @@ def test_get_by_slug_prepends_the_synthetic_access_rights_field(mongo):
 
 
 def test_missing_form_is_404_and_translated(mongo):
-    """Legacy returned a hardcoded, untranslated Spanish string here."""
+    """The translated message."""
     mongo.records["forms"] = None
     payload, status = services.get_by_slug("nope")
 
@@ -285,9 +282,7 @@ def test_missing_form_is_404_and_translated(mongo):
 
 
 def test_update_checks_existence_before_validating(mongo):
-    """Legacy validated and rebuilt the combined schema BEFORE looking the form
-    up, so an update aimed at a nonexistent form could fail with a validation
-    error instead of the real answer: 404."""
+    """A nonexistent form is a 404 before any validation runs."""
     mongo.records["forms"] = None
 
     # Deliberately invalid body: no title field. The 404 must still win.
@@ -321,11 +316,8 @@ def test_delete_succeeds_with_a_message_when_unused(mongo):
 def test_slug_search_is_bounded(mongo):
     """An existence query that always answers "yes" must not spin forever.
 
-    The legacy loop had no bound: it asked the database whether a slug was taken
-    and suffixed until told otherwise. Any condition that makes that query always
-    report "taken" hangs the request thread indefinitely. Found by a test fixture
-    that returned the same record regardless of filter - which is exactly how the
-    real failure would look.
+    Any condition that makes that query always report "taken" would otherwise
+    hang the request thread indefinitely.
     """
     mongo.records["forms"] = {"slug": "always-taken"}  # every lookup matches
 
@@ -334,7 +326,7 @@ def test_slug_search_is_bounded(mongo):
 
 
 def test_duplicate_renames_and_reslugs(mongo):
-    # Filter-aware: only the original slug exists, so the derived slug is free.
+    # Filter-aware: only the source form's slug exists, so the derived slug is free.
     original = {"_id": "x", "name": "Original", "slug": "original", "fields": [title_field()]}
     mongo.records["forms"] = lambda filters: original if filters.get("slug") == "original" else None
     mongo.collections["forms"] = []

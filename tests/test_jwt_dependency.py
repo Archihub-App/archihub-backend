@@ -75,7 +75,7 @@ def test_valid_token_authenticates(client: TestClient):
     assert response.json() == {"user": USERNAME}
 
 
-def test_missing_header_returns_401_with_legacy_message(client: TestClient):
+def test_missing_header_returns_401_with_the_contract_message(client: TestClient):
     response = client.get("/me")
     assert response.status_code == 401
     assert response.json() == {"msg": tokens.MSG_MISSING_HEADER}
@@ -90,12 +90,8 @@ def test_expired_token_returns_401(client: TestClient):
     assert response.json() == {"msg": tokens.MSG_EXPIRED}
 
 
-def test_malformed_token_returns_422_matching_legacy(client: TestClient):
-    """flask_jwt_extended returns 422 (not 401) for an unusable token.
-
-    Preserved deliberately: upgrade_front does exact status-code comparisons in
-    ~187 places, so collapsing this into 401 would be a wire change smuggled in
-    under a framework swap. See InvalidTokenError's docstring.
+def test_malformed_token_returns_422(client: TestClient):
+    """422 (not 401) for an unusable token - see InvalidTokenError's docstring.
     """
     response = client.get("/me", headers=auth("not.a.jwt"))
     assert response.status_code == 422
@@ -122,12 +118,10 @@ def test_role_holder_is_allowed(client: TestClient, roles):
 
 
 def test_missing_role_returns_403_not_401(client: TestClient, roles):
-    """The systematic correction: permission failures are 403.
+    """Permission failures are 403, not 401.
 
-    Legacy used 401 at ~223 sites and 403 exactly once, conflating "I don't know
-    who you are" with "I know, and no". A 401 also tells the frontend to bounce
-    the user to a login screen, which is the wrong remedy when they are already
-    signed in and simply lack a role.
+    A 401 tells the frontend to bounce the user to a login screen, which is the
+    wrong remedy when they are already signed in and simply lack a role.
     """
     response = client.get("/admin-only", headers=auth(tokens.create_access_token(USERNAME)))
     assert response.status_code == 403
@@ -158,9 +152,7 @@ def test_unrelated_role_does_not_grant_access(client: TestClient, roles):
 def test_security_is_documented_automatically(client: TestClient):
     """A route cannot enforce auth while forgetting to document it.
 
-    In the legacy app the Flasgger `security:` block was hand-written per route
-    and separate from the `@jwt_required()` that actually enforced it, so the two
-    could drift. Here both come from the same dependency, so they cannot.
+    Both come from the same dependency, so they cannot drift.
     """
     spec = client.app.openapi()
 

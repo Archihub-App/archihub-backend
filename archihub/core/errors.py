@@ -1,28 +1,13 @@
 """Error handling and the HTTP status-code policy.
 
-Two problems this module exists to prevent:
+``BusinessError`` and its subclasses carry a translated, user-facing message and
+a status code, and are rendered as-is. Everything else is an unexpected failure:
+logged in full server-side, rendered as a generic message client-side, so raw
+exception text - internals, sometimes connection strings - never reaches a
+response.
 
-* ~233 sites do ``except Exception as e: return {'msg': str(e)}, 500``, leaking
-  raw exception text - stack-adjacent internals, sometimes connection strings -
-  straight into API responses.
-* Exceptions are *also* the intended way to deliver user-facing business
-  messages: code raises ``Exception(_('You have reached the limit of requests
-  for this week'))`` specifically so the text reaches the client. A blanket
-  "never show exception text" rule would therefore break real UX.
-
-The fix is a distinguished exception hierarchy. ``BusinessError`` and its
-subclasses carry a translated, user-facing message and a status code, and are
-rendered as-is. Everything else is an unexpected failure: logged in full
-server-side, rendered as a generic message client-side.
-
-This makes conversion incremental. A domain can be ported with all of its error
-paths still falling through to the generic 500 handler, then have specific
-exception types introduced afterwards, without either step blocking the other.
-
-RESPONSE SHAPE IS UNCHANGED: every error is ``{"msg": "<text>"}``, exactly as the
-Flask app emitted, so ``upgrade_front``'s error handling keeps working. No
-machine-readable ``error_code`` field is added - that would be an additive
-change to make deliberately later, not a side effect of the framework swap.
+Every error body is ``{"msg": "<text>"}``, which ``upgrade_front``'s error
+handling reads.
 """
 
 from __future__ import annotations
@@ -71,10 +56,8 @@ class AuthenticationError(BusinessError):
 class PermissionDeniedError(BusinessError):
     """Authenticated, but not allowed.
 
-    This is the systematic correction of the legacy 401-for-everything habit:
-    the old code used 401 at ~223 sites and 403 exactly once, even though most
-    of those are role checks on an already-authenticated user. Role/right
-    failures raise this; only identity failures raise AuthenticationError.
+    Role/right failures raise this; only identity failures raise
+    AuthenticationError.
     """
 
     status_code = status.HTTP_403_FORBIDDEN
@@ -83,19 +66,15 @@ class PermissionDeniedError(BusinessError):
 class InvalidTokenError(BusinessError):
     """A token that is present but unusable: malformed, badly signed, wrong type.
 
-    422, NOT 401 - and that is deliberate. flask_jwt_extended splits these two
-    cases and the split is part of the wire contract this migration preserves:
+    422, NOT 401 - and that is deliberate. The split is part of the wire contract:
 
         missing header / expired token  -> 401
         malformed / bad signature /
         refresh token used as access    -> 422
 
-    ``upgrade_front`` performs exact status-code equality checks at roughly 187
-    call sites, so silently collapsing 422 into 401 here would be a behavioural
-    change smuggled in under a framework swap. If this should become 401 (which
-    is arguably more correct, and would make the frontend redirect to login
-    instead of showing an error), that is a deliberate contract change to make
-    alongside a frontend audit.
+    Making this 401 would make the frontend redirect to login instead of
+    showing an error; that is a contract change to make together with the
+    frontend.
     """
 
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
@@ -116,8 +95,7 @@ class RateLimitError(BusinessError):
 
     Exists as its own type so the Fernet authenticators can let this one
     specific message through while still hiding every other exception behind a
-    generic 'Invalid or expired token'. In the legacy code that asymmetry was
-    achieved by catch-ordering plus a bare ``str(e)``; here it is structural.
+    generic 'Invalid or expired token'.
     """
 
     status_code = status.HTTP_429_TOO_MANY_REQUESTS

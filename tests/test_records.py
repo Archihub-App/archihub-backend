@@ -126,14 +126,7 @@ def test_holding_the_right_grants_access(mongo):
 
 
 def test_an_administrator_may_read_a_restricted_record(mongo, as_admin):
-    """THE fix.
-
-    The original wrote `has_right(current_user, 'admin')` - but `has_right`
-    resolves **access rights**, and `admin` is a *role*. No instance defines an
-    access right by that name, so the intended administrator bypass never
-    existed and administrators were refused. It fails closed, so it is a
-    usability defect rather than a hole - but it was never true that an
-    administrator could always read a record.
+    """Administrators may read any record - a *role* check, not an access right.
     """
     mongo.records[RECORD_ID] = record(accessRights="reserved")
     mongo.user = {"accessRights": []}
@@ -284,7 +277,7 @@ def test_parents_are_annotated_with_their_title_and_icon(mongo):
 
 
 def test_a_parent_with_no_title_does_not_take_the_record_down(mongo):
-    """The original subscripted `metadata.firstLevel.title` directly."""
+    """A parent without a title does not fail the read."""
     mongo.records[RECORD_ID] = record(parent=[{"id": RESOURCE_ID}])
     mongo.resources[RESOURCE_ID] = {
         "_id": ObjectId(RESOURCE_ID), "accessRights": None, "parents": [], "metadata": {},
@@ -462,8 +455,7 @@ def test_a_listing_never_returns_the_storage_path(mongo):
 
 
 def test_no_matches_is_an_empty_list_not_a_404(mongo):
-    """The legacy 404 made "nothing matched" indistinguishable from a wrong
-    endpoint, and broke pagination past the last page."""
+    """Paging past the last page works."""
     payload, status = services.get_by_filters({"filters": {}, "page": 0}, "admin")
     assert (status, payload) == (200, [])
 
@@ -500,9 +492,7 @@ def gallery(mongo):
 
 
 def test_the_gallery_respects_the_curators_order(gallery):
-    """The original keyed its order map by the resource's string ids and looked
-    it up with the record's ObjectId, so nothing ever matched and galleries came
-    back in Mongo's natural order."""
+    """Galleries come back in the curator's order, not Mongo's natural order."""
     payload, status = services.get_by_gallery_index({"id": RESOURCE_ID, "index": 0}, "alice")
 
     assert status == 200
@@ -533,9 +523,8 @@ def test_a_missing_resource_is_404(gallery):
 
 
 def test_only_the_display_fields_may_be_set(mongo):
-    """The original passed the caller's whole body into `RecordUpdate`, which
-    also declares `parent`, `parents`, `processing` and `status` - so a display
-    rename could re-file the record or overwrite a plugin's results."""
+    """A display rename cannot re-file the record or overwrite a plugin's
+    results."""
     mongo.records[RECORD_ID] = record()
 
     services.update_record_by_id(
@@ -595,9 +584,7 @@ def test_favcount_of_a_missing_record_is_404(mongo):
 
 
 def test_an_unprocessed_record_says_so(mongo):
-    """The original's guard subscripted the very key it had just established
-    was absent, so this raised KeyError and reached the client as a 500 with
-    the raw key name."""
+    """An unprocessed record gets the prepared message, not a 500."""
     with pytest.raises(media.NotStreamable):
         media.derivative_of({})
 

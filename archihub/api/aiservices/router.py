@@ -67,8 +67,7 @@ def _provider_error(exc: ai_errors.ProviderError) -> JSONResponse:
 
     The reason travels in the body so the interface can say something useful —
     "the key is wrong" and "the provider is down" need different words and
-    different buttons, and the legacy `{'msg': str(e)}` made them
-    indistinguishable.
+    different buttons.
     """
     status = {
         ai_errors.Reason.AUTH: 502,
@@ -98,8 +97,7 @@ def list_dialects() -> JSONResponse:
     """The protocols available when configuring a provider.
 
     A *protocol*, not a vendor list. Any endpoint speaking one of these can be
-    configured without a code change — which is why the legacy
-    `llm_providers = ["OpenAI", "Google", ...]` literal is gone.
+    configured without a code change.
     """
     return JSONResponse(status_code=200, content=providers.dialects())
 
@@ -152,8 +150,7 @@ def update_provider(
     """Change a provider.
 
     Omitting ``key`` leaves the stored credential alone; sending an empty one
-    clears it. The legacy update wrote whatever its model produced, so saving
-    the form without retyping the key erased it.
+    clears it, so saving the form without retyping the key keeps it.
     """
     return _respond(providers.update(provider_id, body, current_user.username))
 
@@ -204,8 +201,7 @@ def list_models(
 
     Context windows and capabilities are whatever the endpoint reports; where it
     reports nothing, nothing is claimed. If discovery fails, the response says
-    so — the legacy code substituted a hardcoded list, so a provider with a bad
-    key showed a normal catalogue of models that could not be called.
+    so, rather than showing a catalogue of models that cannot be called.
     """
     provider = providers.load(provider_id)
     if provider is None:
@@ -343,9 +339,8 @@ def sync_skills(current_user: CurrentUser = Depends(require_operator)) -> JSONRe
     Declared before ``/skills/{skill_path}`` so the literal segment wins.
 
     Per file the newer side wins, so an operator can edit with a text editor or
-    a git checkout and have it picked up. One unreadable file no longer aborts
-    the whole run — the legacy version let the exception escape, leaving every
-    other skill unsynchronised.
+    a git checkout and have it picked up. One unreadable file does not abort
+    the whole run.
     """
     synced = skills.sync()
     return JSONResponse(status_code=200, content={"skills": synced, "count": len(synced)})
@@ -443,8 +438,6 @@ def ask_assistant(
 
     THIS IS THE CHAT ENDPOINT, not a save. `body["id"]` is the RECORD being
     discussed and `body["conversation_id"]` the thread, if one is being resumed.
-    An earlier revision of this port read `id` as a conversation id and answered
-    404 for every request the frontend made.
 
     ``stream: true`` returns server-sent events shaped the way `AIservice.tsx`
     parses them - see `assistant.py` on why they are not the frames
@@ -507,8 +500,5 @@ def delete_conversation(
     conversation_id: str,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> JSONResponse:
-    """Delete one of your own.
-
-    The legacy route filtered on the id alone, so a known id deleted anyone's.
-    """
+    """Delete one of your own conversations."""
     return _respond(conversations.delete(conversation_id, current_user.username))

@@ -82,9 +82,7 @@ def mongo(monkeypatch):
 def test_a_path_that_leaves_the_skills_directory_is_refused(skills_root, path):
     """Checked by resolving, not by testing whether the text starts with '..'.
 
-    The legacy check reasoned about the string; this reasons about where the
-    path lands, which is the thing that matters and the thing that also covers
-    symlinks.
+    Where the path lands is what matters, and resolving also covers symlinks.
     """
     with pytest.raises(skills.SkillError) as exc:
         skills.normalise(path)
@@ -100,10 +98,7 @@ def test_an_empty_or_unusable_path_is_refused(skills_root, path):
 
 @pytest.mark.parametrize("path", ["/etc/passwd", "/summarise"])
 def test_an_absolute_path_is_refused_rather_than_reinterpreted(skills_root, path):
-    """It is contained either way - the legacy code stripped the leading slash,
-    so `/etc/passwd` became a real skill at `<skills>/etc/passwd.md`. Contained,
-    but a request that plainly meant something else quietly succeeding at
-    something surprising."""
+    """Refused rather than quietly reinterpreted as relative."""
     with pytest.raises(skills.SkillError):
         skills.normalise(path)
 
@@ -224,7 +219,7 @@ def test_a_skill_with_no_content_is_refused(skills_root, mongo, content):
 
 def test_an_oversized_skill_is_refused(skills_root, mongo):
     """A skill is an instruction sheet, not a corpus - and this is a request
-    body that gets written to disk. The legacy write had no limit at all."""
+    body that gets written to disk."""
     with pytest.raises(skills.SkillError) as exc:
         skills.save_skill("a", "x" * (skills.MAX_CONTENT_BYTES + 1))
 
@@ -392,8 +387,7 @@ def test_the_database_wins_when_it_is_the_newer_side(skills_root, mongo):
 
 
 def test_one_unreadable_skill_does_not_abort_the_whole_sync(skills_root, mongo, monkeypatch):
-    """The legacy version let the exception escape, leaving every other skill
-    unsynchronised because one file was bad."""
+    """One bad file must not leave every other skill unsynchronised."""
     (skills_root / "good.md").write_text("# Good")
     mongo.rows["broken.md"] = {"path": "broken.md", "content": "x", "active": True}
 

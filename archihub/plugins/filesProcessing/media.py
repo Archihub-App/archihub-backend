@@ -1,29 +1,16 @@
 """Deriving web-ready versions of an archived file.
 
-Port of ``app/plugins/filesProcessing/utils/*.py`` — six modules of near-identical
-shape, collapsed into one because they were the same twenty lines of external-tool
-invocation six times over. What differs between them (the tool, the arguments,
-the outputs) is data below; what was duplicated (the error handling) is one
-decorator's worth.
+One function per media kind. What differs between them (the tool, the arguments,
+the outputs) is data below; the error handling is shared.
 
-EVERY ONE OF THEM ENDED IN THIS:
+A failure is logged with its traceback and raised as ``ProcessingFailed``
+carrying only what the file was, never an underlying exception's text, which
+would send a path on the server's disk to whoever reads the job list.
 
-```python
-except Exception as e:
-    raise Exception('Error al convertir el archivo: ' + str(e))
-```
-
-A failure here is logged with its traceback and raised as ``ProcessingFailed``
-carrying only what the file was. Appending an underlying exception's own text to
-the message instead sends a path on the server's disk to whoever reads the job
-list, and discards the exception type on the way.
-
-THE SUBPROCESS GUARDS ARE NEW, and they are the same set as ``records/media.py``
-: a timeout, output captured rather than inherited, and a
-non-zero exit treated as failure. ``convert_to_pdf_with_libreoffice`` was a bare
-``subprocess.run`` with none of the three, so a LibreOffice that hung — which it
-does, on a malformed document, waiting for a dialog nobody will answer — held a
-Celery worker until the 12-hour ceiling.
+Every external tool runs with a timeout, output captured rather than inherited,
+and a non-zero exit treated as failure - the same guards as ``records/media.py``.
+A LibreOffice waiting on a dialog for a malformed document cannot hold a Celery
+worker indefinitely.
 """
 
 from __future__ import annotations
@@ -112,9 +99,8 @@ def video(source: Path, output_stem: Path) -> tuple[bool, bool]:
 def _streams(source: Path) -> tuple[bool, bool]:
     """``(has_video, has_audio)`` for a media file.
 
-    Probing failures are assumed to mean video, matching the original — the
-    remaining path transcodes both, so guessing wrong costs time rather than
-    correctness.
+    Probing failures are assumed to mean video: the remaining path transcodes
+    both, so guessing wrong costs time rather than correctness.
     """
     try:
         import ffprobe3
@@ -163,11 +149,11 @@ def image(source: Path, output_stem: Path) -> tuple[dict | None, bool]:
 
     Returns ``(exif metadata, whether tiles were produced)``.
 
-    THE EXIF IS RETURNED WHOLE and stored whole, exactly as before. It carries
-    GPS coordinates, camera serial numbers and owner names — which is why the
-    records API summarises and filters `processing` rather than serving it (see
-    the note in CLAUDE.md). Storing it is the archival decision; not serving it
-    is the access-control one, and they are separate on purpose.
+    THE EXIF IS RETURNED WHOLE and stored whole. It carries GPS coordinates,
+    camera serial numbers and owner names — which is why the records API
+    summarises and filters `processing` rather than serving it. Storing it is
+    the archival decision; not serving it is the access-control one, and they
+    are separate on purpose.
     """
     import pyvips
 
@@ -217,11 +203,8 @@ def _decode_raw(source: Path):
 
 
 def _exif(source: Path) -> dict | None:
-    """EXIF for one file, or ``None``. A missing exiftool is not fatal.
-
-    The original let an ExifTool failure abort the whole derivative run, so an
-    instance without the binary installed produced no thumbnails either.
-    """
+    """EXIF for one file, or ``None``. A missing exiftool is not fatal: the
+    derivatives are still produced."""
     try:
         import exiftool
 
@@ -263,13 +246,11 @@ def pdf_pages(source: Path, output_root: Path) -> bool:
 def strip_active_content(path: Path) -> bool:
     """Rewrite a PDF without its JavaScript or launch actions.
 
-    Runs before the pages are rendered, and **in place on the archived master**.
-    That is the legacy behaviour and it is preserved, but it is worth being
-    explicit that this modifies the original file rather than a copy.
+    Runs before the pages are rendered, and **in place on the archived master**:
+    it modifies the archived file itself, not a copy.
 
-    A failure here is not fatal to the rest of the processing: the original
-    raised, which meant a PDF that pypdf could not rewrite produced no page
-    images either, so the document was unviewable rather than merely unsanitised.
+    A failure here is not fatal: a PDF that cannot be rewritten still gets its
+    page images.
     """
     try:
         import pypdf
@@ -288,7 +269,7 @@ def strip_active_content(path: Path) -> bool:
         if isinstance(action, dict) and action.get("/S") == "/JavaScript":
             del root["/OpenAction"]
 
-        # Written beside the original and moved into place: writing straight
+        # Written beside the master and moved into place: writing straight
         # over the master means a crash mid-write destroys the archived file.
         scratch = path.with_suffix(path.suffix + ".partial")
         with open(scratch, "wb") as handle:
@@ -303,12 +284,7 @@ def strip_active_content(path: Path) -> bool:
 def convert_to_pdf(source, destination) -> None:
     """Convert a document to PDF with LibreOffice, into ``destination``.
 
-    THE DESTINATION IS HONOURED. The original's signature was
-    ``convert_to_pdf_with_libreoffice(input_file, output_dir)`` and the body used
-    ``os.path.dirname(input_file)`` — the second argument was never read. Its one
-    caller outside this plugin (``liquidText``) then moved the file from where it
-    actually landed to where it had asked for, which worked only because both
-    happened to be under the temporal directory.
+    The PDF is written to ``destination``, whatever directory the source is in.
     """
     source = Path(source)
     destination = Path(destination)

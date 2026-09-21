@@ -75,8 +75,8 @@ def get_all(
 ) -> JSONResponse:
     """List users, filtered and paginated.
 
-    A POST because the filter travels in the body - the legacy shape, which the
-    frontend sends.
+    A POST because the filter travels in the body, which is what the frontend
+    sends.
 
     Filters are reduced to an allowlist of string-equality fields before they
     reach a query: a client-supplied filter document passed through unchecked
@@ -267,8 +267,8 @@ def get_snaps(
     """List the caller's own snaps of a given kind, newest first.
 
     Lives under ``/users`` rather than ``/snaps`` because it is scoped to the
-    caller, which is where the legacy blueprint put it too. The implementation
-    is in the ``snaps`` domain, since that is what it reads.
+    caller. The implementation is in the ``snaps`` domain, since that is what it
+    reads.
     """
     from archihub.api.snaps import services as snap_services
 
@@ -445,8 +445,7 @@ def create_api_key(
 def list_api_keys(current_user: CurrentUser = Depends(get_current_user)) -> JSONResponse:
     """List the caller's API keys.
 
-    New route, with no legacy equivalent: the previous single-key-per-user model
-    had nothing to list. Returns metadata only - the secrets do not exist here.
+    Returns metadata only - the secrets are not stored.
     """
     return _respond(services.list_api_keys(current_user.username))
 

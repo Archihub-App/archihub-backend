@@ -1,13 +1,11 @@
 """System prompts for the record assistants.
 
-Copied verbatim from ``app/api/aiservices/utils/prompts.py``. They are wording,
-not logic, and a model's behaviour is sensitive to small edits — so they are kept
-byte-for-byte rather than tidied, and left in English because that is what they
+They are wording, not logic, and a model's behaviour is sensitive to small
+edits — so they are not tidied, and stay in English because that is what they
 were tuned against. Each one ends by telling the model to answer in the user's
 own language, which is what makes a Spanish archive work with an English prompt.
 
-``image_gallery`` is here too, unused, so the string is not lost when that type is
-ported.
+``image_gallery`` is here too, unused until that type is supported.
 """
 
 from __future__ import annotations

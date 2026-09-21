@@ -8,9 +8,7 @@ rule the thing that governs it.
 
 **A SNAP IS NOT A CAPABILITY.** Both sides check: creating one requires the
 record to be visible to the creator, and reading one requires ownership *and*
-that the record is still visible. Checking only on read leaves the archive one
-layer deep, on the wrong side of the write - any authenticated user could snap
-any record and store its filename.
+that the record is still visible.
 
 **The stored data is validated at creation.** It is read back much later, by a
 different code path, and sometimes on another user's screen — article blocks
@@ -80,9 +78,8 @@ def validate_data(snap_type: str, data) -> tuple[dict | None, str | None]:
 
     Written as validation rather than trusted because the values become
     arithmetic on an image (``width * data['bbox']['x']``) and arguments to
-    ffmpeg. The original stored whatever arrived and discovered the problem at
-    render time, as a ``KeyError`` reaching the client as a 500 - on whoever
-    happened to be looking at the page, not necessarily the person who made it.
+    ffmpeg: a bad value is refused when it is saved, not discovered at render
+    time by whoever happens to be looking at the page.
     """
     if not isinstance(data, dict):
         return None, _("data is missing")
@@ -119,9 +116,8 @@ def _validate_box(snap_type: str, data: dict) -> tuple[dict | None, str | None]:
     if snap_type == "document":
         page = data.get("page")
         if isinstance(page, bool) or not isinstance(page, int) or page < 1:
-            # Pages are 1-indexed here. The original subtracted one and passed
-            # the result through, so page 0 asked for index -1 and returned the
-            # last page of the document.
+            # Pages are 1-indexed here; page 0 is refused rather than wrapping to
+            # the last page.
             return None, _("You must specify a page")
         result["page"] = page
 
@@ -158,7 +154,7 @@ def create(user: str, body: dict) -> tuple[dict, int]:
     if snap_type not in SNAP_TYPES:
         return {"msg": _("Unsupported snap type")}, 400
 
-    # The access check the original did not make. `load_visible` answers 404 for
+    # `load_visible` answers 404 for
     # a record that does not exist and a role failure for one this caller may
     # not open, so neither confirms anything the caller should not know.
     record, error = load_visible(record_id, user)
@@ -190,8 +186,7 @@ def _source_matches(record: dict, snap_type: str) -> bool:
     """Whether the record is the kind of thing this snap claims to cut from.
 
     A time range out of a scanned page is not renderable, and finding that out
-    at read time - which is what the original did - means a stored snap that can
-    never display.
+    at read time would mean a stored snap that can never display.
     """
     processing = record.get("processing") or {}
     entry = processing.get("fileProcessing") if isinstance(processing, dict) else None
@@ -210,8 +205,7 @@ def load_own(snap_id: str, user: str) -> tuple[dict | None, tuple[dict, int] | N
     """``(snap, error)``. A snap belongs to the person who made it.
 
     Not even an administrator reads someone else's - a snap is a personal
-    working note, and the original made the same choice. Stated here so every
-    caller applies it identically.
+    working note. Stated here so every caller applies it identically.
     """
     object_id = _to_object_id(snap_id)
     if object_id is None:

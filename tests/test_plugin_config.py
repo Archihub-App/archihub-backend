@@ -292,7 +292,7 @@ def test_every_declared_setting_is_actually_read():
     module.
 
     A setting consumed by the entrypoint scripts counts as read - that is where
-    the worker count and the port are used.
+    the worker count and the listening port are used.
     """
     import ast as ast_
     import re

@@ -2,9 +2,8 @@
 
 A thin rendering of a blog-view search. It is a *public* surface, so it goes
 through the same ``services.search`` with ``public=True``: the feed cannot see
-anything the public search cannot. Passing the caller's body through to a builder
-that reads a publication state from it would turn `?body={"status":"draft"}` into
-a feed of unreleased drafts.
+anything the public search cannot, and the caller never chooses a publication
+state.
 
 Everything interpolated into the XML is escaped, and the article body goes in a
 CDATA section with its terminator neutralised — an article containing `]]>`

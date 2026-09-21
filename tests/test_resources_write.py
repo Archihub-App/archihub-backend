@@ -1,8 +1,7 @@
 """Creating, updating, deleting and restoring resources.
 
-The last piece of the domain, and mostly about ordering: what is validated
-before what is written, and what happens to a batch when permission fails
-partway through it.
+Mostly about ordering: what is validated before what is written, and what
+happens to a batch when permission fails partway through it.
 """
 
 from __future__ import annotations
@@ -239,11 +238,10 @@ def test_an_absent_status_defaults_to_draft(mongo):
 
 
 def test_a_files_parent_is_the_real_resource_id(mongo, monkeypatch):
-    """Found by a live smoke test, not by these tests.
+    """Files are attached after the resource is inserted.
 
-    Files were attached before the resource was inserted, so every record was
-    filed under a placeholder id and nothing could ever find it again - which
-    surfaced as deletion failing to retire a resource's files.
+    Otherwise every record would be filed under a placeholder id that nothing
+    could ever find again.
     """
     captured = {}
 
@@ -331,9 +329,7 @@ def test_file_positions_can_be_updated(mongo):
 
 
 def test_duplicate_file_entries_are_collapsed_by_id(mongo):
-    """The original de-duplicated by comparing whole dicts, so two entries for
-    the same file differing only in `order` both survived and the viewer showed
-    it twice."""
+    """Two entries for the same file that differ only in `order` are one file."""
     mongo.resources[RESOURCE_ID] = resource(
         filesObj=[{"id": "f1", "order": 0}, {"id": "f1", "order": 1}]
     )
@@ -395,11 +391,8 @@ def test_deleting_cascades_to_descendants(mongo):
 
 
 def test_a_failed_permission_check_leaves_the_whole_batch_untouched(mongo):
-    """THE structural fix.
-
-    The original checked and acted in the same loop and returned on the first
-    refusal, so a caller who selected twelve resources and lacked rights on the
-    ninth got eight deleted and an error saying nothing had happened.
+    """A refusal on any one id refuses the whole batch before anything is
+    written.
     """
     mongo.resources[RESOURCE_ID] = resource()
     mongo.resources[CHILD_ID] = resource(_id=ObjectId(CHILD_ID), createdBy="someone-else")
@@ -426,12 +419,7 @@ def test_delete_requires_a_list_of_string_ids(mongo, bad):
 
 
 def test_deleting_retires_the_files_nothing_else_holds(mongo):
-    """THE dead-code bug.
-
-    The original read `resource['files']`, but the stored field is `filesObj` -
-    `files` is not a field of the Resource model at all, so the condition was
-    always false and the cleanup never ran. Records stayed `uploaded`, pointing
-    at a deleted resource.
+    """Records must not stay `uploaded`, pointing at a deleted resource.
     """
     mongo.resources[RESOURCE_ID] = resource(filesObj=[{"id": RECORD_ID, "tag": "file"}])
     mongo.records[RECORD_ID] = {
@@ -575,9 +563,7 @@ def related(mongo, monkeypatch):
 def test_creating_with_a_relation_links_the_other_side(related):
     """The same rule, reached through the real path.
 
-    The original ran this *before* the insert and dereferenced `body['_id']`,
-    which did not exist yet - so creating a resource with a populated same-type
-    relation raised KeyError and returned 500.
+    It runs after the insert, once the new resource has an id.
     """
     payload, status = write.create(
         body(metadata={"firstLevel": {"title": "A"}, "related": [{"id": CHILD_ID}]}), "alice"
@@ -600,9 +586,7 @@ def test_removing_a_relation_unlinks_the_other_side(related):
 
 
 def test_a_reciprocal_update_touches_only_that_field(related):
-    """The original rebuilt the entire target document and wrote it back, so a
-    reciprocal update rewrote every field of a resource nobody had asked to
-    change."""
+    """A reciprocal update changes nothing else on the other resource."""
     write.create(
         body(metadata={"firstLevel": {"title": "A"}, "related": [{"id": CHILD_ID}]}), "alice"
     )

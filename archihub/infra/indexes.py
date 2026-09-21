@@ -1,11 +1,6 @@
 """MongoDB index definitions.
 
-WHY THIS FILE EXISTS
-
-Before this, the database had **no indexes at all** beyond the `_id` one MongoDB
-creates automatically - verified against a live instance, on every collection.
-Every lookup that was not by `_id` was a full collection scan.
-
+Without these, every lookup that is not by `_id` is a full collection scan.
 That is invisible on a development instance holding a handful of documents, and
 it is the dominant cost on a real archive. The queries it affects are not
 occasional ones; they are on the hot path of essentially every request:

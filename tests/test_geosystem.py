@@ -1,8 +1,8 @@
 """Administrative boundary shapes.
 
 Both routes are unauthenticated, so the tests concentrate on what an anonymous
-caller can make the server do:  (request values became Mongo
-operators, unbounded result sets, and a disk cache keyed on a client float.
+caller can make the server do: request values reaching a Mongo filter,
+unbounded result sets, and a disk cache keyed on a client float.
 """
 
 from __future__ import annotations
@@ -80,9 +80,7 @@ def shape_document(**overrides):
     ],
 )
 def test_an_operator_in_place_of_an_identifier_is_refused(mongo, no_cache, payload):
-    """The originals assigned these into the filter as-is, so a JSON object arrived
-    as a Mongo operator - `{"ident": {"$ne": null}}` returns every shape in the
-    collection and simplifies all of them, with no account needed.
+    """Only strings reach the filter; a JSON object is refused.
     """
     result, status = services.get_shape(payload)
 
@@ -112,7 +110,7 @@ def test_a_plain_identifier_still_works(mongo, no_cache):
 
 
 def test_a_listing_is_capped(mongo, no_cache):
-    """The original returned every match, simplified, to an anonymous caller."""
+    """Results are capped for an anonymous caller."""
     mongo.shapes = [shape_document() for _ in range(50)]
 
     services.get_shape({"level": 1, "parent": "CO"})
@@ -205,9 +203,7 @@ def test_bounds_become_a_viewport_intersection(mongo, no_cache):
 
 
 def test_a_mid_zoom_viewport_bounds_the_level_range_at_both_ends(mongo, no_cache):
-    """The original wrote `$gte` and then overwrote the same key with `$lt`.
-
-    Only the upper bound survived, so levels *below* the requested one came back.
+    """Both bounds apply, so no level *below* the requested one comes back.
     """
     mongo.shapes = [shape_document()]
 
@@ -258,7 +254,7 @@ def test_a_shape_gets_a_centroid(mongo, no_cache):
 
 
 def test_a_malformed_stored_geometry_drops_out_rather_than_failing_the_map(mongo, no_cache):
-    """The original wrapped everything in one try/except and 500'd the request."""
+    """A malformed geometry drops out; the request succeeds."""
     mongo.shapes = [shape_document(geometry={"type": "Polygon", "coordinates": "broken"})]
 
     result, status = services.get_level({"level": 1})

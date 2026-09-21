@@ -1,7 +1,4 @@
 """Content-type domain.
-
-First domain ported in Phase 3, chosen to prove the router/schema/service
-pattern on low-risk surface.
 """
 
 from __future__ import annotations
@@ -91,7 +88,7 @@ def test_slugify(name, expected):
 
 
 def test_slugify_does_not_fully_collapse_runs_of_hyphens():
-    """A legacy quirk, preserved on purpose.
+    """A quirk, kept on purpose.
 
     `replace('--', '-')` runs once and replaces non-overlapping matches, so three
     consecutive spaces leave two hyphens rather than one. It looks like a bug and
@@ -116,13 +113,8 @@ def test_unique_slug_suffixes_until_free(mongo):
 
 
 def test_parents_of_a_deleted_type_returns_empty_not_a_crash(mongo):
-    """Regression guard for a reachable 500.
-
-    The legacy guard read `if not parent and not parent['hierarchical']` where
-    `parent` is a list. When the list came back empty the first operand was
-    true, so Python evaluated the second and raised TypeError. Reaching it takes
-    nothing exotic: delete a parent type, then open one of its children - the
-    declared parent id no longer resolves and the list is empty.
+    """Delete a parent type, then open one of its children: the declared parent
+    id no longer resolves, and that must not be a 500.
     """
     mongo.collections["post_types"] = []  # the declared parent no longer exists
 
@@ -220,9 +212,7 @@ def test_create_answers_201(mongo):
 
 
 def test_create_does_not_write_an_id(mongo):
-    """The legacy model declared a UUID `_id` default that only stayed harmless
-    because insert used exclude_unset. Nothing here should emit one - MongoDB
-    assigns the ObjectId."""
+    """Nothing here emits an `_id` - MongoDB assigns the ObjectId."""
     services.create({"name": "Report", "description": "d", "slug": "report"}, "admin")
 
     _collection, record = mongo.inserted[0]
@@ -263,11 +253,7 @@ def test_update_strips_self_from_parent_types(mongo):
 
 
 def test_update_without_parent_types_does_not_raise(mongo):
-    """A partial update omitting parentType is legitimate.
-
-    The legacy version indexed `body['parentType']` unconditionally and raised
-    KeyError on any patch that did not include it.
-    """
+    """A partial update omitting parentType is legitimate."""
     mongo.records["post_types"] = {"slug": "folder"}
 
     payload, status = services.update_by_slug("folder", {"name": "Renamed"}, "admin")
@@ -307,7 +293,7 @@ def test_each_known_chart_aggregates_over_that_content_type(mongo, viz_type):
 
 def test_an_unknown_chart_is_answered_ok_not_an_error(mongo):
     """The panel asks for several charts by name; one it does not recognise must
-    not fail the screen. Legacy fell through to this same answer."""
+    not fail the screen."""
     payload, status = services.get_type_viz("casos", "somethingElse")
 
     assert status == 200

@@ -1,6 +1,6 @@
 """Authentication routes.
 
-Port of ``app/api/auth/routes.py`` - one route, unauthenticated by necessity.
+One route, unauthenticated by necessity.
 """
 
 from __future__ import annotations

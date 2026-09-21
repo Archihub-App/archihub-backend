@@ -97,8 +97,7 @@ def test_an_interval_is_stored_as_a_number(monkeypatch, mongo):
 
 
 def test_the_task_picker_is_found_by_id_not_by_position(monkeypatch, mongo):
-    """The legacy code wrote `resp['settings'][1]['fields']`, so inserting an
-    entry above it filled in the wrong one."""
+    """Inserting an entry above it must not fill in the wrong one."""
     from archihub.plugins import scheduleSystemTasks
 
     settings = {"settings": [{"id": "other"}, {"id": "schedule_tasks"}, {"id": "later"}]}

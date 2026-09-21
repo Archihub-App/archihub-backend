@@ -1,15 +1,14 @@
-"""Bring pre-rewrite `llm_models` rows up to the shape the port expects.
+"""Bring ArchiHUB 1.x `llm_models` rows up to the 2.0 shape.
 
-WHY THIS EXISTS
----------------
-The legacy aiservices module described a provider by a **vendor name** - one of a
-fixed set hardcoded in the source - plus an optional `endpoint`:
+WHY THIS EXISTS --------------- ArchiHUB 1.x described a provider by a **vendor
+name** - one of a fixed set hardcoded in the source - plus an optional
+`endpoint`:
 
     {"name": "OpenAI", "provider": "OpenAI", "key": "...", "endpoint": ""}
 
-The rewrite splits that into two independent things (see the aiservices section
-of CLAUDE.md): a *dialect* is a wire protocol and lives in code, a *provider* is
-an endpoint that speaks one and is a row here:
+Version 2.0 splits that into two independent things: a *dialect* is a wire
+protocol and lives in code, a *provider* is an endpoint that speaks one and is
+a row here:
 
     {"name": "OpenAI", "dialect": "openai-compatible",
      "base_url": "https://api.openai.com/v1", "key": "...", "enabled": true}
@@ -43,11 +42,11 @@ from __future__ import annotations
 import argparse
 import sys
 
-# The legacy vendor vocabulary, mapped to the protocol each vendor actually
+# The ArchiHUB 1.x vendor vocabulary, mapped to the protocol each vendor actually
 # speaks. This table is the whole judgement call in the script, which is why it
 # is small, explicit, and printed rather than applied silently.
 #
-# `base_url` is left to the dialect's own default unless the legacy row carried
+# `base_url` is left to the dialect's own default unless the 1.x row carried
 # an explicit `endpoint`, which always wins - an operator who pointed a provider
 # at a private deployment meant it.
 VENDOR_TO_DIALECT = {

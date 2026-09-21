@@ -96,10 +96,8 @@ class LiquidText(ArchiPlugin):
         ) -> JSONResponse:
             """Queue an export of one record's liquid text.
 
-            The format is checked HERE, not in the task. The legacy version
-            queued whatever arrived and raised "Formato no soportado" inside the
-            worker, so a typo came back as a failed background job minutes later
-            instead of a 400.
+            The format is checked HERE, not in the task, so a typo is a 400 rather
+            than a failed background job minutes later.
             """
             if body.get("format") not in FORMATS:
                 return json_response({"msg": _("Unsupported format")}, 400)
@@ -162,9 +160,8 @@ class LiquidText(ArchiPlugin):
         """Store an edited transcript against a record.
 
         THE RECORD'S OWN VISIBILITY IS CHECKED, not just the caller's global
-        role. Checking the role alone lets an editor rewrite the transcript of a
-        series they are not permitted to open — the write path must compose the
-        same visibility rule the read path applies.
+        role: the write path composes the same visibility rule the read path
+        applies.
         """
         from archihub.api.records import services as record_services
 
@@ -264,8 +261,7 @@ def download_task(body: dict, user: str) -> str:
 
     record_ids = object_ids(body.get("records") or [], "records")
     if len(record_ids) != 1:
-        # The original raised two different Spanish sentences for "none" and
-        # "more than one"; both mean the same thing to the caller.
+        # "None" and "more than one" mean the same thing to the caller.
         raise ValueError("Select exactly one record to export")
 
     record = _mongo().get_record(
@@ -283,7 +279,7 @@ def download_task(body: dict, user: str) -> str:
 
     settings = get_settings()
     # `user` reaches a directory name. It is an authenticated username rather
-    # than free text, but it is still data, and the original concatenated it.
+    # than free text, but it is still data, so it goes through resolve_within.
     directory = filestore.resolve_within(settings.user_files_path, user, "liquidText")
     directory.mkdir(parents=True, exist_ok=True)
 
@@ -317,8 +313,7 @@ def _export_pdf(text: str, title: str, stem: str, directory, settings):
     try:
         interop.convert_to_pdf(scratch, destination)
     finally:
-        # The original removed the intermediate DOCX only on the success path,
-        # so every failed export left one behind in the temporal volume.
+        # The intermediate DOCX is removed on failure too.
         filestore.remove_quietly(scratch)
 
     if not destination.is_file():
@@ -330,10 +325,7 @@ def write_docx(html: str, title: str, path) -> None:
     """Render the stored HTML fragment into a Word document.
 
     Only the inline emphasis the editor can produce is carried over; anything
-    else becomes plain text. Kept as-is from the original, with one change: the
-    original read the record's title from a loop variable that leaked in from
-    the enclosing scope (`r['displayName']`), so refactoring the loop away would
-    have raised `NameError`.
+    else becomes plain text.
     """
     import re
 

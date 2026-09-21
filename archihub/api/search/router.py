@@ -6,9 +6,8 @@ request can widen what an anonymous caller sees.
 
 These are **always registered**. Whether search is
 available is a per-request question answered by `services.indexing_enabled`,
-answering 503 when it is off. Registering conditionally at construction meant an
-operator turning indexing on had to restart every worker, and that the OpenAPI
-document differed between instances of the same build.
+answering 503 when it is off - so turning indexing on needs no restart, and the
+OpenAPI document is the same on every instance of a build.
 """
 
 from __future__ import annotations
@@ -56,11 +55,8 @@ def _respond(result) -> JSONResponse:
 def search_public(body: dict = Body(default_factory=dict)) -> JSONResponse:
     """Search the published catalogue.
 
-    **The publication state is fixed here and cannot be requested.** The legacy
-    route read it from the body, and since every resource is indexed whatever
-    its state with `accessRights` defaulting to `public`, asking for
-    `status: "draft"` returned unpublished material to anyone — demonstrated
-    against a real index.
+    **The publication state is fixed here and cannot be requested**: every
+    resource is indexed whatever its state, so the caller never chooses it.
     """
     return _respond(services.search(body, None, public=True))
 
@@ -81,9 +77,8 @@ def rss_feed(
 ) -> Response:
     """A feed of published articles.
 
-    Typed query parameters rather than the legacy `?body=<json>` blob: a URL
-    carrying a JSON document is a search API with extra steps, and it was the
-    route through which a caller set `status`.
+    Typed query parameters, so the caller can set nothing the route does not
+    declare.
     """
     body = {
         "post_type": [p.strip() for p in (post_type or "").split(",") if p.strip()],

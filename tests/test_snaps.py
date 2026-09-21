@@ -2,7 +2,7 @@
 
 Two properties carry the weight here. **A snap is not a capability** - owning
 one is not permission to read what it points at, and creating one requires being
-able to see the record in the first place . And the stored
+able to see the record in the first place. And the stored
 coordinates are validated at creation, because they are read back later by other
 code, sometimes on another user's screen.
 """
@@ -125,9 +125,7 @@ def test_a_snap_of_a_visible_record_is_created(mongo, visible_record):
 
 
 def test_a_snap_of_an_invisible_record_is_refused(mongo, invisible_record):
-    """The original fetched the record by id with no access check at all, so any
-    authenticated user could snap anything in the archive - and store its
-    filename along with it.
+    """A snap of a record the caller cannot see is refused.
     """
     payload, status = services.create("mallory", {
         "record_id": RECORD_ID, "type": "document", "data": box()
@@ -211,7 +209,7 @@ def test_a_document_snap_needs_a_page(mongo):
 
 @pytest.mark.parametrize("page", [0, -1, 1.5, "2", True])
 def test_a_page_that_is_not_a_positive_integer_is_refused(page):
-    """Pages are 1-indexed; the original passed page 0 through as index -1."""
+    """Pages are 1-indexed; page 0 must not become index -1."""
     data, error = services.validate_data("document", box(page=page))
 
     assert data is None
@@ -269,7 +267,7 @@ def test_another_users_snap_is_refused(mongo):
 
 
 def test_not_even_an_administrator_reads_someone_elses_snap(mongo, monkeypatch):
-    """A snap is a personal working note. The original made the same choice."""
+    """A snap is a personal working note."""
     monkeypatch.setattr("archihub.api.users.services.has_role", lambda u, r: True)
     mongo.snaps[SNAP_ID] = snap(user="alice")
 

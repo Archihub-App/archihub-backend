@@ -1,10 +1,8 @@
 """`/adminApi` and `/publicApi` — the surfaces other organisations script against.
 
-The first section is : the lookup used the whole request
-body as a Mongo filter. It needs an admin API token, which bounds who can reach
-it — but an API token is a long-lived credential handed to an integration, and
-"the caller is trusted" is what turns a leaked token from annoying into
-catastrophic.
+The first section pins that a lookup never uses the request body as a Mongo
+filter. It needs an admin API token, but an API token is a long-lived credential
+handed to an integration, so "the caller is trusted" is not a defence.
 """
 
 from __future__ import annotations
@@ -58,7 +56,7 @@ def mongo(monkeypatch):
     ],
 )
 def test_an_operator_never_reaches_the_query(mongo, body):
-    """The legacy lookup was `get_record('resources', body)`."""
+    """The body never becomes a Mongo filter."""
     payload, status = services.find_resource(body)
 
     assert status == 400
@@ -83,7 +81,7 @@ def test_a_first_level_metadata_lookup_is_allowed(mongo):
 
 
 def test_the_status_is_fixed_and_not_client_settable(mongo):
-    """This endpoint answers about published material, as the legacy one did."""
+    """This endpoint answers about published material only."""
     filters = services.build_lookup({"ident": "x", "status": "draft"})
 
     assert filters["status"] == "published"
@@ -105,7 +103,7 @@ def test_a_body_that_is_not_an_object_is_refused(mongo):
 # ---------------------------------------------------------------------------
 
 
-def test_a_found_resource_is_returned_in_the_legacy_shape(mongo):
+def test_a_found_resource_is_returned_in_the_contract_shape(mongo):
     from bson.objectid import ObjectId
 
     mongo.resources.append(
@@ -128,8 +126,7 @@ def test_a_found_resource_is_returned_in_the_legacy_shape(mongo):
 
 
 def test_a_resource_missing_optional_fields_does_not_500(mongo):
-    """The original subscripted metadata/filesObj/parent/parents directly, so an
-    integration that had done nothing wrong got a 500."""
+    """A resource missing optional fields is still a valid answer."""
     from bson.objectid import ObjectId
 
     mongo.resources.append(
@@ -149,7 +146,7 @@ def test_a_missing_resource_is_a_404(mongo):
 
 
 def test_an_option_lookup_needs_a_term(mongo):
-    """The original subscripted `body['term']`, so an absent one was a 500."""
+    """An absent `term` is a 400."""
     payload, status = services.find_option({})
 
     assert status == 400
@@ -205,8 +202,7 @@ def test_an_explicit_value_is_not_overwritten(monkeypatch):
 
 
 def test_update_cache_is_accepted_and_dropped(monkeypatch):
-    """Caching is not re-enabled in the port; honouring it would promise
-    something nothing does."""
+    """The cache is invalidated by every write, so there is nothing to ask for."""
     monkeypatch.setattr(
         "archihub.api.system.services.get_setting_value",
         lambda name, entry, fallback=None: "carpeta",
@@ -241,8 +237,7 @@ def test_no_default_content_type_configured_is_a_clear_refusal(monkeypatch):
 
 
 def test_a_switched_off_api_is_indistinguishable_from_a_missing_route(monkeypatch):
-    """That is what an external caller saw before: the blueprint was never
-    registered, so it was a plain 404."""
+    """A plain 404."""
     from archihub.api.external import router
 
     monkeypatch.setattr(router, "_enabled", lambda entry: False)
@@ -264,17 +259,12 @@ def test_a_switched_off_api_is_indistinguishable_from_a_missing_route(monkeypatc
 def test_a_switched_off_api_answers_404_before_it_looks_at_the_token(
     monkeypatch, method, path
 ):
-    """Through the real app, with NO credential - which is the case that broke.
+    """Through the real app, with NO credential.
 
     The test above calls the handler function directly and so never resolves
-    the dependencies. That is exactly where the bug lived: the activation check
-    sat in the handler body, the identity dependency ran first, and a caller
-    with no token got **401 from an API that was switched off**. The legacy
-    backend did not register the blueprint at all, so it answered 404 and gave
-    away nothing - and that is the property an external integration relies on
-    to tell "turned off" from "wrong credential".
-
-    Found by the diff harness; invisible to a direct-call test.
+    the dependencies. Here they run: an API that is switched off must answer
+    404 before any identity dependency could answer 401, so it gives away
+    nothing about the route.
     """
     from fastapi.testclient import TestClient
 
@@ -311,8 +301,7 @@ def test_a_switched_off_api_is_404_even_with_a_well_formed_token(monkeypatch):
 
 
 def test_the_plugin_proxy_refuses_rather_than_reaching_a_route_that_is_not_there(monkeypatch):
-    """The legacy proxy assembled its target as a string from a path converter,
-    so `..` segments in it resolved to any route in the application."""
+    """The target is looked up, never assembled from the request."""
     from archihub.api.external import router
 
     monkeypatch.setattr(router, "_enabled", lambda entry: True)
@@ -371,7 +360,7 @@ def test_a_real_plugin_endpoint_resolves():
         _mounted.clear()
 
 
-def test_the_routes_keep_their_legacy_paths():
+def test_the_routes_keep_their_published_paths():
     """External integrations are addressed by these strings and nothing in this
     repository would catch a change to them.
 

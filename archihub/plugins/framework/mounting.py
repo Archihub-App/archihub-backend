@@ -1,19 +1,6 @@
 """Mounting active plugins onto the application.
 
-Replaces ``app/__init__.py:register_plugin()``, which did:
-
-```python
-plugin_module = __import__(f'app.plugins.{plugin_name}', fromlist=[...])
-plugin_bp = plugin_module.ExtendedPluginClass(plugin_name, __name__, **plugin_module.plugin_info)
-plugin_bp.add_routes()
-plugin_bp.get_image()
-plugin_bp.get_settings()
-if os.environ.get('CELERY_WORKER', False):
-    plugin_bp.activate_settings()
-app.register_blueprint(plugin_bp, url_prefix=f'/{plugin_url_prefix}')
-```
-
-Two behavioural changes, both deliberate.
+Two rules:
 
 **One broken plugin must not take the instance down.** Letting an exception from
 a plugin's construction propagate out of ``create_app`` means one plugin's
@@ -66,7 +53,7 @@ def build_plugin(slug: str):
 
 
 def mount_plugins(app: FastAPI, slugs: list[str] | None = None) -> dict:
-    """Build and mount every active, ported plugin. Returns what mounted."""
+    """Build and mount every active plugin. Returns what mounted."""
     from archihub.core.routing import include_router
     from archihub.plugins.framework.discovery import get_active_plugin_slugs, is_mountable
 
@@ -107,7 +94,7 @@ def get_mounted() -> dict:
 
 
 def get_failed() -> dict[str, str]:
-    """Plugins that were active and ported but failed to build, with why."""
+    """Plugins that were active but failed to build, with why."""
     return dict(_failed)
 
 
@@ -129,10 +116,6 @@ def activate_plugin_settings() -> None:
     task is turned into a signature and sent to the broker; a worker executes
     it. Only genuinely synchronous hooks run inline, and those (field validation
     and rendering) are part of the request's own path by design.
-
-    The legacy code reached the same place by an easily-missed route: the mount
-    helper called this when ``CELERY_WORKER`` was set, and each plugin's
-    ``__init__`` called it when that variable was NOT set.
     """
     for slug, plugin in _mounted.items():
         try:

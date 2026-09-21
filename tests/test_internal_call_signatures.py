@@ -3,13 +3,9 @@
 Sibling to `test_internal_imports_resolve.py`, catching the failure one step
 further in: the name resolves, the module is right, and the call is still wrong.
 
-`core.responses.file_response` takes ``download_name``. **All four plugin
-download routes passed ``filename``** — inventoryMaker's task result and its
-public export, massiveUpdater's result, liquidText's result. Every one raised
-``TypeError: file_response() got an unexpected keyword argument 'filename'`` on
-its first real request. The core call sites had it right, so the mistake was
-invisible to anything that looked at `file_response` itself; it lived entirely in
-the callers, in routes whose tests assert the *guard* rather than the download.
+A wrong keyword - ``filename`` where ``file_response`` takes ``download_name`` -
+raises ``TypeError`` only on the route's first real request, and it lives in the
+callers, invisible to anything that tests ``file_response`` itself.
 
 Scope and its reasons:
 

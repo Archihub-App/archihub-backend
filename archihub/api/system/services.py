@@ -2,9 +2,7 @@
 
 SCOPE: settings read/write, the seeder, plugin activation, cache clearing and
 first-time onboarding. The maintenance routes that rebuild Elasticsearch indexes
-or load geometry (`regenerate-index`, `index-resources`, `index-geometries`,
-`geo-load`, and the two file-cleanup routes) are NOT ported here - they belong
-with the `search` and `geosystem` domains, which own the handlers they drive.
+or load geometry drive handlers owned by the `search` and `geosystem` domains.
 
 The ``system`` collection holds one document per settings group, addressed by
 ``name``. Each has a ``data`` array of ``{id, value, ...}`` entries.
@@ -854,9 +852,8 @@ def index_resources(user: str) -> tuple[dict, int]:
 def regenerate_index_geometries(user: str) -> tuple[dict, int]:
     """Queue a rebuild of the geometry index.
 
-    Deliberately NOT gated on `index_activation`, matching the legacy route:
-    the boundary layer is drawn from Elasticsearch whether or not resource
-    search is switched on.
+    Deliberately NOT gated on `index_activation`: the boundary layer is drawn
+    from Elasticsearch whether or not resource search is switched on.
     """
     from archihub.worker.tasks.geometries import regenerate_index_shapes
 

@@ -1,31 +1,17 @@
 """JWT authentication and role authorisation dependencies.
 
-Replaces ``@jwt_required()`` + ``get_jwt_identity()`` (202 usages) and the
-hand-written ``if not has_role(current_user, 'admin'): return 401`` blocks that
-follow most of them.
-
-A route that used to read::
-
-    @bp.route('/thing', methods=['GET'])
-    @jwt_required()
-    def get_thing():
-        current_user = get_jwt_identity()
-        if not has_role(current_user, 'admin'):
-            return {'msg': 'You do not have sufficient permissions'}, 401
-        ...
-
-becomes::
+A route declares its caller and its role requirement as dependencies::
 
     @router.get('/thing', dependencies=[Depends(require_role_any('admin'))])
     def get_thing(current_user: CurrentUser = Depends(get_current_user)):
         ...
 
-Two things change on purpose, and only one of them is visible on the wire.
+Two consequences:
 
 * The identity arrives as a declared parameter rather than through a request
   global, so the dependency that enforces auth and the one that documents it in
-  OpenAPI are the same object. A route can no longer enforce a role while
-  forgetting to declare it (or vice versa).
+  OpenAPI are the same object. A route cannot enforce a role while forgetting
+  to declare it (or vice versa).
 * **Role failures return 403, not 401.** 401 means "I don't know who you are",
   which signing in fixes; 403 means "I know, and no", which it does not. Almost
   every check here runs on an already-authenticated caller, so 403 is the honest
@@ -47,7 +33,7 @@ from archihub.core.security import tokens
 
 logger = logging.getLogger(__name__)
 
-# Message reproduced from the legacy role checks, which did translate it.
+# Translated, unlike the token messages.
 MSG_INSUFFICIENT_PERMISSIONS = "You do not have sufficient permissions"
 
 
@@ -63,13 +49,10 @@ class CurrentUser:
 
 
 # `auto_error=False` is load-bearing. This scheme is declared purely so FastAPI
-# advertises bearer auth in the OpenAPI document (the equivalent of Flasgger's
-# `securityDefinitions`, which the legacy app set by hand) and renders an
-# Authorize button in /docs. With auto_error=True, HTTPBearer would reject a
-# missing header itself with `403 {"detail": "Not authenticated"}` - both a
-# different status code AND a different body key from the legacy
-# `401 {"msg": "Missing Authorization Header"}`. Letting it stay quiet keeps
-# documentation and wire contract from fighting each other.
+# advertises bearer auth in the OpenAPI document and renders an Authorize
+# button in /docs. With auto_error=True, HTTPBearer would reject a missing
+# header itself with `403 {"detail": "Not authenticated"}` instead of the
+# contract's `401 {"msg": "Missing Authorization Header"}`.
 bearer_scheme = HTTPBearer(
     auto_error=False,
     scheme_name="JWT",
@@ -85,7 +68,7 @@ def get_current_user(
 
     The header is re-read off the raw request rather than taken from
     ``_credentials`` so that malformed values (no ``Bearer`` prefix, empty
-    header) produce the legacy messages instead of HTTPBearer's own. The
+    header) produce the contract's messages instead of HTTPBearer's own. The
     injected credentials exist only to document the scheme - see above.
     """
     token = tokens.extract_bearer_token(request.headers.get("Authorization"))

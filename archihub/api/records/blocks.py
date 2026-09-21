@@ -4,20 +4,14 @@ The block editor lets a cataloguer correct what OCR produced: move a block's
 bounding box, retype its text, add a block the recogniser missed, delete one it
 invented. Reading blocks lives in ``viewers.py``; this is the write half.
 
-**A global role was the only check the originals made.** All three routes gated
-on ``admin`` or ``editor`` and then loaded the record by id and wrote to it -
-so any editor could rewrite the OCR of any record in the archive, including one
-filed under a series whose access rights they do not hold and which they cannot
-open in the interface. The record's own visibility rule is applied here, before
-any write, and it is the same rule the read path uses: ``may_edit`` composes
-``records.access.may_view_record`` with the role gate rather than restating
-either.
+**Nobody edits what they cannot read.** The record's own visibility rule is
+applied before any write, and it is the same rule the read path uses:
+``may_edit`` composes ``records.access.may_view_record`` with the role gate
+rather than restating either.
 
-**Writes are addressed, not wholesale.** Each of the originals read the entire
-``processing`` block, mutated one entry in Python and wrote the whole thing
-back, so a plugin finishing a *different* processing on the same record in the
-window between read and write had its result silently discarded. The updates
-below ``$set`` the one page's block list by dotted path.
+**Writes are addressed, not wholesale.** The updates ``$set`` the one page's
+block list by dotted path, so a plugin finishing a *different* processing on
+the same record at the same time keeps its result.
 """
 
 from __future__ import annotations
@@ -32,15 +26,11 @@ logger = logging.getLogger(__name__)
 
 COLLECTION = "records"
 
-#: The only block collection implemented. The originals branched on
-#: ``type_block == 'blocks'`` and, for anything else, fell through to write an
-#: unchanged ``processing`` block - bumping ``updatedAt`` and firing the reindex
-#: hook while reporting "Block updated". Anything else is refused here.
+#: The only block collection implemented; anything else is refused.
 BLOCK_TYPES = ("blocks",)
 
-#: Keys a client may set on a block. ``data`` was previously splatted into the
-#: block whole, so a caller could write ``words`` (the word-level geometry the
-#: read path strips), or any key at all, into stored plugin output.
+#: Keys a client may set on a block. Nothing else - ``words``, the word-level
+#: geometry, included - reaches stored plugin output.
 BLOCK_FIELDS = ("bbox", "text", "type", "label", "labels", "order", "confidence")
 
 
@@ -257,8 +247,7 @@ def _block_index(value, count: int) -> int:
     """A block index, checked against the real block count.
 
     Negative indices are refused rather than wrapping to the end of the page,
-    which is what ``list.pop`` does - the original accepted ``-1`` and deleted
-    the last block on the page.
+    which is what ``list.pop`` would do.
     """
     if isinstance(value, bool) or not isinstance(value, int):
         try:

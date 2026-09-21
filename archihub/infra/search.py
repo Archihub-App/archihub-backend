@@ -6,7 +6,6 @@ two are entangled: this code branches on the *error body* of a response
 (``'error' in response`` with ``status == 404``) where ``elasticsearch-py``
 raises ``NotFoundError``, so swapping the client silently inverts control flow
 in ``regenerate_index`` and its neighbours.
-That rework belongs with the version bump that motivates it.
 
 THREE RULES, all consequences of one decision - an index name is produced in
 exactly one place:

@@ -44,9 +44,8 @@ def get_all(body: dict = Body(default_factory=dict)) -> JSONResponse:
     """The public browse listing.
 
     Content types that restrict viewing are **omitted** from the request rather
-    than refusing it. The original answered 401 for the whole call if any one
-    requested type had ``viewRoles``, so a single restricted type in a saved
-    view blanked the entire public browse page.
+    than refusing it, so a single restricted type in a saved view cannot blank
+    the entire public browse page.
     """
     return _respond(public.get_all(body))
 
@@ -61,8 +60,7 @@ def get_all(body: dict = Body(default_factory=dict)) -> JSONResponse:
 def get_tree(body: dict = Body(default_factory=dict)) -> JSONResponse:
     """The public navigation tree (``view: tree``) or flat list (``view: list``).
 
-    The original had no ``else`` on that branch, so any other value returned
-    ``None`` and Flask rendered an empty 500.
+    Any other ``view`` is a 400.
     """
     return _respond(public.get_tree(body))
 
@@ -80,10 +78,8 @@ def download(body: dict = Body(default_factory=dict)) -> Response:
 
     Declared before ``/public/{resource_id}`` so the literal segment wins.
 
-    Two things the original got wrong here, both fixed: the archive path was
-    built from the request's ``type`` (a file write to wherever the caller
-    pointed it), and files the caller could not see were included in the archive
-    under a placeholder name.
+    The archive path never comes from the request, and files the caller cannot
+    see are left out of the archive.
     """
     resource_id = body.get("id")
     if not resource_id:

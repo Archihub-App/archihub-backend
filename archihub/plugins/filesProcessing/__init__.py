@@ -15,21 +15,10 @@ automatically when files are attached to a resource of a configured content type
 WHICH KIND OF FILE IS DECIDED BY AN ALLOWLIST, NOT BY SUBSTRING
 ---------------------------------------------------------------
 
-Dispatching on substrings of a stored MIME type — ``'audio' in mime``, ``'word'
-in mime``, ``'sheet' in mime`` — with an extension check as a tiebreaker looks
-reasonable and is not:
-
-```python
-if len(filename.split('.')) != 2:
-    return None
-```
-
-So ``interview.final.csv`` was not recognised as a CSV and went to the *document*
-branch instead, where LibreOffice was asked to convert it. That is one bug from
-two: the extension helper's, and the fact that a substring test needed a helper
-at all. ``classify()`` below matches the MIME type against declared prefixes and
-takes the extension from ``Path.suffix``, which has never had an opinion about
-how many dots a name contains.
+``classify()`` matches the MIME type against declared prefixes and takes the
+extension from ``Path.suffix``, so ``interview.final.csv`` is a CSV however many
+dots its name contains. Substring tests on a MIME type (``'word' in mime``) are
+not used.
 
 PATHS OUT OF THE DATABASE ARE RESOLVED, NEVER CONCATENATED. ``filepath`` is a
 stored string and it becomes a directory that gets written into; every use goes
@@ -149,9 +138,8 @@ def process_record(record: dict) -> bool:
     """Derive and store web versions for one record. Returns whether it did.
 
     Every branch ends by writing ``processing.fileProcessing`` through
-    ``store_processing_result``, which `$set`s that one path — the original
-    read the whole ``processing`` block and wrote it back, so a transcription
-    finishing concurrently was discarded.
+    ``store_processing_result``, which `$set`s that one path, so a
+    transcription finishing concurrently keeps its result.
     """
     from archihub.core import files as filestore
     from archihub.core.settings import get_settings
@@ -221,11 +209,8 @@ def _derive(kind: str, source: Path, output_stem: Path, settings, relative_dir: 
         media.strip_active_content(source)
         media.pdf_pages(source, output_stem)
         # The viewer reads pages from a DIRECTORY named after the file, without
-        # its extension. The original computed this as
-        # `os.path.join(path_dir, filename).split('.')[0]`, which truncates at
-        # the first dot ANYWHERE in the path - so a resource filed under a
-        # directory containing a dot lost most of its path and the viewer found
-        # no pages. `stem` has already removed exactly the extension.
+        # its extension. `stem` removes exactly the extension, even when a
+        # directory in the path contains a dot.
         return _entry("document", stored_path)
 
     if kind == "document":
@@ -327,9 +312,8 @@ class FilesProcessing(ArchiPlugin):
             if not isinstance(row, dict) or not row.get("type"):
                 return {"msg": _("Missing required fields")}, 400
             # `order` decides hook execution order and is compared numerically.
-            # The legacy default was the STRING '0', and the hook bus sorts its
-            # registrations - so a mix of stored strings and stored numbers
-            # raised TypeError when the hook fired, taking the upload with it.
+            # The hook bus sorts its registrations, so a stored string would raise
+            # TypeError when the hook fired.
             try:
                 order = int(row.get("order", 0) or 0)
             except (TypeError, ValueError):
@@ -430,8 +414,7 @@ def bulk_task(body: dict, user: str) -> str:
         records = _records_for(page, overwrite=overwrite)
         processed += _process_all(records)
         # `total` can be zero - a selection matching nothing is a legitimate
-        # request. The original computed `step / total * 100` unconditionally
-        # and raised ZeroDivisionError, recording the run as a failed job.
+        # request, not a failed job.
         _progress(
             _("Processing files. Step {step} of {total}", step=seen, total=total or seen),
             (seen / total * 100) if total else 100.0,
@@ -456,8 +439,7 @@ def _process_all(records: list[dict]) -> int:
                 processed += 1
                 touched.update(_parent_ids(record))
         except media.ProcessingFailed as exc:
-            # Logged with the record id, which the original's bare `print(str(e))`
-            # did not carry - so a failed derivative could not be traced to a file.
+            # Logged with the record id, so a failed derivative can be traced to a file.
             logger.warning("Record %s: %s", record.get("_id"), exc)
         except Exception:
             logger.exception("Unexpected failure processing record %s", record.get("_id"))
@@ -524,10 +506,7 @@ def _resource_pages(filters: dict):
     """Pages of matching resources, paginated by ``_id``.
 
     Same reasoning as the indexing tasks: a ``skip`` walk re-scans what it has
-    already returned and shifts under concurrent writes. The original also
-    advanced `skip` by 100 while its loop condition checked the size of the page
-    it had *just* read, so it re-read the first page whenever the driver
-    returned fewer rows than asked for.
+    already returned and shifts under concurrent writes.
     """
     mongo = _mongo()
     last_id = None
@@ -579,7 +558,7 @@ def _progress(status: str, percent: float) -> None:
     """Report progress, if this is running inside a task.
 
     Guarded because ``current_task`` is ``None`` when the function is called
-    directly - which the tests do, and which the original could not.
+    directly, as the tests do.
     """
     try:
         if current_task is None or current_task.request.id is None:

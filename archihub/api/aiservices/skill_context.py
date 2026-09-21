@@ -1,9 +1,7 @@
 """Applying a user's selected skills to the prompt.
 
-Port of the resolution and injection half of ``app/utils/SkillManager.py``
-(``prepare_conversation_payload`` / ``resolve_requested_skills`` /
-``enrich_messages``). Skill storage, syncing and CRUD are already in
-``skills.py``; this is only the part that turns a selection into prompt text.
+Skill storage, syncing and CRUD are in ``skills.py``; this is only the part
+that turns a selection into prompt text.
 
 TWO WAYS TO ASK FOR A SKILL, AND THE FRONTEND USES BOTH AT ONCE. `AImessaging.tsx`
 sends the selection in ``applied_skills``, **and** prefixes the message with a
@@ -37,8 +35,8 @@ logger = logging.getLogger(__name__)
 #: escaped character in quoted text.
 INLINE_SKILL = re.compile(r"(?<!\S)\\([A-Za-z0-9_./-]+)")
 
-#: How the resolved skills are introduced to the model. Wording preserved from
-#: the legacy renderer: it is prompt text, and small edits change behaviour.
+#: How the resolved skills are introduced to the model. It is prompt text, and
+#: small edits change behaviour.
 PREAMBLE = (
     "Use the following skill instructions as additional context for this request. "
     "Follow them only when they are relevant and do not override higher-priority "
@@ -174,12 +172,11 @@ def render(skills_: list[dict]) -> str:
 def apply_to(messages: list[dict], message: str, applied) -> tuple[list[dict], list[dict]]:
     """``(messages with the skills applied, the skills applied)``.
 
-    The context goes on the **last user turn**, not into the system prompt.
-    That is the legacy placement and it is the right one here: the system turn
-    already states what the assistant is (a transcript reader, a document
-    reader), and a skill is a modifier of *this* request rather than a change of
-    role. It also keeps a resumed conversation honest - earlier turns keep the
-    skills they were asked with.
+    The context goes on the **last user turn**, not into the system prompt. The
+    system turn already states what the assistant is (a transcript reader, a
+    document reader), and a skill is a modifier of *this* request rather than a
+    change of role. It also keeps a resumed conversation honest - earlier turns
+    keep the skills they were asked with.
     """
     cleaned, resolved = resolve(message, applied)
     if not resolved:

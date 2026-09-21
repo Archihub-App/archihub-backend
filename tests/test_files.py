@@ -50,10 +50,7 @@ def test_an_accented_filename_survives_as_ascii():
 
 @pytest.mark.parametrize("given", ["", None, "...", "/", "///", "..", "___"])
 def test_a_name_that_sanitises_to_nothing_is_refused(given):
-    """Werkzeug's `secure_filename` returns '' for these.
-
-    The original then did `os.path.join(directory, '')` - which is the directory
-    - and tried to write a file over it.
+    """These must not sanitise to '', which would join to the directory itself.
     """
     with pytest.raises(files.UnsupportedFile):
         files.secure_name(given)
@@ -126,9 +123,8 @@ def test_an_upload_is_written_under_a_fresh_name(storage):
 
 
 def test_the_client_filename_never_appears_on_disk(storage):
-    """The original wrote under the client's name and *then* renamed to a UUID,
-    so two concurrent uploads of the same filename raced - the second overwrote
-    the first, both renamed, and one upload was silently lost.
+    """Written straight to a UUID name, so two concurrent uploads of the same
+    filename cannot race and silently lose one.
     """
     files.store_upload(io.BytesIO(b"a"), storage, "photo.jpg")
     files.store_upload(io.BytesIO(b"b"), storage, "photo.jpg")
@@ -139,8 +135,7 @@ def test_the_client_filename_never_appears_on_disk(storage):
 
 
 def test_the_hash_is_computed_during_the_copy(storage):
-    """The original wrote the file and then read all of it back to hash it,
-    which for archival masters means re-reading gigabytes for no reason."""
+    """Hashed during the copy, so an archival master is never re-read."""
     payload = b"archival master" * 1000
     stored = files.store_upload(io.BytesIO(payload), storage, "master.tif")
 
@@ -189,18 +184,10 @@ def test_a_spooled_temporary_file_can_be_stored(storage):
 
 
 def test_storing_does_not_force_a_spooled_upload_onto_disk(storage):
-    """CORRECTS AN ASSUMPTION IN THE PLAN (section 6).
+    """Storing an upload never touches the source's descriptor.
 
-    The plan expected `SpooledTemporaryFile.fileno()` to *raise* while the
-    contents are still in memory, making the legacy `os.fsync(file.fileno())`
-    an outright error under Starlette. It does not, on either Python this runs
-    on (3.11 in the image, 3.12 locally): `fileno()` calls `rollover()` first,
-    so the real effect would have been to spill every in-memory upload to a
-    temporary file and then fsync *that* - pointless I/O against the file being
-    read, not a crash.
-
-    The fix is the same either way, and this pins the property that matters:
-    storing an upload never touches the source's descriptor.
+    `SpooledTemporaryFile.fileno()` calls `rollover()`, so fsyncing the source
+    would spill every in-memory upload to a temporary file for nothing.
     """
     spooled = tempfile.SpooledTemporaryFile(max_size=1024 * 1024)
     spooled.write(b"small enough to stay in memory")
@@ -305,8 +292,7 @@ def test_a_whole_file_is_served(served):
 
 
 def test_a_range_request_is_answered_with_206(served):
-    """The multimedia players seek with these; Flask's send_file supported it
-    by default, and this is the check that Starlette still does."""
+    """The multimedia players seek with these."""
     client, _target = served
     response = client.get("/media", headers={"Range": "bytes=0-99"})
 
@@ -354,8 +340,8 @@ def test_an_inline_response_is_not_an_attachment(served):
 
 
 def test_a_temporary_file_is_removed_after_it_has_been_sent(tmp_path):
-    """The replacement for Flask's `response.call_on_close`, used by the
-    fragment extractors. It must run *after* the last byte, not before."""
+    """Used by the fragment extractors. It must run *after* the last byte, not
+    before."""
     target = tmp_path / "fragment.mp4"
     target.write_bytes(b"transcoded")
 

@@ -1,26 +1,19 @@
-"""Translations, without Flask-Babel.
+"""Translations.
 
-The active language is an instance-wide setting stored in MongoDB, not a
-per-user or per-request choice::
-
-    def get_locale():
-        user_management = mongodb.get_record('system', {'name': 'user_management'})
-        return user_management['data'][2]['value']
-
-Two properties of that shape this module:
+The active language is an instance-wide setting stored in MongoDB (the
+``user_languages`` entry of the ``user_management`` system document), not a
+per-user or per-request choice. Two properties follow from that:
 
 * The locale is **global to the instance**, not per-user or per-request - it is
   a single system setting. So Celery task bodies can resolve it exactly the same
   way route handlers do, and nothing needs to be threaded through as an argument.
-  This is why removing Flask's app-context wrapper from Celery costs so little.
 * The catalogs are ordinary GNU gettext ``.mo`` files. Stdlib ``gettext`` reads
   them directly, and its language expansion maps ``es`` onto the on-disk
   ``es_ES/LC_MESSAGES/messages.mo``, so no file has to move and
   ``compile_translations.sh`` keeps working unchanged.
 
-Interpolation follows Flask-Babel 3+/4.x semantics - ``str.format`` with keyword
-arguments, e.g. ``_('The field {label} is required', label=...)`` - so existing
-call sites port verbatim.
+Keyword arguments are interpolated into the translated message, in either
+placeholder style - see ``interpolate``.
 """
 
 from __future__ import annotations
@@ -42,9 +35,9 @@ SUPPORTED_LOCALES = ("es", "en")
 # instance locale. Confirmed against a live database.
 LOCALE_SETTING_ID = "user_languages"
 
-# How long a resolved locale is reused before Mongo is consulted again. The
-# legacy code hit Mongo once per request; a short TTL keeps behaviour
-# indistinguishable in practice while removing that round-trip from the hot path.
+# How long a resolved locale is reused before Mongo is consulted again: short
+# enough that a language change shows almost at once, long enough to keep the
+# read off the hot path.
 _LOCALE_TTL_SECONDS = 30
 
 _locale_cache: tuple[str, float] | None = None
@@ -84,10 +77,8 @@ def get_locale() -> str:
     """Resolve the instance-wide locale from the ``system`` collection.
 
     Falls back to ``DEFAULT_LOCALE`` when the setting is missing or malformed.
-    The legacy version indexed ``data[2]['value']`` directly and would raise on
-    a differently-shaped document; this looks the entry up by id first and only
-    then falls back to the positional read, so a health check never 500s because
-    a settings document was reordered.
+    The entry is looked up by id, with the positional read only as a fallback, so
+    a reordered settings document never turns into a 500.
     """
     global _locale_cache
 
@@ -102,11 +93,8 @@ def get_locale() -> str:
         record = get_mongo().get_record("system", {"name": "user_management"})
         data = (record or {}).get("data") or []
 
-        # The setting's id is 'user_languages' (verified against a live
-        # instance). The legacy code reached for data[2] positionally, which
-        # happens to be this entry today but breaks silently if the settings
-        # document is ever reordered or extended - so look it up by id, and keep
-        # the positional read only as a last-resort fallback.
+        # Looked up by id; the positional read is only a last-resort fallback for
+        # a document whose entries carry no ids.
         entry = next((item for item in data if item.get("id") == LOCALE_SETTING_ID), None)
         if entry is None and len(data) > 2:
             entry = data[2]
@@ -153,28 +141,17 @@ def _get_translations(locale: str) -> _gettext.NullTranslations:
     return result
 
 
-#: ``%(name)s`` - the placeholder style used by every msgid in the LEGACY
-#: catalogue, because that is what ``flask_babel`` interpolates with.
+#: ``%(name)s`` - the printf placeholder style, used by many msgids in the catalogue.
 _PRINTF_PLACEHOLDER = _re.compile(r"%\(\w+\)[sdifr]")
 
 
 def interpolate(translated: str, variables: dict) -> str:
     """Fill a translated string's placeholders, in whichever style it uses.
 
-    BOTH STYLES ARE LIVE, and that is not an accident to be tidied away:
-
-    * The legacy catalogue is written for ``flask_babel``, which interpolates
-      with ``%``. Its msgids look like ``"Indexing finished for %(count)s
-      resources"``.
-    * The port's own catalogue uses ``str.format`` - ``"{field} is missing"``.
-
-    The standing convention is to REUSE a legacy msgid wherever one exists
-    rather than add a near-duplicate, so ported code routinely passes strings of
-    the first kind through this. Supporting only ``.format`` made those render
-    with the placeholder still in them - a message reading "Indexing finished
-    for %(count)s resources" to the operator, with no error anywhere, which is
-    exactly what a task result looks like when it is wrong but not broken.
-    The two catalogues merge at Phase 7 cutover; until then both must work.
+    BOTH STYLES ARE IN USE: ``"Indexing finished for %(count)s resources"`` and
+    ``"{field} is missing"``. Existing msgids are reused rather than duplicated,
+    so both reach this function; a message filled in the wrong style would show
+    its placeholder to the operator with no error anywhere.
     """
     if not variables:
         return translated
@@ -190,13 +167,13 @@ def interpolate(translated: str, variables: dict) -> str:
 def gettext(message: str, **variables: object) -> str:
     """Translate ``message`` into the instance locale.
 
-    Mirrors ``flask_babel.gettext``. Keyword arguments are interpolated in
-    whichever placeholder style the message uses - see ``interpolate``.
+    Keyword arguments are interpolated in whichever placeholder style the
+    message uses - see ``interpolate``.
     """
     return interpolate(_get_translations(get_locale()).gettext(message), variables)
 
 
-# Conventional alias, matching `from flask_babel import gettext as _`.
+# The conventional gettext alias.
 _ = gettext
 
 

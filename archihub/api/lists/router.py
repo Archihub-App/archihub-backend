@@ -85,9 +85,7 @@ def get_by_id(
 ) -> JSONResponse:
     """Get one vocabulary by id, with its options resolved to ``{id, term}``.
 
-    Lists are addressed by id. There is no slug-based lookup - `lists` documents
-    carry no slug field, and the legacy function that queried by one could never
-    match anything.
+    Lists are addressed by id; `lists` documents carry no slug field.
     """
     return _respond(services.get_by_id(list_id))
 
@@ -130,7 +128,7 @@ def delete_by_id(
 ) -> JSONResponse:
     """Delete a vocabulary.
 
-    The option documents it referenced are left in place, matching legacy
-    behaviour - they may be shared, and orphan cleanup is not part of this path.
+    The option documents it referenced are left in place - they may be shared,
+    and orphan cleanup is not part of this path.
     """
     return _respond(services.delete_by_id(list_id, current_user.username))

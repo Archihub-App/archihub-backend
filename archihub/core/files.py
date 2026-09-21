@@ -4,28 +4,22 @@ Every route in ``resources`` and ``records`` either accepts an upload or serves
 a stored file, so all of them depend on the rules this module fixes in one
 place.
 
-THE THREE DECISIONS, and the evidence behind them:
+THE THREE DECISIONS:
 
-1. **Uploads are bounded.** Flask configured no ``MAX_CONTENT_LENGTH``, so they
-   were unbounded; inheriting that by accident is worse than choosing a number.
-   ``settings.max_upload_bytes`` (5 GiB by default - archival masters are large)
-   is enforced *while streaming*, so an oversized upload is refused after one
-   chunk past the limit rather than after it has been written.
+1. **Uploads are bounded.** ``settings.max_upload_bytes`` (5 GiB by default -
+   archival masters are large) is enforced *while streaming*, so an oversized
+   upload is refused after one chunk past the limit rather than after it has
+   been written.
 
 2. **``os.fsync`` applies to the destination.** Flushing and syncing the
    *incoming* upload is meaningless - you cannot fsync data you are reading.
-   The durability belongs to the file being written.
+   The durability belongs to the file being written, and nothing here
+   touches the source's descriptor (for Starlette's ``SpooledTemporaryFile``
+   that would spill every in-memory upload to disk).
 
-   The plan predicted this would *raise* under Starlette, because
-   ``UploadFile.file`` is a ``SpooledTemporaryFile``. It does not, on either
-   Python this runs on: ``fileno()`` calls ``rollover()`` first, so the real
-   consequence would have been spilling every in-memory upload to a temporary
-   file and fsyncing that. Wasted I/O rather than an error - but the correction
-   is the same, and nothing here touches the source's descriptor.
-
-3. **Range requests are Starlette's job.** Verified against the installed
-   version: ``FileResponse`` implements single- and multi-range handling
-   natively, including ``206``, ``Content-Range`` and ``416``. Serving a stored
+3. **Range requests are Starlette's job.** ``FileResponse`` implements
+   single- and multi-range handling natively, including ``206``,
+   ``Content-Range`` and ``416``. Serving a stored
    file therefore needs no custom range code, and the multimedia players'
    seeking works.
 
@@ -96,12 +90,8 @@ class StoredFile:
 def secure_name(filename: str | None) -> str:
     """A filename safe to place in a path.
 
-    Equivalent in intent to Werkzeug's ``secure_filename``, kept here so the
-    package does not become a dependency of the new stack for one function - and
-    so its one sharp edge is handled: ``secure_filename`` returns the **empty
-    string** for input consisting only of separators or dots (``"..."``,
-    ``"/../"``). The original then did ``os.path.join(directory, "")``, which is
-    the directory itself, and tried to write a file over it.
+    Never returns the empty string: input consisting only of separators or dots
+    (``"..."``, ``"/../"``) would otherwise join to the directory itself.
     """
     if not filename:
         raise UnsupportedFile(_("The file has no name"))
@@ -136,7 +126,7 @@ def is_allowed(filename: str, allowed_extensions) -> bool:
 
 
 def unique_name(original: str) -> str:
-    """A collision-free storage name that keeps the original's extension."""
+    """A collision-free storage name that keeps the uploaded file's extension."""
     extension = extension_of(original)
     return f"{uuid.uuid4()}.{extension}" if extension else str(uuid.uuid4())
 
@@ -150,7 +140,7 @@ def dated_directory(root: str | os.PathLike, when: datetime | None = None) -> Pa
     """``<root>/YYYY/MM/DD``, created if absent.
 
     The layout the archive already uses on disk; keeping it means stored paths
-    stay valid across the cutover.
+    stay valid across upgrades.
     """
     moment = when or datetime.now()
     path = Path(root) / moment.strftime("%Y") / moment.strftime("%m") / moment.strftime("%d")
@@ -193,9 +183,8 @@ def store_upload(
     ``source`` is any readable binary file-like object - Starlette's
     ``UploadFile.file``, a plain open file, an ``io.BytesIO``.
 
-    The content hash is computed **during** the copy. The original wrote the
-    file and then re-read all of it to hash it, which for archival masters means
-    reading several gigabytes back off disk for no reason.
+    The content hash is computed **during** the copy, so an archival master is
+    never read back off disk just to hash it.
 
     A file that exceeds the ceiling is refused and its partial write removed, so
     a rejected upload leaves nothing behind.
@@ -303,9 +292,8 @@ def remove_tree_quietly(path: str | os.PathLike) -> None:
 def sniff_media_type(path: str | os.PathLike) -> str | None:
     """The media type of a file's actual bytes, or ``None`` if undeterminable.
 
-    ``python-magic`` is already a declared dependency but was never used for
-    this. Call it before handing bytes to ffmpeg, LibreOffice or a PDF parser -
-    the extension only says what the uploader claimed.
+    Call it before handing bytes to ffmpeg, LibreOffice or a PDF parser - the
+    extension only says what the uploader claimed.
     """
     try:
         import magic

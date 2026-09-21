@@ -1,9 +1,8 @@
 """The startup guard, and discovering plugins from the plugins directory.
 
-This guard is what stands between an operator and a broken cutover: every plugin
-written for the legacy stack is a Flask Blueprint, and an instance with one of
-them active would otherwise crash opaquely - or, worse, appear to start while
-silently missing features.
+A plugin written for the ArchiHUB 1.x plugin framework has no ``build()``, and
+an instance with one of them active would otherwise crash opaquely - or, worse,
+appear to start while silently missing features.
 
 The plugin set is read from disk, so these tests build real plugin directories
 rather than patching a list of names. A test that patched a list would keep
@@ -30,7 +29,7 @@ MOUNTABLE = "\n".join(
     ]
 )
 
-# A plugin written for the legacy stack. It has metadata and no build().
+# A plugin written for ArchiHUB 1.x. It has metadata and no build().
 LEGACY = "\n".join(
     [
         "from flask import Blueprint",

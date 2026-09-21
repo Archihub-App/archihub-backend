@@ -59,13 +59,9 @@ def get_all() -> JSONResponse:
 def get_view_info(view_slug: str) -> JSONResponse:
     """Describe one view: its content types, its tree, and what it holds.
 
-    The file counts cover **public material only**. The original counted every
-    matching record with no access-rights or publication filter, on this
-    unauthenticated route, so the totals disclosed how much reserved and
-    unpublished material an archive holds.
+    The file counts cover **public material only**, so they do not disclose how
+    much reserved or unpublished material an archive holds.
 
-    An unknown slug is a 404. The original read the view's fields before
-    checking whether it had found one, so it raised ``TypeError`` on ``None``
-    and answered 500.
+    An unknown slug is a 404.
     """
     return _respond(services.get_view_info(view_slug))

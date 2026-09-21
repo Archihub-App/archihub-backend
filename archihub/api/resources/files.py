@@ -10,15 +10,12 @@ are individually dangerous - a filesystem write and an access decision - and the
 public mirror reaches it with no authentication at all. Four rules hold:
 
 * **The requested kind indexes a fixed map and never becomes part of a path.**
-  Joining a request value into the archive filename is a file write to wherever
-  the caller points it.
 * **The archive name is a digest of what goes into it** - the resource, the kind,
   and the ids it contains. So no client string reaches the path, *and* the name
   changes when the contents do; caching on a fixed name serves a stale archive
   for the life of the deployment, long after the files were corrected.
-* **A record the caller may not see is excluded, not renamed.** Blanking a
-  display name while still writing the file by its stored path puts restricted
-  material into an anonymous download.
+* **A record the caller may not see is excluded**, not included under another
+  name.
 * **Entry names inside the archive are sanitised.** A stored name containing
   ``..`` writes outside the extraction directory on whoever opens it.
 """

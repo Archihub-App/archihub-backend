@@ -1,10 +1,9 @@
 """Resource ancestry, parent validation, and the navigation tree.
 
-These are the pieces the write path is about to be built on top of, and three of
-them fix defects that are only visible once you exercise the graph rather than
-read it. No database is required: a small in-memory stand-in for the Mongo
-handler is enough, because every one of these functions is a query plus a
-decision about its result.
+The write path is built on these, and several of their rules are only visible
+once you exercise the graph rather than read it. No database is required: a
+small in-memory stand-in for the Mongo handler is enough, because every one of
+these functions is a query plus a decision about its result.
 """
 
 from __future__ import annotations
@@ -154,11 +153,10 @@ def test_ancestors_are_returned_nearest_first_with_their_level(mongo):
 
 
 def test_a_cycle_does_not_recurse_forever(mongo):
-    """THE bug.
+    """A cycle terminates.
 
-    The original walked each parent with no memory of where it had been, so a
-    two-node cycle raised RecursionError - and every read that resolves a
-    breadcrumb through either resource failed permanently, for every user.
+    Otherwise a two-node cycle raises RecursionError, and every read that
+    resolves a breadcrumb through either resource fails permanently.
     """
     mongo.resources = {"a": {"parent": [{"id": "b"}]}, "b": {"parent": [{"id": "a"}]}}
 
@@ -302,9 +300,8 @@ def test_a_resource_may_not_be_its_own_parent(hierarchical_types):
 def test_a_resource_may_not_be_placed_under_its_own_descendant(hierarchical_types):
     """The cycle-creation half of the same rule.
 
-    The original refused only a resource naming itself, so naming a child - or
-    any deeper descendant - was accepted, and that is precisely what produced
-    the unbounded recursion above. Nothing else in the system rejected it later.
+    Naming a child - or any deeper descendant - as the parent is refused, not
+    only naming itself: that is what produces the cycles above.
     """
     hierarchical_types.resources = {
         "a": {"parent": [], "post_type": "fondo"},
@@ -356,9 +353,7 @@ def test_a_same_type_parent_is_allowed_when_the_type_is_hierarchical(hierarchica
 
 def test_a_parent_of_an_undeclared_type_is_refused(hierarchical_types):
     """``serie`` declares ``fondo`` as its only acceptable parent. Placing one
-    under a ``foto`` was accepted by the original: the check ran only when
-    parent and child shared a type, and the branch that would have caught this
-    was unreachable.
+    under a ``foto`` is refused, whatever the parent's type.
     """
     hierarchical_types.resources = {"p": {"parent": [], "post_type": "foto"}}
 
@@ -399,7 +394,7 @@ def test_a_parent_that_does_not_exist_is_refused(hierarchical_types):
 
 
 def test_a_parent_entry_without_an_id_clears_the_whole_set(hierarchical_types):
-    """Matches the original: an unusable payload does not half-apply."""
+    """An unusable payload does not half-apply."""
     body = hierarchy.validate_parent({"post_type": "serie", "parent": [{"post_type": "fondo"}]})
     assert body["parent"] == []
     assert body["parents"] == []
@@ -439,8 +434,7 @@ def test_an_admin_sees_every_type(mongo, monkeypatch):
 
 
 def test_holding_several_of_a_types_roles_does_not_repeat_it(mongo, monkeypatch):
-    """The original appended the slug once per matching role, so the same type
-    entered the query several times."""
+    """Each type enters the query once, however many roles match it."""
     import archihub.api.users.services as users
 
     mongo.post_types = {"foto": {"viewRoles": ["a", "b", "c"]}}
@@ -500,7 +494,7 @@ def test_a_leaf_is_marked_as_having_no_children(tree_data):
 
 
 def test_a_resource_with_no_title_does_not_take_the_level_down_with_it(tree_data):
-    """The original subscripted straight through firstLevel.title."""
+    """A missing title does not fail the read."""
     tree_data.resources["broken"] = {
         "post_type": "fondo",
         "parent": [],
@@ -518,8 +512,7 @@ def test_a_caller_with_no_visible_types_gets_an_empty_level(tree_data):
 
 
 def test_the_recycle_bin_is_refused_to_non_admins(tree_data):
-    """Refused with the legacy status, not the 403 this really is - the frontend
-    compares the code exactly, so both sides flip together or neither does."""
+    """Refused with the role-failure status."""
     payload, status = hierarchy.get_tree("all", ["fondo"], "alice", status="deleted")
     assert status == hierarchy.ROLE_FAILURE_STATUS
     assert "msg" in payload

@@ -112,9 +112,8 @@ def validate_messages(messages) -> str | None:
 
 
 # `save()` deliberately does not exist. `POST /aiservices/conversation` is the
-# ASK endpoint (see `assistant.py`); an earlier revision of this port gave that
-# path to a create-or-append handler, which is what made every chat turn answer
-# 404. Turns are written by `assistant.store_turn`, which is the only writer, so
+# ASK endpoint (see `assistant.py`). Turns are written by `assistant.store_turn`,
+# which is the only writer, so
 # there is one place that decides what a stored conversation looks like.
 
 
@@ -136,7 +135,7 @@ def get(conversation_id: str, user: str) -> tuple[dict, int]:
 def delete(conversation_id: str, user: str) -> tuple[dict, int]:
     """Delete one of your own conversations.
 
-    The original filtered on the id alone, so a known id deleted anyone's.
+    The filter includes the owner, so a known id deletes only your own.
     """
     conversation, error = load_own(conversation_id, user)
     if error is not None:
@@ -179,10 +178,7 @@ def history(body: dict, user: str) -> tuple[list, int]:
     * The record is named by ``id`` in the request, not ``record_id``. That is
       what the component sends.
 
-    An earlier revision of this port got all four wrong at once, which is a
-    single 200 that shows an empty panel to a user who has conversations.
-
-    Deliberately unpaginated, as the legacy route is: the panel has no paging
+    Deliberately unpaginated: the panel has no paging
     control, so a limit would silently hide older conversations with nothing to
     reach them by. Message bodies are already trimmed to one.
     """
@@ -223,7 +219,7 @@ def history(body: dict, user: str) -> tuple[list, int]:
             filters["processing_slug"] = slug
 
     else:
-        # Unknown kind: an empty list, exactly as the legacy route returns.
+        # Unknown kind: an empty list.
         # Not a 400 - the panel asks on open, and refusing would replace an
         # empty history with an error dialog.
         return [], 200
@@ -233,9 +229,8 @@ def history(body: dict, user: str) -> tuple[list, int]:
             COLLECTION,
             filters,
             fields=HISTORY_FIELDS,
-            # STORED SNAKE_CASE. Legacy wrote `created_at`/`updated_at` and the
-            # conversations already in the database carry those names, so
-            # sorting on a camelCase key ordered by nothing at all.
+            # STORED SNAKE_CASE: conversations in the database carry
+            # `created_at`/`updated_at`, so a camelCase key would order by nothing.
             sort=[("updated_at", -1)],
         )
     )

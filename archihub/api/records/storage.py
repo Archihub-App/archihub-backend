@@ -1,8 +1,6 @@
 """Attaching files to a resource.
 
-Port of ``create`` in ``app/api/records/services.py:300`` - the function every
-upload in the system goes through, and the one the resources write path is
-blocked on.
+Every upload in the system goes through here.
 
 WHAT IT DOES. For each incoming file: store it, hash it, and either create a
 record or - if a record with that hash already exists - attach the existing one
@@ -36,10 +34,8 @@ logger = logging.getLogger(__name__)
 
 COLLECTION = "records"
 
-#: What may be uploaded. Carried over verbatim from the legacy
-#: ``ALLOWED_EXTENSIONS`` - narrowing it would reject files existing
-#: deployments accept, and widening it is a decision for whoever runs the
-#: instance, not a side effect of a port.
+#: What may be uploaded. Narrowing it would reject files existing deployments
+#: accept.
 ALLOWED_EXTENSIONS = frozenset({
     "txt", "pdf", "png", "jpg", "jpeg", "jfif", "gif", "oga", "ogg", "ogv", "tif", "tiff", "heic",
     "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "zip", "rar", "7z", "mp4",
@@ -70,10 +66,8 @@ class IncomingFile:
     * an upload - ``stream`` is the client's bytes, ``filename`` their name;
     * a file a plugin already produced - ``path`` points at it on disk.
 
-    The legacy function took a list that could hold either a Werkzeug
-    ``FileStorage`` or a dict, and told them apart with ``type(f) is not dict``
-    scattered through the body. One shape with two constructors is the same
-    information without the branching.
+    One shape with two constructors, so the attach path never has to branch
+    on where a file came from.
     """
 
     filename: str
@@ -292,11 +286,9 @@ def _add_parent(record: dict, resource_id: str, resource: dict, user: str | None
 def _merge_by_id(*groups) -> list[dict]:
     """Union of parent lists, first occurrence of each id winning.
 
-    ORDER IS STABLE HERE, and it was not before. The original built a ``set`` of
-    ids and then rebuilt the list from it, so the stored parent order was
-    whatever the set happened to iterate - different between runs, since string
-    hashing is salted per process. It also crashed on any entry without an
-    ``id``.
+    ORDER IS STABLE: a ``set`` would make the stored parent order differ between
+    runs, since string hashing is salted per process. Entries without an ``id``
+    are skipped.
     """
     merged: list[dict] = []
     seen: set[str] = set()
@@ -327,9 +319,7 @@ def detach_from_parent(record_id: str, parent_id: str, user: str | None) -> bool
     nothing holds it any more.
 
     Lives here rather than in either caller because both the resource delete
-    path and the view thumbnail replacement need exactly this, and the legacy
-    code had two different partial versions of it ( for
-    the one that never ran at all).
+    path and the view thumbnail replacement need exactly this.
     """
     object_id = None
     try:

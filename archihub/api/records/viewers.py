@@ -4,25 +4,15 @@ This is what the document viewer and the image gallery fetch. Everything here
 resolves a *stored* processing path to files on disk and returns them base64
 encoded inside JSON, which is how the frontend's viewers consume them.
 
-THE SIZE PARAMETER IS AN ALLOWLIST KEY, NOT A PATH SEGMENT. This is the whole
-reason this is a module of its own. Building the directory to list as::
-
-    path_files = os.path.join(WEB_FILES_PATH, path, 'web/' + size + '/')
-    files = sorted(os.listdir(path_files))
-    ... open(file, 'rb') -> base64 -> response
-
-with ``size`` joined into the path. Any caller who can read one record can then
-name any directory the service account can reach, list it, and have its contents
-returned base64 encoded.
+THE SIZE PARAMETER IS AN ALLOWLIST KEY, NOT A PATH SEGMENT.
 
 THE INVARIANT: **a client-supplied string never becomes a path component.** It
 selects a key in a fixed map, and anything absent from that map is refused before
 a path is built. Every path assembled from *stored* data additionally goes
 through ``resolve_within``.
 
-Page indices are validated for the same reason in miniature - subscripting
-``files[x]`` with the client's integer means a negative index quietly
-returned a page counted from the end of the document instead of an error.
+Page indices are range-checked for the same reason: a negative index must be an
+error, not a page counted from the end of the document.
 """
 
 from __future__ import annotations
@@ -67,7 +57,7 @@ class ViewerError(Exception):
 
     Carries the status the caller should answer with, because "this record has
     no pages" (404) and "that size does not exist" (400) are different answers
-    and the original returned 500 for both.
+    and neither is a 500.
     """
 
     def __init__(self, message: str, status_code: int = 400) -> None:
@@ -89,9 +79,7 @@ def _mongo():
 def file_processing_of(record: dict) -> dict:
     """The ``fileProcessing`` block, or a 404-shaped refusal.
 
-    The original tested ``if 'processing' not in record:`` and then subscripted
-    ``record['processing']`` inside that branch, so an unprocessed record raised
-    ``KeyError`` rather than reaching the prepared message.
+    An unprocessed record gets the prepared message.
     """
     processing = record.get("processing")
     entry = processing.get("fileProcessing") if isinstance(processing, dict) else None
@@ -207,8 +195,7 @@ def document_detail(record: dict) -> dict:
             raise ViewerError(_("Record does not have files"), 404)
         return {"pages": 1, "aspect_ratio": _aspect_ratio(path)}
 
-    # The original returned None here, which Flask turned into a 500 with an
-    # empty body - the viewer showed a spinner forever.
+    # An explicit refusal, so the viewer does not wait forever.
     raise ViewerError(_("Record is not a document"), 400)
 
 
@@ -231,8 +218,8 @@ def page_images(record: dict, pages, size: str) -> list[dict]:
     it can never fetch, and an image record renders as an empty frame.
 
     An image has exactly one page, so every requested index resolves to the
-    same derivative and the reply is a single entry - what the original
-    returned, and what the reader draws.
+    same derivative and the reply is a single entry, which is what the reader
+    draws.
     """
     if not isinstance(pages, list):
         raise ViewerError(_("You must specify a page"), 400)
@@ -289,8 +276,8 @@ def gallery_records(
 
     The order map is keyed by the string ids held in ``filesObj`` and looked up
     with the record's own ``_id``, which is an ``ObjectId`` - so it is
-    stringified before the lookup. The original compared the two directly,
-    every lookup missed, and every gallery fell back to Mongo's natural order.
+    stringified before the lookup; otherwise every gallery would fall back to
+    Mongo's natural order.
 
     A gallery is derived from the resource's ``filesObj``, but each image is
     still its own record with its own ``accessRights`` - one filed under an
@@ -364,8 +351,8 @@ def gallery_images(
         entry = file_processing_of(record)
         path = filestore.resolve_within(_web_root(), entry["path"] + suffix)
         if not path.is_file():
-            # One missing derivative used to abort the whole batch, blanking a
-            # gallery page because a single image had not finished processing.
+            # One missing derivative must not blank a gallery page because a single
+            # image has not finished processing.
             logger.info("Gallery derivative missing: %s", path)
             continue
         payload = _encoded(path)

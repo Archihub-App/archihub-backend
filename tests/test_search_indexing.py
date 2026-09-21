@@ -1,10 +1,8 @@
 """What actually reaches the search index.
 
-The legacy indexer was one 160-line loop body inside
-``try: ... except Exception: continue``, so the only observable was a number at
-the end of a run - a number that counted failures as successes. Nothing here
-could have been written against that shape. These tests exist because the port
-splits "what does this resource index as" out from "walk the collection".
+"What does this resource index as" is split out from "walk the collection", so
+it can be asserted directly rather than inferred from a count at the end of a
+run.
 
 Covers ``archihub/api/search/documents.py``, ``archihub/api/search/mapping.py``
 and the paging/batching in ``archihub/worker/tasks/indexing.py``.
@@ -58,9 +56,8 @@ def test_a_missing_value_leaves_the_field_out_rather_than_writing_null():
 
 
 def test_a_non_dict_step_is_replaced_rather_than_subscripted():
-    """Two schema entries, one a prefix of the other. The original did
-    `temp = temp[key]` unconditionally, so the second raised TypeError inside
-    the swallow-everything handler and the resource vanished from the index."""
+    """Two schema entries, one a prefix of the other: the resource still
+    indexes."""
     document = documents.set_by_path({"date": "1990"}, "date.from", "1990-01-01")
 
     assert document["date"] == {"from": "1990-01-01"}
@@ -101,9 +98,7 @@ def test_a_date_field_holding_a_string_is_left_alone():
 
 
 def test_a_multi_select_indexes_its_terms_deduplicated_and_ordered():
-    """Ordered on purpose: the original built a `set` and sent it straight to
-    Elasticsearch, so the same resource produced a different document on every
-    run and no diff of the index against itself meant anything."""
+    """Ordered on purpose: the same resource always produces the same document."""
     resource = {
         "status": "published",
         "metadata": {
@@ -129,9 +124,8 @@ def test_a_multi_select_entry_with_no_term_is_skipped_not_fatal():
 
 
 def test_a_repeater_is_not_indexed():
-    """DELIBERATE, and reproduced from the legacy behaviour - see
-    _apply_repeater_dates. Reproduced deliberately rather than changed, because turning
-    it on risks mapping conflicts that would REMOVE resources from the index."""
+    """DELIBERATE - see _apply_repeater_dates. Turning it on risks mapping
+    conflicts that would REMOVE resources from the index."""
     resource = {
         "status": "published",
         "metadata": {"authors": [{"name": "A", "born": datetime(1900, 1, 1)}]},
@@ -161,8 +155,7 @@ def test_a_location_with_explicit_coordinates_becomes_a_geojson_point():
 
 
 def test_a_malformed_location_costs_that_point_not_the_resource():
-    """The original raised here, and the raise was caught by the handler that
-    skipped the whole resource."""
+    """One unusable point costs that point, not the resource."""
     resource = {
         "status": "published",
         "ident": "AH-1",
@@ -347,8 +340,7 @@ def test_an_unknown_field_kind_is_dropped_rather_than_guessed():
 
 
 def test_a_malformed_schema_entry_costs_one_field_not_the_whole_request():
-    """The original raised ValueError, which the route turned into a 500 that
-    did not say which entry was at fault."""
+    """A malformed entry is skipped and named in the log, not a 500."""
     built = mapping.build_resources_mapping({"metadata": {"ok": {"type": "text"}, "bad": "nonsense"}})
 
     assert set(built["properties"]["metadata"]["properties"]) == {"ok"}
@@ -369,9 +361,8 @@ def test_the_system_fields_are_always_present():
 
 
 def test_building_a_mapping_does_not_mutate_the_shared_definitions():
-    """`file` used to be popped out of the built mapping; if the returned
-    fragments were the module constants themselves, one build would corrupt
-    every later one."""
+    """If the returned fragments were the module constants themselves, one
+    build would corrupt every later one."""
     first = mapping.build_resources_mapping({"metadata": {"title": {"type": "text"}}})
     first["properties"]["metadata"]["properties"]["title"]["type"] = "corrupted"
 

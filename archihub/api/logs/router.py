@@ -97,12 +97,10 @@ def filter_logs(
 ) -> JSONResponse:
     """Read the audit log.
 
-    A POST because the filter travels in the body - the legacy shape.
+    A POST because the filter travels in the body.
 
     Returns an empty list when nothing matches, not a 404: no entries matching a
-    filter is a successful query with no results. (The legacy 404 could never
-    fire anyway - it tested a pymongo cursor for emptiness, and a cursor is
-    always truthy.)
+    filter is a successful query with no results.
     """
     return _respond(services.filter_logs(body))
 

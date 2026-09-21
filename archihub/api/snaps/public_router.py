@@ -27,9 +27,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/snaps", tags=["Snaps (public)"])
 
 #: Identical for "no such snap" and "its record is not public". An anonymous
-#: caller must not have a snap id confirmed. The original answered 500 with the
-#: record's own refusal message for the second case, which both leaked the
-#: distinction and reported a permission decision as a server fault.
+#: caller must not have a snap id confirmed.
 MSG_NOT_FOUND = "Snap not found"
 
 

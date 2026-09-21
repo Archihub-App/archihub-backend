@@ -6,13 +6,8 @@ name missing from the list is a button that is never rendered: no error, nothing
 logged, just an interface quietly smaller than the instance it is connected to.
 
 Four of the names come from the instance's own settings rather than from a
-plugin, and an earlier revision of this port collected only the plugin half.
-Against a normally configured instance that returned `[]`, which hid **all four
-download buttons and both AI assistant entry points** — reported as "now I don't
-see the Pregúntale a la IA button".
-
-The route had no tests at all, which is the same gap that let a defect through in the
-neighbouring `/system/plugins`.
+plugin. Missing them hides **all four download buttons and both AI assistant
+entry points**.
 """
 
 from __future__ import annotations
@@ -91,7 +86,7 @@ def test_indexing_and_vectors_are_advertised_separately(instance):
 
 
 def test_plugin_capabilities_and_system_ones_are_both_present(instance):
-    """Neither source may shadow the other; the legacy list held both."""
+    """Neither source may shadow the other."""
     instance["plugin_capabilities"] = ["forms_data_viz"]
     instance["providers"] = 2
 

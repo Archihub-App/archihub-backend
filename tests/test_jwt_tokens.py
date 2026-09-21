@@ -1,17 +1,17 @@
 """Token acceptance and rejection.
 
-TOKENS ISSUED BEFORE THIS BACKEND EXISTED ARE STILL IN CIRCULATION, and that is
-what most of this file is about. An access token sits in every signed-in
-browser's local storage, and API keys were issued with a 365-day expiry or with
-none at all. All of them are signed with the same ``JWT_SECRET_KEY``, so they
-must keep being accepted until they expire or are rotated - otherwise upgrading
-signs every user out and breaks every integration on the same afternoon.
+TOKENS ISSUED BY ARCHIHUB 1.x ARE STILL IN CIRCULATION, and that is what most
+of this file is about. An access token sits in every signed-in browser's local
+storage, and API keys were issued with a 365-day expiry or with none at all.
+All of them are signed with the same ``JWT_SECRET_KEY``, so they must keep being
+accepted until they expire or are rotated - otherwise upgrading signs every user
+out and breaks every integration on the same afternoon.
 
-The claim sets below are written as LITERALS rather than produced by the library
-that originally minted them. That is deliberate: the contract is the shape on
-the wire, not any library's current idea of it, and a test that mints its own
-input with the same code under test proves only that it agrees with itself.
-The literals were taken from real tokens.
+The claim sets below are written as LITERALS rather than produced by a library.
+That is deliberate: the contract is the shape on the wire, not any library's
+current idea of it, and a test that mints its own input with the same code under
+test proves only that it agrees with itself. The literals were taken from real
+tokens.
 
 The rejection cases are the ones a plain signature check does not cover. PyJWT
 verifies the signature, ``exp`` and ``nbf`` and stops there - it has no concept
@@ -52,7 +52,7 @@ def _issued_token(
     subject: str | None = USERNAME,
     secret: str = SECRET,
 ) -> str:
-    """A token in the shape previously issued to users.
+    """A token in the shape ArchiHUB 1.x issued to users.
 
     ``csrf`` is present because it was always minted; it is never validated for
     a token sent in the Authorization header, which is how this application

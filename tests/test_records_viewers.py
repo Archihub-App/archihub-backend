@@ -1,8 +1,8 @@
 """Page images, gallery images, deep-zoom tiles and OCR blocks.
 
 The centre of gravity here is that a client-supplied string never becomes a
-path component. ``test_a_traversing_size_is_refused`` and its neighbours are the
-regression tests for  - keep them.
+path component. ``test_a_traversing_size_is_refused`` and its neighbours pin
+that - keep them.
 """
 
 from __future__ import annotations
@@ -105,10 +105,6 @@ def write_pages(root, stored, size, count):
 )
 def test_a_traversing_size_is_refused(mongo, web_root, size):
     """A size that is not one of the two known names never reaches the filesystem.
-
-    The original concatenated this straight into the directory it listed, then
-    base64-encoded whatever it found there. Any caller who could read one record
-    could read any directory the service account could reach.
     """
     write_pages(web_root, "2024/03/doc", "small", 3)
 
@@ -292,7 +288,7 @@ def test_a_record_of_an_unknown_kind_is_still_refused(mongo, web_root):
 
 
 def test_an_unprocessed_record_says_so_rather_than_raising_keyerror(mongo, web_root):
-    """The original's inner test subscripted the key its outer test ruled out."""
+    """An unprocessed record gets the prepared message."""
     with pytest.raises(viewers.ViewerError) as exc:
         viewers.document_detail({"name": "scan.tif"})
 
@@ -342,9 +338,6 @@ def gallery(mongo, web_root):
 
 def test_the_gallery_is_returned_in_the_curators_order(gallery):
     """The order map is keyed by string ids and looked up with ObjectIds.
-
-    The original compared the two directly, so every lookup missed and every
-    gallery came back in Mongo's natural order instead of the curator's.
     """
     result = viewers.gallery_images(gallery, [0, 1], "small")
 
@@ -372,7 +365,7 @@ def test_gallery_entries_carry_an_aspect_ratio(gallery):
 
 
 def test_one_missing_derivative_does_not_blank_the_whole_page(gallery, web_root):
-    """The original raised, so an image still processing emptied the gallery."""
+    """An image still processing must not empty the gallery."""
     (web_root / "2024" / "03" / "b_small.jpg").unlink()
 
     result = viewers.gallery_images(gallery, [0, 1], "small")
@@ -641,10 +634,8 @@ def test_a_chunked_result_is_reassembled_in_chunk_order(mongo, web_root):
 def test_an_image_page_index_is_still_validated(mongo, web_root):
     """Serving images here must not carve out a kind where the index is unchecked.
 
-    Caught by the harness's existing negative-index contract case within minutes
-    of the image branch landing: it returned 200 where the case asserts 400,
-    because the branch ignored the indices entirely. An image has one page, so
-    0 is the only valid index - and it is checked, not assumed.
+    An image has one page, so 0 is the only valid index - and it is checked,
+    not assumed.
     """
     record = _image(web_root)
 

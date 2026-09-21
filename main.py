@@ -26,22 +26,19 @@ app = create_app()
 
 
 # ---------------------------------------------------------------------------
-# Compatibility aliases for the Flasgger paths.
+# Aliases for the documentation URLs of ArchiHUB 1.x.
 #
-# Flasgger served its UI at /apidocs/ and the raw spec at /apispec_1.json (the
-# unconfigured default endpoint name - note it is *not* /apispec.json). Those
-# URLs appear in the backend README, in the docs site, and in operator
-# bookmarks at every deployment, so they keep working rather than silently
-# 404ing after cutover.
+# /apidocs/ (the UI) and /apispec_1.json (the raw spec) appear in the docs site
+# and in operator bookmarks at every deployment, so they keep working.
 # ---------------------------------------------------------------------------
 
 
 @app.get("/apidocs/", include_in_schema=False)
 @app.get("/apidocs", include_in_schema=False)
-def legacy_swagger_ui():
+def swagger_ui_alias():
     return get_swagger_ui_html(openapi_url="/openapi.json", title=f"{app.title} - Swagger UI")
 
 
 @app.get("/apispec_1.json", include_in_schema=False)
-def legacy_openapi_spec() -> JSONResponse:
+def openapi_spec_alias() -> JSONResponse:
     return JSONResponse(app.openapi())

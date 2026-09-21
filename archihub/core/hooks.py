@@ -1,22 +1,16 @@
 """The hook bus.
 
-Port of ``app/utils/HookHandler.py``. This is the mechanism by which side
-effects fan out without domain modules importing each other: creating a resource
-fires ``resource_create``, and whatever registered against that name runs -
-Elasticsearch indexing, Qdrant vectorisation, plugin post-processing.
+The mechanism by which side effects fan out without domain modules importing
+each other: creating a resource fires ``resource_create``, and whatever
+registered against that name runs - Elasticsearch indexing, Qdrant
+vectorisation, plugin post-processing.
 
 The dispatch logic is deliberately plain - no framework types cross this
-boundary, because both the web process and the workers raise events. Of note:
+boundary, because both the web process and the workers raise events.
+Registration failures raise: a hook that is silently absent is
+indistinguishable from one that ran and did nothing.
 
-* ``register()`` swallowed every exception with ``print(str(e))``. A hook that
-  failed to register did so silently, and the feature it powered simply never
-  ran - with no error anywhere. Registration failures now raise, because a hook
-  that is silently absent is indistinguishable from one that ran and did nothing.
-* An ``IndexError`` was reachable when correlating Celery task ids back to task
-  names (see ``_register_chain_tasks``).
-* ``print`` replaced by module logging throughout.
-
-TWO BEHAVIOURS THAT LOOK LIKE BUGS BUT ARE LOAD-BEARING, preserved deliberately:
+TWO BEHAVIOURS THAT LOOK LIKE BUGS BUT ARE LOAD-BEARING:
 
 1. ``queue`` orders callbacks ascending, and built-in indexing registers at 101
    (Elasticsearch) and 102 (Qdrant) so plugins can interpose *before* indexing
@@ -95,9 +89,9 @@ class HookHandler:
         Lower ``queue`` runs first. Duplicate registrations are ignored so that
         re-importing or re-instantiating a plugin does not double its effects.
 
-        Unlike the original, a failure here raises rather than being printed and
-        swallowed: a hook that fails to register produces a feature that silently
-        never runs, which is far harder to diagnose than a loud startup error.
+        A failure here raises rather than being swallowed: a hook that fails to
+        register produces a feature that silently never runs, which is far
+        harder to diagnose than a loud startup error.
         """
         registrations = self.hooks.setdefault(hook_name, [])
 
@@ -179,11 +173,7 @@ class HookHandler:
     def _register_chain_tasks(result: Any, names: list[str]) -> None:
         """Record each queued task so /tasks can report on it.
 
-        The original zipped task ids against names positionally
-        (``add_task(task_id, names[x], ...)``) after de-duplicating the ids,
-        which misaligns the pairing as soon as one id repeats and raises
-        IndexError if the chain yields more ids than names. Pairing is done with
-        ``zip`` here, which simply stops at the shorter sequence.
+        Ids and names are paired with ``zip``, which stops at the shorter sequence.
         """
         from archihub.api.tasks.services import add_task
 

@@ -10,10 +10,7 @@ icon, the child content types beneath it, and its ancestors named.
 and an anonymous one otherwise, into `GET /resources/{id}` or
 `GET /resources/public/{id}` respectively, and renders the result with the same
 component. So the two produce the same shape and differ only in the caller's
-rights — which is one argument here, not a second implementation. The originals
-were two copies that had already drifted: the public one dropped the per-field
-access check down to "any `accessRights` at all hides it", which is right for an
-anonymous caller and wrong as a copy.
+rights — which is one argument here, not a second implementation.
 
 **Field-level access rights are a real thing here.** A form can mark individual
 fields as restricted; those are replaced with a refusal string rather than
@@ -120,10 +117,8 @@ def _icon_of(post_type: str | None):
 def describe_parents(parents: list) -> list:
     """Name and icon each ancestor, in two queries rather than two per ancestor.
 
-    A dangling ancestor keeps its entry but without a name: the original
-    subscripted ``r_['metadata']['firstLevel']['title']`` on the result of a
-    lookup it never checked, so one stale reference took the whole detail
-    response down with a ``TypeError``.
+    A dangling ancestor keeps its entry but without a name, so one stale
+    reference cannot fail the whole detail response.
     """
     wanted = [p for p in parents if isinstance(p, dict) and p.get("id")]
     if not wanted:
@@ -253,10 +248,7 @@ def build_fields(resource: dict, user: str | None, *, public: bool = False) -> l
 def _may_read_field(field: dict, user: str | None, *, public: bool) -> bool:
     """Whether this caller may read one restricted field.
 
-    The original's loop did not stop at the first failure - it kept iterating
-    and let a later right re-set ``canView`` to True, so holding *any* one of a
-    field's rights was not required to be the last one checked. Written as
-    "holds at least one" here, which is what the surrounding code means by it.
+    Holding at least one of the field's rights is enough.
     """
     required = field.get("accessRights")
     if not required:
@@ -360,8 +352,7 @@ def _relations(value) -> list[dict]:
 
     described = []
     for entry in entries:
-        # A relation pointing at a deleted resource is dropped rather than
-        # raising, which is what the original did by subscripting the lookup.
+        # A relation pointing at a deleted resource is dropped rather than raising.
         if str(entry["id"]) not in titles:
             continue
         described.append(
@@ -382,9 +373,8 @@ REPEATER_SUBFIELDS = ("text", "text-area", "number", "checkbox", "simple-date")
 def _repeater(field: dict, value) -> list[list[dict]]:
     """Each row of a repeater, as a list of rendered subfields.
 
-    Subfield values are read with ``.get`` rather than subscripted: the original
-    indexed ``v[s['destiny']]`` directly, so a row saved before a subfield was
-    added to the form raised ``KeyError`` on read.
+    Subfield values are read with ``.get``: a row saved before a subfield was
+    added to the form is still readable.
     """
     rows = []
     for row in value:

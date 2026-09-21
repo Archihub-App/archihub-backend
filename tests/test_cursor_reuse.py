@@ -5,14 +5,8 @@ yields nothing the second time - no exception, no warning, just an empty
 iteration - so whatever the second pass computes comes back empty and the route
 still answers 200.
 
-This shipped. Both ``describe_parents`` implementations built their id map from
-the cursor and then derived the icon set from the same name, so every ancestor
-came back with ``"icon": None``: a breadcrumb with no icons, on a 200, found by
-the diff harness against the legacy backend.
-
-**No unit test could have caught it**, which is the point of this file. Every
-fake in the suite returns a `list` from ``get_all_records``, and a list is
-re-iterable, so the second pass sees the data the real cursor would not. The
+Every other fake in the suite returns a `list` from ``get_all_records``, and a
+list is re-iterable, so a second pass sees data the real cursor would not. The
 fake here deliberately returns a one-shot iterator, the way pymongo does.
 """
 

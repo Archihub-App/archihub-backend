@@ -1,7 +1,5 @@
 """Turning a model's reasoning stream into named steps.
 
-Port of ``ThinkingStepTracker`` in ``app/api/aiservices/utils/StreamingUtils.py``.
-
 WHAT THIS IS, AND WHAT IT IS NOT. Several providers stream the model's own
 reasoning separately from its answer (``reasoning_content``, ``thinking_delta``,
 parts flagged ``thought``). That text is prose, not structure — there are no
@@ -16,9 +14,8 @@ they belong to a different subsystem.
 
 WHY THE REASONING IS NEVER CONCATENATED INTO THE ANSWER. It is fluent prose in
 the same voice, so a user cannot tell it apart once it is mixed in. It is kept on
-its own `ChatChunk` field the whole way through, and the Google dialect had to be
-fixed for exactly this: its parts list holds both, and the answer builder was
-taking all of them.
+its own `ChatChunk` field the whole way through - including in the Google
+dialect, whose parts list holds both.
 """
 
 from __future__ import annotations

@@ -168,8 +168,7 @@ def _from_phrases(rules: dict, message: str) -> Reason | None:
     """Match against the phrase table, most specific reason first.
 
     Order matters and is taken from the data file rather than dict iteration:
-    "token limit" appears in both context-window and rate-limit messages, and
-    the legacy code needed a hand-written exception for exactly that clash.
+    "token limit" appears in both context-window and rate-limit messages.
     """
     text = (message or "").lower()
     if not text:

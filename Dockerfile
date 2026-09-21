@@ -9,10 +9,7 @@
 #      layer 2 resolved so a plugin cannot move a version the backend pinned.
 #
 # Layer 3 is what makes the documented workflow real: copy a plugin directory
-# in, rebuild, and its dependencies are installed. Before this it was not -
-# a merge script concatenated every plugin's requirements into a tracked
-# requirements.txt, rewrote that file in place during the build, and stripped
-# the comments in which authors had been declaring their system packages.
+# in, rebuild, and its dependencies are installed.
 
 # PINNED. `python:3.11` is a moving tag and has already carried this image
 # across a Debian major release, changing package names and the Tesseract
@@ -37,9 +34,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libvips-dev \
     libreoffice \
     libimage-exiftool-perl \
-    # `python-magic` calls into this. It was present only because the previous
-    # base image happened to carry it, so a base change could have removed
-    # content-type sniffing with nothing in this file to explain the breakage.
+    # `python-magic` calls into this. Declared explicitly so a base-image change
+    # cannot silently remove content-type sniffing.
     libmagic1 \
     # Build dependencies for python-ldap, a C extension that will not install
     # without these headers. Required by the LDAP login path (`import ldap`).

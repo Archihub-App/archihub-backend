@@ -1,7 +1,6 @@
 """Search-index maintenance tasks.
 
-Port of ``app/api/system/tasks/elasticTasks.py``. Three tasks, all long-running
-and all triggered from the admin settings screen:
+Three tasks, all long-running and all triggered from the admin settings screen:
 
     system.regenerate_index         rebuild the index under a new mapping
     system.index_resources          (re)index resources into it
@@ -10,8 +9,7 @@ and all triggered from the admin settings screen:
 The dotted names are stable identifiers: a message already queued in Redis, and
 every row in the `tasks` collection, resolves by this string.
 
-WHAT CHANGED, AND WHY IT HAD TO
--------------------------------
+WHAT A RUN GUARANTEES ---------------------
 
 **A failed resource is counted as a failure.** Incrementing the counter before
 the work and swallowing exceptions means a run in which every document was
@@ -28,9 +26,7 @@ collection for anything larger.
 reindex of a real archive spends its time on. ``bulk_index`` sends a page at a
 time and reports which ids the cluster refused.
 
-**Types are resolved once.** ``get_by_slug`` and ``get_metadata`` were called
-per resource, so a 12000-resource archive with 20 content types made 24000
-lookups to answer 20 questions.
+**Types are resolved once per run**, not once per resource.
 """
 
 from __future__ import annotations
@@ -63,9 +59,7 @@ def _client():
 def regenerate_index_task(mapping: dict, user: str | None = None) -> str:
     """Rebuild the resources index under ``mapping``.
 
-    ``user`` is unused and kept only because the legacy task was called with it
-    positionally; a message already in the queue at cutover carries two
-    arguments.
+    ``user`` is unused and kept only because callers pass it positionally.
     """
     from archihub.core.i18n import gettext as _
 
@@ -151,8 +145,6 @@ def index_resources_delete_task(body: dict | None = None) -> str:
 
     resource_id = (body or {}).get("_id")
     if not resource_id:
-        # The original subscripted body['_id'], so a caller that forgot it got a
-        # KeyError recorded as a failed task with no message.
         raise ValueError("index_resources_delete requires an _id")
 
     result = _client().delete_document(RESOURCES_INDEX, str(resource_id))

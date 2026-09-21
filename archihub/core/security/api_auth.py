@@ -46,10 +46,8 @@ MSG_GENERIC = "Invalid or expired token"
 class ApiIdentity:
     """Caller identified by an API key.
 
-    A returned object rather than arguments injected into the view: the legacy
-    decorators prepended ``username`` and ``isAdmin`` as positional parameters
-    (``def view(username, isAdmin, *args, **kwargs)``), which coupled every
-    route signature to the decorator wrapping it.
+    A returned object rather than arguments injected into the view, so a route
+    signature does not depend on how it is authenticated.
     """
 
     username: str

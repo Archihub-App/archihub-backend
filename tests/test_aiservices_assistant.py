@@ -1,11 +1,8 @@
 """The record assistant — the layer that answers a question about a record.
 
-`POST /aiservices/conversation` is the ASK endpoint. The rewrite gave that path
-to a create-or-append handler for conversation *records*, so every chat turn in
-the product answered **404 "Conversation not found"**: the frontend sends `id`
-meaning the record being discussed, and it was looked up as a conversation id.
-The first test here is that regression, stated as a property rather than a
-status.
+`POST /aiservices/conversation` is the ASK endpoint: the frontend sends `id`
+meaning the record being discussed, never a conversation id. The first test
+here states that as a property.
 
 The stream shape is tested for the same reason it exists. `AIservice.tsx`
 branches on a `type` field, and a payload carrying neither `type` nor `response`
@@ -163,7 +160,7 @@ def test_an_unknown_type_is_a_400(visible):
 
 
 def test_a_record_the_caller_cannot_see_keeps_the_records_own_status(monkeypatch):
-    """Not a 500. The legacy builders raised a bare exception for any non-200."""
+    """Not a 500."""
     monkeypatch.setattr(
         "archihub.api.records.services.load_visible",
         lambda record_id, user: (None, ({"msg": "You don't have the required authorization"}, 403)),
@@ -245,7 +242,7 @@ def test_every_frame_carries_a_type(monkeypatch, visible, mongo):
 
 
 def test_frames_are_separated_by_real_blank_lines(monkeypatch, visible, mongo):
-    """The legacy framing emitted a literal backslash-n and no client could read it."""
+    """Real newlines, not a literal backslash-n, so any SSE client can read it."""
     frames = _frames(monkeypatch, [FakeChunk("hi")])
 
     assert all(frame.startswith("data: ") and frame.endswith("\n\n") for frame in frames)
@@ -292,7 +289,7 @@ def test_a_failed_stream_does_not_store_a_half_answer(monkeypatch, visible, mong
 # ---------------------------------------------------------------------------
 
 
-def test_a_new_conversation_is_stored_with_the_legacy_date_fields(mongo):
+def test_a_new_conversation_is_stored_with_snake_case_date_fields(mongo):
     """36 conversations on this instance carry `created_at`/`updated_at`.
 
     Writing camelCase would make them invisible to a history sorted the other
@@ -665,7 +662,7 @@ def test_a_gallery_conversation_needs_no_processing_slug(gallery):
 
 
 def test_a_position_past_the_end_is_a_404(gallery):
-    """Legacy indexed the list directly, so this raised IndexError as a 500."""
+    """Not an IndexError."""
     with pytest.raises(assistant.AssistantError) as caught:
         assistant.build_messages(_gallery_body(opts={"page": 99}), "someone@test.com")
 
@@ -732,7 +729,7 @@ def test_a_gallery_conversation_hangs_off_the_resource(gallery, mongo):
 
 
 def test_only_the_newest_stored_image_is_re_sent(gallery):
-    """Legacy replayed every image, so a long conversation resent them all."""
+    """A long conversation does not resend every image."""
     conversation = {
         "_id": "abc",
         "messages": [
@@ -903,9 +900,7 @@ def test_image_mode_does_not_need_a_processing_slug(document_record):
     """The assistant opens on a plain PDF with no processing view selected.
 
     `view` is undefined in the frontend then, so no slug is sent - and none is
-    needed, because a page image comes from `fileProcessing`. Demanding one
-    refused the request outright; the legacy route subscripted `body['slug']`
-    and 500'd on the KeyError.
+    needed, because a page image comes from `fileProcessing`.
     """
     body = _doc_body(opt="image", opts={"page": 1})
     body.pop("slug")

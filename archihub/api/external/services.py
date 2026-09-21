@@ -1,20 +1,10 @@
 """Shared behaviour for the two externally-consumed APIs.
 
-**A CLIENT-SUPPLIED OBJECT NEVER BECOMES A MONGO FILTER.** That is the finding
-this module exists to close. `adminApi`'s lookup did:
+**A CLIENT-SUPPLIED OBJECT NEVER BECOMES A MONGO FILTER.** These routes need an
+admin API token, but an API token is a long-lived credential handed to an
+integration, so "the caller is trusted" is not a defence.
 
-    def get_id(body, user):
-        body['status'] = 'published'
-        resource = mongodb.get_record('resources', body, {...})
-
-with `body` straight from `request.json`. The whole request body *is* the query,
-so a caller could send `{"$where": "..."}` — server-side JavaScript execution —
-or any operator at any depth. It needs an admin API token, which bounds who can
-reach it, but an API token is a long-lived credential handed to an integration:
-"the caller is trusted" is exactly the assumption that makes a leaked token
-catastrophic rather than annoying.
-
-The replacement is the pattern already used for `/users` and `/logs`: a field
+Lookups follow the pattern used for `/users` and `/logs`: a field
 allowlist, string equality only, matching what the endpoint is actually for.
 """
 
@@ -59,7 +49,7 @@ def build_lookup(body: dict) -> dict:
     """A Mongo filter from a caller's lookup request, built field by field.
 
     Only allowlisted keys survive, and only string values — an object here would
-    be an operator, which is the whole defect being closed.
+    be an operator.
     """
     if not isinstance(body, dict):
         raise InvalidRequest(_("The request body must be an object"))
@@ -80,7 +70,7 @@ def build_lookup(body: dict) -> dict:
         )
 
     # Fixed, not client-settable: this endpoint answers about published
-    # material only, as the legacy one did.
+    # material only.
     filters["status"] = "published"
     return filters
 
@@ -96,9 +86,8 @@ def find_resource(body: dict) -> tuple[dict, int]:
     if not resource:
         return {"msg": _("Resource not found")}, 404
 
-    # `.get` rather than subscripting: the original indexed `metadata`,
-    # `filesObj`, `parent` and `parents` directly, so a resource missing any of
-    # them answered 500 to an integration that had done nothing wrong.
+    # `.get` rather than subscripting: a resource missing any of these fields
+    # is still a valid answer.
     return {
         "id": str(resource["_id"]),
         "post_type": resource.get("post_type"),
@@ -116,7 +105,6 @@ def find_option(body: dict) -> tuple[dict, int]:
 
     term = body.get("term")
     if not isinstance(term, str) or not term.strip():
-        # The original subscripted `body['term']`, so an absent one was a 500.
         return {"msg": _('"{field}" must be a text value', field="term")}, 400
 
     option = _mongo().get_record(OPTIONS_COLLECTION, {"term": term}, fields={"_id": 1})
@@ -156,10 +144,8 @@ def system_info(username: str) -> tuple[dict, int]:
 def with_defaults(body: dict, *, update: bool = False) -> dict:
     """Fill in the fields an integration is not required to send.
 
-    Preserved from the legacy `autoComplete`, because integrations rely on being
-    able to omit these. `updateCache` is dropped rather than passed through:
-    caching is not re-enabled in the port, so honouring it would be a promise
-    nothing keeps.
+    Integrations rely on being able to omit these. `updateCache` is dropped:
+    the cache is invalidated by every write, so there is nothing to ask for.
     """
     payload = dict(body or {})
     payload.setdefault("filesIds", [])

@@ -2,9 +2,8 @@
 
 The rule under test is `access.is_public`: a record is public only when it
 restricts nothing itself and every resource it is filed under is *published* and
-unrestricted. The published half is  - the legacy public
-route checked access rights but never publication state, so a file attached to
-an unpublished draft was served anonymously.
+unrestricted - so a file attached to an unpublished draft is never served
+anonymously.
 """
 
 from __future__ import annotations
@@ -97,10 +96,8 @@ def test_a_record_under_a_published_unrestricted_resource_is_public(mongo):
 
 
 def test_a_record_under_an_unpublished_draft_is_not_public(mongo):
-    """The legacy rule never looked at publication state.
-
-    A cataloguer's work in progress, with no access right set because none has
-    been chosen yet, was downloadable by anyone who knew the record id.
+    """A cataloguer's work in progress, with no access right set because none
+    has been chosen yet, is not downloadable by anyone who knows the record id.
     """
     mongo.resources[RESOURCE_ID] = resource(status="draft")
 
@@ -166,10 +163,7 @@ def test_one_non_public_parent_is_enough_to_withhold_it(mongo):
 
 
 def test_a_record_filed_nowhere_is_not_public(mongo):
-    """Narrower than the legacy rule, deliberately.
-
-    An orphan is reachable through no public resource, so nothing publishes it.
-    The legacy loop simply had nothing to iterate and returned the record.
+    """An orphan is reachable through no public resource, so nothing publishes it.
     """
     assert access.is_public(record(parents=[])) is False
 

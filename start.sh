@@ -47,10 +47,7 @@ fi
 # -------- START BACKEND --------
 # `main:app` is the ASGI entrypoint; `archihub/` is the application package.
 #
-# uvicorn runs its own worker processes. gunicorn's
-# `uvicorn.workers.UvicornWorker` is DEPRECATED - it moved to the separate
-# `uvicorn-worker` distribution - so depending on it would tie the deployment to
-# a shim already on its way out.
+# uvicorn runs its own worker processes.
 FASTAPI_ENV="${FASTAPI_ENV:-PROD}"
 FASTAPI_RUN_PORT="${FASTAPI_RUN_PORT:-${BACKEND_PORT:-5000}}"
 UVICORN_WORKERS="${UVICORN_WORKERS:-4}"

@@ -1,9 +1,7 @@
 """Who may see which resources.
 
-Extracted from the listing query in ``app/api/resources/services.py``, where it
-sat inline among pagination and sorting. It is the access-control boundary for
-the archive's main read path, so it is worth being able to read it on its own -
-and worth being able to test it without constructing a full listing request.
+The access-control boundary for the archive's main read path, kept apart from
+pagination and sorting so it can be read and tested on its own.
 
 THE MODEL:
 
@@ -61,14 +59,10 @@ def effective_access_right(resource: dict) -> str | None:
     expressed. Missing this is what makes the difference between "this series is
     reserved" and "this series is reserved, but every item in it is public".
 
-    Two changes from the original ``get_accessRights``:
-
-    * it raised for a resource with no ``parents`` key and again for an ancestor
-      with no ``accessRights`` key, both of which occur in real documents;
-    * it resolved ancestors with a single ``$in`` query and took whichever came
-      back first, so which right won was down to Mongo's storage order. Here the
-      stored ``parents`` order decides, which :func:`hierarchy.ancestors` sorts
-      nearest-first - the nearest ancestor's condition is the one that applies.
+    A resource with no ``parents`` key, or an ancestor with no ``accessRights``
+    key, is handled; both occur in real documents. The stored ``parents`` order
+    decides which ancestor wins - :func:`hierarchy.ancestors` sorts it
+    nearest-first, so the nearest ancestor's condition is the one that applies.
     """
     own = resource.get("accessRights")
     if own:
@@ -148,9 +142,7 @@ def holds_edit_role(username: str, post_type: str | None, is_admin: bool) -> boo
 def owns_or_supervises(username: str, resource: dict, is_admin: bool) -> bool:
     """The ownership half of the write rule: creator, ``super_editor``, or admin.
 
-    ``createdBy`` is read with ``.get`` - documents predating the field exist,
-    and the original's direct subscript turned one of those into a 500 on every
-    attempt to edit it.
+    ``createdBy`` is read with ``.get``: documents predating the field exist.
     """
     from archihub.api.users.services import has_role
 
@@ -175,8 +167,8 @@ def is_public(resource: dict) -> bool:
     * its content type declares no ``viewRoles`` - a type restricted to some
       role cannot be visible to someone holding none.
 
-    Stated once here rather than in each public service, because the legacy
-    public layer applied a different subset at each of its six routes.
+    Stated once here rather than in each public service, so every public route
+    applies the same rule.
     """
     if resource.get("status") != "published":
         return False
@@ -200,22 +192,10 @@ def may_see_deleted(username: str | None, is_admin: bool) -> bool:
 def may_see_all_drafts(is_publisher: bool, is_admin: bool) -> bool:
     """Whether the caller may see drafts other than their own.
 
-    PRESERVED FROM LEGACY, INCLUDING WHAT LOOKS LIKE A TYPO. The original reads:
-
-        if not has_role(user, 'publisher') or not has_role(user, 'admin'):
-            restrict to own drafts
-
-    By De Morgan that grants the privilege only to someone who is **both**
-    publisher and admin. Every comparable guard in this codebase is written
-    ``if not has_role(a) and not has_role(b)`` - i.e. "neither" - so ``or`` here
-    is almost certainly a slip, and the intent was that either role suffices.
-
-    It is NOT corrected here, deliberately. The bug fails **closed**: it shows
-    people less than intended, never more. Fixing it would widen who can read
-    other people's unpublished work, and quietly broadening access is not
-    something that should ride along inside a framework migration. It needs an
-    explicit decision from someone who knows how these roles are handed out.
-
+    ONLY SOMEONE WHO IS BOTH publisher AND admin sees everyone's drafts; anyone
+    else sees their own. This is stricter than "either role", deliberately: it
+    fails closed, and widening who can read other people's unpublished work is a
+    decision for whoever hands out these roles.
     """
     return is_publisher and is_admin
 

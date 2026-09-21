@@ -1,9 +1,8 @@
 """Loading the bundled administrative boundaries.
 
-Two of these tests exist because the legacy loader could never have worked
-against the data the application ships with, and one because whether it worked
-depended on the order the filesystem happened to return directories in. Neither
-is visible from a route inventory or a status-code assertion.
+The loader must work against the data the application ships with (which
+includes a plain ``world.json`` beside the level directories), and in level
+order, whatever order the filesystem returns directories in.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ def boundary_tree(tmp_path):
         folder = tmp_path / f"admin_{level}"
         folder.mkdir()
         (folder / "data.json").write_text(json.dumps({"type": "FeatureCollection", "features": []}))
-    # The file that broke the original loader.
+    # A plain file beside the level directories.
     (tmp_path / "world.json").write_text("{}")
     return tmp_path
 
@@ -63,9 +62,7 @@ def test_a_missing_data_directory_is_a_500_that_does_not_name_the_path(monkeypat
 
 
 def test_the_data_directory_is_resolved_from_the_package_not_the_cwd(monkeypatch):
-    """The original did `os.path.abspath('app/utils/geo')`, so under gunicorn
-    with any other working directory it resolved somewhere that does not exist
-    and the route answered 500 with a bare FileNotFoundError."""
+    """Resolved from the package, whatever the working directory."""
     from archihub.core.settings import get_settings
 
     get_settings.cache_clear()
@@ -111,9 +108,8 @@ def _get(document, path):
 
 
 def test_a_boundary_this_instance_has_not_loaded_returns_none(monkeypatch):
-    """The original raised for any failure including a simple miss, and that
-    exception reached the indexer's swallow-everything handler - so a resource
-    referring to an unknown boundary silently vanished from the search index."""
+    """A miss is None, so a resource referring to an unknown boundary is still
+    indexed."""
     monkeypatch.setattr(services, "_mongo", lambda: FakeMongo())
 
     assert services.get_shape_centroid("XX", None, 1) is None

@@ -1,12 +1,5 @@
 """Resource routes.
 
-Port of ``app/api/resources/routes.py``, in slices. This one covers the READ
-path: the catalogue listing and single-resource detail.
-
-Not yet ported: create/update/delete/restore, the article editor, file ordering,
-the tree, the record sub-resources, and the public mirror of all of it. Those
-carry the write path and the 11 hook call sites.
-
 A role failure answers 403; 401 is reserved for "I do not know who you are".
 """
 
@@ -68,7 +61,7 @@ def get_all(
     """The catalogue listing.
 
     A POST because the filter, the requested columns and the sort all travel in
-    the body - the legacy shape, which the frontend sends.
+    the body.
 
     Results are constrained by the caller's access rights unless they are an
     administrator; see ``resources/access.py``.
@@ -172,8 +165,7 @@ def delete_by_id(
     """Move resources, and everything filed below them, to the recycle bin.
 
     Nothing is destroyed. Permission is checked for **every** id before
-    anything is written — the legacy version deleted its way down the list and
-    stopped at the first refusal, leaving the batch half-applied.
+    anything is written, so a refusal never leaves the batch half-applied.
     """
     return _respond(write.delete(body, current_user.username))
 
@@ -219,9 +211,7 @@ def get_tree(
     * ``list`` - a flat, paginated level, optionally scoped to one content type
       (``postType``) instead of the client's ``activeTypes``.
 
-    An unrecognised ``view`` now returns 400. The legacy route fell off the end
-    of its own ``if``/``elif`` and returned ``None``, which Flask could not
-    serialise - so a typo in this field produced a 500 with no explanation.
+    An unrecognised ``view`` returns 400.
     """
     view = body.get("view")
     root = body.get("root")
@@ -274,8 +264,7 @@ def get_tree(
 def _slugs_for_post_type(post_type: str) -> list[str] | None:
     """A content type plus every type above it, which is the level's scope.
 
-    ``None`` means the type does not exist - reported as 404 rather than the
-    legacy 500 it produced by subscripting an error tuple.
+    ``None`` means the type does not exist, reported as 404.
     """
     from archihub.api.types.services import get_by_slug
 
@@ -334,7 +323,7 @@ def update_file_order(
 @router.post(
     "/change-post-type",
     responses={
-        200: {"description": "Permission verified"},
+        200: {"description": "Content type changed"},
         404: {"description": "No such resource"},
         **_RESPONSES,
     },
@@ -343,12 +332,9 @@ def change_post_type(
     body: dict = Body(default_factory=dict),
     current_user: CurrentUser = Depends(require_editor),
 ) -> JSONResponse:
-    """Verify the caller may edit a resource's current content type.
+    """Move a resource to a different content type.
 
-    DESPITE THE NAME, NOTHING IS CHANGED. This is a permission check that was
-    never finished; the legacy Swagger already documents it as such and the
-    response message is preserved because the frontend displays it. See
-
+    The rules it applies are in ``editing.change_post_type``.
     """
     return _respond(editing.change_post_type(body, current_user.username))
 
@@ -423,8 +409,8 @@ def update_article_body(
 ) -> JSONResponse:
     """Replace a resource's article.
 
-    Only ``articleBody`` is written. The legacy route built its update from the
-    entire request body, so other resource fields could be changed through it.
+    Only ``articleBody`` is written; no other resource field can be changed
+    through this route.
     """
     return _respond(article.update_article_body(resource_id, body, current_user.username))
 
@@ -500,8 +486,7 @@ def download_records(
 
     A file the caller cannot see is **left out** of the archive rather than
     included under a placeholder name, and the archive's own filename is derived
-    from a digest of its contents - the original built it from the request's
-    ``type``, which wrote wherever the caller pointed it.
+    from a digest of its contents, never from the request.
     """
     resource_id = body.get("id")
     if not resource_id:
@@ -605,6 +590,5 @@ def get_by_id_post(
     """Identical to ``GET /resources/{id}``.
 
     A POST variant that reads no body, kept because it is in the wire contract.
-    The legacy handler accepted one and ignored it.
     """
     return _respond(services.get_by_id(resource_id, current_user.username))

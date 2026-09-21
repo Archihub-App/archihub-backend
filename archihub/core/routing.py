@@ -1,9 +1,6 @@
 """Router registration and live-route introspection.
 
-Exists because of a genuine trap discovered while porting
-``/health/test-control/routes``.
-
-That endpoint exists so ``ArchiHUBTestRunner``'s ``swagger-inventory`` suite can
+``/health/test-control/routes`` exists so ``ArchiHUBTestRunner``'s ``swagger-inventory`` suite can
 diff the routes the application *actually serves* against the routes the
 generated OpenAPI spec *documents*, and fail when one drifts from the other. The
 inventory must therefore be derived independently of the spec - deriving it from

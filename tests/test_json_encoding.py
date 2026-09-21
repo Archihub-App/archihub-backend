@@ -5,11 +5,6 @@ Starlette's ``JSONResponse`` renders with a bare ``json.dumps``, so a single
 nasty shape of bug: it fires only for the documents that happen to carry the
 field, so it survives the unit tests, survives a live smoke test against a
 fresh instance, and appears later against real data.
-
-It did happen. ``GET /users/me`` and ``GET /users/{id}`` both 500'd against the
-real database on a user whose ``lastRequest`` had been set, while every test
-passed - found by the diff harness, which is the only thing that fires at real
-documents.
 """
 
 from __future__ import annotations
@@ -28,14 +23,13 @@ def _rendered(payload):
 
 
 # ---------------------------------------------------------------------------
-# The values that used to 500
+# Values json.dumps refuses
 # ---------------------------------------------------------------------------
 
 
 def test_a_datetime_renders_as_an_http_date_like_flask_did():
-    """`GET /users/{id}` returns the raw document, as the legacy route did, and
-    Flask's `jsonify` rendered a datetime as an HTTP date. That string is the
-    wire contract."""
+    """`GET /users/{id}` returns the raw document, and a datetime in it renders
+    as an HTTP date. That string is the wire contract."""
     payload = {"lastRequest": datetime.datetime(2026, 8, 10, 14, 12, 34)}
 
     assert _rendered(payload) == {"lastRequest": "Mon, 10 Aug 2026 14:12:34 GMT"}
@@ -48,7 +42,7 @@ def test_a_timezone_aware_datetime_is_not_shifted_twice():
 
 
 def test_a_naive_datetime_is_read_as_utc():
-    """The reading Werkzeug's `http_date` applies, so the two stacks agree."""
+    """A naive datetime is UTC."""
     naive = datetime.datetime(2026, 8, 10, 14, 12, 34)
     aware = naive.replace(tzinfo=datetime.timezone.utc)
 

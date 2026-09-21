@@ -1,33 +1,8 @@
 """Background task records.
 
-PARTIAL PORT: ``add_task`` and ``has_task`` only, because the hook bus needs
-them. The polling endpoints (``get_tasks`` and friends) land with the rest of the
-domain in Phase 3.
-
-``has_task`` ANSWERS "IS THIS WORK ALREADY QUEUED?", and the obvious
-implementations do not:
-
-1. It rebinds ``task`` from the Mongo document to a ``TaskUpdate`` Pydantic model
-   (``task = TaskUpdate(**update)``) and then immediately does
-   ``mongodb.update_record('tasks', {'taskId': task['taskId']}, task)``.
-   A Pydantic model is not subscriptable, so this raises
-   ``TypeError: 'TaskUpdate' object is not subscriptable`` - verified.
-2. Three branches then assign to ``t['status']`` / ``t['result']``, but ``t`` is
-   never defined in that function. That is a ``NameError``.
-3. Both are caught by a bare ``except Exception`` whose handler
-   ``return True`` - i.e. "this user already has a task running".
-4. When the task really is still pending, no branch matches and the function
-   falls off the end, returning ``None``.
-
-So the result is inverted in both directions that matter: a FINISHED task
-reports "still running" (blocking the user from starting another), and a
-GENUINELY RUNNING task reports "nothing running" (allowing a duplicate). This is
-the guard ``mqttHandler`` and ``mailLabeler`` use to avoid launching concurrent
-jobs, so in practice it both blocks legitimate work and permits the duplicates
-it exists to prevent.
-
-The rewrite below keeps the intended contract: True when the named task is
-genuinely still in flight for that user.
+``has_task`` answers "is this work already in flight for this user?" - True only
+when a pending record exists and Celery agrees the task has not finished. Hooks
+use it to avoid launching the same job twice.
 """
 
 from __future__ import annotations
@@ -42,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def serialise(result):
-    """Mongo types into the extended-JSON forms legacy's ``parse_result`` gave.
+    """Mongo types into their extended-JSON forms.
 
     ``_id`` becomes ``{"$oid": ...}`` and a ``datetime`` becomes
     ``{"$date": ...}``. Which of the two date conventions a route uses is a
@@ -65,11 +40,8 @@ def _result(task_id: str) -> AsyncResult:
     ``AttributeError: 'DisabledBackend' object has no attribute
     '_get_task_meta_for'``.
 
-    The legacy code worked only because ``celery_init_app`` called
-    ``set_default()`` as a side effect of building the Flask app. Depending on
-    that is fragile - it makes task polling silently conditional on which module
-    happened to be imported first. Passing the app explicitly removes the
-    ambient dependency.
+    Passing the app explicitly means task polling does not depend on which module
+    happened to be imported first.
     """
     from archihub.worker.celery_app import celery_app
 
@@ -107,8 +79,7 @@ def add_task(
 
     user = mongo.get_record("users", {"username": username}, fields={"username": 1})
     if not user and username not in SYSTEM_USERS:
-        # Legacy returned ({'msg': ...}, 404) from this void function, which no
-        # caller inspected - so the task simply went unrecorded and invisible.
+        # Raised rather than returned, so a task is never silently left unrecorded.
         logger.error("Refusing to record task %s for unknown user %r", task_id, username)
         raise ValueError(f"Unknown user: {username}")
 
@@ -154,9 +125,8 @@ def has_task(username: str, task_name: str) -> bool:
     past, which is what stops a crashed or completed job from blocking the user
     forever.
 
-    Errors resolve to False (allow the work) rather than True (block it). The
-    legacy handler did the opposite, so any transient broker hiccup silently
-    locked the user out of a feature with no indication why.
+    Errors resolve to False (allow the work) rather than True (block it), so a
+    transient broker hiccup never silently locks the user out of a feature.
     """
     try:
         task = _mongo().get_record(
@@ -221,16 +191,7 @@ def may_read_tasks_of(current_user: str, requested_user: str, is_admin: bool) ->
     A user may read their own tasks. Administrators may read anyone's, including
     the ``automatic`` pseudo-user that hooks and the scheduler own.
 
-    STATED AS A POSITIVE RULE ON PURPOSE. The legacy guard was written as a
-    negative:
-
-        if not has_role(current_user, 'admin') and (current_user != user
-                                                    and user == 'automatic'):
-
-    which only refuses when the *requested* user is literally ``automatic`` - so
-    a non-admin asking for any other person's username fell straight through it.
-    A condition of this shape is hard to read correctly, which is most of why it
-    was wrong; an allow-rule is checkable at a glance.
+    Stated as an allow-rule on purpose: it is checkable at a glance.
     """
     if is_admin:
         return True
@@ -260,8 +221,7 @@ def get_tasks(user: str, body: dict) -> tuple[list | dict, int]:
             # the column as `getSimpleDate(resource.date.$date)`, unguarded, so
             # a bare string leaves `.$date` undefined and every row in the panel
             # reads "Invalid Date" - a 200 with a full body and a wrong screen.
-            # Legacy reached the same shape by running the list through
-            # `parse_result`; `serialise` is this port's name for that pass.
+            # `serialise` produces that shape.
             entry = serialise(entry)
             # The stored status is a snapshot; Celery is the authority on
             # whether the work has since finished.

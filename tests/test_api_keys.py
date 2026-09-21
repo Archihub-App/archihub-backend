@@ -133,7 +133,7 @@ def test_unknown_handle_is_refused(mongo):
 )
 def test_values_from_another_scheme_return_none(mongo, presented):
     """None rather than an exception - that is what lets the caller fall back to
-    the legacy credential path for keys issued before this scheme."""
+    the older credential format for keys issued before this scheme."""
     assert api_keys.verify_key(presented) is None
 
 
@@ -230,9 +230,8 @@ def test_bookkeeping_failure_does_not_fail_the_request(mongo, monkeypatch):
 #
 # Each of these scopes is a single credential in the product: the profile
 # screen offers "generate", and its own description tells the user the token
-# lasts "two days or until a new one is generated". Before this, pressing that
-# button left the previous key live - so an account accumulated admin
-# credentials that no screen listed and no screen could revoke.
+# lasts "two days or until a new one is generated", so the previous key of
+# that scope stops working.
 
 
 @pytest.fixture

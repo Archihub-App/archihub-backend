@@ -32,8 +32,8 @@ class ModelInfo:
 
     ``context_length`` and ``capabilities`` are ``None``/empty when the provider
     does not say — which is the honest answer for endpoints whose ``/models``
-    returns nothing but identifiers. The legacy code filled that silence with a
-    hardcoded table that was wrong the moment a vendor shipped anything.
+    returns nothing but identifiers. A hardcoded table would be wrong the moment
+    a vendor shipped anything.
     """
 
     id: str

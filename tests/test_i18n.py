@@ -1,8 +1,7 @@
-"""Translations without Flask-Babel.
+"""Translations.
 
-Verifies the two things the port has to get right: resolving the instance
-locale out of the ``system`` collection, and finding the existing GNU gettext
-catalogs on disk.
+Resolving the instance locale out of the ``system`` collection, and finding the
+GNU gettext catalogs on disk.
 """
 
 from __future__ import annotations
@@ -18,7 +17,7 @@ def _clear_locale_cache(monkeypatch):
 
     `conftest.pinned_locale` replaces `get_locale` for the rest of the suite so
     no test can reach a live database for a translation. Here the resolver is
-    the subject, driven against a fake Mongo, so the original is put back.
+    the subject, driven against a fake Mongo, so the real one is put back.
     """
     monkeypatch.setattr(i18n, "get_locale", i18n._real_get_locale)
     i18n.reset_locale_cache()
@@ -46,8 +45,8 @@ def test_locale_is_read_by_setting_id(monkeypatch):
     """Look the entry up by id, not by position.
 
     Against a live instance the entry is ``user_languages`` and happens to sit
-    at index 2 - which is why the legacy positional read ``data[2]`` worked.
-    Here it is deliberately moved so a positional read would pick the wrong one.
+    at index 2. Here it is deliberately moved so a positional read would pick
+    the wrong one.
     """
     _patch_mongo(
         monkeypatch,
@@ -62,8 +61,8 @@ def test_locale_is_read_by_setting_id(monkeypatch):
     assert i18n.get_locale() == "en"
 
 
-def test_locale_falls_back_to_legacy_position(monkeypatch):
-    """An unrecognised id still resolves, matching legacy behaviour."""
+def test_locale_falls_back_to_the_positional_entry(monkeypatch):
+    """An unrecognised id still resolves, through the positional fallback."""
     _patch_mongo(
         monkeypatch,
         {"data": [{"id": "a"}, {"id": "b"}, {"id": "renamed_someday", "value": "es"}]},
@@ -78,8 +77,7 @@ def test_locale_falls_back_to_legacy_position(monkeypatch):
 def test_malformed_settings_fall_back_to_default(monkeypatch, record):
     """Never raise on a missing, empty, short or unsupported-locale document.
 
-    The legacy version indexed ``data[2]['value']`` unconditionally and would
-    500 on any of these - including from inside a health check.
+    A health check reads the locale too, so none of these may be a 500.
     """
     _patch_mongo(monkeypatch, record)
     assert i18n.get_locale() == i18n.DEFAULT_LOCALE
@@ -94,7 +92,7 @@ def test_unreachable_database_falls_back_to_default(monkeypatch):
 
 
 def test_locale_is_cached(monkeypatch):
-    """The legacy selector hit Mongo on every request; a short TTL removes that."""
+    """A short TTL keeps the locale read off every request."""
     fake = _patch_mongo(monkeypatch, {"data": [{"id": i18n.LOCALE_SETTING_ID, "value": "es"}]})
     for _ in range(5):
         i18n.get_locale()
@@ -104,8 +102,8 @@ def test_locale_is_cached(monkeypatch):
 def test_spanish_catalog_is_found_on_disk(monkeypatch):
     """stdlib gettext must resolve 'es' onto the existing es_ES/*.mo catalog.
 
-    This is what makes dropping flask-babel safe: no catalog file has to move
-    and compile_translations.sh keeps working unchanged.
+    No catalog file has to move, and compile_translations.sh builds what is
+    read.
     """
     _patch_mongo(monkeypatch, {"data": [{"id": i18n.LOCALE_SETTING_ID, "value": "es"}]})
     assert i18n.gettext("The token has expired") == "El token ha expirado"
@@ -117,7 +115,7 @@ def test_english_returns_the_source_string(monkeypatch):
 
 
 def test_interpolation_uses_str_format(monkeypatch):
-    """Matches Flask-Babel 3+/4.x semantics, so call sites port verbatim."""
+    """Keyword arguments are interpolated with ``str.format``."""
     _patch_mongo(monkeypatch, {"data": [{"id": i18n.LOCALE_SETTING_ID, "value": "en"}]})
     assert i18n.gettext("The field {label} is required", label="Title") == (
         "The field Title is required"
@@ -130,14 +128,10 @@ def test_bad_interpolation_does_not_raise(monkeypatch):
     assert i18n.gettext("Needs {missing}") == "Needs {missing}"
 
 
-def test_a_legacy_printf_msgid_is_interpolated_too(monkeypatch):
-    """BOTH placeholder styles are live and must stay so until the catalogues
-    merge at cutover: the legacy catalogue is written for flask_babel's `%`
-    interpolation, the port's own for `str.format`. The standing convention is
-    to REUSE a legacy msgid rather than add a near-duplicate, so ported code
-    passes strings of the first kind through here routinely - and supporting
-    only `.format` rendered them with the placeholder still in them, which is
-    a message that is wrong without being broken."""
+def test_a_printf_msgid_is_interpolated_too(monkeypatch):
+    """BOTH placeholder styles are in use: `%(name)s` and `{name}`. A message
+    filled in the wrong style shows its placeholder, which is wrong without
+    being broken."""
     _patch_mongo(monkeypatch, {"data": [{"id": i18n.LOCALE_SETTING_ID, "value": "en"}]})
 
     assert i18n.gettext("Indexing finished for %(count)s resources", count=42) == (

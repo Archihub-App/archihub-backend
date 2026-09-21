@@ -90,9 +90,7 @@ def test_article_bodies_are_stripped_from_audit_details():
 
 
 def test_no_matches_is_an_empty_list_not_a_404(mongo):
-    """The legacy 404 could never fire - it tested a pymongo cursor for
-    emptiness, and a cursor is always truthy. "Nothing matched this filter" is a
-    successful query with no results anyway."""
+    """"Nothing matched this filter" is a successful query with no results."""
     mongo.rows["logs"] = []
     payload, status = logs.filter_logs({"page": 0, "filters": {}})
 
@@ -128,11 +126,7 @@ def test_a_user_may_read_their_own_tasks():
 
 
 def test_a_user_may_not_read_someone_elses_tasks():
-    """The headline fix.
-
-    The legacy guard only refused when the requested user was literally
-    'automatic', so any authenticated caller could read another person's task
-    list by passing their username.
+    """A user reads only their own task list.
     """
     assert tasks.may_read_tasks_of("alice", "bob", is_admin=False) is False
 

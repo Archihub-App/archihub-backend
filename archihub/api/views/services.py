@@ -7,13 +7,7 @@ the public site lists views and reads their contents.
 That public exposure is what shapes this module.
 
 **`filesObj` is server-owned.** A view's thumbnail is a record attached through
-the upload path, and nothing else. The originals passed the request body
-straight into ``View(**body)`` / ``ViewUpdate(**update_body)``, and both models
-declare ``filesObj`` - so a client could point a view's thumbnail at *any*
-record id. ``_thumbnail`` then read that record and base64-encoded its
-derivative into the response of ``get_all``, which is **unauthenticated**. That
-is a route from "can edit a view" to "can publish any image in the archive".
-
+the upload path, and nothing else; a client cannot set it.
 
 **The thumbnail is only ever read from a record attached to that view.**
 Belt and braces alongside the allowlist: even a ``filesObj`` written directly to
@@ -195,9 +189,7 @@ def get_all() -> tuple[list, int]:
 def get_view_info(slug: str) -> tuple[dict, int]:
     """Everything the explore screen needs to render a view. Public.
 
-    The original read ``view['visible']`` at the top of the function and only
-    checked ``if not view`` thirty lines later, so an unknown slug raised
-    ``TypeError`` on ``None`` and reached the client as a 500 rather than a 404.
+    An unknown slug is a 404.
     """
     view = _mongo().get_record(
         COLLECTION,
@@ -217,8 +209,8 @@ def get_view_info(slug: str) -> tuple[dict, int]:
     for type_slug in view.get("visible") or []:
         post_type = get_by_slug(type_slug)
         if not isinstance(post_type, dict):
-            # A view still naming a content type that has been deleted. The
-            # original subscripted the lookup and took the whole screen down.
+            # A view still naming a content type that has been deleted must not
+            # take the whole screen down.
             logger.info("View %s names a missing content type %s", slug, type_slug)
             continue
 
@@ -266,10 +258,8 @@ def _type_parents(post_type: dict) -> list[dict]:
 def _file_counts(view: dict, types: list[dict]) -> dict:
     """How many files the view covers, broken down by media kind.
 
-    PUBLIC, AND SO COUNTS ONLY WHAT IS PUBLIC. The original counted every
-    matching record with no access-rights or publication filter at all, on an
-    unauthenticated route - so the totals disclosed how much reserved and
-    unpublished material an archive holds.
+    PUBLIC, AND SO COUNTS ONLY WHAT IS PUBLIC: the totals must not disclose how
+    much reserved or unpublished material an archive holds.
     """
     mongo = _mongo()
 
@@ -315,9 +305,8 @@ def _validate(payload: dict, *, creating: bool) -> str | None:
 def _one_image(incoming) -> tuple[object | None, str | None]:
     """The single thumbnail upload, if any.
 
-    A view has one image. The original checked the count and the *claimed* type
-    - a mimetype the client sent, or an extension - and only found out what the
-    bytes really were after handing them to the image processor.
+    A view has one image, and its type is decided by its bytes, not by the
+    mimetype or extension the client claimed.
     """
     if not incoming:
         return None, None
@@ -345,10 +334,10 @@ def _derive_thumbnail(attached: list, user: str) -> str | None:
     all, silently, because the read path treats a missing derivative as "not
     ready yet" rather than an error.
 
-    Done here and now rather than queued, which is deliberate and is what the
-    legacy service did too: the operator is looking at the form, and a thumbnail
-    that appears some seconds later - or not at all, if no worker is running -
-    reads as the upload having failed. Nothing else about a view is asynchronous.
+    Done here and now rather than queued, deliberately: the operator is looking
+    at the form, and a thumbnail that appears some seconds later - or not at
+    all, if no worker is running - reads as the upload having failed. Nothing
+    else about a view is asynchronous.
 
     The two automatic paths in `filesProcessing` cannot cover this: both select
     *resources* by content type, and a view is not a resource.
@@ -408,7 +397,7 @@ def create(body: dict, user: str, incoming: list | None = None) -> tuple[dict, i
 
     if _mongo().get_record(COLLECTION, {"slug": payload["slug"]}, fields={"_id": 1}):
         # The slug is how the public route addresses a view, so two views
-        # sharing one makes which is served arbitrary. The original allowed it.
+        # sharing one would make which is served arbitrary.
         return {"msg": _("A view with that slug already exists")}, 409
 
     payload["filesObj"] = []
@@ -508,8 +497,7 @@ def delete(view_id: str, user: str) -> tuple[dict, int]:
 
     view = _mongo().get_record(COLLECTION, {"_id": object_id}, fields={"filesObj": 1, "name": 1})
     if not view:
-        # The original deleted nothing and reported success, so a stale id in
-        # the interface looked like it had worked.
+        # A stale id is reported, not answered with a success that deleted nothing.
         return {"msg": _("View not found")}, 404
 
     _detach_existing(view, view_id, user)

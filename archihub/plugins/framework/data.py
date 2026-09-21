@@ -1,16 +1,7 @@
 """Writes a plugin makes into the core collections.
 
-These were ``PluginClass.update_data`` and ``PluginClass.clear_cache``, both
-``@classmethod``s that needed no instance — which did not stop ``filesProcessing``
-from constructing an entire plugin object inside a Celery task purely to reach
-them:
-
-```python
-instance = ExtendedPluginClass('filesProcessing', '', **plugin_info)
-instance.update_data('records', str(record['_id']), update)
-```
-
-Module-level functions here, so a task imports what it uses.
+Module-level functions, so a task imports what it uses and never constructs a
+plugin object to reach them.
 
 WHY A PROCESSING RESULT IS NOT WRITTEN THROUGH THE RECORDS ROUTE'S UPDATE
 
@@ -20,20 +11,11 @@ result or a transcript is doing something different, and giving it the same
 entry point would mean widening what a user can submit to that route. So it has
 its own, narrow one.
 
-The narrowness is what prevents a lost update. The tempting pattern is:
-
-```python
-update = {'processing': record['processing']}          # read a moment ago
-update['processing']['liquidText'] = {...}
-instance.update_data('records', str(record['_id']), update)   # writes ALL of it
-```
-
-Two plugins finishing different processings on the same record — which is the
-normal case, since a file is OCR'd and transcribed and thumbnailed by different
-tasks — each write back the whole `processing` block as they last read it, and
-the second silently discards the first's result. ``store_processing_result``
-`$set`s one dotted path instead, the same fix already applied in
-``records/blocks.py``.
+The narrowness is what prevents a lost update. Two plugins finishing different
+processings on the same record — the normal case, since a file is OCR'd and
+transcribed and thumbnailed by different tasks — must not each write back the
+whole `processing` block as they last read it. ``store_processing_result``
+`$set`s one dotted path instead, as ``records/blocks.py`` does.
 """
 
 from __future__ import annotations
@@ -122,13 +104,12 @@ def get_processing(record_id: str) -> dict:
 def update_resource(resource_id: str, update: dict) -> tuple[dict, int]:
     """Apply a plugin's metadata update to a resource.
 
-    Validates against the content type's form exactly as a user edit does — the
-    legacy ``update_data`` did too, and that is the one part of it worth keeping:
-    a plugin writing a malformed date leaves the resource unindexable, and the
-    error surfaces much later somewhere unrelated.
+    Validates against the content type's form exactly as a user edit does: a
+    plugin writing a malformed date would leave the resource unindexable, and the
+    error would surface much later somewhere unrelated.
 
-    ``updatedBy`` is ``system``, not the operator who started the job. That is
-    the legacy behaviour and it is right: the change was made by a program.
+    ``updatedBy`` is ``system``, not the operator who started the job: the
+    change was made by a program.
     """
     from archihub.api.resources.validation import validate_fields
     from archihub.api.types.services import get_metadata
@@ -139,8 +120,6 @@ def update_resource(resource_id: str, update: dict) -> tuple[dict, int]:
 
     post_type = update.get("post_type")
     if not post_type:
-        # The original indexed `update['post_type']` directly, so a caller that
-        # omitted it raised KeyError inside a Celery task.
         return {"msg": "The update must state the content type"}, 400
 
     metadata = get_metadata(post_type)

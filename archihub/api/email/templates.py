@@ -1,20 +1,12 @@
 """Email bodies.
 
-Port of ``app/api/email/templates.py``, with the translation fixed and the link
-escaped.
-
 TWO THINGS THAT ARE EASY TO GET WRONG HERE, and invisible when you do:
 
-1. ``_(f"...{link}...")`` interpolated the f-string BEFORE handing it to the
-   translator, so the message id contained the actual URL. No catalogue entry can
-   ever match a string that differs on every call, which means these emails were
-   never translated - regardless of the instance locale. Translation now happens
-   on the template, and interpolation after it.
-
-2. The link was written straight into an ``href`` with no escaping. It is
-   assembled from ``REDIRECT_URL`` plus a token, so it is not attacker-controlled
-   today, but an unescaped value in an HTML attribute is one refactor away from
-   being a hole. It goes through ``html.escape`` with ``quote=True``.
+1. Translate the template, then interpolate. ``_(f"...{link}...")`` would make
+   the message id contain the actual URL, which no catalogue entry can match.
+2. The link goes through ``html.escape`` with ``quote=True`` before it reaches
+   an ``href``: it is not attacker-controlled today, but an unescaped value in an
+   HTML attribute is one refactor away from being a hole.
 
 Each translatable sentence is its own message id rather than one blob of markup,
 so a translator sees prose instead of HTML, and changing the layout does not

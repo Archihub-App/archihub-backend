@@ -5,9 +5,8 @@ Two separate properties, and the second is the one that bites.
 Several providers stream the model's private reasoning alongside its reply.
 Because it is fluent prose in the same voice, a user cannot tell it apart once
 the two are concatenated — the answer simply begins with the model talking to
-itself. Google's dialect was doing exactly that: reasoning arrives as an ordinary
-text part flagged ``thought: true``, in the same list as the answer, and the text
-builder took every part.
+itself. In Google's dialect reasoning arrives as an ordinary text part flagged
+``thought: true``, in the same list as the answer.
 """
 
 from __future__ import annotations

@@ -31,8 +31,7 @@ from archihub.core.security import tokens
 
 logger = logging.getLogger(__name__)
 
-# Session lifetime. Deliberately longer than the framework-level default in
-# settings, matching the legacy login route.
+# Session lifetime. Deliberately longer than the default in settings.
 ACCESS_TOKEN_LIFETIME = timedelta(days=1)
 
 # A real bcrypt hash of a value nobody can supply, compared against when the

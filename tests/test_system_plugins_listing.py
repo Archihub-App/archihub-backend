@@ -1,15 +1,13 @@
 """`GET /system/plugins` — the payload two screens depend on.
 
-This route had **no test at all**, and it has now broken the frontend twice in
-the same way: the payload is a hand-picked subset of each plugin's `plugin_info`,
-where the legacy route returned the whole dict, so a field the port did not think
-to pick simply vanished.
+The payload is a hand-picked subset of each plugin's `plugin_info`, so a field
+nobody thought to pick simply vanishes from the frontend.
 
 * the listing must be an object, not a bare array: both callers read
   `response.plugins`.
 * **The `type` omission** — `/processing` renders one button per entry of
-  `plugin.type` and routes to `/processing/{type}/{slug}`. With the field gone,
-  the page died on `undefined.map` before rendering anything.
+  `plugin.type` and routes to `/processing/{type}/{slug}`. Without the field,
+  the page dies on `undefined.map` before rendering anything.
 
 So the fields are pinned here by consumer, not by taste. Adding a field is free;
 removing one needs this file changed, which is the point.

@@ -10,12 +10,8 @@ an anonymous caller and each one reaches either a Mongo query or an O(n log n)
 geometry pass over megabytes of coordinates, so:
 
 * **Nothing from the request becomes a query operator.** `ident`, `parent` and
-  `type` are required to be strings. The originals assigned them into the filter
-  as-is, so a JSON object arrived as a Mongo operator — `{"ident": {"$ne": null}}`
-  returns every shape in the collection, simplifies all of them, and does it
-  without an account.
-* **Results are capped.** Asking without an `ident` returned every matching
-  shape, unbounded, each one simplified.
+  `type` are required to be strings.
+* **Results are capped**, including a request without an `ident`.
 * **Retention is quantised** before it reaches the simplification cache; see
   ``simplify.normalise_retention``.
 
@@ -47,8 +43,7 @@ MIN_LEVEL = 0
 MAX_LEVEL = 5
 
 #: Bounding-box area below which the level is overridden, and the retention used
-#: at each step. Preserved from the original, whose intent is "zoomed in far
-#: enough to want detail".
+#: at each step: "zoomed in far enough to want detail".
 DETAIL_AREA = 400
 CLOSE_AREA = 40
 
@@ -114,9 +109,8 @@ def _level(value, *, required: bool = True) -> int | None:
 def _bounds(value) -> dict | None:
     """A viewport rectangle, validated as four numbers in range.
 
-    These become the coordinates of a ``$geoIntersects`` polygon. The original
-    used them unchecked, so a non-numeric one reached Mongo and came back as a
-    500 carrying the driver's error text.
+    These become the coordinates of a ``$geoIntersects`` polygon, so they are
+    checked before they reach Mongo.
     """
     if not value:
         return None
@@ -170,10 +164,7 @@ def get_level(body: dict) -> tuple[list | dict, int]:
         area = abs(bounds["maxLng"] - bounds["minLng"]) * abs(bounds["maxLat"] - bounds["minLat"])
 
         if CLOSE_AREA < area < DETAIL_AREA:
-            # The original wrote `{'$gte': level}` and then immediately
-            # overwrote the same key with `{'$lt': level + 2}`, so the lower
-            # bound never applied and levels *below* the requested one came
-            # back. Both bounds are in one expression here.
+            # Both bounds in one expression: the requested level and the one below it.
             filters["properties.admin_level"] = {"$gte": level, "$lt": level + 2}
             threshold = 0.1
         elif area <= CLOSE_AREA:
@@ -219,8 +210,7 @@ def _prepare(document: dict, threshold: float, level: int, bounds: dict | None) 
         geometry = shape(document["geometry"])
     except Exception:
         # A malformed stored geometry drops out of the layer rather than taking
-        # the whole map request down, which is what the original's single
-        # try/except around everything did.
+        # the whole map request down.
         logger.warning("Unusable stored geometry on shape %s", document.get("_id"))
         return None
 
@@ -253,7 +243,7 @@ def get_shape(body: dict) -> tuple[list | dict, int]:
 
     ``type: 'administrative'`` is a special request meaning "the first-level
     divisions of this shape": the identifier becomes the parent and the level is
-    forced to 1. Preserved from the original.
+    forced to 1.
     """
     try:
         ident = _identifier(body.get("ident"), "ident")
@@ -331,21 +321,9 @@ _ADMIN_DIRECTORY = _re.compile(r"^admin_(\d+)$")
 def _boundary_levels(directory) -> list[tuple[int, object]]:
     """The bundled boundary directories, LOWEST ADMINISTRATIVE LEVEL FIRST.
 
-    Both properties matter and neither held before.
-
-    The original iterated ``os.listdir`` and did ``int(f.split('admin_')[1])``
-    on every entry. That directory also contains ``world.json``, a plain file,
-    for which the split yields a one-element list - so the loader raised
-    ``IndexError: list index out of range`` before reading anything, and
-    ``/system/geo-load`` returned 500 on the data the application ships with.
-
-
-    The order is the second half. Each level's shapes are matched to a parent by
-    intersecting them against the level above, which must therefore already be
-    in the database. ``os.listdir`` returns entries in filesystem order, so
-    whether that held was luck: processing ``admin_1`` before ``admin_0`` gave
-    every department a null parent, and the explore map's drill-down silently
-    stopped working one level down.
+    Plain files in the directory (such as ``world.json``) are skipped. The order
+    matters: each level's shapes are matched to a parent by intersecting them
+    against the level above, which must therefore already be in the database.
     """
     levels = []
     for entry in sorted(directory.iterdir(), key=lambda p: p.name):
@@ -592,11 +570,8 @@ def get_shape_centroid(ident: str, parent: str | None, level: int) -> list[dict]
     one for the whole - an archipelago's overall centroid can fall in open
     water, hundreds of kilometres from any of its land.
 
-    Returns ``None`` when the boundary is not stored. The original raised
-    ``Exception(f'Error al obtener el centroide ...')`` for any failure
-    including a simple miss, and that exception propagated into the indexing
-    loop's swallow-everything handler - so a resource referring to a boundary
-    this instance has not loaded silently disappeared from the search index.
+    Returns ``None`` when the boundary is not stored, so a resource referring to
+    a boundary this instance has not loaded is still indexed.
     """
     if not ident:
         return None
@@ -689,9 +664,7 @@ def ensure_polygon(feature: dict) -> dict:
         return feature
 
     # `linemerge` raises for a bare LineString in shapely 2.x - it wants a
-    # collection to merge. The original called it unconditionally, so a boundary
-    # stored as one continuous line raised `ValueError: Cannot linemerge ...`
-    # and the request 500'd. There is nothing to merge in that case anyway.
+    # collection to merge, and there is nothing to merge in that case anyway.
     merged = geom if geom.geom_type == "LineString" else linemerge(geom)
     polygons = list(polygonize(merged if merged.geom_type != "LineString" else [merged]))
 

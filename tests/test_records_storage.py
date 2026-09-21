@@ -1,9 +1,8 @@
 """Attaching files to a resource.
 
-Every upload in the system goes through this, and it is what the resources
-write path is blocked on. The interesting behaviour is deduplication by content
-hash - archives receive the same scan against several catalogue entries
-routinely, and it must be stored once.
+Every upload in the system goes through this. The interesting behaviour is
+deduplication by content hash - archives receive the same scan against several
+catalogue entries routinely, and it must be stored once.
 """
 
 from __future__ import annotations
@@ -248,9 +247,8 @@ def test_reattaching_to_the_same_resource_does_not_duplicate_the_parent(mongo):
 
 
 def test_parent_order_is_stable(mongo):
-    """The original built a set of ids and rebuilt the list from it, so stored
-    parent order was whatever the set happened to iterate - and string hashing
-    is salted per process, so it differed between runs."""
+    """Stored parent order does not depend on set iteration, which differs
+    between runs because string hashing is salted per process."""
     mongo.records.append({
         "_id": "rec0",
         "hash": "h",
@@ -266,7 +264,7 @@ def test_parent_order_is_stable(mongo):
 
 
 def test_a_parent_entry_without_an_id_does_not_crash_the_merge(mongo):
-    """The original did `set(x['id'] for x in new_parent)`."""
+    """An entry without an id is skipped, not a KeyError."""
     mongo.records.append({
         "_id": "rec0", "hash": "h", "parent": [{"no": "id"}, {"id": "a"}],
         "parents": [], "status": storage.STATUS_UPLOADED,
@@ -332,13 +330,8 @@ def test_a_file_already_on_disk_can_be_attached(mongo, tmp_path):
 
 
 def test_a_file_on_disk_is_deduplicated_the_same_way(mongo, tmp_path):
-    """THE bug this replaces .
-
-    In the legacy non-upload branch, the duplicate case returned
-    ``str(new_record.inserted_id)`` - a variable only bound when a record was
-    *created*. On the first file that raised NameError; on a later one it still
-    referred to the previous iteration's record, so the resource was given an
-    attachment pointing at the wrong file.
+    """A duplicate file already on disk attaches the existing record, never a
+    record from a previous iteration.
     """
     source = tmp_path / "a.pdf"
     source.write_bytes(b"same bytes")

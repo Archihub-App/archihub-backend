@@ -94,9 +94,8 @@ def test_set_first_time_requires_every_field(mongo, body):
 
 
 def test_set_first_time_checks_the_password_confirmation(mongo, monkeypatch):
-    """The legacy version accepted the confirmation field and never compared it,
-    so a mistyped confirmation silently created the account with the first
-    value - on the one account that matters most."""
+    """A mistyped confirmation must not silently create the administrator with
+    the first value."""
     mongo.counts["users"] = 0
     monkeypatch.setattr(services, "set_system_setting", lambda: None)
 
@@ -285,8 +284,8 @@ def test_the_restart_counter_is_not_writable_through_settings(mongo):
 
 
 def test_settings_lookup_prefers_id_over_position(mongo):
-    """The legacy code indexed these arrays positionally, which reads the wrong
-    setting as soon as a document is reordered or extended."""
+    """A positional read would take the wrong setting as soon as a document is
+    reordered or extended."""
     mongo.records["system"] = {
         "name": "user_management",
         "data": [{"id": "user_languages", "value": "en"}, {"id": "other", "value": "x"}],
@@ -343,8 +342,8 @@ def test_activating_a_plugin_copied_into_the_directory_works(mongo, tmp_path, mo
 
 
 def test_deactivating_is_always_allowed(mongo):
-    """Even for an unsupported plugin - that is how an operator unblocks a
-    cutover."""
+    """Even for an unsupported plugin - that is how an operator unblocks an
+    upgrade."""
     mongo.records["system"] = {"name": "active_plugins", "data": ["ocrProcessing"]}
 
     payload, status = services.set_plugin_active("ocrProcessing", False, "admin")
@@ -520,8 +519,8 @@ def seeded(monkeypatch):
     """The seeder over a fake store, with the create services stubbed.
 
     The services are stubbed rather than run so this stays a test of the
-    SEQUENCE - what gets provisioned, and what gets wired to what - which is the
-    part that was missing. Each service has its own tests.
+    SEQUENCE - what gets provisioned, and what gets wired to what. Each service
+    has its own tests.
     """
     from archihub.api.system import services
 

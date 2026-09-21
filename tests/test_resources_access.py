@@ -122,17 +122,11 @@ def test_an_ordinary_user_sees_only_their_own_drafts(mongo):
         (True, True, False),
     ],
 )
-def test_draft_visibility_matches_legacy_exactly(mongo, is_publisher, is_admin, restricted):
-    """Pins the legacy behaviour, including what looks like a typo.
+def test_only_a_publisher_who_is_also_admin_sees_all_drafts(mongo, is_publisher, is_admin, restricted):
+    """Only someone who is BOTH publisher and admin sees everyone's drafts.
 
-    The original guard (`not publisher or not admin`) grants "see all drafts"
-    only to someone who is BOTH. Every comparable check in the codebase is
-    written as "neither", so `or` is probably a slip.
-
-    It is preserved rather than fixed because the bug fails CLOSED - it shows
-    people less than intended, never more - and correcting it would widen who
-    can read other people's unpublished work. That is a policy decision, not a
-    migration one. See .
+    Deliberately strict: it fails closed, and widening who can read other
+    people's unpublished work is a policy decision.
     """
     filters, _error = access.build_listing_filters(
         {}, username="alice", is_admin=is_admin, is_publisher=is_publisher, status="draft"

@@ -1,15 +1,13 @@
 """Catalogued resources.
 
-Port of ``app/api/resources/services.py`` (2,714 lines) - the largest domain in
-the application. Being ported in slices; this one covers the READ path:
+The read path:
 
 * ``get_all``  - the paginated catalogue listing behind ``POST /resources/getall``
 * ``get_by_id`` - a single resource
 * the cross-domain helpers other modules import (``get_resource_type``,
   ``get_access_rights_of``)
 
-The write path (create/update/delete/restore, the article editor, file ordering,
-the tree, and the 11 hook call sites) follows in later slices.
+Writes live in ``write.py``, the article editor in ``article.py``.
 
 ACCESS CONTROL LIVES IN ``access.py``, not here. Interleaving it with pagination
 and sorting inside a listing query is how a visibility defect goes unnoticed:
@@ -48,8 +46,8 @@ def _column_names(active_columns) -> list[str]:
     label is what the table header renders. Only `destiny` is a field path; the
     rest is presentation and has no business reaching a Mongo projection.
 
-    A bare string is accepted as well so that a hand-written request (the diff
-    harness, a curl, another organisation's script) does not have to wrap every
+    A bare string is accepted as well so that a hand-written request (a curl,
+    another organisation's script) does not have to wrap every
     column in an object to be understood.
     """
     names: list[str] = []
@@ -111,9 +109,8 @@ def get_resource_type(resource_id: str) -> str | None:
 
     resource = _mongo().get_record(COLLECTION, {"_id": object_id}, fields={"post_type": 1})
     if not resource:
-        # Legacy raised here. A missing resource is an ordinary outcome for a
-        # caller enriching a list, and raising turned one stale reference into a
-        # failed page.
+        # A missing resource is an ordinary outcome for a caller enriching a list;
+        # one stale reference must not fail the page.
         logger.info("No resource %s when resolving its content type", resource_id)
         return None
     return resource.get("post_type")
@@ -185,9 +182,7 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
 
         # `metadata.firstLevel.title` is in the base projection because the
         # listing renders a title for every row whether or not the caller asked
-        # for a column. Dropping it produced a browse screen of untitled rows -
-        # caught by the diff harness against the legacy backend, not by any
-        # test, because no test asserted on a field nobody had thought to name.
+        # for a column.
         fields = {
             "accessRights": 1, "filesObj": 1, "ident": 1, "post_type": 1,
             "createdAt": 1, "metadata.firstLevel.title": 1,
@@ -253,17 +248,14 @@ def _access_right_term(access_right):
 def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
     """One resource, if the caller may see it.
 
-    THREE GATES, all of which the original applied and all of which must stay:
-    the recycle bin is administrators-only, the governing access right must be
+    THREE GATES: the recycle bin is administrators-only, the governing access right must be
     held (and it is **inherited from ancestors** - see
     ``access.effective_access_right``), and the content type may restrict
     viewing by role.
 
     The checks are applied to the fetched document rather than folded into the
     query, so "does not exist" and "exists but you may not see it" produce the
-    same 404. The original answered 401 for the second case, which confirmed the
-    resource was there; ``upgrade_front`` compares this response against 200
-    only, so the change is invisible to it.
+    same 404, which never confirms that a hidden resource exists.
     """
     object_id = _to_object_id(resource_id)
     if object_id is None:
@@ -272,8 +264,7 @@ def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
     try:
         from archihub.api.users.services import has_role
 
-        # `updatedAt`/`updatedBy`/`articleBody` are projected out, as the legacy
-        # detail route projects them out. `articleBody` especially: the detail
+        # `updatedAt`/`updatedBy`/`articleBody` are projected out. `articleBody` especially: the detail
         # screen renders `selectedResource.articleBody &&  ...`, so returning it
         # here makes an article block appear on a screen that has never shown
         # one. It has its own route.
@@ -300,9 +291,9 @@ def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
         #     renaming the key leaves the history tab permanently empty with no
         #     error to notice.
         #   - `parse_result` would render `createdAt` as `{"$date": ...}` where
-        #     the legacy route emitted an HTTP-date string.
+        #     the contract is an HTTP-date string.
         # Anything else unencodable is handled by the response encoder, which
-        # renders datetimes exactly as Flask's `jsonify` did.
+        # renders datetimes as HTTP dates.
         resource["_id"] = str(resource["_id"])
         return resource, 200
     except Exception as exc:
@@ -361,12 +352,8 @@ def _may_open(user: str, resource: dict, is_admin: bool) -> bool:
 def get_fav_count(resource_id: str) -> tuple[dict, int]:
     """How many users have favourited a resource.
 
-    Two legacy failure modes become ordinary answers here: the original *raised*
-    for an unknown resource, out of a route with no handler, so a stale id
-    returned 500 instead of 404; and it subscripted ``favCount`` directly, so a
-    resource that had simply never been favourited - the field is only written
-    on the first favourite - also produced a 500. Zero is the right answer for
-    that one.
+    An unknown resource is a 404. A resource never favourited has no
+    ``favCount`` field (it is written on the first favourite), and answers zero.
     """
     object_id = _to_object_id(resource_id)
     if object_id is None:

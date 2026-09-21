@@ -1,7 +1,6 @@
 """The built-in form field-type catalogue.
 
-Port of ``_get_all_fields_types`` in ``app/api/forms/services.py``, lifted into
-its own module because it is data, not logic.
+Its own module because it is data, not logic.
 
 Ids are a wire contract: they are stored on every form field, matched by
 ``Form.tsx``'s field-type dispatch in the frontend, and referenced by plugins

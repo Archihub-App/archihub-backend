@@ -1,4 +1,4 @@
-"""Celery task bodies (Phase 4).
+"""Celery task bodies.
 
 Six tasks, all long-running, all triggered from the admin screens. What is worth
 testing about them is not the Elasticsearch call - it is everything around it:
@@ -164,9 +164,7 @@ def test_a_filtered_run_does_not_empty_the_index(stubbed):
 
 
 def test_a_filtered_run_keeps_its_filter_on_every_page(stubbed, monkeypatch):
-    """The original applied the caller's filter to the
-    first page and queried `{}` for every page after it, so a filter matching
-    more than one page walked the entire collection from page two onward."""
+    """The caller's filter applies to every page, not only the first."""
     monkeypatch.setattr(indexing, "PAGE_SIZE", 2)
 
     rows = _resources(4, post_type="fondo") + [
@@ -242,8 +240,7 @@ def test_an_id_clause_is_used_as_a_filter_rather_than_parsed_as_one_id(stubbed, 
 
 
 def test_a_rejected_document_is_reported_not_counted_as_indexed(stubbed):
-    """The original incremented the counter BEFORE the try block, so a run in
-    which every document was rejected still reported them all as indexed."""
+    """A run in which every document was rejected reports none as indexed."""
     mongo, client = stubbed(FakeMongo(resources=_resources(3)), FakeSearch(reject={"0001"}))
 
     result = indexing.index_resources_task()
@@ -338,8 +335,7 @@ def test_an_unusable_record_id_does_not_stop_the_page(stubbed):
 
 
 def test_deleting_requires_an_id(stubbed):
-    """The original subscripted body['_id'], so a caller that forgot it got a
-    KeyError recorded as a failed task with no message."""
+    """A missing `_id` is a clear error message."""
     stubbed(FakeMongo(), FakeSearch())
 
     with pytest.raises(ValueError):
@@ -373,9 +369,8 @@ def _shapes(count: int) -> list[dict]:
 
 
 def test_indexing_shapes_clears_the_index_it_then_writes_to(stubbed):
-    """The original wrote to `<prefix>-shapes` and cleared
-    `shapes` - an unprefixed name that exists on no real instance - so every
-    rerun added a second copy of every boundary instead of replacing it."""
+    """The clear targets the same prefixed index as the write, so a rerun
+    replaces every boundary instead of adding a second copy."""
     mongo, client = stubbed(FakeMongo(shapes=_shapes(3)), FakeSearch())
 
     geometries.index_shapes()
@@ -437,10 +432,9 @@ def test_plugins_are_loaded_in_the_workers_parent_process():
 
     So plugin task registration has to happen on `celeryd_init` (parent, before
     the consumer starts), not only on `worker_process_init` (per forked child).
-    An earlier revision of this port hooked only the latter: the worker reported
-    `ready`, looked healthy, and would have discarded every plugin job on
-    arrival. The visible tell was the startup banner listing six task names
-    instead of fifteen.
+    Otherwise the worker reports `ready`, looks healthy, and discards every
+    plugin job on arrival; the tell is a startup banner listing only the core
+    tasks.
     """
     import weakref
 
@@ -492,7 +486,7 @@ def test_loading_plugins_twice_is_harmless():
     hooks.unregister_all()
 
 
-def test_the_registered_names_are_the_legacy_ones():
+def test_the_registered_task_names_are_stable():
     """These strings key queued Redis messages and every row already in the
     `tasks` collection. Changing one silently orphans both."""
     from archihub.worker.tasks import REGISTERED_TASK_NAMES

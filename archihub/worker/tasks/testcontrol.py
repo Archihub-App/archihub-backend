@@ -1,7 +1,5 @@
 """The disposable-instance reset task.
 
-Port of ``reset_task`` in ``app/api/health/testcontrol_services.py``.
-
 THIS TASK DESTROYS DATA. It drops every Mongo collection, empties every search
 and vector index, flushes the cache, clears the temporary-files directory and
 then reseeds the instance with a fresh administrator. It exists so
@@ -58,10 +56,10 @@ def _assert_disposable() -> None:
 def _wipe_mongo() -> None:
     """Drop everything except the marker that says this may be done.
 
-    Collections are DROPPED rather than emptied, and `system` is kept, both as
-    in the original: a partial wipe leaves cross-collection references pointing
-    at documents that no longer exist, and losing `system` would take the
-    disposability marker with it - after which no further reset could run.
+    Collections are DROPPED rather than emptied, since a partial wipe leaves
+    cross-collection references pointing at documents that no longer exist.
+    `system` is kept: losing it would take the disposability marker with it,
+    after which no further reset could run.
     """
     from archihub.core.security.test_control import TEST_MODE_MARKER_NAME
 

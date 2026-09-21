@@ -11,9 +11,8 @@ and :func:`update_main_schema` refuse is something a cataloguer typed into the
 form builder - a missing label, a destiny that does not start with ``metadata``,
 the same destiny declared twice with different types. Those raise
 ``ValidationError`` so the caller gets a 400 carrying the reason, and the log
-gets one line. Raising a bare exception instead put a full traceback in the log
-at ERROR and told the client 500, which says "the server is broken" about a
-typo the user can fix - and buries the genuine faults among the typos.
+gets one line - not a traceback at ERROR and a 500 about a typo the user can
+fix, which would bury the genuine faults among the typos.
 """
 
 from __future__ import annotations
@@ -126,10 +125,8 @@ def get_all() -> tuple[list | dict, int]:
 def exists(slug: str) -> bool:
     """Cheap existence check.
 
-    The legacy code answered this by calling the full ``get_by_slug``, which
-    resolves the access-rights list, prepends a synthetic field and serialises
-    the whole document - all discarded. It is called in a loop while deriving a
-    unique slug.
+    Reads only the slug, since it is called in a loop while deriving a unique
+    slug.
     """
     return _mongo().get_record(COLLECTION, {"slug": slug}, {"slug": 1}) is not None
 
@@ -143,8 +140,6 @@ def get_by_slug(slug: str) -> tuple[dict, int]:
     try:
         form = _mongo().get_record(COLLECTION, {"slug": slug})
         if not form:
-            # Legacy returned an untranslated hardcoded Spanish string here while
-            # its siblings used the translated message.
             return {"msg": _("Form not found")}, 404
 
         field = dict(ACCESS_RIGHTS_FIELD)
@@ -174,16 +169,8 @@ def slugify(name: str) -> str:
 def make_unique_slug(desired: str) -> str:
     """Return ``desired`` (or a slugified name) with -1, -2, ... until free.
 
-    The legacy loop reassigned the suffixed value back into the variable it was
-    suffixing::
-
-        while status == 200:
-            body['slug'] = body['slug'] + '-' + str(index)
-
-    so a third form named "Test" became ``test-1-2`` and a fourth
-    ``test-1-2-3``. The types domain got this right by keeping the base
-    separate; forms did not. Aligned here. This only affects newly generated
-    slugs, so no existing URL changes.
+    The suffix replaces the previous one - ``test-1``, ``test-2`` - rather than
+    accumulating, as for content types.
     """
     base = desired or ""
     candidate = base
@@ -192,7 +179,7 @@ def make_unique_slug(desired: str) -> str:
         if index > MAX_SLUG_ATTEMPTS:
             # Bounded on purpose. This loop is driven entirely by what the
             # database reports, so an existence query that always answers "yes"
-            # spins a request thread forever. The legacy version had no bound.
+            # would otherwise spin a request thread forever.
             raise RuntimeError(
                 _("Could not generate a unique slug for {name}", name=base)
             )
@@ -387,10 +374,8 @@ def create(body: dict, user: str) -> tuple[dict, int]:
 
 def update_by_slug(slug: str, body: dict, user: str) -> tuple[dict, int]:
     try:
-        # Existence is checked FIRST. The legacy version ran validate_form and
-        # update_main_schema before looking the form up, so an update aimed at a
-        # form that does not exist did all that work (and could raise a
-        # validation error) before reporting the real problem: 404.
+        # Existence is checked FIRST, so a missing form is a 404 before any
+        # validation runs.
         form = _mongo().get_record(COLLECTION, {"slug": slug}, {"slug": 1})
         if not form:
             return {"msg": _("Form not found")}, 404
@@ -468,7 +453,7 @@ def duplicate_by_slug(slug: str, user: str) -> tuple[dict, int]:
 
 
 # ---------------------------------------------------------------------------
-# Wiring to not-yet-ported domains
+# Access rights
 # ---------------------------------------------------------------------------
 
 

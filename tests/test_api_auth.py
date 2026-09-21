@@ -232,7 +232,7 @@ def test_a_fernet_ciphertext_no_longer_authenticates(keys):
 
 
 def test_nothing_here_reads_a_credential_off_the_user_document():
-    """The property the rewrite exists for: a database read must not yield
+    """The property that matters most: a database read must not yield
     anything presentable to the API. Asserted over the source, because the
     absence of a field lookup is not observable from behaviour.
     """

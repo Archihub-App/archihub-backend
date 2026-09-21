@@ -136,8 +136,8 @@ class GoogleDialect:
 
         body: dict = {"contents": contents}
         if system:
-            # A first-class field, not a fake user turn - which is what the
-            # legacy converter did, leaving the instruction visible as dialogue.
+            # A first-class field, not a fake user turn that would leave the
+            # instruction visible as dialogue.
             body["systemInstruction"] = {"parts": system}
 
         config = {}

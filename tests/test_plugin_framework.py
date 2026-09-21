@@ -1,11 +1,8 @@
-"""The plugin framework (Phase 5).
+"""The plugin framework.
 
 The single most important thing asserted here is that **a plugin route's role
-requirement cannot be discarded**. In the legacy framework it could, and at
-all twenty-one of its call sites it was — see the docstring of
-``archihub/plugins/framework/base.py``. A dependency has no return value for a
-handler to drop, which is why the fix is structural rather than a patch to
-twenty-one call sites.
+requirement cannot be discarded**: it is a dependency, which has no return
+value for a handler to drop.
 """
 
 from __future__ import annotations
@@ -67,12 +64,8 @@ DELIBERATELY_ANONYMOUS_ROUTES = {
 
 @pytest.mark.parametrize("slug", PLUGINS)
 def test_every_plugin_route_states_a_role_requirement(slug):
-    """The legacy `validate_roles` returned a refusal tuple that all 21 of
-    its call sites dropped, so those routes had no authorisation beyond a valid
-    session - and `scheduleSystemTasks`' settings ARE a task scheduler.
-
-    Asserted over the route's dependency list, so a handler that merely *calls*
-    a check inside its body would not satisfy this.
+    """Asserted over the route's dependency list, so a handler that merely
+    *calls* a check inside its body would not satisfy this.
     """
     plugin = build(slug)
     router = plugin.build()
@@ -90,12 +83,11 @@ def test_every_plugin_route_states_a_role_requirement(slug):
 
 @pytest.mark.parametrize("slug", PLUGINS)
 def test_no_plugin_route_handler_calls_a_role_check_itself(slug):
-    """The shape that failed. A check inside a handler body has a return value,
-    and a return value can be ignored.
+    """A check inside a handler body has a return value, and a return value can
+    be ignored.
 
-    Over the AST rather than the text, because several of these modules *quote*
-    the legacy call in a docstring while explaining why it was wrong - and a
-    grep cannot tell the difference between describing a defect and having one.
+    Over the AST rather than the text: a grep cannot tell a docstring that
+    mentions a call from code that makes it.
     """
     import ast
     import inspect
@@ -143,9 +135,8 @@ def test_only_display_keys_are_translated():
 
 
 def test_translating_settings_does_not_mutate_the_plugin_info():
-    """The tree is a module constant, and the legacy code assigned into it -
-    `resp['settings'][1]['fields'] = [...]` - so the second request saw the
-    first request's values."""
+    """The tree is a module constant; a request that filled it in place would
+    leak its values into the next one."""
     plugin = build("filesProcessing")
 
     first = plugin.translated_settings()
@@ -155,7 +146,7 @@ def test_translating_settings_does_not_mutate_the_plugin_info():
 
 
 @pytest.mark.parametrize("slug", PLUGINS)
-def test_plugin_info_keeps_its_legacy_shape(slug):
+def test_plugin_info_keeps_its_published_shape(slug):
     """`plugin_info` is read by the admin screens and by the beat scheduler."""
     module = __import__(f"archihub.plugins.{slug}", fromlist=["plugin_info"])
     info = module.plugin_info
@@ -239,7 +230,7 @@ def mongo(monkeypatch):
 
 
 def test_settings_are_empty_rather_than_a_crash_when_nothing_is_stored(mongo):
-    """The legacy version indexed a record it had not checked for existence."""
+    """No `active_plugins` document is an empty result, not a crash."""
     mongo.record = None
 
     assert build("liquidText").get_plugin_settings() == {}
@@ -284,7 +275,7 @@ def test_a_bulk_body_must_name_a_content_type(mongo):
 
 
 def test_an_unknown_settings_group_is_a_404_not_a_500(mongo):
-    """The legacy code raised KeyError and returned it as a 500 with the key."""
+    """An unknown group is a 404."""
     payload, status = build("liquidText").settings_payload("nonexistent")
 
     assert status == 404
@@ -296,8 +287,7 @@ def test_an_unknown_settings_group_is_a_404_not_a_500(mongo):
 
 
 def test_pdf_conversion_is_unavailable_until_its_provider_is_built():
-    """The legacy import succeeded whether or not filesProcessing was active,
-    so a deactivated plugin's code still ran."""
+    """A deactivated plugin's code does not run."""
     with pytest.raises(interop.CapabilityUnavailable) as exc:
         interop.convert_to_pdf("a.docx", "a.pdf")
 
@@ -375,9 +365,8 @@ def test_a_pending_task_has_no_file_yet(monkeypatch):
 
 
 def test_a_broken_plugin_does_not_take_the_instance_down(monkeypatch):
-    """The legacy web process let a plugin's construction error propagate out of
-    create_app, so one plugin with a missing dependency denied access to the
-    whole archive. (Its own beat scheduler, meanwhile, caught and skipped.)"""
+    """One plugin with a missing dependency must not deny access to the whole
+    archive."""
     from archihub.plugins.framework import mounting
 
     real_build = mounting.build_plugin
@@ -424,7 +413,7 @@ def test_actions_are_tagged_with_the_plugin_that_owns_them():
 # ---------------------------------------------------------------------------
 
 
-def test_every_plugin_task_keeps_its_legacy_dotted_name():
+def test_every_plugin_task_keeps_its_dotted_name():
     """These key queued Redis messages and every row in the `tasks` collection."""
     from archihub.plugins import filesProcessing, inventoryMaker, liquidText, massiveUpdater
 

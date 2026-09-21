@@ -1,19 +1,10 @@
 """Building the inventory spreadsheets.
 
-Port of the four ``@shared_task`` bodies in
-``app/plugins/inventoryMaker/__init__.py`` plus ``services.py``, which between
-them contained **five** copies of the same ``clean_string`` helper and four
-copies of the same "make a folder, pick a uuid, write an xlsx" block.
-
-TWO THINGS THAT NEVER GO IN AN INVENTORY
-
-``filepath`` and ``hash``. The records sheet listed both for every file, so an
-inventory — a spreadsheet an archivist mails to a colleague — carried the
-absolute layout of the server's storage. That is the same field the records API
-goes out of its way never to return (see CLAUDE.md: "Two things never leave the
-records API"), and exporting it through a different door does not make it less
-of a disclosure. The sheet keeps what an inventory is for: what the file is
-called, what type it is and how big it is.
+TWO THINGS THAT NEVER GO IN AN INVENTORY: ``filepath`` and ``hash``. An
+inventory is a spreadsheet an archivist mails to a colleague, and those would
+carry the layout of the server's storage - which the records API never returns
+either. The sheet keeps what an inventory is for: what the file is called, what
+type it is and how big it is.
 """
 
 from __future__ import annotations
@@ -41,8 +32,7 @@ def clean_cell(value) -> str:
 def user_export_directory(user: str):
     """``<user files>/<user>/inventoryMaker``, created if needed.
 
-    Resolved rather than concatenated: the originals built this as
-    ``USER_FILES_PATH + '/' + user + '/inventoryMaker'``.
+    Resolved rather than concatenated, so the username cannot leave the root.
     """
     from archihub.core import files as filestore
     from archihub.core.settings import get_settings
@@ -104,9 +94,8 @@ def metadata_fields(post_types: list[str]) -> list[dict]:
 def header_row(fields: list[dict]) -> dict:
     """The first data row, mapping each column label to the field it came from.
 
-    Preserved from the original: the sheet's first row is a legend, not data,
-    so an inventory can be read back in knowing which metadata path each column
-    corresponds to.
+    The sheet's first row is a legend, not data, so an inventory can be read
+    back in knowing which metadata path each column corresponds to.
     """
     row = {"Tipo de contenido": "post_type", "id": "id", "ident": "ident"}
     for field in fields:
@@ -152,9 +141,7 @@ def resource_row(resource: dict, fields: list[dict], option_terms) -> dict:
 def option_term_lookup():
     """A memoised ``[option id] -> term`` resolver.
 
-    The original issued one Mongo query PER SELECT FIELD PER RESOURCE — an
-    inventory of 5000 resources with four vocabulary fields made 20000 lookups
-    against a few dozen distinct terms.
+    Each distinct term is looked up once, not once per field per resource.
     """
     from bson.errors import InvalidId
     from bson.objectid import ObjectId

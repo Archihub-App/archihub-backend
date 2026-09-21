@@ -5,20 +5,9 @@ Two things gate it: the record's own ``accessRights``, and the *effective*
 access right of each resource it hangs off - which is itself inherited from that
 resource's ancestors (see ``archihub/api/resources/access.py``).
 
-THE RULE THIS MODULE EXISTS TO STATE ONCE. Written inline, it comes out as:
-
-    if not has_right(current_user, record['accessRights']) and not has_right(current_user, 'admin')
-
-``has_right`` looks up **access rights**, not roles. Administrators are an
-``admin`` *role*, and no instance defines an access right by that name - so the
-second clause is always false and the intended administrator bypass never
-existed. The parent check a few lines below has no bypass clause at all.
-
-The effect is that administrators are refused access to restricted records,
-which fails closed and so is a usability defect rather than a hole - but it
-means "an administrator can always read it" was never true here, and any
-deployment appearing to rely on it was relying on records that had no access
-rights set. It is a role check.
+THE RULE IS STATED ONCE, here. Administrators may read any record: that is a
+*role* check. Access rights are a separate vocabulary, and no access right is
+named ``admin``.
 """
 
 from __future__ import annotations
@@ -85,12 +74,8 @@ def is_public(record: dict) -> bool:
     it is filed under is public - which carries the published check and the
     inherited access right with it, through ``resources.access.is_public``.
 
-    The legacy public layer checked only that the *record* declared no access
-    right and that each parent's own right was absent. It never checked that the
-    parent was published, so **a file attached to an unpublished draft was
-    served to anonymous callers** through `/records/public/<id>` as soon as
-    somebody knew its id. Ids are not secret: they appear in the authenticated
-    listing every cataloguer can see.
+    A file attached to an unpublished draft is not public, even to someone who
+    knows its id: ids are not secret, they appear in the authenticated listing.
     """
     if record.get("accessRights"):
         return False
@@ -98,7 +83,7 @@ def is_public(record: dict) -> bool:
     parents = _containing_parents(record)
     if not parents:
         # A record filed nowhere is reachable through no public resource, so
-        # nothing publishes it. The legacy code treated this as public.
+        # nothing publishes it.
         return False
 
     return all(_parent_is_public(parent) for parent in parents)

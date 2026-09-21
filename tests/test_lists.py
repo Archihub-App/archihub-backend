@@ -1,8 +1,6 @@
 """Controlled-vocabulary domain.
 
-Lists are addressed by id (confirmed with the maintainer). The slug-based lookup
-that existed in the legacy service is dead code and is not ported - `lists`
-documents carry no slug field, so it could never match.
+Lists are addressed by id: `lists` documents carry no slug field.
 """
 
 from __future__ import annotations
@@ -69,13 +67,9 @@ VALID_ID = "6a70b8c3497d4440325c94c3"
 
 
 def test_missing_list_is_404(mongo):
-    """Legacy returned HTTP 200 whose body was the array [{"msg": ...}, 404].
+    """A real 404 with a `msg`, not a 200 carrying an error.
 
-    The service returned a tuple to a route testing `if 'msg' in resp`;
-    membership in a tuple is not key lookup, so the check never fired and the
-    route fell through to `return jsonify(resp), 200`. `ListsService.getList`
-    treats any 200 as success, so the component received an array where it
-    expected {name, description, options}.
+    `ListsService.getList` treats any 200 as success.
     """
     mongo.records["lists"] = None
 
@@ -88,14 +82,13 @@ def test_missing_list_is_404(mongo):
 def test_malformed_id_is_404_not_500(mongo):
     """A bad id in the URL is a client error.
 
-    Legacy called ObjectId(id) directly, so `InvalidId` surfaced as a 500
-    carrying the bson error text.
+    It is never a 500 carrying bson's error text.
     """
     payload, status = services.get_by_id("not-an-object-id")
     assert status == 404
 
 
-def test_success_shape_matches_legacy(mongo):
+def test_success_shape_is_name_description_options(mongo):
     mongo.records["lists"] = {
         "_id": ObjectId(VALID_ID),
         "name": "Test",
@@ -155,11 +148,7 @@ def test_dangling_option_ids_are_skipped(mongo):
 
 
 def test_rename_without_options_succeeds(mongo):
-    """The headline update bug.
-
-    The legacy service wrapped its entire body in `if 'options' in body:`, so a
-    patch that only renamed a list fell off the end and returned None - which
-    Flask cannot turn into a response.
+    """A patch may only rename a list.
     """
     mongo.records["lists"] = {"_id": ObjectId(VALID_ID), "name": "Old"}
 
@@ -253,8 +242,7 @@ def test_create_stores_options_separately(mongo):
 
 
 def test_delete_missing_list_is_404_and_translated(mongo):
-    """Legacy returned a hardcoded Spanish string here while every sibling path
-    used the translated message."""
+    """The translated message, like every sibling path."""
     mongo.records["lists"] = None
     payload, status = services.delete_by_id(VALID_ID, "admin")
 
@@ -263,7 +251,7 @@ def test_delete_missing_list_is_404_and_translated(mongo):
 
 
 def test_delete_audit_id_is_serialisable(mongo):
-    """Legacy passed the raw ObjectId into the audit record."""
+    """The audit record carries the id as a string."""
     captured = {}
     mongo.records["lists"] = {"_id": ObjectId(VALID_ID), "name": "L"}
     services._register_log = lambda user, action, metadata: captured.update(metadata)
@@ -274,5 +262,5 @@ def test_delete_audit_id_is_serialisable(mongo):
 
 
 def test_slug_lookup_is_not_ported():
-    """`lists` documents have no slug; the legacy lookup could never match."""
+    """`lists` documents have no slug."""
     assert not hasattr(services, "get_by_slug")

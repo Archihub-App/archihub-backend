@@ -1,10 +1,7 @@
 """The Elasticsearch mapping for the `resources` index.
 
-Port of ``transform_dict_to_mapping`` plus the fixed block that follows it in
-``app/api/system/services.py:622`` (``regenerate_index``). The two were written
-as one 130-line function that built a mapping and dispatched a Celery task; they
-are separated here because the mapping is a pure function of the stored schema
-and is the only part worth testing.
+The mapping is a pure function of the stored schema, kept apart from the
+Celery task that applies it so it can be tested on its own.
 
 WHERE THE SCHEMA COMES FROM. ``forms.services.resources_schema`` combines every
 stored form into one nested schema recording, for every metadata field any
@@ -53,10 +50,9 @@ FIELD_TYPES: dict[str, dict] = {
     # THE STORED SPELLING IS `userslit`. The forms builder writes whatever id
     # the field-type catalogue gives it, and that id has been the typo since the
     # beginning (see api/forms/field_types.py). Keying this table on the correct
-    # spelling meant it matched nothing, so a User list field was never mapped -
-    # while its VALUE was still sent to Elasticsearch, leaving the cluster to
-    # infer a type from the first document that carried one. `userslist` is kept
-    # beside it only to tolerate hand-edited data; nothing produces it.
+    # spelling would match nothing, leaving Elasticsearch to infer the field's
+    # type from the first document. `userslist` is kept beside it only to
+    # tolerate hand-edited data; nothing produces it.
     "userslit": {"type": "keyword"},
     "userslist": {"type": "keyword"},
     "select-multiple2": {"type": "keyword", "ignore_above": 256},
@@ -80,10 +76,8 @@ SYSTEM_FIELDS: dict[str, dict] = {
 def _map_field(definition: object, path: str) -> dict | None:
     """One schema entry to one Elasticsearch field definition."""
     if not isinstance(definition, dict):
-        # The legacy version raised ValueError here, inside the try/except of a
-        # route, so one malformed schema entry became a 500 with no indication
-        # of which entry. Skipping it costs that one field's searchability and
-        # names it in the log.
+        # Skipping a malformed schema entry costs that one field's searchability
+        # and names it in the log; it does not fail the whole mapping.
         logger.warning("Ignoring unusable schema entry at %r: %r", path, definition)
         return None
 
@@ -118,8 +112,7 @@ def build_resources_mapping(schema: dict) -> dict:
         if (mapped := _map_field(value, key)) is not None
     }
 
-    # `file` is a stored attachment descriptor, not searchable metadata. The
-    # legacy code popped it after building, which is the same result.
+    # `file` is a stored attachment descriptor, not searchable metadata.
     properties.pop("file", None)
     properties.update(SYSTEM_FIELDS)
 
@@ -136,8 +129,8 @@ SHAPES_MAPPING: dict = {
             "properties": {
                 "admin_level": {"type": "integer"},
                 "ident": {"type": "keyword"},
-                # No `ignore_above` on these two, matching the legacy mapping:
-                # a boundary name is short, and capping it would silently stop
+                # No `ignore_above` on these two: a boundary name is short, and capping
+                # it would silently stop
                 # indexing the keyword form of any that is not.
                 "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
                 "parent_name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},

@@ -42,8 +42,8 @@ import time
 logger = logging.getLogger(__name__)
 
 #: The ``system`` document holding the counter, and the field ids inside it.
-#: These are the LEGACY names, kept verbatim: an instance upgrading in place
-#: already has this document, and a renamed field would read as revision 0 and
+#: The names are fixed: an instance upgrading in place already has this
+#: document, and a renamed field would read as revision 0 and
 #: restart every process once on first poll.
 RESTART_CONTROL_OPTION = "runtime_control"
 RESTART_REVISION_ID = "restart_revision"

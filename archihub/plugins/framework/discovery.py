@@ -16,10 +16,10 @@ switch on.
 
 WHAT IS REFUSED, AND WHY THE TEST IS STRUCTURAL
 
-A plugin this backend can mount exposes ``build()``. Plugins written against
-Flask's ``Blueprint`` do not, and importing one into an ASGI process either
-fails opaquely or - worse - appears to succeed while the features it provides
-are silently absent. So ``build()`` is the predicate: read statically here,
+A plugin this backend can mount exposes ``build()``. A plugin written for an
+earlier plugin framework does not, and importing one would either fail
+opaquely or appear to succeed while its features are silently absent. So
+``build()`` is the predicate: read statically here,
 enforced for real by :func:`~archihub.plugins.framework.mounting.build_plugin`.
 One fact, asked in two places, which is what stops the plugins screen accepting
 something the next startup cannot load.
@@ -473,13 +473,8 @@ def assert_active_plugins_are_mountable(mongo: Any | None = None) -> list[str]:
 def import_plugin(slug: str) -> ModuleType:
     """Import a plugin package by slug.
 
-    ``archihub.plugins`` is the ONLY location searched, and there is no fallback
-    to any other plugin directory. ``app.plugins.<slug>`` is a subpackage of
-    ``app``, whose ``__init__`` builds and boots an entire Flask application at
-    module scope - a ``torch`` import and monkeypatch, Mongo reads, a
-    SkillManager thread, plugin registration, a Babel instance. Reading one
-    metadata dictionary from there would drag a second, fully-initialised web
-    framework into the Celery worker or the ASGI process.
+    ``archihub.plugins`` is the ONLY location searched; there is no fallback
+    to any other plugin directory.
     """
     _validate_slug(slug)
 

@@ -1,9 +1,8 @@
 """Editing the OCR block layout of a page.
 
-The first section is the regression test for : a global
-role was the only check the originals made, so any editor could rewrite the OCR
-of any record in the archive - including one filed under a series they cannot
-open. Keep those tests.
+The first section pins that a global role is not enough: an editor cannot
+rewrite the OCR of a record filed under a series they cannot open. Keep those
+tests.
 """
 
 from __future__ import annotations
@@ -91,11 +90,9 @@ def body(**overrides):
 
 
 def test_an_editor_may_not_edit_blocks_of_a_record_they_cannot_open(mongo, monkeypatch):
-    """The whole reason this module exists.
-
-    The record is filed under a reserved series whose access right this editor
-    does not hold, so they cannot see it in the interface - and now cannot
-    rewrite its OCR through the API either.
+    """The record is filed under a reserved series whose access right this
+    editor does not hold, so they cannot see it in the interface - nor rewrite
+    its OCR through the API.
     """
     roles(monkeypatch, "editor")
     mongo.resources[RESERVED_SERIES] = {"accessRights": "restricted", "parents": []}
@@ -187,7 +184,7 @@ def test_adding_a_block_appends_it_with_its_box(mongo, monkeypatch):
 
 
 def test_a_client_may_not_write_arbitrary_keys_into_a_block(mongo, monkeypatch):
-    """`data` used to be splatted in whole, so anything at all could be stored."""
+    """Only the declared block keys are stored."""
     roles(monkeypatch, "editor")
     mongo.records[RECORD_ID] = ocr_record([{"blocks": []}])
 
@@ -271,7 +268,7 @@ def test_pages_are_addressed_one_indexed(mongo, monkeypatch):
 
 
 def test_an_unsupported_block_type_is_refused(mongo, monkeypatch):
-    """The originals fell through and reported success having written nothing."""
+    """An unknown block collection is refused, not reported as a success."""
     roles(monkeypatch, "editor")
     mongo.records[RECORD_ID] = ocr_record()
 

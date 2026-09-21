@@ -68,8 +68,8 @@ def normalize_action(action: str) -> str:
     """Accept either the action key or its stored value.
 
     ``log_actions`` maps a lowercase key (``'list_create'``) to the stored value
-    (``'LIST_CREATE'``). Legacy call sites pass ``log_actions['list_create']``;
-    ported ones pass the key directly, which reads better. Both must end up
+    (``'LIST_CREATE'``). Call sites pass either ``log_actions['list_create']``
+    or the key directly. Both must end up
     storing the same value - the audit filter vocabulary comes from this same
     mapping, so an entry stored under a key would be invisible to every filter.
     """
@@ -185,10 +185,8 @@ def normalize_log_details(logs: list[dict]) -> list[dict]:
 def filter_logs(body: dict) -> tuple[list | dict, int]:
     """Paginated audit entries, newest first.
 
-    Returns an empty list rather than a 404 when nothing matches. The legacy
-    version tested ``if not logs`` on a pymongo **cursor**, which is always
-    truthy, so its documented 404 could never fire - and "no entries match this
-    filter" is a successful query with no results, not a missing resource.
+    Returns an empty list rather than a 404 when nothing matches: "no entries
+    match this filter" is a successful query with no results.
     """
     try:
         filters = sanitize_log_filters(body.get("filters"))

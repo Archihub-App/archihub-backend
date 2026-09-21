@@ -60,7 +60,7 @@ def test_callbacks_run_in_queue_order(hooks):
 
 
 def test_sync_callbacks_do_not_chain_into_each_other(hooks):
-    """Each callback gets the ORIGINAL arguments; the last return value wins.
+    """Each callback gets the CALLER'S arguments; the last return value wins.
 
     Easy to misread as a pipeline, and it is not one: the second callback below
     receives 1, not the first callback's output of 2. So the result is 1*10, not
@@ -121,8 +121,8 @@ def test_duplicate_bound_method_from_a_new_instance_is_ignored(hooks):
 def test_registration_failure_is_not_silent(hooks):
     """register() must not swallow errors.
 
-    The original wrapped its whole body in `except Exception: print(...)`, so a
-    hook that failed to register produced a feature that silently never ran.
+    A hook that failed to register silently would produce a feature that never
+    ran.
     """
     with pytest.raises((TypeError, ValueError)):
         hooks.register("evt", lambda: None, kwargs=["not", "a", "dict"])
@@ -190,11 +190,8 @@ def test_broker_failure_does_not_break_the_request(hooks, monkeypatch):
 
 
 def test_task_ids_are_paired_with_names_safely(monkeypatch):
-    """Regression guard for an IndexError in the original.
-
-    The original indexed `names[x]` by position after de-duplicating task ids,
-    which misaligns as soon as an id repeats and raises IndexError when the
-    chain yields more ids than names.
+    """Ids and names are paired safely, even when an id repeats or the chain
+    yields more ids than names.
     """
     recorded = []
     monkeypatch.setattr(

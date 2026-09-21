@@ -1,11 +1,8 @@
 """Wiring the search index into the resource write path.
 
-Port of ``hookHandlerIndex()`` in ``app/api/system/services.py``, which
-``create_app`` called whenever ``index_management.index_activation`` was on.
-
-WHY THIS MODULE HAD TO EXIST. Without it the hook bus has no registrations at
-all, so ``resource_create``/``resource_update``/``resource_delete`` fire into an
-empty registry: every write returns 200, nothing is queued, and the search index
+Registered whenever ``index_management.index_activation`` is on. Without these
+registrations, ``resource_create``/``resource_update``/``resource_delete`` fire
+into an empty registry: every write returns 200, nothing is queued, and the search index
 keeps answering with the state it had at the last manual reindex. There is no
 error anywhere - a stale index looks exactly like a correct one until somebody
 searches for something they just catalogued and does not find it.
@@ -67,11 +64,9 @@ def register_index_hooks() -> None:
     hooks.register("resource_create", index_resources_task, queue=INDEX_QUEUE)
     hooks.register("resource_update", index_resources_task, queue=INDEX_QUEUE)
     hooks.register("resource_delete", index_resources_delete_task, queue=INDEX_QUEUE)
-    # Registered for parity with the legacy set. It never fires: the only caller
-    # (`types.services`) spells the name in the plural. Left as it is rather
-    # than corrected, because the body it would send is `{"slug": ...}` and
-    # resources carry no `slug` field, so the task would match nothing either
-    # way - fixing the name alone would buy a reindex of zero resources.
+    # Currently never fired: the only caller (`types.services`) spells the name
+    # in the plural, and the body it sends (`{"slug": ...}`) would match no
+    # resource anyway.
     hooks.register("resources_update_by_filter", index_resources_task, queue=INDEX_QUEUE)
 
     logger.info("Search indexing is active; registered the resource write hooks")

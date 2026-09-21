@@ -249,8 +249,7 @@ def update(provider_id: str, body: dict, user: str) -> tuple[dict, int]:
             return {"msg": _("A provider with that name already exists")}, 409
 
     # An absent `key` leaves the stored one alone; an explicit empty string
-    # clears it. The legacy update wrote whatever the model produced, so saving
-    # the settings form without retyping the key erased it.
+    # clears it, so saving the settings form without retyping the key keeps it.
     if "key" in body:
         payload["key"] = encrypt_key(body["key"]) if body["key"] else None
 

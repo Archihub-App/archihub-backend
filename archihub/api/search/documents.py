@@ -1,8 +1,5 @@
 """Turning a stored resource into the document that gets indexed.
 
-Port of the body of ``index_resources_task`` in
-``app/api/system/tasks/elasticTasks.py``, extracted from the loop that drove it.
-
 WHY IT IS ITS OWN MODULE: so you can ask what a *given* resource indexes as.
 Built inline in a loop that swallows exceptions, the only observable is whether
 the run reported a number at the end - which it does whether the documents were
@@ -89,10 +86,8 @@ def set_by_path(document: dict, path: str, value) -> dict:
     """``a.b.c`` into nested dicts, creating the intermediate levels.
 
     An intermediate step that exists but is not a dict is REPLACED rather than
-    subscripted. The original did ``temp = temp[key]`` unconditionally, so a
-    schema declaring both ``date`` and ``date.from`` raised ``TypeError`` on the
-    second - inside the swallow-everything handler, so that resource silently
-    vanished from the index.
+    subscripted, so a schema declaring both ``date`` and ``date.from`` cannot
+    make a resource vanish from the index.
     """
     keys = path.split(".")
     target = document
@@ -112,10 +107,8 @@ def set_by_path(document: dict, path: str, value) -> dict:
 def _apply_select_multiple(document: dict, resource: dict, destiny: str) -> None:
     """A multi-select stores ``[{term, id}, ...]``; index the terms only.
 
-    De-duplicated, and ORDERED - the original built a ``set`` and handed the
-    result straight to Elasticsearch, so the same resource produced a different
-    document on every run purely from set iteration order. That makes any
-    diff of the index against itself meaningless, and it is why this sorts.
+    De-duplicated, and ORDERED, so the same resource always produces the same
+    document.
     """
     value = get_by_path(resource, destiny)
     if not isinstance(value, list):
@@ -127,19 +120,16 @@ def _apply_select_multiple(document: dict, resource: dict, destiny: str) -> None
 def _apply_repeater_dates(resource: dict, field: dict) -> None:
     """Normalise the dates inside a repeater's rows.
 
-    REPEATERS ARE NOT INDEXED, and this function is what is left of the
-    original's attempt to index them: it converted the dates of each row in
-    place, on the RESOURCE, and never wrote the result into the document - and
-    the branch above that copies ordinary fields excludes ``repeater``. So a
-    repeater's contents have never been searchable, despite the mapping
-    declaring the field.
+    REPEATERS ARE NOT INDEXED: this converts the dates of each row in place, on
+    the RESOURCE, and the branch that copies ordinary fields excludes
+    ``repeater``, so a repeater's contents are not searchable even though the
+    mapping declares the field.
 
-    Reproduced rather than fixed on purpose. Indexing them is not a one-line
-    change: rows are free-form, so a field holding a number in one resource and
-    text in another is a mapping conflict that makes Elasticsearch REJECT the
-    whole document - i.e. turning this on could remove resources from the index
-    that are in it today., to be done with a
-    mapping decision behind it rather than in passing.
+    Indexing them is not a one-line change: rows are free-form, so a field
+    holding a number in one resource and text in another is a mapping conflict
+    that makes Elasticsearch REJECT the whole document - turning this on could
+    remove resources from the index that are in it today. It needs a mapping
+    decision behind it.
     """
     rows = get_by_path(resource, field.get("destiny", ""))
     if not isinstance(rows, list):
@@ -176,9 +166,8 @@ def _apply_location(document: dict, destiny: str, centroid_lookup) -> None:
             if not coordinates:
                 continue
             if len(coordinates) != 2:
-                # The original raised here, aborting the whole resource inside
-                # the swallowing handler. One unusable point should cost that
-                # point, not the resource's searchability.
+                # One unusable point costs that point, not the resource's
+                # searchability.
                 logger.warning("Ignoring a location with %d coordinates", len(coordinates))
                 continue
             points.append({"type": "Point", "coordinates": [coordinates[0], coordinates[1]]})

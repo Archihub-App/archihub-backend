@@ -300,7 +300,7 @@ def test_a_transcribers_task_on_another_record_does_not_carry_over(mongo, monkey
 
 
 def test_a_caller_with_none_of_the_roles_is_refused(mongo, monkeypatch):
-    """The original returned None here and every caller tested `is False`."""
+    """A real False, not None."""
     result = transcription.may_edit(RECORD_ID, "nobody")
 
     assert result is False
@@ -404,7 +404,7 @@ def test_renaming_a_speaker_touches_every_matching_segment(mongo):
 
 
 def test_renaming_a_speaker_who_does_not_appear_writes_nothing(transcript):
-    """The original wrote regardless, bumping updatedAt and reindexing for nothing."""
+    """Nothing to rename: no write, no reindex."""
     payload, status = transcription.rename_speaker(
         RECORD_ID, {"slug": "whisper", "speaker": "Ana", "oldSpeaker": "nobody"}, "tina"
     )

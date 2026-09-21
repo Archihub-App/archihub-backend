@@ -2,15 +2,8 @@
 
 **THE CALLER DOES NOT CHOOSE WHAT MAY BE SEARCHED.** The publication state and
 the access-rights clause are decided here from *who is asking*, and no request
-field can influence either. That is the whole point of this module:
-
-    {'term': {'status.keyword': body['status'] if 'status' in body else 'published'}}
-
-with the public service passing the caller's body through untouched. Since the
-indexer indexes every resource whatever its state and defaults `accessRights` to
-``public``, an anonymous request asking for ``status: "draft"`` read unpublished
-material — **demonstrated against a real index, 16 drafts.**
-
+field can influence either. Every resource is indexed whatever its state, so
+this is what keeps unpublished material out of a public search.
 
 Two other rules follow from the same thought — a search endpoint is reachable by
 people who are not signed in, so everything they send is adversarial until
@@ -140,8 +133,7 @@ def resolve_source(active_columns, declared_fields: set[str]) -> list[str]:
     """Which stored fields a result may carry.
 
     Restricted to what the requested content types actually declare, so a caller
-    cannot name an arbitrary indexed field and have it returned. The legacy
-    builder appended `activeColumns` to `_source` unchecked.
+    cannot name an arbitrary indexed field and have it returned.
     """
     requested = []
     for column in active_columns or []:

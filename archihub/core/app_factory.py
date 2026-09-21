@@ -1,7 +1,5 @@
 """FastAPI application construction.
 
-Replaces ``app/__init__.py``'s ``create_app()``.
-
 IMPORTANT - why conditional mounting happens here and NOT in a lifespan handler.
 Which routers exist depends on the ``system`` collection (``active_plugins`` for
 the plugin routers) and is decided at construction. A FastAPI ``lifespan`` runs
@@ -10,9 +8,6 @@ there are not reliably reflected in ``/openapi.json``, and every worker process
 would re-run the logic independently. Anything that changes the route table
 belongs in this factory; ``lifespan`` is reserved for warming resources -
 connections, the embedding model - that do not alter routing.
-
-Only the health router is mounted so far - the remaining domains land through
-Phase 3.
 """
 
 from __future__ import annotations
@@ -56,11 +51,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # NOTE: startup deliberately does NOT probe MongoDB (or any other backing
     # service) before accepting traffic.
     #
-    # An earlier version pinged Mongo here. With the legacy connection string's
-    # connectTimeoutMS=300000 that turned an unreachable database into a
-    # multi-minute startup hang during which /health/live could not answer -
-    # so an orchestrator could not tell "still booting" from "broken", and
-    # would eventually kill a container that was merely waiting.
+    # A probe here would turn an unreachable database into a startup hang
+    # during which /health/live could not answer, so an orchestrator could not
+    # tell "still booting" from "broken".
     #
     # Constructing a pymongo client does no I/O, so connections are established
     # lazily on first use, and /health/ready is what reports dependency state.
@@ -134,9 +127,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # is read from the plugins directory - see
     # archihub/plugins/framework/discovery.py.
     #
-    # During the migration itself this is expected to trip - set
-    # ARCHIHUB_ALLOW_UNPORTED_PLUGINS=true against a disposable instance to work
-    # on the not-yet-adapted parts of the stack.
+    # ARCHIHUB_ALLOW_UNPORTED_PLUGINS=true bypasses this, for a disposable
+    # instance only.
     _check_plugin_readiness()
 
     _register_middleware(app, settings)
@@ -225,30 +217,13 @@ def _check_plugin_readiness() -> None:
 def _register_middleware(app: FastAPI, settings: Settings) -> None:
     app.add_middleware(RequestIdMiddleware)
 
-    # CORS, preserving the legacy asymmetry exactly.
+    # CORS. The wildcard is INTENTIONAL: /adminApi and /publicApi are called by
+    # other organisations' scripts, not only by the bundled frontend.
     #
-    # Flask-CORS was configured per-path: /adminApi/* and /publicApi/* always
-    # allowed any origin, while everything else was restricted to URL_FRONTEND.
-    # Starlette's CORSMiddleware has no per-path configuration, so the two rules
-    # collapse into one.
-    #
-    # WHAT THAT MEANS IN PRACTICE. Both external APIs are now ported and are
-    # registered on every instance (availability is a per-request question - see
-    # api/external/router.py), so the permissive half always applies to some
-    # route. With URL_FRONTEND unset this is `*` throughout, which is the legacy
-    # behaviour for those two paths and MORE permissive than the legacy default
-    # for the rest. Setting URL_FRONTEND restricts everything, including the two
-    # APIs that other organisations' scripts call - so an operator who sets it
-    # must add those callers' origins to it.
-    #
-    # Restoring the exact per-path split needs a small middleware of our own
-    # rather than Starlette's; recorded here rather than done, because narrowing
-    # CORS was tried once on the legacy stack and deliberately reverted (commit
-    # 4b3e25d).
-    #
-    # The wildcard on the public/admin APIs is INTENTIONAL - those endpoints are
-    # consumed by other organisations' scripts, not just this repo's frontend.
-    # See the CORS note in CLAUDE.md before narrowing it.
+    # Starlette's CORSMiddleware has no per-path configuration, so one rule
+    # covers every route: with URL_FRONTEND unset every origin is allowed.
+    # Setting URL_FRONTEND restricts everything, including those two APIs, so
+    # an operator who sets it must add their callers' origins to it.
     origins = settings.cors_origins
     app.add_middleware(
         CORSMiddleware,
@@ -355,7 +330,7 @@ def _register_routers(app: FastAPI) -> None:
     include_router(app, public_api_router)
     _assert_public_routes_win(app)
 
-    # Always mounted, exactly like the legacy blueprint. These routes exist on
+    # Always mounted. These routes exist on
     # every instance; it is the per-request dependency that 404s them when the
     # instance is not disposable - not their absence from the routing table.
     include_router(app, test_control_router)
@@ -368,7 +343,7 @@ def _register_routers(app: FastAPI) -> None:
 
 
 def _mount_plugins(app: FastAPI) -> None:
-    """Mount every active, ported plugin. Never fatal.
+    """Mount every active plugin. Never fatal.
 
     The decision that CAN refuse startup - an active plugin this backend does
     not support at all - was already made in `_check_plugin_readiness`, before
@@ -387,17 +362,9 @@ def _mount_plugins(app: FastAPI) -> None:
     if mounted:
         logger.info("Mounted %d plugin(s): %s", len(mounted), ", ".join(sorted(mounted)))
 
-    # THE WEB PROCESS NEEDS THE HOOKS TOO, and this is the half that was missing.
+    # THE WEB PROCESS NEEDS THE HOOKS TOO; the worker registers them as well.
     #
-    # The legacy code registered them from two places, which reads like a
-    # duplication and is not: `register_plugin()` called `activate_settings()`
-    # only when CELERY_WORKER was set, and the plugin's own `__init__` called it
-    # only when CELERY_WORKER was NOT set. Between them every process got the
-    # registrations; porting the first half alone left this one with an empty
-    # hook bus.
-    #
-    # What that costs is not obvious from here, because dispatching is what a
-    # registration is FOR: `hooks.call()` turns each registered Celery task into
+    # A registration is for dispatching: `hooks.call()` turns each registered Celery task into
     # a signature and sends it to the broker, so the job still runs in a worker.
     # With nothing registered, `resource_files_create` fires into an empty
     # registry - the upload succeeds, 201 comes back, and no derivative is ever

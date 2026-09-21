@@ -3,22 +3,7 @@
 Authenticated with **Fernet API tokens**, not the browser's JWT. Their consumers
 live outside this repository, so a change here is invisible to any audit of
 `upgrade_front` and silently breaks somebody else's integration. Paths, methods
-and response shapes are therefore preserved exactly; the deviations are listed
-below and belong in the operator release notes.
-
-**Deviations from the published wire contract, all deliberate:**
-
-1. `POST /adminApi/get_id` now takes an allowlisted lookup instead of using the
-   whole request body as a Mongo filter. An integration
-   filtering by `ident`, `post_type` or a `metadata.firstLevel.*` field is
-   unaffected; one relying on arbitrary Mongo operators will need changing, and
-   that is the point.
-2. `updateCache` is accepted and ignored — caching is not re-enabled in the
-   port, so honouring it would promise something nothing does.
-3. The plugin proxy answers **501** until the plugin framework lands in Phase 5,
-   rather than silently reaching a route that is not there. See its docstring.
-4. Malformed input that used to produce a 500 (an absent `term`, a resource
-   without `metadata`) now produces a 400 or a well-formed 200.
+and response shapes are therefore kept stable.
 
 **Availability follows the `api_activation` setting, per request.** The routes
 always exist and answer a plain 404 when the instance has that API switched off,
@@ -87,15 +72,9 @@ def _unavailable() -> JSONResponse:
 def _refuse_if_switched_off(entry_id: str) -> None:
     """The activation gate, run BEFORE the token is looked at.
 
-    This check used to sit at the top of each handler body, which reads as
-    though it comes first and does not: FastAPI resolves the ``Depends`` in the
-    signature before it calls the handler, so a caller with no token got a
-    **401 from an API that was switched off** - confirming the route exists,
-    where the legacy backend (which never registered the blueprint at all)
-    returned a plain 404.
-
-    Making it a dependency *of* the identity dependencies puts the ordering in
-    the structure rather than in a convention someone has to remember.
+    A dependency *of* the identity dependencies, so a switched-off API answers
+    404 before any token is checked and never confirms that the route exists. In
+    a handler body it would run after FastAPI had already resolved the token.
     """
     if not _enabled(entry_id):
         from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -211,9 +190,7 @@ def update_resource(
 ) -> JSONResponse:
     """Update a resource.
 
-    The id is its own form field. The legacy handler read it from
-    `body['id']` — the *form* dict, not the parsed `data` — which is the same
-    place, but subscripted, so omitting it was a 500.
+    The id is its own form field.
     """
     if not _enabled(ADMIN_SETTING):
         return _unavailable()
@@ -235,9 +212,8 @@ def get_resource_id(
 ) -> JSONResponse:
     """Find a published resource by an identifier you already hold.
 
-    **The request body is no longer used as a Mongo filter.** It was, verbatim,
-    so a caller could send `{"$where": "..."}`. Lookups by
-    `ident`, `post_type` or a `metadata.firstLevel.*` field work unchanged.
+    Lookups are by `ident`, `post_type` or a `metadata.firstLevel.*` field; the
+    body is never used as a Mongo filter.
     """
     if not _enabled(ADMIN_SETTING):
         return _unavailable()
@@ -276,8 +252,7 @@ def update_type(
 ) -> JSONResponse:
     """Update a content type.
 
-    The original read `body['slug']` by subscript, so omitting it was a 500 —
-    documented as such in its own Swagger.
+    A missing `slug` is a 400.
     """
     if not _enabled(ADMIN_SETTING):
         return _unavailable()
@@ -311,7 +286,7 @@ def get_list(list_id: str, identity: ApiIdentity = Depends(admin_identity)) -> J
     """One controlled vocabulary by id.
 
     Part of the external contract other organisations' scripts read, so the
-    path, the method and the response shape are what the previous stack served.
+    path, the method and the response shape are fixed.
     """
     if not _enabled(ADMIN_SETTING):
         return _unavailable()
@@ -324,7 +299,7 @@ def get_list(list_id: str, identity: ApiIdentity = Depends(admin_identity)) -> J
 @admin_router.api_route(
     "/plugins/{plugin}/{plugin_endpoint:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    responses={501: {"description": "The plugin framework is not available yet"}},
+    responses={501: {"description": "Forwarding to a plugin with an API token is not implemented"}},
 )
 def plugin_proxy(
     plugin: str,
@@ -333,23 +308,13 @@ def plugin_proxy(
 ) -> JSONResponse:
     """Reach a plugin's endpoint with an admin API token instead of a JWT.
 
-    THE TARGET IS RESOLVED, NEVER ASSEMBLED, and that is the whole design.
+    THE TARGET IS RESOLVED, NEVER ASSEMBLED. The named plugin is looked up in the
+    **mounted registry** — so it must be active — and the endpoint must match one
+    of that plugin's own declared route paths *exactly*. A traversal string does
+    not match any of them: there is nothing to filter when the only reachable
+    values come from a list the application built.
 
-    The legacy implementation built it as ``f"/{plugin}/{pluginEndpoint}"``
-    where ``pluginEndpoint`` is a **path converter** — so ``..`` segments in it
-    resolved to any route in the application, not just a plugin's — then
-    re-entered the WSGI stack through ``current_app.test_client()`` with the
-    caller's headers, and copied the inner response's headers out verbatim
-    (``Content-Length`` included, which can desynchronise the outer response).
-
-
-    Here the named plugin is looked up in the **mounted registry** — so it must
-    be active and ported — and the endpoint must match one of that plugin's own
-    declared route paths *exactly*. A traversal string does not match any of
-    them, which is why filtering `..` is unnecessary: there is nothing to filter
-    when the only reachable values come from a list the application built.
-
-    It still answers 501, and deliberately: resolution is implemented and
+    It answers 501, deliberately: resolution is implemented and
     testable, but re-dispatching a request into the ASGI stack with a *different*
     identity is a second, separate decision (the inner route's own
     ``Depends(get_current_user)`` would reject a Fernet identity, so honouring

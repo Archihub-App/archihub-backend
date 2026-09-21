@@ -1,16 +1,9 @@
 """Geosystem routes.
 
-Both routes are unauthenticated, deliberately.
-
-That is not an oversight in either. ``/geosystem/level`` is called by
-``GeoService.getAdminLevel`` with no ``Authorization`` header at all, and the
-public explore map draws boundaries before anyone signs in. What these serve is
-reference geography — the administrative divisions of a country — not anything
-the archive holds.
-
-The public explore map draws administrative boundaries before anyone signs in,
-and ``GeoService.getAdminLevel`` sends no ``Authorization`` header - so requiring
-a token here would blank the map for every anonymous visitor. The defences are on
+Both routes are unauthenticated, deliberately: the public explore map draws
+administrative boundaries before anyone signs in, and
+``GeoService.getAdminLevel`` sends no ``Authorization`` header. What these serve
+is reference geography, not anything the archive holds. The defences are on
 the *inputs* instead (see ``services``): nothing from the request becomes a query
 operator, results are capped, and the simplification retention is quantised.
 """
@@ -72,8 +65,7 @@ def get_polygon(body: dict = Body(default_factory=dict)) -> JSONResponse:
 
     With ``ident`` this answers a single GeoJSON feature; without it, the list
     matching the remaining filters — capped, because a third administrative
-    level runs to thousands of polygons and the original returned all of them,
-    simplified, to an anonymous caller.
+    level runs to thousands of polygons and this route is anonymous.
 
     ``retention`` is the fraction of vertices to keep. It is clamped and rounded
     before use: it keys a disk cache, and taking the caller's float verbatim

@@ -12,18 +12,10 @@ both ends - through the interface and by dropping a Markdown file on the box -
 so neither side can be treated as authoritative.
 
 **THE PATH IS THE SECURITY BOUNDARY.** A skill path arrives in a URL and becomes
-a file that gets written, read and deleted. A string-based check on it - say::
-
-    normalized = os.path.normpath(normalized).replace('\\\\', '/')
-    if normalized.startswith('..'):
-        raise ValueError(...)
-
-which reasons about the *text* of a path rather than where it lands, and says
-nothing about symlinks — a link inside the skills directory pointing at
-``/etc`` was followed by the filesystem walk and its contents synced into the
-database. Every path here goes through ``core.files.resolve_within``, which
-resolves and then checks containment, so both cases fail closed. It is the same
-helper the records viewers use, for the same reason.
+a file that gets written, read and deleted. Every path here goes through
+``core.files.resolve_within``, which resolves and then checks containment - so
+where the path lands decides, not its text, and a symlink pointing outside the
+skills directory fails closed. It is the same helper the records viewers use.
 """
 
 from __future__ import annotations
@@ -47,8 +39,7 @@ COLLECTION = "llm_skills"
 SKILL_SUFFIX = ".md"
 
 #: Ceiling on a skill's content. A skill is an instruction sheet, not a corpus,
-#: and this is a request body that gets written to disk — the legacy write had
-#: no limit at all.
+#: and this is a request body that gets written to disk.
 MAX_CONTENT_BYTES = 1024 * 1024
 
 #: Directories skipped when walking. Dot-directories are editor and VCS state.
@@ -99,10 +90,6 @@ def normalise(skill_path: str | None) -> str:
     candidate = skill_path.replace("\\", "/").strip()
 
     # An absolute path is refused rather than quietly reinterpreted as relative.
-    # The legacy code stripped the leading slash, so `/etc/passwd` became a real
-    # skill at `<skills>/etc/passwd.md` - contained, and therefore not a security
-    # problem, but a request that plainly meant something else succeeding at
-    # something surprising.
     if candidate.startswith("/"):
         raise SkillError(_("Skill path must be relative to the skills directory"), 400)
 
@@ -340,9 +327,7 @@ def sync() -> list[dict]:
                 else:
                     synced.append(_write_record(record))
         except (OSError, SkillError):
-            # One unreadable skill does not abort the sync of every other. The
-            # legacy version let the exception escape, so a single bad file left
-            # the whole collection unsynchronised.
+            # One unreadable skill does not abort the sync of every other.
             logger.exception("Could not synchronise the skill %s", relative)
 
     prune_empty_directories()

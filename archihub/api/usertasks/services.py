@@ -7,12 +7,7 @@ asked to review the same thing.
 ERROR KEY: this domain answers with ``{"error": ...}`` rather than the
 ``{"msg": ...}`` every other domain uses - **except** the two "there are no
 tasks" 404s, which use ``msg``. That inconsistency is wire contract: clients read
-one key or the other per route, so it is reproduced rather than tidied.
-
-That is preserved exactly, both parts. Unifying the two would be a wire change
-with no behavioural benefit, and the harness diffs the body key by key, so the
-inconsistency is easier to keep than to notice. Do not tidy it without a paired
-frontend change.
+one key or the other per route. Do not tidy it without a paired frontend change.
 """
 
 from __future__ import annotations
@@ -72,8 +67,7 @@ def process_comments(comments) -> str:
 def get_resource_tasks(resource_id: str) -> tuple[dict, int]:
     task = _mongo().get_record(COLLECTION, {"resourceId": resource_id, "status": STATUS_PENDING})
     if not task:
-        # `msg`, not `error`: the legacy service uses `msg` for exactly
-        # these two and `error` for everything else in this module.
+        # `msg`, not `error` - see the module docstring.
         return {"msg": _("There are no tasks for this resource")}, 404
 
     task["_id"] = str(task["_id"])
@@ -84,8 +78,7 @@ def get_resource_tasks(resource_id: str) -> tuple[dict, int]:
 def get_record_tasks(record_id: str) -> tuple[dict, int]:
     task = _mongo().get_record(COLLECTION, {"recordId": record_id, "status": STATUS_PENDING})
     if not task:
-        # `msg`, not `error`: the legacy service uses `msg` for exactly
-        # these two and `error` for everything else in this module.
+        # `msg`, not `error` - see the module docstring.
         return {"msg": _("There are no tasks for this record")}, 404
 
     task["_id"] = str(task["_id"])

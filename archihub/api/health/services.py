@@ -1,8 +1,7 @@
 """Readiness checks.
 
-Port of ``app/api/health/services.py``. The response shape is reproduced exactly
-because ``ArchiHUBTestRunner`` preflight and (once section 11 lands) the Docker
-healthcheck both read it::
+The response shape is a contract: ``ArchiHUBTestRunner`` preflight and container
+health checks read it::
 
     {"ready": bool, "checks": {"<dep>": {"status": "ok"|"error"|"disabled",
                                          "error": "<only when failing>"}}}
@@ -30,7 +29,7 @@ DISABLED = "disabled"
 
 
 def _find_by_id(data_array: list | None, id_value: str) -> dict | None:
-    """Port of ``app/utils/functions.py:find_by_id``."""
+    """The entry of ``data_array`` whose ``id`` is ``id_value``."""
     for item in data_array or []:
         if item.get("id") == id_value:
             return item

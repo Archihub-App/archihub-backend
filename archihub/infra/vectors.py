@@ -1,22 +1,8 @@
 """Qdrant vector database access.
 
-FOUR THINGS THIS PATH MUST GET RIGHT, each of which fails silently rather than
-loudly:
-
-1. ``insert_vector`` called ``qdrant.upsert(collection_name=..., points=vector[0],
-   payload=...)``. ``points`` must be a list of ``PointStruct`` (or a Batch);
-   ``vector[0]`` is a single float from the encoded array, and ``upsert`` takes
-   no ``payload`` argument at all. Rewritten to build a proper ``PointStruct``.
-2. ``search_vector`` called ``qdrant.search(collection_name=..., query=...)``.
-   That method's parameter is ``query_vector``, not ``query``, and it does not
-   accept a ``search_params=models.SearchRequest(...)`` (``SearchRequest`` is a
-   whole request body, not a params object - ``SearchParams`` is). Rewritten
-   against ``query_points``.
-3. ``VECTOR_SIZE`` was read with ``os.environ.get('VECTOR_SIZE', 768)``, so it was
-   an ``int`` when unset but a ``str`` when set - and was passed straight into
-   ``VectorParams(size=...)``, which requires an int. Now typed as ``int`` in
-   settings.
-4. ``QdrantClient.search()`` is deprecated in favour of ``query_points()``.
+Points are written as ``PointStruct``s carrying both the vector and its payload,
+searches go through ``query_points`` with a real ``SearchParams``, and
+``VECTOR_SIZE`` is an ``int`` setting - ``VectorParams(size=...)`` requires one.
 
 The embedding model is loaded eagerly by the caller at application startup
 rather than as a side effect of first instantiation - see ``get_vectors()``.
@@ -108,9 +94,7 @@ class VectorClient:
     ) -> None:
         """Upsert one embedded point.
 
-        Fixes legacy bug 1 (see module docstring): builds a real ``PointStruct``
-        carrying both the vector and its payload, instead of passing a lone
-        float as ``points`` and an unsupported ``payload`` kwarg.
+        Builds a ``PointStruct`` carrying both the vector and its payload.
         """
         self.qdrant.upsert(
             collection_name=collection,
@@ -126,8 +110,7 @@ class VectorClient:
     def search_vector(self, collection: str, text: str, limit: int = 5):
         """Nearest-neighbour search.
 
-        Fixes legacy bugs 2 and 4: uses ``query_points`` with the correct
-        argument names and a real ``SearchParams``.
+        Uses ``query_points`` with a real ``SearchParams``.
         """
         response = self.qdrant.query_points(
             collection_name=collection,

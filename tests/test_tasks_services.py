@@ -1,18 +1,8 @@
-"""Task records, and the ``has_task`` rewrite.
+"""Task records, and ``has_task``.
 
 ``has_task`` is the guard plugins use to avoid launching duplicate concurrent
-jobs (``mqttHandler``, ``mailLabeler``, and any plugin via
-``PluginClass.has_task``). The legacy implementation cannot work:
-
-* it rebinds ``task`` to a Pydantic model and then subscripts it
-  (``task['taskId']``) -> TypeError;
-* three branches assign to an undefined name ``t`` -> NameError;
-* a bare ``except Exception`` returns True, i.e. "a task is already running";
-* when the task genuinely IS running, no branch matches and it returns None.
-
-Net effect, inverted in both directions that matter: a FINISHED task blocks the
-user, and a RUNNING task fails to block a duplicate. These tests pin the
-corrected behaviour.
+jobs. A FINISHED task must not block the user, and a RUNNING task must block a
+duplicate.
 """
 
 from __future__ import annotations
@@ -90,7 +80,7 @@ def test_no_record_means_no_task(mongo):
 
 
 def test_running_task_blocks_a_duplicate(mongo, monkeypatch):
-    """THE bug: legacy returned None here, so duplicates were allowed."""
+    """A running task blocks a duplicate."""
     mongo.records["tasks"] = {"taskId": "abc", "user": "alice"}
     patch_result(monkeypatch, FakeResult(state="STARTED", ready=False))
 
@@ -105,8 +95,7 @@ def test_all_in_flight_states_block(mongo, monkeypatch, state):
 
 
 def test_completed_task_does_not_block(mongo, monkeypatch):
-    """THE other bug: legacy crashed here and the handler returned True,
-    locking the user out of the feature until the record was edited by hand."""
+    """A finished task never locks the user out of the feature."""
     mongo.records["tasks"] = {"taskId": "abc", "user": "alice"}
     patch_result(monkeypatch, FakeResult(state="SUCCESS", result="done", ready=True, successful=True))
 
@@ -151,8 +140,7 @@ def test_failure_details_are_not_persisted(mongo, monkeypatch):
 
 
 def test_errors_allow_work_rather_than_blocking_it(mongo, monkeypatch):
-    """Legacy's handler returned True, so a transient broker hiccup silently
-    locked the user out with no indication why."""
+    """A transient broker hiccup must not silently lock the user out."""
     mongo.records["tasks"] = {"taskId": "abc", "user": "alice"}
 
     def _explode(task_id):
@@ -199,8 +187,7 @@ def test_system_users_may_record_tasks(mongo, system_user):
 
 
 def test_unknown_user_is_rejected_loudly(mongo):
-    """Legacy returned a (dict, 404) tuple from this void function, which no
-    caller inspected - so the task went unrecorded and simply never appeared."""
+    """Raised, so a task is never silently left unrecorded."""
     mongo.records["users"] = None
     with pytest.raises(ValueError):
         services.add_task("abc", "plugin.job", "ghost", "msg")
@@ -258,8 +245,7 @@ def test_a_task_date_is_extended_json_not_a_bare_string(monkeypatch):
 
     The read is unguarded, so a bare string leaves `.$date` undefined and every
     row in the panel reads "Invalid Date" - a 200, a full body, and a wrong
-    screen with nothing logged anywhere. Legacy reached this shape by running
-    the list through `parse_result`.
+    screen with nothing logged anywhere.
     """
     listing_mongo(
         monkeypatch,
@@ -274,7 +260,7 @@ def test_a_task_date_is_extended_json_not_a_bare_string(monkeypatch):
 
 
 def test_a_task_id_is_extended_json_too(monkeypatch):
-    """The same `json_util` pass legacy applied, so `_id` keeps its `$oid` form."""
+    """A `json_util` pass, so `_id` keeps its `$oid` form."""
     listing_mongo(
         monkeypatch,
         [{"_id": ObjectId(TASK_OID), "date": datetime(2026, 8, 19, 10, 30), "user": "alice"}],

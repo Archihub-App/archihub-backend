@@ -26,8 +26,7 @@ from archihub.api.aiservices import errors
 logger = logging.getLogger(__name__)
 
 #: Connect/read/write/pool timeouts. A model call is slow by nature, so the read
-#: budget is generous — but it is finite, which the legacy `getModels` calls
-#: were not.
+#: budget is generous — but it is finite.
 DEFAULT_TIMEOUT = httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=10.0)
 
 #: Discovery is not slow, and blocking a settings screen on an unreachable
@@ -45,8 +44,7 @@ def get_client() -> httpx.Client:
     """The shared connection pool.
 
     Reused across calls because TLS handshakes to a model endpoint are a
-    meaningful share of the latency of a short completion, and because the
-    legacy code built a fresh client per request in every provider class.
+    meaningful share of the latency of a short completion.
     """
     global _client
     if _client is None:

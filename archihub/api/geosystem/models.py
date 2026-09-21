@@ -1,14 +1,9 @@
 """The stored form of an administrative boundary.
 
-Port of ``app/api/geosystem/models.py``. One change, and it is not cosmetic.
-
-``id`` had ``default_factory=uuid.uuid4``, declared ``str`` — so the default was
-a ``UUID`` **object**, not a string, and Pydantic v2 does not coerce a default
-produced by a factory. Every shape's ``_id`` therefore went into MongoDB as a
-BSON binary UUID while the type said otherwise, and anything comparing that id
-to a string got no match. Here the factory produces the string the annotation
-promises. Existing stored shapes keep their binary ids and still read back
-fine; the loader replaces a level wholesale, so a reload normalises them.
+``id`` defaults to a UUID *string*, as its annotation says: Pydantic does not
+coerce a default produced by a factory, so a bare ``uuid.uuid4`` would store a
+binary UUID. Shapes stored with binary ids still read back; the loader replaces
+a level wholesale, so a reload normalises them.
 """
 
 from __future__ import annotations

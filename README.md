@@ -77,7 +77,7 @@ pip install --upgrade pip setuptools wheel
 pip install -e ".[dev]"
 ```
 
-El extra `dev` añade `pytest`, `pytest-asyncio` y `deepdiff`. `httpx` **no** está ahí: es una dependencia de tiempo de ejecución, porque todas las llamadas a modelos de lenguaje pasan por ella.
+El extra `dev` añade `pytest` y `pytest-asyncio`. `httpx` **no** está ahí: es una dependencia de tiempo de ejecución, porque todas las llamadas a modelos de lenguaje pasan por ella.
 
 **Los plugins declaran sus propias dependencias.** Cada plugin instalado en `archihub/plugins/<slug>/` puede traer su `requirements.txt` (paquetes de Python), su `packages.txt` (paquetes del sistema, un nombre de apt por línea) y su `.env`. Para instalarlas todas de una vez:
 
@@ -208,7 +208,7 @@ pytest -q archihub/plugins/<slug>/tests    # solo un plugin
 
 `tests/` contiene solo las pruebas del backend. Las de cada plugin van en su propia carpeta, `archihub/plugins/<slug>/tests/`, para que viajen con el plugin; `pytest` las recoge de ahí, y `conftest.py`, en la raíz, prepara el entorno para ambas. Esas carpetas no se copian en la imagen. Como los nombres de los archivos de prueba no pueden repetirse entre carpetas, conviene incluir el nombre del plugin (`test_plugin_<slug>.py`).
 
-Si instalaste con pip sin el extra `dev`, instala `pytest`, `pytest-asyncio` y `deepdiff` antes.
+Si instalaste con pip sin el extra `dev`, instala `pytest` y `pytest-asyncio` antes.
 
 ### 9. Desarrollar un plugin
 

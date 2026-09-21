@@ -4,21 +4,15 @@ Four exports, all queued: resources (with their files), controlled vocabularies,
 metadata standards, and content types. Plus one **unauthenticated** route that
 exports a public view's resources synchronously.
 
-THE PUBLIC ROUTE IS THE INTERESTING ONE, and three things about it changed.
+THE PUBLIC ROUTE:
 
-**It applies access rights.** Filtering on content type and published status
-alone puts a resource under embargo — reserved, visible to nobody without the
-right — into an inventory anyone can download anonymously. The rule is the same
-one as everywhere else: a public caller's rights are fixed at "none", and only
-resources requiring none are exported.
+**It applies access rights.** The rule is the same one as everywhere else: a
+public caller's rights are fixed at "none", and only resources requiring none
+are exported.
 
-**It stops serving a stale file forever.** The workbook was cached under a name
-built from the view and content types, and the generator's first line was
-``if not os.path.exists(...)`` — so once written, that name was returned
-unchanged for the life of the deployment. A resource catalogued afterwards never
-appeared in the public inventory, and nothing said so. The name is now a digest
-of what went into it, exactly as the bulk-download archives are, so it changes
-when the contents change.
+**Its file is named by a digest of what went into it**, exactly as the
+bulk-download archives are, so the name changes when the contents change and a
+cached workbook is never stale.
 
 **It cannot be asked for a content type the view does not show**, and the
 request is refused outright when ``post_type`` is neither a list nor a string
@@ -171,11 +165,8 @@ def _queue_export(task, task_name: str, body: dict, user: str) -> JSONResponse:
 def _may_export(body: dict, user: str) -> tuple[dict, int] | None:
     """Whether this caller may inventory these content types and this branch.
 
-    Both checks existed in the original. The second one called
-    ``self.has_right(...)``, a method ``PluginClass`` does not define — so it
-    raised ``AttributeError`` and the route 500'd for every request that
-    supplied a ``parent``. Confirmed latent, and the reason the branch has never
-    refused anyone.
+    Both are real checks: the content types, and the effective access right of
+    the requested ``parent``.
     """
     from archihub.api.resources.access import effective_access_right
     from archihub.api.resources.services import can_view_type
@@ -236,18 +227,14 @@ def _public_inventory(body: dict):
     elif isinstance(requested, list) and all(isinstance(p, str) for p in requested):
         post_types = list(requested)
     else:
-        # The original assumed a string or a list of strings; a JSON object here
-        # became a Mongo operator inside the filter.
+        # Only a string or a list of strings reaches the filter.
         return json_response({"msg": _("No content type was specified")}, 400)
 
     for post_type in post_types:
         if post_type not in visible:
-            # Not a permission failure, despite the message the legacy helper
-            # would have produced here. This route is unauthenticated: there is
-            # no identity to grant, so an authorisation status tells the caller
-            # to go and get a credential that would change nothing. What
-            # happened is that the request named a content type this view does
-            # not publish - a bad request, like its two neighbours.
+            # Not a permission failure: this route is unauthenticated, so a
+            # credential would change nothing. The request named a content type this
+            # view does not publish - a bad request, like its two neighbours.
             return json_response({"msg": _("The content type is required")}, 400)
 
     if not post_types:
@@ -257,7 +244,7 @@ def _public_inventory(body: dict):
         "post_type": {"$in": post_types},
         "status": "published",
         # THE PUBLIC RULE: the caller holds no rights, so only resources that
-        # require none are exported. Absent from the legacy filter entirely.
+        # require none are exported.
         "$or": [{"accessRights": {"$exists": False}}, {"accessRights": None}, {"accessRights": "public"}],
     }
     if view.get("root") and view.get("parent"):
@@ -409,9 +396,8 @@ def types_task(body: dict, user: str) -> str:
     rows = [{column: column for column in columns}]
     for post_type in _mongo().get_all_records("post_types"):
         row = {"id": str(post_type.get("_id"))}
-        # `.get`, not `[...]`: the original subscripted all nine, so a content
-        # type created before one of them existed raised KeyError and the whole
-        # export failed.
+        # `.get`, not `[...]`: a content type created before one of these
+        # fields existed must not fail the export.
         row.update({column: post_type.get(column) for column in columns[1:]})
         rows.append(row)
 

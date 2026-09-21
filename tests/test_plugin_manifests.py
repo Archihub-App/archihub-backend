@@ -7,11 +7,8 @@ its requirements without a person reading them first. Two manifests:
                       ``test_declared_dependencies.py``.
 ``packages.txt``      SYSTEM packages, installed with apt.
 
-**``packages.txt`` exists because authors were already declaring these - in
-prose.** The convention was a comment at the top of ``requirements.txt``
-("install tesseract-ocr"), which the build's merge step then deleted, because
-it stripped comment lines. The result was a plugin that installed cleanly and
-failed at its first task on a binary nothing had installed.
+A system package mentioned only in a comment is never installed: the plugin
+installs cleanly and fails at its first task on a missing binary.
 
 **The name pattern is a security boundary, not tidiness.** Each line is handed
 to ``apt-get install`` running as root during the build, and the file comes from

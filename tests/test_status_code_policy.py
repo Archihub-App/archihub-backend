@@ -1,16 +1,11 @@
 """The success status a route ADVERTISES must be the one it SENDS.
 
-Two rules, both learned from routes that were wrong in a way nothing could see.
-
-**A route may not advertise a success code it never sends.** Nine create routes
-documented ``201: {"description": "... created"}`` in their ``responses`` block
-but never declared ``status_code=201``. FastAPI fills the gap with its own
-default, so the published spec listed **both** 200 and 201 as success responses
-for a single create - and the 200 was fiction. Nothing failed: the routes really
-did answer 201, because their services returned it in the ``(payload, status)``
-tuple, so every test that fired a request passed. Only the generated document
-was wrong, which is exactly the artefact nobody re-reads and every third-party
-integrator does.
+**A route may not advertise a success code it never sends.** A create route
+that documents ``201`` in its ``responses`` block but does not declare
+``status_code=201`` gets FastAPI's default as well, so the published spec lists
+**both** 200 and 201 - while every test that fires a request passes. Only the
+generated document is wrong, which is the artefact every third-party integrator
+reads.
 
 **Deletes answer 200 with a body.** Some deletes here return data the caller can
 act on - bulk results, remaining counts - so 204 cannot cover all of them. One

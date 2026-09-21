@@ -37,7 +37,7 @@ class AdminTokenRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     password: str
-    # Days. `false` means "no expiry" in the legacy contract.
+    # Days. `false` means "no expiry".
     duration: int | bool = 2
 
 

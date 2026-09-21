@@ -139,10 +139,9 @@ class OpenAICompatibleDialect:
         }
 
         # `max_tokens` was renamed `max_completion_tokens` for reasoning models.
-        # The legacy code decided which to send by testing whether the model id
-        # started with "gpt-5", "o1", "o3" or "o4" - a hardcoded list that is
-        # wrong for every model released after it was written, and for every
-        # other provider. Both are sent through the caller's chosen key, and the
+        # Deciding by model-name prefix would be wrong for every model released
+        # after the list was written, and for every other provider. The caller
+        # chooses the key, and the
         # retry on `unsupported_parameter` below handles servers that reject it.
         if options.get("max_tokens") is not None:
             body[options.get("max_tokens_field") or "max_tokens"] = options["max_tokens"]

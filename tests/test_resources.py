@@ -112,9 +112,8 @@ def test_an_admin_sees_a_restricted_resource(mongo, as_admin):
 # ---------------------------------------------------------------------------
 # Detail - the three gates
 #
-# An earlier version of this port applied only the access-rights one, checked
-# against the resource's own field. That was wrong in three separate ways, all
-# of which widened access; these pin each of them.
+# The recycle bin is admin-only, the EFFECTIVE (inherited) access right must be
+# held, and the content type's viewRoles apply. These pin each of them.
 # ---------------------------------------------------------------------------
 
 
@@ -299,7 +298,7 @@ def test_a_column_descriptor_is_projected_by_its_destiny(mongo, as_admin, monkey
 
 
 def test_bare_strings_are_still_accepted(mongo, as_admin, monkeypatch):
-    """Hand-written callers - the diff harness, curl, another org's script."""
+    """Hand-written callers - curl, another org's script."""
     monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
     mongo.rows["resources"] = []
 
@@ -378,8 +377,8 @@ def test_a_malformed_column_descriptor_is_ignored_not_fatal(mongo, as_admin, mon
 
 
 def test_resource_type_of_a_missing_resource_is_none_not_an_error(mongo):
-    """Legacy raised. Callers enriching a list would turn one stale reference
-    into a failed page."""
+    """Callers enriching a list must not turn one stale reference into a failed
+    page."""
     mongo.records["resources"] = None
     assert services.get_resource_type(VALID_ID) is None
 

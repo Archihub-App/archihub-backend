@@ -42,15 +42,7 @@ class NotStreamable(Exception):
 def derivative_of(record: dict, size: str = "large"):
     """``(path, media_kind)`` for a record's web derivative.
 
-    The original's guard read::
-
-        if 'processing' not in record:
-            if 'fileProcessing' not in record['processing']:
-
-    - the inner test subscripts the very key the outer one just established is
-    absent, so an *unprocessed* record raised ``KeyError`` instead of the
-    prepared "has not been processed" message, and that reached the client as a
-    500 with the raw key name.
+    Raises ``NotStreamable`` for a record that has not been processed.
     """
     processing = record.get("processing") or {}
     file_processing = processing.get("fileProcessing") if isinstance(processing, dict) else None
@@ -131,13 +123,8 @@ def download_path(record: dict, kind: str):
 
     The archival master is served for ``original`` and the web derivative for
     ``small`` - except for documents, whose "derivative" is a directory of page
-    images rather than a single file, so the master is served for both. That
-    asymmetry is the original's and is deliberate: there is no single-file
-    rendition of a document to hand back.
-
-    The original ended with an ``if``/``elif`` over the requested kind and no
-    ``else``, so an unrecognised value fell off the end returning ``None``,
-    which Flask rendered as a 500 with an empty body.
+    images rather than a single file, so the master is served for both: there is
+    no single-file rendition of a document to hand back.
     """
     if kind not in DOWNLOAD_KINDS:
         raise DownloadRefused(_("Unsupported download type"), 400)
@@ -204,11 +191,11 @@ def download(record: dict, kind: str):
 #: whole transcode.
 MAX_FRAGMENT_SECONDS = 2 * 60 * 60
 
-#: Wall-clock ceiling on the ffmpeg process. The legacy code had none, so a
-#: transcode that hung held its worker until the process was killed by hand.
+#: Wall-clock ceiling on the ffmpeg process, so a transcode that hangs cannot
+#: hold its worker indefinitely.
 FFMPEG_TIMEOUT_SECONDS = 300
 
-#: Output settings per media kind, as the originals had them.
+#: Output settings per media kind.
 FRAGMENT_OUTPUT = {
     "video": (
         ".mp4",
@@ -242,8 +229,7 @@ def sweep_stale_fragments(directory) -> int:
     A fragment is normally removed once its response has been written
     (``delete_after``). That does not happen if the client disconnects mid-
     stream or the process dies between transcoding and sending, so without this
-    the temporal directory grows without bound - the legacy code had the same
-    gap with its ``call_on_close`` callback and no sweep at all.
+    the temporal directory would grow without bound.
 
     Runs on the extraction path because that is the only moment anything is
     known to be looking at this directory, and it costs one ``listdir``. Only
@@ -277,7 +263,7 @@ def sweep_stale_fragments(directory) -> int:
 def fragment_command(source, destination, start: float, duration: float, kind: str) -> list[str]:
     """The ffmpeg argument list, built as a list and never a shell string.
 
-    ``-ss``/``-t`` are placed **after** ``-i``, as the originals had them: that
+    ``-ss``/``-t`` are placed **after** ``-i``: that
     is the slow but frame-accurate seek, and a snap of a spoken phrase that
     starts a keyframe early is a wrong snap.
 
@@ -321,9 +307,8 @@ def extract_fragment(source, start: float, end: float, kind: str):
     directory.mkdir(parents=True, exist_ok=True)
     sweep_stale_fragments(directory)
 
-    # A fresh name every time. The original built it from the record id and the
-    # requested offsets and reused whatever it found there, so a fragment left
-    # behind by a failed run was served as if it were the real thing.
+    # A fresh name every time, so a fragment left behind by a failed run is never
+    # served as if it were the real thing.
     destination = directory / f"{FRAGMENT_PREFIX}{uuid.uuid4().hex}{suffix}"
 
     try:
@@ -343,8 +328,7 @@ def extract_fragment(source, start: float, end: float, kind: str):
 
     if result.returncode != 0 or not destination.is_file() or destination.stat().st_size == 0:
         filestore.remove_quietly(destination)
-        # ffmpeg's stderr names paths on the server and is logged, never
-        # returned - the original put it straight in the response body.
+        # ffmpeg's stderr names paths on the server and is logged, never returned.
         logger.warning(
             "ffmpeg failed (%s) extracting a fragment: %s",
             result.returncode,
@@ -358,9 +342,8 @@ def extract_fragment(source, start: float, end: float, kind: str):
 def stream_fragment(record: dict, bounds: tuple[float, float], size: str = "large"):
     """A response serving just part of a recording.
 
-    The temp file is deleted once the response has been written, which is what
-    ``delete_after`` is for - the original attached a Flask ``call_on_close``
-    callback to do the same thing.
+    The temp file is deleted once the response has been written
+    (``delete_after``).
     """
     path, kind = derivative_of(record, size)
     if not path.is_file():
@@ -384,11 +367,9 @@ def stream_fragment(record: dict, bounds: tuple[float, float], size: str = "larg
 def parse_fragment_bounds(start_ms, end_ms) -> tuple[float, float] | None:
     """Validate a requested time range, or ``None`` if none was asked for.
 
-    THE UNIT IS SECONDS, despite the parameter names. The legacy code passed
-    these straight to ffmpeg's ``-ss``/``-t``, which take seconds, and the
-    frontend fills them from an HTML media element's ``currentTime``, which is
-    also seconds. Its own Swagger says "in seconds" too. The names are wrong and
-    are kept only because they are the wire contract.
+    THE UNIT IS SECONDS, despite the parameter names: they go to ffmpeg's
+    ``-ss``/``-t``, and the frontend fills them from an HTML media element's
+    ``currentTime``. The names are kept only because they are the wire contract.
 
     Raises ``ValueError`` for a range that was asked for but does not make
     sense, so the caller can answer 400 rather than serving the whole file and

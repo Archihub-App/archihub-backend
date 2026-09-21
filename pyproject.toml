@@ -9,10 +9,8 @@ authors = [{ name = "BITSOL", email = "contact@bit-sol.com.co" }]
 
 # NOTE ON PINNING
 # ---------------
-# This file declares the compatible RANGES. Reproducibility is meant to come
-# from a committed `uv.lock` (exact and hash-pinned), which does not exist yet -
-# until it does, two deployments building on different days can resolve
-# different versions.
+# This file declares the compatible RANGES; `uv.lock` pins exactly what they
+# resolve to, with hashes.
 #
 # To (re)generate the lockfile:      uv lock
 # To install exactly the lockfile:   uv sync --frozen
@@ -22,10 +20,8 @@ authors = [{ name = "BITSOL", email = "contact@bit-sol.com.co" }]
 # SECURITY FLOORS (pip-audit, 2026-08-19)
 # ---------------------------------------
 # Several floors above are set to the first release that carries a published
-# fix, not to whatever was installed. The previous ranges all PERMITTED a
-# vulnerable version, so a fresh resolve on a new machine could legitimately
-# install one - `PyJWT>=2.9` allowed 2.9-2.12, and every one of those carries
-# the 11 advisories fixed in 2.13.0. A range is only as good as its floor.
+# fix, so a fresh resolve on a new machine cannot pick a vulnerable version. A
+# range is only as good as its floor.
 #
 #   PyJWT              >=2.13.0    11 advisories   <- signs and verifies every token
 #   python-multipart   >=0.0.31     5 advisories   <- parses every upload
@@ -36,10 +32,6 @@ authors = [{ name = "BITSOL", email = "contact@bit-sol.com.co" }]
 #   pydantic-settings  >=2.14.2     1 advisory
 #   soupsieve          >=2.8.4      2 advisories   (transitive, via BeautifulSoup4)
 #
-# Verified together, not just resolved: the full unit suite (2659 passed) and
-# all 157 diff-harness cases were run against exactly this set, with byte-for-byte
-# identical harness results. starlette 1.x is a major bump and was the one worth
-# proving rather than assuming.
 #
 # `torch` reaches the image transitively through sentence-transformers and carries
 # 8 advisories of its own (fixed in 2.9.1). It is only loaded when the vector
@@ -65,9 +57,8 @@ dependencies = [
 
     # RUNTIME, not a test tool. `archihub/api/aiservices/transport.py` is the one
     # HTTP path every LLM call goes through, and it imports httpx at module level -
-    # `create_app()` raises ModuleNotFoundError without it. It sat under
-    # [optional-dependencies].dev, so `uv sync --no-dev` produced a backend that
-    # could not start at all. Verified by blocking the import and calling create_app.
+    # `create_app()` raises ModuleNotFoundError without it, so it must not move
+    # to [optional-dependencies].dev.
     "httpx>=0.27,<0.29",
 
     # --- Auth ---
@@ -111,12 +102,8 @@ dependencies = [
     "geopandas>=1.0,<2.0",
 
     # --- AI / LLM ---
-    # Only ONE of these survived the aiservices rewrite. The legacy module used
-    # `openai`, `aisuite` and `tiktoken` plus raw httpx (and already bypassed
-    # aisuite whenever tools were involved); the rewrite has a single transport
-    # and reads model facts from each provider, so none of the three is imported
-    # anywhere in archihub/. They are in the legacy block below until app/ goes.
-    # `transformers`/`tokenizers` are not declared either: sentence-transformers
+    # No vendor SDK: aiservices has a single httpx transport and reads model
+    # facts from each provider. `transformers`/`tokenizers` are not declared: sentence-transformers
     # requires them, and re-declaring a hard transitive only creates a second
     # place for its range to drift.
     "sentence-transformers>=3.0",   # archihub/infra/vectors.py, imported lazily
@@ -131,10 +118,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     # httpx is NOT here - it is a runtime dependency (see the note above it).
-    # TestClient and the diff harness use the same installed copy.
     "pytest>=8.3,<9.0",
     "pytest-asyncio>=0.24,<2.0",
-    "deepdiff>=8.0,<9.0",          # response-body field-by-field diffing
 ]
 
 [build-system]

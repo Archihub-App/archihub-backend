@@ -3,12 +3,8 @@
 ACCESS CONTROL ON THE TWO PER-USER ROUTES IS STATED POSITIVELY, in
 ``services.may_read_tasks_of``: your own tasks, or anyone's if you are an
 administrator. An allow-rule is checkable at a glance; the equivalent written as
-exclusions is not, and a guard that refuses only one special username lets every
-other person's task list through.
-
-That is a genuine behaviour change rather than a port, and it is the correct
-direction - the frontend only ever requests the signed-in user's own tasks (or
-``automatic`` from an admin screen), so nothing legitimate depended on the gap.
+exclusions is not. The frontend only ever requests the signed-in user's own
+tasks, or ``automatic`` from an admin screen.
 """
 
 from __future__ import annotations

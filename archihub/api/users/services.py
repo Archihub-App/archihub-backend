@@ -7,21 +7,16 @@ INVARIANTS THIS MODULE ENFORCES. Both are easy to get wrong and both are
 security-relevant, so they are stated as rules rather than left implicit.
 
 1. AN AUTHORISATION HELPER ALWAYS RETURNS A REAL ``bool`` - never a response
-   object, tuple, dict or ``None``. Callers write ``if not has_role(...): deny``,
-   and a non-empty tuple is truthy, so any helper that returns a
-   response-shaped value on the "unknown user" path inverts the guard that uses
-   it. There must remain exactly ONE implementation of each of these helpers;
-   do not add a variant elsewhere in the tree.
+   object, tuple, dict or ``None``. Callers write ``if not has_role(...): deny``.
+   There must remain exactly ONE implementation of each of these helpers; do not
+   add a variant elsewhere in the tree.
 
 2. Authorisation is decided in ONE place, including the
    ``_is_valid_system_user`` allowance for scheduled-task pseudo-users. Two
    functions of the same name with different rules is how the two drift apart.
 
-CACHING IS DELIBERATELY NOT WIRED UP YET. Correctness depends on 119
-``.invalidate()``/``.invalidate_all()`` call sites across the codebase, which are
-not ported. Caching permission checks while those are missing would serve stale
-authorisation decisions - strictly worse than an uncached lookup. Restored in
-Phase 3 step 2, together with its invalidation sites.
+``has_role`` and ``has_right`` are cached; every write to the collections they
+declare invalidates the cache (see ``archihub/infra/cache.py``).
 """
 
 from __future__ import annotations
@@ -191,9 +186,7 @@ def add_request(username: str) -> None:
     Raises :class:`RateLimitError` once the quota is exhausted. That exception
     type matters: the Fernet authenticators hide every other failure behind a
     generic "Invalid or expired token", but this particular message is meant to
-    reach the caller so they understand *why* they are being refused. In the
-    legacy code that distinction relied on catch ordering plus a bare
-    ``str(e)``; here it is carried by the type.
+    reach the caller so they understand *why* they are being refused.
     """
     mongo = _mongo()
     user = mongo.get_record(
@@ -398,22 +391,11 @@ def present_profile(user: dict) -> dict:
 def get_profile(username: str, *, with_stats: bool = False) -> tuple[dict, int]:
     """The caller's own profile, without the password hash.
 
-    The existence check comes before any use of the record. The legacy handler
-    called `user.pop('password')` on the line above its own `if not user` check,
-    so an absent account raised AttributeError and surfaced as a 500 where 400
-    was documented.
+    An unknown account answers 400.
     """
-    # `requests`/`lastRequest` are projected out, matching the projection the
-    # legacy route reaches through `get_user`. The quota the profile screen
-    # shows does NOT come from here: `KeysMain.tsx`'s counter calls
-    # `UsersService.getRequests()` -> `/users/requests`, and its only read of
-    # `requests` off this response is guarded by `if (response.requests)`, so
-    # the field has always been absent and nothing renders from it.
-    #
-    # An earlier revision widened this projection to include them, on the
-    # strength of a harness diff that had been misread. It also made the route
-    # 500: `lastRequest` is a raw `datetime`, which does not survive JSON
-    # encoding. Keep the projection narrow.
+    # `requests`/`lastRequest` are projected out: the profile screen reads the
+    # quota from `/users/requests`, and `lastRequest` is a raw `datetime` that
+    # would not survive JSON encoding here. Keep the projection narrow.
     user = _mongo().get_record(
         "users",
         {"username": username},
@@ -441,8 +423,7 @@ def get_profile(username: str, *, with_stats: bool = False) -> tuple[dict, int]:
     if with_stats:
         user["stats"] = profile_stats(username)
 
-    # `{"$oid": ...}`, not a bare string: the legacy route serialises through
-    # json_util and every other endpoint returns the wrapped form.
+    # `{"$oid": ...}`, not a bare string, like every other endpoint.
     return serialise(user), 200
 
 
@@ -490,8 +471,7 @@ def set_favorite(username: str, body: dict) -> tuple[dict, int]:
         return {"msg": _("Resource not found")}, 404
 
     # Only published resources may be favourited. `.get` rather than `[...]`:
-    # collections other than `resources` have no status field, and the legacy
-    # subscript raised KeyError for them.
+    # collections other than `resources` have no status field.
     if collection == "resources" and target.get("status") != "published":
         return {"msg": _("Resource not published")}, 400
 
@@ -588,8 +568,7 @@ def get_by_id(user_id: str) -> tuple[dict, int]:
     try:
         object_id = ObjectId(user_id)
     except Exception:
-        # A malformed id is a client error, not a server fault. Legacy let
-        # InvalidId escape into the 500 handler along with its bson message.
+        # A malformed id is a client error, not a server fault.
         return {"msg": _("User not found")}, 404
 
     user = _mongo().get_record("users", {"_id": object_id}, fields=_DETAIL_PROJECTION)
@@ -605,8 +584,7 @@ def _user_management_flag(entry_id: str, fallback_index: int) -> bool:
     """Read a self-service toggle from the `user_management` settings document.
 
     Looked up by id with a positional fallback, so a reordered settings document
-    does not silently flip a feature on or off - the legacy code indexed
-    `data[0]` and `data[1]` directly.
+    does not silently flip a feature on or off.
     """
     record = _mongo().get_record("system", {"name": "user_management"})
     data = (record or {}).get("data") or []

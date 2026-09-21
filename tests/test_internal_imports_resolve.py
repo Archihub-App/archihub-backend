@@ -5,12 +5,6 @@ cycles between domains, and keeping optional subsystems out of a process that
 does not need them. The cost is that a wrong module path is not an error until
 the line runs, and a line inside a rarely-taken branch may not run for months.
 
-That is not hypothetical. `inventoryMaker._may_export` imported `type_roles`
-from `archihub.core.roles`, where it does not live (it is in
-`archihub.api.resources.hierarchy`). The whole bulk-export route 500'd with an
-`ImportError` on its first real request — past the role check, past the tests,
-straight to an operator clicking a button.
-
 This walks the source rather than the running program, so an import inside an
 `except` branch or a route nobody calls is checked exactly like any other.
 """

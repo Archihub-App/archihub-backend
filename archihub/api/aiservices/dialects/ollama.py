@@ -5,16 +5,9 @@ exists for one reason: **the native API tells you what a model can do, and the
 compatible one does not.** ``/api/tags`` lists what is pulled locally and
 ``/api/show`` reports a model's capabilities and context length directly.
 
-That is worth an adapter, because the alternative is:
-
-    _OLLAMA_VISION_FAMILIES = ("llava", "bakllava", "moondream", "minicpm-v",
-                               "qwen-vl", "qwen3-vl", "gemma3", "pixtral",
-                               "vision", "gemma4")
-
-— guessing a model's capabilities from substrings of its name. That is wrong for
-every vision model whose name does not contain one of those strings, wrong for
-any model whose name coincidentally does, and needs editing every time somebody
-publishes a new one. Ollama has known the answer all along; this asks it.
+That is worth an adapter: the alternative is guessing a model's capabilities
+from substrings of its name, which is wrong for every model the list does not
+anticipate.
 """
 
 from __future__ import annotations

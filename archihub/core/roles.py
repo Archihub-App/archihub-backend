@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 ACCESS_RIGHTS_SETTING = "access_rights"
 
 # Entry ids within the access_rights settings document, each holding the id of a
-# document in the `lists` collection. Positional fallbacks match the legacy
-# `data[0]` / `data[1]` reads for documents predating the ids.
+# document in the `lists` collection. The positional fallbacks serve documents
+# predating the ids.
 ROLES_LIST_ENTRY = "user_roles_list"
 ROLES_LIST_INDEX = 1
 ACCESS_RIGHTS_LIST_ENTRY = "access_rights_list"
@@ -126,8 +126,8 @@ def access_rights_document() -> dict:
 
     ``get_access_rights`` above is the internal view - callers inside the
     backend want the options and nothing else. The HTTP route returns the whole
-    document, which is what the legacy route returned; the two are kept apart so
-    widening one does not quietly widen the other.
+    document; the two are kept apart so widening one does not quietly widen the
+    other.
     """
     list_id = get_access_rights_id()
     if not list_id:

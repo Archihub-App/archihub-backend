@@ -1,16 +1,12 @@
 """Health and test-control routes.
 
-The Flasgger YAML docstrings become FastAPI route metadata: prose moves to the
-handler docstring (FastAPI reads it as the OpenAPI description), ``tags:`` moves
-to the decorator, and the ``responses:`` map becomes the ``responses=`` kwarg.
-The ``X-ArchiHUB-Test-Secret`` header parameter no longer needs documenting by
-hand - it is derived from the dependency's signature.
+The ``X-ArchiHUB-Test-Secret`` header parameter is documented from the
+dependency's signature.
 
 Responses are returned through explicit ``JSONResponse`` objects because these
 endpoints signal state through their status code (200 vs 503, 404 vs 403 vs 401)
-and must not be reshaped by a response model. ``response_model`` stays off
-until a route has been confirmed field-for-field, because it silently *filters*
-undeclared fields - an invisible regression.
+and must not be reshaped by a response model: ``response_model`` silently
+*filters* undeclared fields.
 """
 
 from __future__ import annotations

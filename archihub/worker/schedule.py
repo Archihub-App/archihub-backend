@@ -1,8 +1,7 @@
 """Building Celery beat entries from plugin settings.
 
-Port of ``app/celery_schedule.py``. Pure functions - no Celery app, no Flask, no
-database connection of its own - so the scheduling rules can be tested without
-any infrastructure.
+Pure functions - no Celery app, no database connection of its own - so the
+scheduling rules can be tested without any infrastructure.
 
 An administrator picks a registered Celery task and a periodicity in the
 ``scheduleSystemTasks`` settings UI; that is stored in the ``system`` collection

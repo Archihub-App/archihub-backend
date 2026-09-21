@@ -3,10 +3,10 @@
 Serving a stored file has one requirement that is easy to lose: the Range
 behaviour ``upgrade_front``'s audio and video players depend on for seeking.
 
-IT DOES, natively, in the installed version (Starlette 1.4.1): ``FileResponse``
-parses ``Range``, answers ``206 Partial Content`` with ``Content-Range`` for a
-single range, produces a ``multipart/byteranges`` body for several, and answers
-``416`` for an unsatisfiable one. So there is no custom range code here - only
+Starlette's ``FileResponse`` provides it natively: it parses ``Range``, answers
+``206 Partial Content`` with ``Content-Range`` for a single range, produces a
+``multipart/byteranges`` body for several, and answers ``416`` for an
+unsatisfiable one. So there is no custom range code here - only
 the things Starlette does *not* decide for us: which path is safe to serve,
 what the download filename should be, and when a temporary file gets cleaned up.
 
@@ -39,18 +39,16 @@ DEFAULT_MEDIA_TYPE = "application/octet-stream"
 
 
 def _flask_default(value):
-    """Render what ``json.dumps`` refuses, the way Flask's ``jsonify`` did.
+    """Render what ``json.dumps`` refuses.
 
-    Two conventions for dates exist in the legacy responses, and both are wire
-    contract:
+    Two conventions for dates are wire contract:
 
-    * a route that ran its document through ``json_util`` (``parse_result``)
-      emitted ``{"$date": ...}``. The ported services call ``serialise()`` for
-      exactly those, so the conversion happens before the encoder sees it and
-      this function is never reached.
-    * a route that returned a raw Mongo document through ``jsonify`` emitted an
-      **HTTP date** - ``"Mon, 10 Aug 2026 14:12:34 GMT"``. ``GET /users/{id}``
-      is one. That is what this reproduces.
+    * a service that calls ``serialise()`` emits ``{"$date": ...}``; the
+      conversion happens before the encoder sees it, so this function is never
+      reached for those.
+    * a route that returns a raw Mongo document emits an **HTTP date** -
+      ``"Mon, 10 Aug 2026 14:12:34 GMT"``. ``GET /users/{id}`` is one. That is what
+      this produces.
 
     So the two paths keep the shapes their callers already produce, and the
     difference is a deliberate property of which one a route uses rather than an
@@ -60,7 +58,7 @@ def _flask_default(value):
     from email.utils import format_datetime
 
     if isinstance(value, _datetime.datetime):
-        # A naive datetime is UTC, the reading Werkzeug's `http_date` applies.
+        # A naive datetime is UTC.
         if value.tzinfo is None:
             value = value.replace(tzinfo=_datetime.timezone.utc)
         return format_datetime(value, usegmt=True)
@@ -112,13 +110,11 @@ def file_response(
 ) -> Response:
     """Serve a file from disk, with Range support.
 
-    ``as_attachment`` sets ``Content-Disposition: attachment``, which is what
-    the legacy ``send_file(..., as_attachment=True)`` calls meant. Everything
-    else is served inline so the browser's media elements can play it.
+    ``as_attachment`` sets ``Content-Disposition: attachment``. Everything else
+    is served inline so the browser's media elements can play it.
 
-    ``delete_after`` removes the file once the response has been sent - the
-    replacement for Flask's ``response.call_on_close(...)``, which the fragment
-    extractors use to clean up transcoded clips. It runs as a Starlette
+    ``delete_after`` removes the file once the response has been sent; the
+    fragment extractors use it to clean up transcoded clips. It runs as a Starlette
     background task, i.e. **after** the last byte reaches the client, so a
     seeking player is not served a file that has already been deleted.
 

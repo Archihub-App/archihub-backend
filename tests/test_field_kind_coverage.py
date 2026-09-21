@@ -6,21 +6,10 @@ metadata fields. Three separate tables then consume those ids - the Elasticsearc
 mapping, the metadata validators, and `Form.tsx`'s field dispatch in the frontend
 - and each was written independently.
 
-They drifted, and nothing noticed for years. The catalogue offers **`userslit`**
-(a typo for "user list", preserved because it is the stored wire value); all
-three consumers spelled it **`userslist`**. A User list field therefore did not
-render in the cataloguing form, was never validated, and was never mapped. The
-only trace was one INFO line during a reindex.
-
-Worse than "not indexed": the index-document builder copies a field's value
-unless its kind is one of three special cases, so the value WAS sent to
-Elasticsearch, with no declared mapping and dynamic mapping left at its default.
-The cluster inferred a type from whichever document happened to carry one first,
-and that guess sticks until the next regeneration - the exact outcome
-`mapping.py`'s docstring says it exists to prevent.
-
-A test rather than a fix, because the fix is one line per table and the drift is
-what recurs.
+They can drift silently. The catalogue offers **`userslit`** (a typo for "user
+list", kept because it is the stored wire value); a consumer spelling it
+**`userslist`** would neither render, validate nor map a User list field, while
+its value still reached Elasticsearch with an inferred type.
 """
 
 from __future__ import annotations

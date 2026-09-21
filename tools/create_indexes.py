@@ -8,9 +8,8 @@ lookup by username, slug, parent or task id is a full collection scan. That is
 unnoticeable on a small instance and dominant on a real archive.
 
 The indexes are pure database state - they are not tied to the application
-version. Running this against an instance still on the Flask backend gives it
-the same speed-up immediately, with no code change and no redeploy. There is no
-reason to wait for a migration to benefit.
+version. Running this against an instance still on ArchiHUB 1.x gives it the
+same speed-up immediately, with no code change and no redeploy.
 
 USAGE
 

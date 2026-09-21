@@ -124,8 +124,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # Elasticsearch
     # ------------------------------------------------------------------
-    # Stays on the raw-HTTP client for this migration - the elasticsearch-py
-    # adoption is deferred with the 7->8 server upgrade. See decision 3.
+    # Elasticsearch is reached through a raw-HTTP client.
     elastic_domain: str = Field(default="http://localhost", validation_alias="ELASTIC_DOMAIN")
     elastic_port: str = Field(default="9200", validation_alias="ELASTIC_PORT")
     elastic_user: str = Field(default="elastic", validation_alias="ELASTIC_USER")
@@ -221,10 +220,9 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str] | str:
         """Which origins may call this backend.
 
-        ``/adminApi/*`` and ``/publicApi/*`` are always ``*`` (they are consumed
-        by other organisations' scripts, not just this repo's frontend); every
-        other path is restricted to URL_FRONTEND when it is set. This wildcard
-        is intentional - see the CORS note in CLAUDE.md before "fixing" it.
+        ``*`` unless URL_FRONTEND lists origins, in which case the list applies to
+        every route - ``/adminApi`` and ``/publicApi`` included, which other
+        organisations' scripts call. The wildcard default is intentional.
         """
         if self.url_frontend:
             return [origin.strip() for origin in self.url_frontend.split(",") if origin.strip()]
@@ -233,9 +231,7 @@ class Settings(BaseSettings):
     def mongo_uri(self) -> str:
         """Build the Mongo connection URI.
 
-        Port of ``MongoConector.getMongoURI()``, preserving its exact URI shape
-        (including the ``ssl=false`` and 300s timeout parameters) so connection
-        behaviour is unchanged.
+        Includes ``ssl=false`` and 300s socket/connect timeouts.
         """
         hosts = [host.strip() for host in self.mongo_ip_server.split(",") if host.strip()]
         if not hosts:
@@ -243,9 +239,9 @@ class Settings(BaseSettings):
 
         credentials = f"{self.mongo_user or 'admin'}:{self.mongo_password}"
         authority = ",".join(f"{host}:{self.mongo_port}" for host in hosts)
-        # socketTimeoutMS/connectTimeoutMS keep their legacy values - some
-        # queries and bulk operations here genuinely run for minutes.
-        # serverSelectionTimeoutMS is added (see the field docstring).
+        # socketTimeoutMS/connectTimeoutMS are long because some queries and
+        # bulk operations here genuinely run for minutes. serverSelectionTimeoutMS
+        # is short (see the field docstring).
         timeout = (
             "&socketTimeoutMS=300000&connectTimeoutMS=300000"
             f"&serverSelectionTimeoutMS={self.mongo_server_selection_timeout_ms}"

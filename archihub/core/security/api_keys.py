@@ -9,9 +9,7 @@ DESIGN, AND WHY IT IS THIS SHAPE
 **The server never stores anything that can be used to authenticate.** Only a
 hash of each secret is kept. A read of the database - a backup, a `mongodump`, an
 injection bug, an insider - yields nothing that can be presented to the API. This
-is the single most important property here, and it is the one the previous scheme
-did not have: there, the stored value *was* the credential, so anyone who could
-read the users collection held working keys for every user.
+is the single most important property here.
 
 **A key is shown exactly once, at creation.** It cannot be retrieved afterwards
 because the server genuinely does not have it. Losing one means issuing a new one.
@@ -61,8 +59,7 @@ PREFIX = "ahk"
 KEY_ID_BYTES = 8       # -> 16 hex characters
 SECRET_BYTES = 32      # -> 43 url-safe base64 characters
 
-# Scopes mirror the four credential types the legacy schema kept as separate
-# fields on the user document.
+# One scope per kind of API a key can reach.
 SCOPE_PUBLIC = "public"
 SCOPE_ADMIN = "admin"
 SCOPE_NODE = "node"
@@ -107,8 +104,8 @@ def format_key(key_id: str, secret: str) -> str:
 def parse_key(presented: str) -> tuple[str, str] | None:
     """Split a presented key into ``(key_id, secret)``, or None if not ours.
 
-    Returning None rather than raising is what lets the caller fall back to the
-    legacy credential scheme for values that predate this one.
+    Returning None rather than raising lets the caller fall back to the older
+    credential format for keys issued before this one.
     """
     if not presented or not presented.startswith(f"{PREFIX}_"):
         return None

@@ -1,18 +1,16 @@
 """Conversation history — a 200 that renders as "No results".
 
 `AImessaging.tsx` reads this route in a way that fails silently in four separate
-places, and an earlier revision of this port broke all four at once:
+places:
 
 * ``Array.isArray(response) ? response : []`` — an envelope is read as *empty*
 * ``item._id.$oid`` — the row is opened and deleted by that exact shape
 * ``item.messages[0].content`` — the first message is what labels the row
 * the record is named ``id`` in the request, not ``record_id``
 
-None of them produces an error. The panel shows "No results" to a user who has
-conversations, which is what was reported.
-
-The tests below assert the wire shape rather than the internals, because the
-shape is the contract and it is what drifted.
+None of them produces an error: the panel just shows "No results" to a user who
+has conversations. The tests below assert the wire shape, because the shape is
+the contract.
 """
 
 from __future__ import annotations
@@ -132,7 +130,7 @@ def test_the_record_is_named_id_in_the_request(mongo, visible):
 
 
 def test_a_record_conversation_is_not_narrowed_to_one_kind(mongo, visible):
-    """`record` means every conversation about it, as in the legacy route."""
+    """`record` means every conversation about it."""
     conversations.history({"type": "record", "id": RECORD_ID}, USER)
 
     filters, _fields, _sort = mongo.queries[0]

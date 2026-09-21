@@ -231,8 +231,7 @@ def _with_defaults(options: dict, model) -> dict:
     """Fill in what the catalogue knows and the caller did not say.
 
     Only from *reported* metadata. If nothing is known about the model's output
-    limit, none is sent and the provider applies its own default — which is the
-    correct behaviour and what the legacy hardcoded tables were standing in for.
+    limit, none is sent and the provider applies its own default.
     """
     resolved = dict(options)
     if model is not None and resolved.get("max_tokens") is None and model.max_output_tokens:

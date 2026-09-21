@@ -1,7 +1,7 @@
 """View routes.
 
-Port of ``app/api/views/routes.py``. Four authenticated routes; the two public
-ones are in ``public_router.py`` and mount before this one.
+Four authenticated routes; the two public ones are in ``public_router.py`` and
+mount before this one.
 
 Create and update are multipart, because a view carries a thumbnail image: the
 view itself travels as a JSON string in ``data``, matching the shape the
@@ -94,10 +94,7 @@ def create(
     """Create a view, optionally with its thumbnail.
 
     ``filesObj`` is not a field a client may set - the thumbnail comes from the
-    upload and nothing else. The original passed the body straight into its
-    model, which declares ``filesObj``, so a view's thumbnail could be pointed
-    at any record in the archive and then published through the unauthenticated
-    listing.
+    upload and nothing else.
     """
     try:
         body = _parse_data(data)
@@ -147,8 +144,7 @@ def delete(
 ) -> JSONResponse:
     """Delete a view and retire the thumbnail it owned.
 
-    A view that does not exist is a 404. The original deleted nothing and
-    reported success, so a stale id in the interface looked like it had worked.
+    A view that does not exist is a 404.
     """
     return _respond(services.delete(view_id, current_user.username))
 

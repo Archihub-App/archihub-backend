@@ -1,7 +1,5 @@
 """Sending mail.
 
-Port of ``app/api/email/services.py``, with the connection handled properly.
-
 The connection is a context manager with an explicit timeout. Closing it only on
 the happy path leaks the socket on any exception in between, and an unresponsive
 mail server with no timeout holds the calling thread indefinitely.

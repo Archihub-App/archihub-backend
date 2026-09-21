@@ -1,10 +1,7 @@
 """Search.
 
-The first section is the regression for , the one finding in
-this migration that was *demonstrated* against a real index rather than inferred:
-the public route let the caller choose a publication state, and every resource is
-indexed whatever its state with `accessRights` defaulting to `public`, so asking
-for drafts returned unpublished material to anyone.
+The first section pins that a public caller never chooses the publication state:
+every resource is indexed whatever its state.
 """
 
 from __future__ import annotations
@@ -107,7 +104,7 @@ def test_dangerous_query_features_are_not_enabled():
 
 
 def test_a_malformed_keyword_is_a_search_not_a_failure():
-    """A stray bracket typed into a search box was a 500."""
+    """A stray bracket typed into a search box is not a 500."""
     built = _build({"post_type": ["x"], "keyword": 'unbalanced "quote and (bracket'})
 
     assert built["query"]["bool"]["must"][0]["simple_query_string"]["lenient"] is True
@@ -125,8 +122,7 @@ def test_an_empty_keyword_adds_no_matcher():
 
 
 def test_a_caller_cannot_name_an_arbitrary_field_to_have_returned():
-    """The legacy builder appended `activeColumns` to `_source` unchecked, so a
-    caller could pull fields the content type marks restricted."""
+    """A caller cannot pull fields the content type does not declare."""
     source = query.resolve_source(
         [{"destiny": "metadata.firstLevel.secret"}, {"destiny": "metadata.firstLevel.title"}],
         declared_fields={"metadata.firstLevel.title"},
@@ -597,8 +593,8 @@ def test_a_populated_feed_parses_as_xml():
 
 
 def test_search_reports_503_when_indexing_is_off(monkeypatch):
-    """Registered always, available per request. The legacy blueprint was
-    registered conditionally, so turning indexing on needed a restart."""
+    """Registered always, available per request, so turning indexing on needs
+    no restart."""
     monkeypatch.setattr(services, "indexing_enabled", lambda: False)
 
     payload, status = services.search({"post_type": ["x"]}, None, public=True)

@@ -1,7 +1,6 @@
 """Metadata-form request models.
 
-Port of ``app/api/forms/models.py``, minus the inert UUID ``_id`` default (see
-``api/types/schemas.py`` for why that field was harmless only by accident).
+No ``_id`` field: MongoDB generates ids (see ``api/types/schemas.py``).
 
 ``fields`` is deliberately left as ``list[dict]`` rather than being modelled
 field-by-field. A form field is a small open-ended schema whose valid keys depend

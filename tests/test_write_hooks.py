@@ -2,9 +2,8 @@
 
 WHAT THIS GUARDS. Hooks are how a write fans out: creating a resource queues its
 indexing, attaching files queues their processing. Registration is process-local,
-and the process that *raises* these events is the web process. It had none of
-them - the plugin half was registered only in the Celery worker, and the core
-indexing half was not ported at all.
+and the process that *raises* these events is the web process, so both the
+plugin registrations and the core indexing ones must exist there too.
 
 Neither absence produces an error. `hooks.call()` on a name with no registrations
 returns its argument and does nothing, so the API answers 201, the operator sees
@@ -85,9 +84,8 @@ def _reachable_calls(source: str, root: str) -> set[str]:
 def test_the_app_factory_activates_plugin_settings():
     """Without this the web process mounts plugin ROUTES and no plugin HOOKS.
 
-    The legacy code got here by two complementary call sites - one gated on
-    CELERY_WORKER being set, the other on it being unset - and porting only the
-    first left automatic processing registered nowhere that raises its events.
+    Automatic processing must be registered in every process that raises its
+    events.
     """
     assert "activate_plugin_settings" in _reachable_calls(APP_FACTORY.read_text(), "create_app"), (
         "archihub/core/app_factory.py must call activate_plugin_settings(). "

@@ -1,9 +1,8 @@
 """The article editor.
 
 ``articleBody`` is the long-form narrative some content types carry alongside
-their catalogue metadata. The write path is where the interesting problems are:
-the original could be used to change fields that have nothing to do with
-articles, and in the common configuration it required no authorisation at all.
+their catalogue metadata. The write path writes only the article, and only for
+a caller the rule in ``article.may_edit`` allows.
 """
 
 from __future__ import annotations
@@ -136,11 +135,8 @@ def test_datetimes_inside_blocks_are_serialised(mongo):
 
 
 def test_a_stranger_cannot_rewrite_an_article(mongo):
-    """THE hole.
-
-    The original checked only the content type's editRoles. A type that
-    declares none - the common case, including the default seeded type - meant
-    any authenticated user could overwrite any resource's article.
+    """With no editRoles declared - the common case, including the default
+    seeded type - only the creator or a super_editor may write the article.
     """
     mongo.resource = resource()
     mongo.user = {"accessRights": []}
@@ -181,7 +177,7 @@ def test_an_admin_may_always_edit(mongo, monkeypatch):
 
 
 def test_a_declared_edit_role_is_sufficient(mongo, monkeypatch):
-    """Exactly the original's rule, kept where the original had one."""
+    """A declared editRole is required and sufficient."""
     with_roles(monkeypatch, "curator")
     mongo.resource = resource()
     mongo.user = {"accessRights": []}
@@ -201,8 +197,7 @@ def test_lacking_the_declared_edit_role_is_refused(mongo):
 
 
 def test_nobody_may_edit_what_they_cannot_read(mongo, monkeypatch):
-    """The original checked access rights on the read route and not the write
-    one, so a reserved resource's narrative was rewritable by anyone."""
+    """Nobody writes a narrative they cannot read."""
     with_roles(monkeypatch, "curator")
     mongo.resource = resource(accessRights="reserved")
     mongo.user = {"accessRights": ["public"]}
@@ -218,14 +213,8 @@ def test_nobody_may_edit_what_they_cannot_read(mongo, monkeypatch):
 
 
 def test_only_the_article_and_its_audit_fields_are_written(mongo):
-    """The other half of the same rule.
-
-    The original built its update from the whole request body and
-    ``ResourceUpdate`` accepts ``status``, ``accessRights``, ``post_type``,
-    ``parent``, ``parents``, ``metadata``, ``ident`` and ``favCount`` - and the
-    database layer writes exactly the fields that were set. So an article save
-    could publish a draft, clear its access restrictions and re-file it in the
-    tree, bypassing every check the real update route performs.
+    """An article save changes nothing else: status, access rights, content
+    type and placement change only through the resource-update route.
     """
     mongo.resource = resource(createdBy="alice")
     mongo.user = {"accessRights": []}
@@ -296,8 +285,7 @@ def test_an_article_body_that_is_not_a_list_is_rejected(mongo):
 
 
 def test_a_missing_resource_is_404_not_500(mongo):
-    """The original read ``resource['post_type']`` several lines above its own
-    existence check, so a stale id produced a 500 where 404 was documented."""
+    """A stale id is a 404."""
     mongo.resource = None
     _payload, status = article.update_article_body(VALID_ID, {"articleBody": []}, "alice")
     assert status == 404

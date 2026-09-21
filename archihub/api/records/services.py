@@ -1,20 +1,11 @@
 """Reading records.
 
-Port of the read half of ``app/api/records/services.py``. The write half - the
-upload and deduplication path - is in ``storage.py``.
+The write half - the upload and deduplication path - is in ``storage.py``.
 
-ONE GUARD, NOT EIGHT. Every route here starts from the same visibility check, so
-"does not exist" and "you may not see it" cannot collapse into one status. The
-shape to avoid is:
-
-    resp_, status = get_by_id(id, current_user)
-    if status != 200:
-        return {'msg': resp_['msg']}, 500
-
-so a **404** (no such record) and a **401** (not yours to read) both reach the
-client as **500**. The message survives, the status does not. `upgrade_front`
-branches on status, so a permission failure looked to it like a server fault.
-; the helper below returns the real status.
+ONE GUARD, NOT EIGHT. Every route here starts from the same visibility check,
+which returns the real status, so "does not exist" and "you may not see it"
+never collapse into one - and never into a 500. `upgrade_front` branches on
+status.
 """
 
 from __future__ import annotations
@@ -129,8 +120,7 @@ def load_visible(record_id: str, user: str | None) -> tuple[dict | None, tuple[d
     """``(record, error)``. Exactly one of them is not ``None``.
 
     Every route that serves a record or something derived from it starts here,
-    so the access rule is applied once and the *real* status is what comes back
-    - not the blanket 500 the original produced.
+    so the access rule is applied once and the *real* status is what comes back.
 
     ``user`` may be ``None`` for a caller acting on nobody's behalf: it holds no
     role and no access right, so it sees only records that restrict nothing,
@@ -224,10 +214,7 @@ def important_exif(metadata) -> dict:
 def _exif_name(key: str) -> str:
     """An ExifTool key without its group prefix.
 
-    Matching the whole key was the defect: every stored key is
-    ``<group>:<name>``, so an allowlist of bare names matched nothing at all and
-    the panel came back empty - a 200 with a complete record and no metadata on
-    the screen, which reads as "this scan has none".
+    Every stored key is ``<group>:<name>``, and the allowlist holds bare names.
     """
     return key.rsplit(":", 1)[-1] if isinstance(key, str) else ""
 
@@ -235,10 +222,7 @@ def _exif_name(key: str) -> str:
 def _describe_parents(parents: list) -> list[dict]:
     """Annotate each parent with its title and icon, in two queries.
 
-    The original ran one query per parent for the resource, another per parent
-    for its type icon, and a third per parent for its access rights - and
-    subscripted ``metadata.firstLevel.title`` directly, so a parent missing a
-    title took the whole record fetch down with a ``KeyError``.
+    A parent missing a title does not fail the record fetch.
 
     A dangling parent is dropped from the result. That behaviour is kept: the
     reference is stale, and rendering a breadcrumb entry that leads nowhere is
@@ -349,9 +333,8 @@ def get_by_filters(body: dict, user: str) -> tuple[list | dict, int]:
 
     _audit(user, "record_get_all", {"filters": filters})
 
-    # An empty page is a successful query with no results. The original
-    # answered 404, which made "nothing matched" indistinguishable from "the
-    # endpoint is wrong" and broke pagination past the last page.
+    # An empty page is a successful query with no results, not a 404, so
+    # paging past the last page works.
     return parse_result(records), 200
 
 
@@ -388,9 +371,8 @@ def get_by_gallery_index(body: dict, user: str) -> tuple[dict, int]:
         )
     )
 
-    # The original keyed the order map by the resource's string ids and looked
-    # it up with the record's ObjectId, so nothing ever matched and every
-    # gallery came back in Mongo's natural order rather than the curator's.
+    # The order map is keyed by string ids, so the record's ObjectId is
+    # stringified for the lookup; the gallery comes back in the curator's order.
     images.sort(key=lambda image: order_of.get(str(image["_id"]), float("inf")))
 
     if index >= len(images):
@@ -473,9 +455,7 @@ def get_fav_count(record_id: str) -> tuple[dict, int]:
 # ---------------------------------------------------------------------------
 
 #: The only fields a client may set on a record through the generic update.
-#: The original passed the caller's whole body into ``RecordUpdate``, which
-#: also declares `parent`, `parents`, `processing` and `status` - so a display
-#: rename could re-file the record or overwrite a plugin's results.
+#: A display rename cannot re-file the record or overwrite a plugin's results.
 UPDATABLE_FIELDS = ("displayName", "accessRights")
 
 

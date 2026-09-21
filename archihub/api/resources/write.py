@@ -1,9 +1,7 @@
 """Creating, updating, deleting and restoring resources.
 
-The last and largest piece of the resources domain, ported from
-``app/api/resources/services.py`` (``create``, ``update_by_id``,
-``delete_by_id``, ``restore_by_id`` and the parent/relation maintenance around
-them).
+``create``, ``update_by_id``, ``delete_by_id``, ``restore_by_id`` and the
+parent/relation maintenance around them.
 
 It assembles pieces that already exist rather than restating them:
 
@@ -14,15 +12,11 @@ It assembles pieces that already exist rather than restating them:
 
 TWO RULES ABOUT BATCHES:
 
-1. **Permission is checked for every id before anything is written.** The
-   original looped, and returned on the first refusal - having already deleted
-   or restored the ids before it. A caller who selected twelve resources and
-   lacked rights on the ninth got eight of them deleted and an error saying
-   nothing had happened.
+1. **Permission is checked for every id before anything is written**, so a
+   refusal never leaves a batch half-applied.
 
-2. **Reciprocal relation updates happen after the insert, not before.** The
-   original called ``update_relations_children`` before the resource had an id,
-   then dereferenced ``body['_id']``.
+2. **Reciprocal relation updates happen after the insert, not before**, once
+   the new resource has an id.
 """
 
 from __future__ import annotations
@@ -48,10 +42,7 @@ STATUS_DELETED = "deleted"
 #: Fields a client may set. Everything else on a resource is server-owned:
 #: ``createdBy``/``createdAt`` record who made it, ``filesObj`` is written by
 #: the file pipeline, ``favCount`` by the favourites routes, ``parents`` is
-#: derived from ``parent``. The original built its update from whatever the
-#: request contained, which is how the article route became a way to change all
-#: of them; an allowlist is the shape that does not have that failure
-#: mode.
+#: derived from ``parent``.
 CLIENT_FIELDS = (
     "post_type", "metadata", "status", "accessRights", "parent", "ident", "atlasWiki",
 )
@@ -100,9 +91,7 @@ def may_create(user: str, post_type: str, is_admin: bool) -> bool:
 def may_modify(user: str, resource: dict, is_admin: bool) -> bool:
     """Whether this caller may change or remove an existing resource.
 
-    All three gates, which the original applied in three different partial
-    combinations depending on the route: readable, the content type's edit
-    roles, and ownership.
+    All three gates: readable, the content type's edit roles, and ownership.
     """
     if is_admin:
         return True
@@ -202,8 +191,7 @@ def create(body: dict, user: str, incoming_files=None) -> tuple[dict, int]:
         # processing hook starts by comparing it against the content type the
         # operator configured, and returns without doing anything when they
         # differ - so a body that omits it matches no configuration at all and
-        # every hook exits on its first line. The legacy call passed the whole
-        # update document; these are the fields a subscriber actually reads.
+        # every hook exits on its first line. These are the fields a subscriber reads.
         _call_hook(
             "resource_files_create",
             {
@@ -368,9 +356,8 @@ def update(resource_id: str, body: dict, user: str, incoming_files=None) -> tupl
 def _surviving_files(existing: dict, deleted_ids) -> list[dict]:
     """The resource's current files, minus the ones this request removes.
 
-    De-duplicated by id. The original de-duplicated by comparing whole dicts as
-    tuples, so two entries for the same file differing only in ``order`` both
-    survived - and the viewer then showed it twice.
+    De-duplicated by id, so two entries for the same file that differ only in
+    ``order`` are one file.
     """
     removed = set(deleted_ids or [])
     kept: list[dict] = []
@@ -487,9 +474,7 @@ def _load(resource_id: str):
 def _write_path(resource_id: str, path: str, value) -> None:
     """Write one dotted path, and only that path.
 
-    The original rebuilt the entire target document and wrote it back through
-    ``ResourceUpdate``, so a reciprocal relation update rewrote every field of a
-    resource nobody had asked to change.
+    A reciprocal relation update changes nothing else on the other resource.
     """
     _mongo().update_record(
         COLLECTION,
@@ -566,10 +551,7 @@ def delete(ids, user: str) -> tuple[dict, int]:
 def _load_all_modifiable(ids, user: str, is_admin: bool):
     """Resolve every id and check permission on all of them before writing any.
 
-    THE POINT OF THIS FUNCTION. The original checked and acted in the same loop
-    and returned on the first refusal, so a caller who selected twelve resources
-    and lacked rights on the ninth got eight of them deleted and an error
-    reporting that nothing had happened.
+    A refusal on any one id refuses the whole batch before anything is written.
     """
     resolved = []
     for resource_id in ids:
@@ -613,11 +595,8 @@ def _cascade_delete(resource_id: str, user: str) -> None:
 def _detach_records(resource: dict, resource_id: str, user: str) -> None:
     """Mark the resource's files deleted where nothing else holds them.
 
-    THE ORIGINAL NEVER DID THIS. It read ``resource['files']``, but the stored
-    field is ``filesObj`` - ``files`` is not a field of the ``Resource`` model at
-    all, so the condition was always false and the call was dead code. Deleting
-    a resource left its records pointing at it, still ``uploaded``, invisible to
-    the recycle bin and to any cleanup.
+    Reads ``filesObj``. Without this, a deleted resource's records would keep
+    pointing at it, still ``uploaded``, invisible to the recycle bin.
     """
     from archihub.api.records.storage import detach_from_parent
 

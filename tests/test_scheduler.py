@@ -16,10 +16,9 @@ from archihub.worker.schedule import DYNAMIC_SCHEDULE_PREFIX
 def test_infra_imports_are_module_level_not_function_level():
     """Regression guard for a real beat startup failure.
 
-    `refresh_schedule` originally did `from archihub.infra.mongo import
-    get_mongo` inside the function. Beat calls setup_schedule() on its scheduler
-    thread during Celery's bootstrap, while other threads are still importing,
-    and that function-level import lost the race:
+    Beat calls setup_schedule() on its scheduler thread during Celery's
+    bootstrap, while other threads are still importing, so a function-level
+    import in `refresh_schedule` can lose the race:
 
         ImportError: cannot import name 'get_mongo' from partially initialized
         module 'archihub.infra.mongo' (most likely due to a circular import)

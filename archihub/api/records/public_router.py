@@ -62,9 +62,7 @@ def get_by_gallery_index(body: dict = Body(default_factory=dict)) -> JSONRespons
 def download(body: dict = Body(default_factory=dict)) -> Response:
     """Download a public record's archival master or its web derivative.
 
-    Unlike the legacy public route, this honours the instance's
-    ``files_download`` capability - an archive that has switched downloads off
-    now has them off here too.
+    Honours the instance's ``files_download`` capability.
     """
     record_id = body.get("id")
     if not record_id:

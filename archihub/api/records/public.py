@@ -148,12 +148,10 @@ def get_transcription(record_id: str, slug: str, page: int = 0) -> tuple[dict, i
 def stream(record_id: str, size: str = "large"):
     """The record's web derivative.
 
-    Served as an attachment, which is what the legacy public route did -
-    unlike its authenticated twin, which serves the same bytes inline. The
-    inconsistency is preserved rather than smoothed over: changing a
-    ``Content-Disposition`` on a public endpoint that external sites may embed
-    is a wire change, and it belongs with the coordinated frontend pass rather
-    than here. Range support is unaffected either way, so seeking still works.
+    Served as an attachment - unlike its authenticated twin, which serves the
+    same bytes inline. Changing a ``Content-Disposition`` on a public endpoint
+    that external sites may embed is a wire change, so it stays. Range support
+    is unaffected either way, so seeking still works.
     """
     record, error = load_public(record_id)
     if error is not None:
@@ -173,10 +171,8 @@ def stream(record_id: str, size: str = "large"):
 def download(record_id: str, kind: str):
     """Download a public record's master or derivative.
 
-    The ``files_download`` capability is checked here. The legacy public route
-    did not check it at all, while its authenticated twin did - so an archive
-    that had switched downloads off still served them to anonymous callers, on
-    the one surface where that matters most.
+    The ``files_download`` capability is checked here, as on the
+    authenticated route.
     """
     if not media.downloads_enabled():
         raise media.DownloadRefused(_("Files download isn't active"), 400)

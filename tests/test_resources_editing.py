@@ -1,8 +1,7 @@
 """Targeted edits: file order, granular metadata, change-post-type.
 
 The reordering rule is pure and gets tested directly. The two service functions
-around it are mostly authorisation, which is where the legacy versions each
-invented their own partial rule.
+around it are mostly authorisation.
 """
 
 from __future__ import annotations
@@ -122,8 +121,7 @@ def test_a_boolean_order_is_ignored():
 
 
 def test_a_malformed_entry_does_not_take_the_request_down():
-    """The original indexed straight into these, so one bad entry raised
-    KeyError and the raw key name became the error message."""
+    """One bad entry is skipped, not a failed request."""
     assert ids(editing.reorder([{"id": "a"}, {"no": "id"}, None], [{"bad": True}, None])) == ["a"]
 
 
@@ -163,8 +161,7 @@ def test_reordering_writes_only_the_files_and_audit_fields(mongo):
 
 
 def test_reordering_a_missing_resource_is_404_not_500(mongo):
-    """The original resolved access rights before its own existence check, and
-    that raised."""
+    """Existence is checked first."""
     _payload, status = editing.update_files_order(VALID_ID, {"files": []}, "alice")
     assert status == 404
 
@@ -175,8 +172,7 @@ def test_a_malformed_resource_id_is_404(mongo):
 
 
 def test_the_content_types_edit_roles_now_apply_to_reordering(mongo):
-    """The original checked access rights only, so a type naming exactly who may
-    edit it had that ignored on this route."""
+    """A type naming exactly who may edit it is honoured on this route."""
     mongo.resources[VALID_ID] = resource()
     mongo.user = {"accessRights": []}
     mongo.type = {"editRoles": ["curator"], "viewRoles": []}
@@ -385,7 +381,7 @@ def test_a_publisher_may_edit_a_published_resource(granular, monkeypatch):
 
 
 def test_an_unreadable_resource_cannot_be_edited(granular):
-    """The original omitted access rights on this path, as on every write path."""
+    """Access rights apply on this path, as on every write path."""
     granular.resources[PARENT_A]["accessRights"] = "reserved"
     granular.user = {"accessRights": ["public"]}
 
@@ -396,7 +392,7 @@ def test_an_unreadable_resource_cannot_be_edited(granular):
 
 
 def test_a_resource_predating_created_by_does_not_500(granular):
-    """Documents without the field exist; the original subscripted it."""
+    """Documents without the field exist."""
     del granular.resources[PARENT_A]["createdBy"]
 
     _payload, status = editing.update_resource_granular(
@@ -406,8 +402,8 @@ def test_a_resource_predating_created_by_does_not_500(granular):
 
 
 def test_a_hook_returning_a_non_string_is_a_400_not_a_500(granular, monkeypatch):
-    """A `resource_pre_update` hook can rewrite the body; the original let the
-    text validator raise, and the outer handler turned that into a 500."""
+    """A `resource_pre_update` hook can rewrite the body; a wrong type is a
+    validation failure, not a 500."""
     monkeypatch.setattr(
         editing,
         "_call_hook",
@@ -592,8 +588,7 @@ def test_fields_the_new_form_does_not_declare_are_kept_and_reported(reclassify, 
 
 
 def test_change_post_type_on_a_missing_resource_is_404(mongo):
-    """The original raised a KeyError for a missing id and 500'd for a
-    nonexistent resource; both are documented in its own Swagger."""
+    """A missing id is a 400 and a nonexistent resource a 404."""
     _payload, status = editing.change_post_type({"id": VALID_ID, "post_type": "x"}, "alice")
     assert status == 404
 

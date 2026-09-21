@@ -6,11 +6,8 @@ runs the source tree at ``/app``, so installing the package as well would put a
 second copy of ``archihub`` in site-packages and leave which one wins to import
 order. Only the dependencies are wanted.
 
-WHY NOT ``requirements.txt``. That file is generated at build time by a script
-that merges every plugin's requirements into it and then rewrites the tracked
-copy in place - so the manifest that governed an install was a build artefact
-nobody could read back. ``pyproject.toml`` is the declaration; this turns it
-into something pip accepts, and nothing rewrites it.
+``pyproject.toml`` is the declaration; this turns it into something pip accepts,
+and nothing rewrites it. Plugins' requirements are installed separately.
 
 The dev extra is deliberately excluded. A runtime import satisfied only by a
 dev dependency is a backend that cannot start from a production install, which

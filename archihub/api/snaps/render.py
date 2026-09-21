@@ -21,8 +21,8 @@ from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
 
-#: Quality for the cropped JPEG. The original's value, kept: these are working
-#: references, not preservation copies.
+#: Quality for the cropped JPEG: these are working references, not
+#: preservation copies.
 CROP_QUALITY = 70
 
 #: Derivative a document page is cropped from. Fixed, not client-selected -

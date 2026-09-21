@@ -42,12 +42,13 @@ def _sources(root: pathlib.Path = PACKAGE_ROOT):
 FINDING_ID = re.compile(r"(?<![A-Za-z0-9_])[SFP]\d{1,2}(?![A-Za-z0-9_])")
 
 #: Phrases that introduce a comparison with an implementation the reader cannot
-#: open. "Legacy" is the load-bearing one; the rest are how it gets rephrased.
+#: open.
 ARCHAEOLOGY = re.compile(
     r"(?<![A-Za-z0-9_])("
     r"legacy|the original|the old (?:code|version|implementation|route|helper)|"
     r"this port|the port(?:'s)?|earlier revision|used to (?:be|do|return|check)|"
-    r"before the (?:port|rewrite)|the previous (?:code|version|implementation)"
+    r"before the (?:port|rewrite)|the previous (?:code|version|implementation)|"
+    r"port of|ported (?:from|verbatim)|flask|werkzeug|jsonify|blueprint|cutover"
     r")(?![A-Za-z0-9_])",
     re.IGNORECASE,
 )
@@ -114,14 +115,6 @@ def test_no_comment_names_a_finding_identifier():
     )
 
 
-#: A RATCHET, not a target. Every module docstring has been rewritten; what is
-#: left is function-level and inline prose, being worked through file by file.
-#: The number may only go DOWN - lower it as you clear files, and never raise it
-#: to make a new comment pass. The destination is zero, at which point this
-#: becomes a plain `assert not problems` like its neighbour above.
-ARCHAEOLOGY_BUDGET = 338
-
-
 def test_no_module_docstring_compares_against_an_implementation_that_is_gone():
     """The docstring is what a reader meets first, so it is held to zero.
 
@@ -142,18 +135,22 @@ def test_no_module_docstring_compares_against_an_implementation_that_is_gone():
     )
 
 
-def test_archaeology_in_comments_only_decreases():
+def test_no_comment_compares_against_an_implementation_that_is_gone():
+    """State the invariant the code enforces, which stays true and readable."""
     problems = _hits(ARCHAEOLOGY)
 
-    assert len(problems) <= ARCHAEOLOGY_BUDGET, (
-        f"{len(problems)} comment(s) describe a previous implementation, over the "
-        f"budget of {ARCHAEOLOGY_BUDGET}. Write the invariant the code enforces, "
-        "which stays true and stays readable:\n" + "\n".join(problems)
+    assert not problems, (
+        f"{len(problems)} comment(s) describe a previous implementation. Write the "
+        "invariant the code enforces instead:\n" + "\n".join(problems)
     )
-    assert len(problems) == ARCHAEOLOGY_BUDGET or len(problems) < ARCHAEOLOGY_BUDGET, "unreachable"
 
-    if len(problems) < ARCHAEOLOGY_BUDGET:
-        raise AssertionError(
-            f"Good news, and the budget is now stale: {len(problems)} left, budget "
-            f"{ARCHAEOLOGY_BUDGET}. Lower ARCHAEOLOGY_BUDGET to {len(problems)}."
-        )
+
+def test_no_test_or_tool_compares_against_an_implementation_that_is_gone():
+    """The tests and tools are published too, so the same rule holds there."""
+    roots = (TESTS_ROOT, TOOLS_ROOT, *sorted(PACKAGE_ROOT.glob("plugins/*/tests")))
+    problems = _hits(ARCHAEOLOGY, roots)
+
+    assert not problems, (
+        f"{len(problems)} comment(s) describe a previous implementation. Write the "
+        "invariant the code enforces instead:\n" + "\n".join(problems)
+    )

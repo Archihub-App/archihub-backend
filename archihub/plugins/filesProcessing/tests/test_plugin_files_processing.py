@@ -45,9 +45,7 @@ def mongo(monkeypatch):
         ("text/plain", "a/b/notes.txt", "document"),
         ("application/msword", "a/b/report.doc", "document"),
         ("text/csv", "a/b/data.csv", "csv"),
-        # THE BUG: `len(filename.split('.')) != 2` returned None for any name
-        # with more than one dot, so this went to the document branch and
-        # LibreOffice was asked to convert a CSV.
+        # More than one dot in the name is still a CSV.
         ("text/plain", "a/b/interview.final.csv", "csv"),
         ("application/vnd.ms-excel", "a/b/book.xls", "spreadsheet"),
         # A JPEG under a name `mimetypes` knows only from a system mime.types
@@ -195,9 +193,8 @@ def test_a_raw_image_is_derived_from_decoded_sensor_data(tmp_path, monkeypatch):
 
 
 def test_hook_order_is_stored_as_a_number(mongo):
-    """The legacy save wrote the STRING '0'; the hook bus sorts registrations,
-    and sorting a mix of strings and numbers raises TypeError when the hook
-    fires - taking the upload with it."""
+    """The hook bus sorts registrations, and sorting a mix of strings and numbers
+    raises TypeError when the hook fires - taking the upload with it."""
     plugin = build("filesProcessing")
 
     plugin.save_settings({"types_activation": [{"type": "carpeta", "order": "3"}]})

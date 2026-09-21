@@ -1,4 +1,4 @@
-"""The admin maintenance routes that queue the Phase 4 tasks.
+"""The admin maintenance routes that queue background tasks.
 
 These are thin, and what matters about them is the three things a thin route can
 still get wrong: refusing when the feature is switched off, saying so when the
@@ -98,8 +98,8 @@ def test_indexing_resources_with_indexing_switched_off_is_a_400(monkeypatch, rec
 
 
 def test_geometry_routes_are_not_gated_on_resource_indexing(monkeypatch, recorded):
-    """Deliberate, and it matches the legacy routes: the explore map's boundary
-    layer is drawn from Elasticsearch whether or not resource search is on."""
+    """Deliberate: the explore map's boundary layer is drawn from Elasticsearch
+    whether or not resource search is on."""
     _indexing(monkeypatch, enabled=False)
     monkeypatch.setattr(
         "archihub.worker.tasks.geometries.index_shapes.delay", lambda *a: Queued()
@@ -130,9 +130,7 @@ def test_a_queued_job_is_recorded_under_the_requesting_user(monkeypatch, recorde
 
 
 def test_a_broker_that_is_down_answers_503_rather_than_success(monkeypatch, recorded):
-    """The original had no such branch: `.delay()` raised, the surrounding
-    `except Exception` turned it into `{'msg': str(e)}, 500`, and an operator
-    saw a connection error where a queue outage was the actual news."""
+    """A queue outage is reported as one, not as a connection error."""
     _indexing(monkeypatch)
 
     def explode(*args):
@@ -186,8 +184,8 @@ def test_regenerating_passes_the_built_mapping_to_the_task(monkeypatch, recorded
 
 
 def test_only_the_two_known_directories_can_be_emptied():
-    """The value reaches a filesystem path. The legacy routes took no argument
-    precisely because there was nothing safe to pass."""
+    """The value would reach a filesystem path, so there is nothing safe to
+    pass."""
     from archihub.api.resources import files
 
     for rejected in ("../../originals", "userfiles", "", "."):
@@ -196,8 +194,7 @@ def test_only_the_two_known_directories_can_be_emptied():
 
 
 def test_emptying_removes_files_but_not_subdirectories(monkeypatch, tmp_path):
-    """The legacy version called os.remove on every entry, which raised on the
-    first subdirectory and left the rest in place, reported as a 500."""
+    """A subdirectory does not stop the clean-up."""
     from archihub.api.resources import files
 
     web = tmp_path / "web"

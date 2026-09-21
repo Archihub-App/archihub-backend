@@ -1,9 +1,7 @@
 """MongoDB index definitions.
 
-Before this work the database had no indexes beyond the automatic `_id` one, so
-every lookup by username, slug, parent or task id was a full collection scan.
-These tests guard the definitions themselves; the query-plan improvement
-(COLLSCAN -> IXSCAN) was verified against a live instance.
+Without them every lookup by username, slug, parent or task id is a full
+collection scan. These tests guard the definitions themselves.
 """
 
 from __future__ import annotations
@@ -115,11 +113,8 @@ def test_sorted_listings_use_compound_indexes_in_esr_order():
 
 
 def test_lists_slug_is_sparse_and_not_unique():
-    """Regression guard for a spec that did not match the data.
-
-    `lists` documents carry no `slug` field, so a unique index treats every one
-    of them as the same null value and fails to build. Confirmed against a live
-    instance when this index was the only one of 23 to fail.
+    """`lists` documents carry no `slug` field, so a unique index would treat
+    every one of them as the same null value and fail to build.
     """
     spec = next(s for s in INDEXES if s.name == "ix_lists_slug")
     assert spec.unique is False

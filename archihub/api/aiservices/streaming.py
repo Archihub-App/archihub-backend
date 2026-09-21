@@ -15,13 +15,9 @@ checked rather than assumed: `normalizeEscapedSSEDelimiters` matches the literal
 two-character sequences ``\\n\\n`` and ``\\r\\n\\r\\n``. A correct stream
 contains neither, so the regexes do not match, the text passes through
 untouched, and `nextSeparatorIndex` finds the real ``\\n\\n`` it is already
-looking for. Both framings therefore work today, and only the correct one works
+looking for. Both framings therefore work with it, and only the correct one works
 with anything else — an `EventSource`, a proxy that understands SSE, or any
 client written against the spec.
-
-(CLAUDE.md previously said to preserve the exact bytes. That guidance was
-written before the frontend parser was read closely; it is superseded here, and
-the note has been updated.)
 """
 
 from __future__ import annotations
@@ -70,8 +66,7 @@ def event_stream(chunks: Iterator, *, on_error=None) -> Iterator[str]:
     **An error mid-stream is delivered as an event, not a dropped connection.**
     The status line has already been sent by then, so there is no status code
     left to signal with; a client that sees the socket close cannot tell a
-    finished answer from a failed one. The legacy code simply let the exception
-    escape the generator.
+    finished answer from a failed one.
     """
     from archihub.api.aiservices import errors
 

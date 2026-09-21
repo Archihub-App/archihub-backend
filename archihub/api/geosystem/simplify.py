@@ -1,15 +1,10 @@
 """Visvalingam/weighted-area simplification.
 
-Ported verbatim from ``app/api/geosystem/utils.py`` - it is pure geometry with
-no framework coupling, and reimplementing a working line-simplification
-algorithm during a framework port would be inviting a subtly different map.
-
 The weighting is Mapshaper's: points at sharp angles are underweighted so a
 spike survives simplification where a gentle bend of the same triangle area does
 not. ``weight_factor=0.7`` is Mapshaper's default.
 
-What is NOT ported verbatim is the caching around it - see ``simplify`` in this
-module.
+The results are cached - see ``simplify`` in this module.
 """
 
 from __future__ import annotations
@@ -247,10 +242,9 @@ def _count_geom_vertices(geom):
 # ---------------------------------------------------------------------------
 
 #: Retention is rounded to this many decimals before it reaches the cache key.
-#: The original took the client's float verbatim and wrote one cache file per
-#: distinct value, on an **unauthenticated** route - so a caller could fill the
-#: temporal volume by walking `0.100001, 0.100002, ...`. Quantising bounds the
-#: key space to a hundred entries per shape set; sweeping bounds it in time.
+#: The route is **unauthenticated**, so a client float must not become one
+#: cache file per distinct value. Quantising bounds the key space to a hundred
+#: entries per shape set; sweeping bounds it in time.
 #:
 RETENTION_DECIMALS = 2
 MIN_RETENTION = 0.01
@@ -290,7 +284,7 @@ def sweep_stale_cache(directory) -> int:
     """Drop simplified geometry nobody has asked for in a week.
 
     It is derivable from the shapes collection at any time, so keeping it is a
-    cache decision. The original never removed anything.
+    cache decision.
     """
     import time
     from pathlib import Path
@@ -361,7 +355,7 @@ def simplify(feature_collection: dict, retention) -> dict:
                 simplified = simplified.buffer(0)
                 feature["geometry"] = mapping(simplified)
         except Exception:
-            # Simplification broke the geometry - keep the original rather than
+            # Simplification broke the geometry - keep the unsimplified shape rather than
             # returning something that will not draw.
             logger.info("Simplification produced an invalid geometry; keeping the original")
             feature["geometry"] = mapping(original)

@@ -1,4 +1,4 @@
-"""``ArchiPlugin`` — the base every ported plugin builds on.
+"""``ArchiPlugin`` — the base every plugin builds on.
 
 COMPOSITION, NOT AN ``APIRouter`` SUBCLASS, AND THAT IS WHAT MAKES THE
 AUTHORISATION RULE ENFORCEABLE
@@ -9,13 +9,9 @@ routes can be ordinary functions with ordinary dependencies.
 
 **A role requirement on a plugin route is a DEPENDENCY.** It is resolved before
 the handler body runs, so there is no return value for a handler to inspect,
-forget to inspect, or drop. ``require_roles`` below is the only way a ported
-plugin states one, and two guards hold that shape: a test walks every plugin
-route's dependency list, and an AST scan asserts no handler calls a role check
-itself. The scan exists because a *call* is the shape that fails — a check whose
-refusal is returned rather than raised reads exactly like a guard, is indented
-as though it guards what follows, and protects nothing. The same reasoning
-applies to field validation, which is likewise declared rather than called.
+forget to inspect, or drop. ``require_roles`` below is the only way a plugin
+states one, and two guards hold that shape: a test walks every plugin route's
+dependency list, and an AST scan asserts no handler calls a role check itself.
 
 WHAT ELSE THIS CLASS OWNS
 
@@ -49,8 +45,7 @@ from archihub.core.security.jwt import (
 
 logger = logging.getLogger(__name__)
 
-#: Keys whose string values are shown to a user and so get translated. Same set
-#: as the legacy ``_translate_display_node``.
+#: Keys whose string values are shown to a user and so get translated.
 TRANSLATABLE_KEYS = frozenset({"name", "label", "title", "text", "description", "placeholder"})
 
 SETTINGS_ROLES = ("admin", "processing")
@@ -87,12 +82,9 @@ def translate_display(value: Any, parent_key: str | None = None) -> Any:
 class ArchiPlugin:
     """One plugin: metadata, settings, and an ``APIRouter``.
 
-    Composition rather than ``APIRouter`` subclassing. The legacy class *was* a
-    Blueprint, which is why route registration had to happen inside methods
-    (``add_routes``, ``get_settings``) that closed over ``self``. Holding a
-    router instead means a plugin's routes are ordinary module-level functions
-    with ordinary dependencies, which is what makes them testable and what makes
-    the role dependency above possible at all.
+    Composition rather than ``APIRouter`` subclassing: holding a router means a
+    plugin's routes are ordinary functions with ordinary dependencies, which is
+    what makes them testable and what makes the role dependency above possible.
     """
 
     #: Set by each plugin package.
@@ -120,9 +112,8 @@ class ArchiPlugin:
         """The settings tree with its display strings translated.
 
         Deep-copied first: the tree is a module-level constant in the plugin
-        package, and the legacy code mutated it in place at several points
-        (`resp['settings'][1]['fields'] = [...]`), so without the copy the
-        second request would see the first request's values.
+        package, and a request that filled it in place would leak its values into
+        the next one.
         """
         return translate_display(copy.deepcopy(self.settings))
 
@@ -145,9 +136,7 @@ class ArchiPlugin:
     def get_plugin_settings(self) -> dict:
         """This plugin's saved settings, or ``{}``.
 
-        Always a dict. The legacy version indexed a record it had not checked
-        for existence (``if 'plugins_settings' not in settings``), so an
-        instance with no `active_plugins` document raised ``TypeError``.
+        Always a dict, including on an instance with no `active_plugins` document.
         """
         from archihub.infra.mongo import get_mongo
 
@@ -162,10 +151,8 @@ class ArchiPlugin:
         """Replace this plugin's saved settings.
 
         Writes ONE key by dotted path rather than reading the whole
-        `plugins_settings` map and writing it back. The legacy version did the
-        read-modify-write, so two administrators saving different plugins'
-        settings at the same time silently discarded one of them — and it also
-        fed the record's own ``_id`` back into the update model.
+        `plugins_settings` map and writing it back, so two administrators saving
+        different plugins' settings at the same time cannot discard each other's.
         """
         from archihub.infra.mongo import get_mongo
 
@@ -184,11 +171,7 @@ class ArchiPlugin:
     def validate_settings_fields(self, body: dict, group: str) -> str | None:
         """Check a submitted body against a settings group's declarations.
 
-        Returns the error message, or ``None`` when it passes. **Returning a
-        message rather than a response tuple is deliberate**: the legacy shape
-        was a `(payload, status)` tuple that all six of its callers dropped on the
-        floor, so required fields were never actually required. A caller here has to do
-        something with a string.
+        Returns the error message, or ``None`` when it passes.
         """
         if group == "bulk" and not body.get("records") and not body.get("post_type"):
             # A bulk group is selected EITHER by an explicit record list or by a
@@ -239,8 +222,7 @@ class ArchiPlugin:
         """Pick one group out of a settings tree.
 
         ``all`` is the whole tree, ``settings`` the main group, anything else the
-        group named ``settings_<kind>``. An unknown name is a 404: the legacy
-        code raised ``KeyError`` and returned it as a 500 carrying the key name.
+        group named ``settings_<kind>``. An unknown name is a 404.
         """
         if kind == "all":
             return settings, 200
@@ -333,9 +315,8 @@ class ArchiPlugin:
             """Save this plugin's settings.
 
             The body is `multipart/form-data` with a JSON string in `data`,
-            which is what the settings screen sends — see the note in
-            ``upgrade_front``'s CLAUDE.md about never setting `Content-Type`
-            manually alongside a `FormData` body.
+            which is what the settings screen sends. A client must not set
+            `Content-Type` itself alongside a `FormData` body, or the boundary is lost.
             """
             try:
                 parsed = json.loads(data)
@@ -358,8 +339,7 @@ def queue(task, task_name: str, user: str, result_type: str, *args, params: dict
     """Dispatch a plugin task and record it against the user.
 
     Raises ``BrokerUnavailable`` if it cannot be queued, so a route answers 503
-    rather than 201 with a task id that will never resolve. Every legacy plugin
-    route returned 201 unconditionally.
+    rather than 201 with a task id that will never resolve.
     """
     from archihub.api.tasks.services import add_task
 

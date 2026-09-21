@@ -91,13 +91,10 @@ def derive_web_versions(record: dict) -> bool:
     A **core** domain reaching for a plugin capability, which is worth being
     explicit about. A view's thumbnail is not optional decoration: the image is
     uploaded through the view form and is unrenderable until something turns it
-    into `_medium.jpg`. The legacy views service imported
-    ``app.plugins.filesProcessing`` directly for exactly this, which ran the
-    plugin's code whether or not it was active.
-
-    Going through the registry keeps that following activation, and gives an
-    instance with ``filesProcessing`` switched off a refusal naming what to turn
-    on rather than an ImportError.
+    into `_medium.jpg`. Going through the registry keeps that following
+    activation - a direct import would run the plugin's code whether or not it
+    was active - and gives an instance with ``filesProcessing`` switched off a
+    refusal naming what to turn on rather than an ImportError.
     """
     processor = get(
         IMAGE_DERIVATIVES, needed_by="the view thumbnail", provider_hint="filesProcessing"

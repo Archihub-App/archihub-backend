@@ -1,9 +1,8 @@
 """Saved views.
 
 Two of the six routes are unauthenticated, and that is what shapes the tests.
-The thumbnail section is the regression for : `filesObj` was
-client-settable and the thumbnail it named was base64-encoded into a public
-response, with no check on the record it pointed at.
+The thumbnail section pins that a public response only ever carries the
+thumbnail of a record attached to that view.
 """
 
 from __future__ import annotations
@@ -138,9 +137,8 @@ def test_a_views_own_thumbnail_is_served_inline(mongo, media_root):
 
 
 def test_a_record_not_attached_to_the_view_is_never_served(mongo, media_root):
-    """`filesObj` used to be client-settable and the thumbnail it named was
-    base64-encoded into `GET /views`, which is unauthenticated - so pointing a
-    view at any record published that image.
+    """`GET /views` is unauthenticated, so the thumbnail it serves must be a
+    record attached to that view.
     """
     mongo.records[FOREIGN_RECORD] = image_record(FOREIGN_RECORD, parent_id="another-thing")
 
@@ -380,7 +378,7 @@ def test_deleting_a_view_retires_its_thumbnail(mongo, monkeypatch):
 
 
 def test_deleting_a_view_that_does_not_exist_is_a_404(mongo):
-    """The original deleted nothing and reported success."""
+    """A stale id is reported, not answered with a success."""
     payload, status = services.delete(VIEW_ID, "alice")
 
     assert status == 404
@@ -419,7 +417,7 @@ def types(monkeypatch):
 
 
 def test_an_unknown_slug_is_a_404_not_a_500(mongo, types):
-    """The original read the view's fields before checking it had found one."""
+    """An unknown slug is a 404."""
     payload, status = services.get_view_info("nonexistent")
 
     assert status == 404
@@ -437,7 +435,7 @@ def test_view_info_describes_its_content_types(mongo, types):
 
 
 def test_a_view_naming_a_deleted_content_type_still_renders(mongo, types):
-    """The original subscripted the lookup and took the whole screen down."""
+    """A dangling reference does not take the screen down."""
     mongo.by_slug["photographs"] = view(visible=["foto", "removed"])
 
     payload, status = services.get_view_info("photographs")
@@ -447,7 +445,7 @@ def test_a_view_naming_a_deleted_content_type_still_renders(mongo, types):
 
 
 def test_file_counts_exclude_restricted_material(mongo, types):
-    """PUBLIC route. The original counted everything with no filter at all."""
+    """PUBLIC route, so it counts public material only."""
     mongo.by_slug["photographs"] = view()
     captured = []
 

@@ -1,7 +1,7 @@
 """Snap routes.
 
-Port of ``app/api/snaps/routes.py``. Three authenticated routes; the public
-mirror is in ``public_router.py`` and mounts before this one.
+Three authenticated routes; the public mirror is in ``public_router.py`` and
+mounts before this one.
 
 The two checks a snap route makes are separate and both required: the snap
 belongs to the caller (``services.load_own``), **and** the record it points at
@@ -57,9 +57,7 @@ def create(
 ) -> JSONResponse:
     """Save a snap of a record.
 
-    The record must be one the caller can see. The original checked nothing at
-    all here and relied on the read path to catch it, which meant any user could
-    store a snap - and the record's filename - for anything in the archive.
+    The record must be one the caller can see.
 
     The stored coordinates are validated now rather than at render time: a snap
     is read back later, by other code, sometimes on another user's screen.

@@ -1,8 +1,7 @@
 """The public resource mirror, and the shared file/presentation machinery.
 
-The bulk download is where the weight is:  (the archive
-path was built from the request, a file write to wherever the caller pointed it)
-and that files the caller cannot see are excluded from the archive.
+The bulk download is where the weight is: no request value reaches the archive
+path, and files the caller cannot see are excluded from the archive.
 """
 
 from __future__ import annotations
@@ -237,10 +236,7 @@ def test_counting_images_reports_how_many(mongo):
     "kind", ["../../../../../../tmp/pwned", "../../evil", "/etc/passwd", "", "zip"]
 )
 def test_a_download_kind_outside_the_allowlist_is_refused(mongo, media_root, kind):
-    """The archive path was ``os.path.join(WEB_FILES_PATH, 'zipfiles', user + '-' +
-    body['id'] + '-' + body['type'] + '.zip')``, so this was a file write to
-    wherever the caller pointed it - verified resolving to ``/tmp/evil.zip`` -
-    and the public route reached it unauthenticated.
+    """The requested kind indexes a fixed map; it never becomes part of a path.
     """
     with pytest.raises(files.DownloadRefused) as exc:
         files.bulk_download(resource(), kind, "alice")
@@ -257,7 +253,7 @@ def test_the_archive_name_holds_no_client_string(mongo):
 
 
 def test_the_archive_name_changes_when_the_contents_change(mongo):
-    """The original cached on a fixed name and served the stale archive forever."""
+    """A fixed name would serve a stale archive forever."""
     first = files.archive_name(RESOURCE_ID, [{"_id": ObjectId(OPEN_FILE)}], "original")
     second = files.archive_name(
         RESOURCE_ID, [{"_id": ObjectId(OPEN_FILE)}, {"_id": ObjectId(RESERVED_FILE)}], "original"
@@ -281,9 +277,8 @@ def _place(media_root, name):
 
 
 def test_an_archive_excludes_files_the_caller_may_not_see(mongo, media_root):
-    """The original kept restricted records in the list, only blanking the display
-    name, and then wrote them into the archive by ``filepath`` - so a public
-    bulk download shipped reserved files under a placeholder name.
+    """A restricted record is left out of a public bulk download, not included
+    under a placeholder name.
     """
     second_open = "6a70b833497d4440325c94c3"
     for name in ("open.pdf", "also-open.pdf", "secret.pdf"):
@@ -345,7 +340,7 @@ def test_a_resource_whose_files_are_all_restricted_is_a_404(mongo, media_root):
 
 
 def test_downloads_disabled_refuses_the_public_route_too(mongo, media_root, monkeypatch):
-    """The legacy public route omitted the capability check entirely."""
+    """The public route applies the capability check too."""
     monkeypatch.setattr("archihub.api.records.media.downloads_enabled", lambda: False)
     mongo.records[OPEN_FILE] = record(OPEN_FILE, "one.pdf")
 
@@ -388,9 +383,7 @@ def test_a_draft_is_not_public(mongo):
 
 
 def test_a_restricted_type_is_omitted_from_a_listing_not_refused(mongo, monkeypatch):
-    """The original answered 401 for the whole request if any type was restricted.
-
-    One restricted type in a saved view blanked the entire public browse page.
+    """One restricted type in a saved view must not blank the public browse page.
     """
     monkeypatch.setattr(
         "archihub.api.resources.hierarchy.type_roles",
@@ -412,7 +405,7 @@ def test_a_listing_of_only_restricted_types_is_empty_not_an_error(mongo, monkeyp
 
 @pytest.mark.parametrize("view", [None, "", "nonsense", "TREE"])
 def test_an_unrecognised_tree_view_is_a_400_not_an_empty_500(mongo, view):
-    """The original had no `else` and returned None, which Flask could not render."""
+    """Any other value is a 400."""
     payload, status = public.get_tree({"view": view} if view is not None else {})
 
     assert status == 400
@@ -528,8 +521,7 @@ def test_an_author_field_is_rendered_as_a_plain_name(mongo, monkeypatch):
 
 
 def test_a_repeater_row_missing_a_subfield_does_not_raise(mongo, monkeypatch):
-    """The original subscripted the subfield directly, so a row saved before the
-    subfield was added to the form raised KeyError on read."""
+    """A row saved before the subfield was added to the form is still readable."""
     monkeypatch.setattr(
         "archihub.api.types.services.get_metadata",
         lambda slug: form(
@@ -568,7 +560,7 @@ def test_a_relation_to_a_deleted_resource_is_dropped_not_raised(mongo, monkeypat
 
 
 def test_a_dangling_ancestor_keeps_its_entry_without_a_name(mongo):
-    """The original subscripted a lookup it never checked and raised TypeError."""
+    """A dangling reference does not fail the read."""
     described = presentation.describe_parents([{"id": "000000000000000000000000"}])
 
     assert described == [{"id": "000000000000000000000000"}]

@@ -1,19 +1,16 @@
 """Content-type business logic.
 
-SCOPE: the five CRUD operations behind ``GET/POST /types`` and
-``GET/PUT/DELETE /types/{slug}``, plus the cross-domain helpers other modules
-import (``get_metadata``, ``get_icon``, ``is_hierarchical``, ``add_resource``,
-``get_count``). The two aggregation endpoints - ``POST /types/moreinfo`` and the
-public ``POST /types/info`` - are NOT ported yet; they pull in the resources
-aggregation pipeline and land with that domain.
+SCOPE: the CRUD operations behind ``GET/POST /types`` and
+``GET/PUT/DELETE /types/{slug}``, the statistics behind ``POST /types/moreinfo``,
+and the cross-domain helpers other modules import (``get_metadata``,
+``get_icon``, ``is_hierarchical``, ``add_resource``, ``get_count``).
 
 RETURN CONVENTION: ``(payload, status_code)`` tuples, which the router renders.
 A few helpers deviate and say so in their own docstrings, because callers probe
 their return shape.
 
-CACHING is deliberately off here (see the note in ``api/users/services.py``).
-These lookups are cheap to cache and hard to invalidate correctly, and a stale
-content type is a stale authorisation decision.
+These lookups are not cached: a stale content type is a stale authorisation
+decision.
 """
 
 from __future__ import annotations
@@ -330,7 +327,6 @@ def get_form_by_slug(slug: str):
         if not form:
             return {"msg": _("Form not found")}, 404
 
-        # Field types come from the forms domain, which is not ported yet.
         # Degrade to an unannotated form rather than failing: the annotation only
         # adds a `plugin` marker used for rendering.
         fields_types: list = []
@@ -411,11 +407,9 @@ def add_resource(post_type_slug: str, increment: int = 1):
 
 
 # ---------------------------------------------------------------------------
-# Wiring to not-yet-ported domains
+# Other domains
 # ---------------------------------------------------------------------------
-# These keep the types domain independently portable. Each degrades to a no-op
-# with a log line rather than failing, and is replaced by a direct import as its
-# domain lands.
+# Each degrades to a no-op with a log line rather than failing.
 
 
 def _register_log(user: str, action_key: str, metadata: dict) -> None:
@@ -449,9 +443,8 @@ def _get_access_rights_id():
 def invalidate_cache() -> None:
     """Invalidation point for the cached lookups in this module.
 
-    Caching is off (see the module docstring), so there is nothing to invalidate
-    and this is a no-op. It is called from every site that would need it, so
-    turning caching on is a change in one place rather than an audit of many.
+    A no-op while the lookups are not cached. It is called from every site that
+    would need it, so caching them is a change in one place.
     """
     logger.debug("types cache invalidation requested (caching not yet enabled)")
 

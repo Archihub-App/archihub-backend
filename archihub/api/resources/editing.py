@@ -1,7 +1,7 @@
 """Targeted edits to an existing resource.
 
 Three services that change part of a resource without going through the full
-create/update path, ported from ``app/api/resources/services.py``:
+create/update path:
 
 * :func:`update_files_order`     - reorder the files attached to a resource
 * :func:`update_granular`        - set one text field across a file's parents
@@ -10,7 +10,6 @@ create/update path, ported from ``app/api/resources/services.py``:
 They are grouped here because they share a shape the main write path does not:
 each touches a single named field, so none of them needs the metadata
 validation, parent validation or file handling that ``create``/``update`` do.
-That is also what makes them portable ahead of ``records``.
 
 AUTHORISATION IS ASSEMBLED FROM NAMED PIECES IN ``access.py``, never invented
 per route. Each of these three states which combination it applies and why.
@@ -75,8 +74,7 @@ def update_files_order(resource_id: str, body: dict, user: str) -> tuple[dict, i
     order and is renumbered from zero so the stored sequence stays dense.
 
     Authorisation is the caller's read access plus the content type's
-    ``editRoles``. The original checked access rights only - so a type that
-    named exactly who may edit it had that ignored on this route. Ownership is
+    ``editRoles``. Ownership is
     deliberately *not* required: reordering someone else's files is ordinary
     editorial work, and the route is already restricted to editors.
     """
@@ -91,9 +89,7 @@ def update_files_order(resource_id: str, body: dict, user: str) -> tuple[dict, i
         {"_id": object_id},
         fields={"filesObj": 1, "accessRights": 1, "parents": 1, "post_type": 1},
     )
-    # Before anything is read off it. The original resolved access rights first,
-    # which raised for a missing resource and produced a 500 where 404 was
-    # documented.
+    # Before anything is read off it.
     if not resource:
         return {"msg": _("Resource does not exist")}, 404
 
@@ -123,10 +119,8 @@ def reorder(files: list[dict], moves: list[dict]) -> list[dict]:
 
     Pure, so the ordering rule can be reasoned about without a database.
 
-    Entries in either list that carry no usable ``id`` are skipped rather than
-    subscripted - the original indexed straight into them, so one malformed
-    entry took the whole request down with a ``KeyError`` whose raw text became
-    the error message.
+    Entries in either list that carry no usable ``id`` are skipped, so one
+    malformed entry cannot fail the whole request.
     """
     ordered = sorted(
         (dict(f) for f in files if isinstance(f, dict) and f.get("id")),
@@ -239,11 +233,10 @@ def update_resource_granular(
     route that takes a dotted path from the request body - so keep the schema
     lookup ahead of the write if this is ever refactored.
 
-    Authorisation is the strictest of the three rules in this module, and it is
-    the original's: ownership (creator, ``super_editor`` or admin), *and* the
-    content type's ``editRoles``, *and* the publisher role if the resource is
-    already published. Access rights are added on top - the original omitted
-    them here, as it did on every write path.
+    Authorisation is the strictest of the three rules in this module: read
+    access, ownership (creator, ``super_editor`` or admin), *and* the content
+    type's ``editRoles``, *and* the publisher role if the resource is already
+    published.
     """
     from archihub.api.resources.validation import get_value_by_path, set_value_by_path
     from archihub.api.types.services import get_metadata
@@ -300,9 +293,8 @@ def update_resource_granular(
 
     final_value = get_value_by_path(body, metadata_path)
     if not isinstance(final_value, str):
-        # A `resource_pre_update` hook can rewrite the body. The original ran
-        # the text validator here and let it raise, which the outer handler
-        # turned into a 500 - a validation failure reported as a server fault.
+        # A `resource_pre_update` hook can rewrite the body, so the type is
+        # checked again and reported as a validation failure.
         return {"msg": _("The field {label} must be of type string", label=declared.get("label") or metadata_path)}, 400
 
     update = {
@@ -372,17 +364,11 @@ def _undeclared_fields(metadata: dict, target_form: dict | None) -> list[str]:
 def change_post_type(body: dict, user: str) -> tuple[dict, int]:
     """Move a resource to a different content type.
 
-    The legacy service did nothing: it checked the caller's edit roles over the
-    resource's *current* type and returned ``{'msg': 'Post type changed'}``
-    without writing anything. This implements it.
-
     FOUR GATES, and each one exists because reclassifying is not a rename:
 
     1. **Rights over both types.** The caller must be able to modify the
        resource as it stands *and* be entitled to create in the target type -
        they are taking it out of one editorial domain and putting it in another.
-       Checking only the current type, as the legacy code started to, would let
-       someone move a resource into a type they have no business filling.
     2. **The target type must exist**, and be a type, not a form slug.
     3. **The hierarchy must still be legal afterwards.** Content types declare a
        ``parentType`` allowlist; a resource's parents must accept its new type,

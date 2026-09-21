@@ -148,9 +148,8 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     the same request produced. It also has no duration.
 
     A request that raises is logged too, with the status the client will actually
-    receive, and the exception re-raised for the handlers above. A failure that
-    left no trace in the access log was the legacy behaviour and made "the screen
-    was blank at 14:03" unanswerable.
+    receive, and the exception re-raised for the handlers above, so "the screen
+    was blank at 14:03" can be answered from the access log.
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:

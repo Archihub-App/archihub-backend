@@ -1,22 +1,9 @@
 """Controlled-vocabulary business logic.
 
-Lists are addressed **by id**, confirmed with the maintainer. ``get_by_slug`` is
-therefore NOT ported: `lists` documents carry no ``slug`` field at all (verified
-against a live database - the create path never writes one), so that function
-could never match anything, and it then subscripted its ``None`` result before
-its own existence check. It is dead code and is deleted rather than reproduced.
+Lists are addressed **by id**; `lists` documents carry no ``slug``.
 
-Error responses are the part worth stating, because the obvious shapes here are
-unusable:
-
-``get_by_id`` returned its errors as ``({'msg': ...}, 404)`` - a tuple - to a
-route that tested ``if 'msg' in resp``. Membership in a tuple is not key lookup,
-so the test was always False and the route fell through to
-``return jsonify(resp), 200``: an **HTTP 200 whose body is the JSON array
-``[{"msg": ...}, 404]``**. `ListsService.getList` treats any 200 as success and
-hands that array to the component expecting ``{name, description, options}``.
-Returning a real 404 is what the frontend already knows how to handle - it
-rejects every non-200 - so this is a fix in the direction the client expects.
+Errors are real ``(payload, status)`` responses - a 404 for an unknown list - so
+the frontend's ``!response.ok`` check sees them as errors.
 """
 
 from __future__ import annotations
@@ -48,9 +35,7 @@ def parse_result(result):
 def _to_object_id(value: str) -> ObjectId | None:
     """Parse an id, returning None when it is not a valid ObjectId.
 
-    The legacy code called ``ObjectId(id)`` directly on a path parameter, so a
-    malformed id raised ``InvalidId`` and surfaced as a 500 carrying the bson
-    error text. A bad id in the URL is a client error, not a server fault.
+    A bad id in the URL is a client error, not a server fault.
     """
     try:
         return ObjectId(value)
@@ -62,8 +47,8 @@ def _load_options(option_ids: list[str]) -> list[dict]:
     """Resolve option ids to ``{id, term}``, preserving the list's own order.
 
     Order is significant - it is the order the options are presented in - and
-    MongoDB does not return ``$in`` results in the order of the argument, which
-    is why the legacy code walked the id list rather than the query result.
+    MongoDB does not return ``$in`` results in the order of the argument, so the
+    result is re-ordered by the id list.
     """
     object_ids = [oid for oid in (_to_object_id(str(i)) for i in option_ids) if oid]
     if not object_ids:
@@ -99,7 +84,7 @@ def get_by_id(list_id: str) -> tuple[dict, int]:
     """One list with its options resolved and ordered.
 
     Success payload is exactly ``{name, description, options: [{id, term}]}``,
-    matching the legacy shape the frontend consumes.
+    the shape the frontend consumes.
     """
     object_id = _to_object_id(list_id)
     if object_id is None:
@@ -107,9 +92,7 @@ def get_by_id(list_id: str) -> tuple[dict, int]:
 
     try:
         record = _mongo().get_record(COLLECTION, {"_id": object_id})
-        # The existence check comes FIRST here. The legacy version subscripted
-        # the result on the two lines above its own `if not lista` check, so an
-        # unknown id raised TypeError and was reported as a 500.
+        # The existence check comes first.
         if not record:
             return {"msg": _("List not found")}, 404
 
@@ -179,9 +162,7 @@ def update_by_id(list_id: str, body: dict, user: str) -> tuple[dict, int]:
     membership both come from the request.
 
     A patch that does NOT include ``options`` updates the remaining fields and
-    leaves the options alone. The legacy version wrapped its whole body in
-    ``if 'options' in body:`` and so returned ``None`` - a broken response - for
-    any patch that only renamed a list.
+    leaves the options alone.
     """
     object_id = _to_object_id(list_id)
     if object_id is None:
@@ -240,17 +221,13 @@ def delete_by_id(list_id: str, user: str) -> tuple[dict, int]:
         mongo = _mongo()
         existing = mongo.get_record(COLLECTION, {"_id": object_id})
         if not existing:
-            # Legacy returned a hardcoded, untranslated Spanish string here
-            # ('Listado no existe') while every sibling path used the translated
-            # _('List not found'). Unified.
             return {"msg": _("List not found")}, 404
 
         mongo.delete_record(COLLECTION, {"_id": object_id})
         _register_log(
             user,
             "list_delete",
-            # str() on the id: legacy passed the raw ObjectId, which is not
-            # JSON-serialisable and would break the audit record.
+            # str() on the id: a raw ObjectId would break the audit record.
             {"list": {"name": existing.get("name"), "id": str(existing["_id"])}},
         )
         return {"msg": _("List deleted successfully")}, 200

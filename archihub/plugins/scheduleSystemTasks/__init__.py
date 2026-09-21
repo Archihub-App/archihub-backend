@@ -1,22 +1,14 @@
 """scheduleSystemTasks — periodic execution of registered Celery tasks.
 
-Port of ``app/plugins/scheduleSystemTasks/__init__.py``. First of the five,
-deliberately: it has no routes of its own, so it exercises exactly the shared
-machinery — metadata, settings storage, the auto-added routes and the role
-dependency — and nothing else.
-
-WHAT IT DOES. An administrator picks a task from the list of everything the
-workers have registered, chooses a periodicity, and the beat scheduler turns
-that into a schedule (``archihub/worker/schedule.py``, already ported). The
-plugin itself only stores the choice; it declares the ``scheduler`` capability,
+An administrator picks a task from the list of everything the workers have
+registered, chooses a periodicity, and the beat scheduler turns that into a
+schedule (``archihub/worker/schedule.py``). The plugin itself only stores the
+choice; it declares the ``scheduler`` capability,
 which is how the schedule builder knows to read its settings.
 
 THIS PLUGIN'S ROLE CHECKS CARRY MORE WEIGHT THAN MOST. Its settings ARE a task
-scheduler: writing them makes the workers run something, repeatedly, forever. A
-role check whose result is computed and then dropped would leave that open to
-**any authenticated account** — a transcriber, a read-only researcher. Here the
-role is a dependency on the route, resolved before the handler body runs, so
-there is no return value available to ignore.
+scheduler: writing them makes the workers run something, repeatedly, forever.
+The role is a dependency on the route, resolved before the handler body runs.
 """
 
 from __future__ import annotations
@@ -61,10 +53,7 @@ class ScheduleSystemTasks(ArchiPlugin):
     def save_settings(self, data: dict):
         """Validate the schedule before storing it.
 
-        Every row is checked and the FIRST failure refuses the whole save. The
-        legacy version validated too — it just did it after a role check whose
-        refusal it dropped, so the validation was the only thing standing
-        between any authenticated user and the scheduler.
+        Every row is checked and the FIRST failure refuses the whole save.
         """
         rows = data.get("schedule_tasks")
         if rows is None:
@@ -113,9 +102,7 @@ class ScheduleSystemTasks(ArchiPlugin):
 def registered_task_names() -> list[str]:
     """Every task name the running workers report, sorted and de-duplicated.
 
-    ``[]`` when no worker answers. The legacy code reached the broker through
-    Flask's ``current_app.control.inspect()``; the standalone Celery app makes
-    that a plain import.
+    ``[]`` when no worker answers.
 
     An unreachable broker returns an empty list rather than raising: the
     settings screen must still open, showing an empty picker, instead of a 500
@@ -141,9 +128,8 @@ def registered_task_names() -> list[str]:
 def _find_group(settings: dict, group_id: str) -> dict | None:
     """The settings entry with this id.
 
-    BY ID, NOT BY POSITION. The legacy code wrote `resp['settings'][1]['fields']`,
-    so inserting an entry above it in `plugin_info` silently filled in the wrong
-    one — and inserting two moved the write past the end of the list.
+    BY ID, NOT BY POSITION, so adding an entry to `plugin_info` cannot make the
+    picker fill in the wrong one.
     """
     for entry in settings.get("settings") or []:
         if isinstance(entry, dict) and entry.get("id") == group_id:

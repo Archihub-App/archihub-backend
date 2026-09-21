@@ -4,17 +4,11 @@ The Celery app is a module of its own, so anything that needs the task queue can
 import it without booting the web application. Hanging it off the web app object
 instead makes the queue unreachable except through a full application start.
 
-Here it is a standalone module that imports no web framework at all. That is
-what lets ``scheduleSystemTasks`` ask the broker which tasks are registered
-(``celery_app.control.inspect()``) without Flask's ``current_app`` indirection,
-and what lets a worker start without constructing an ASGI app.
-
-The other thing that disappears is ``FlaskTask``, whose ``__call__`` wrapped
-*every* task execution in ``with app.app_context():``. All 39 task bodies relied
-on that implicitly - none of them acquired a context themselves - and it is what
-made ``flask_babel`` work inside a worker. Since the replacement translator
-(``archihub.core.i18n``) resolves an instance-wide setting straight from Mongo,
-task bodies need no ambient context at all; they just call ``_()``.
+It imports no web framework at all. That is what lets ``scheduleSystemTasks``
+ask the broker which tasks are registered (``celery_app.control.inspect()``),
+and what lets a worker start without constructing an ASGI app. Task bodies need
+no ambient context: the translator (``archihub.core.i18n``) resolves the
+instance-wide locale straight from Mongo, so they just call ``_()``.
 
 Run with::
 
@@ -40,9 +34,7 @@ celery_app.conf.update(
     broker_url=settings.celery_broker_url,
     result_backend=settings.celery_broker_url,
     broker_connection_retry_on_startup=True,
-    # Legacy set task_ignore_result=True globally and then overrode it with
-    # ignore_result=False on essentially every task. Results are polled through
-    # AsyncResult by app/api/tasks, so keep them.
+    # Results are polled through AsyncResult by the tasks API, so keep them.
     task_ignore_result=False,
     enable_utc=False,
     timezone="America/Bogota",
@@ -55,7 +47,7 @@ celery_app.conf.update(
     beat_max_loop_interval=settings.celery_beat_refresh_interval,
 )
 
-# macOS cannot fork the default pool safely; legacy applied the same fallback.
+# macOS cannot fork the default pool safely.
 _worker_pool = settings.celery_worker_pool or ("solo" if sys.platform == "darwin" else None)
 if _worker_pool:
     celery_app.conf.worker_pool = _worker_pool
@@ -173,8 +165,7 @@ def _load_plugins() -> None:
 
         # The worker fires `resource_update` too - `plugins.framework.data`
         # does it whenever a plugin task writes back to a resource - so it needs
-        # the indexing registrations as much as the web process does. The legacy
-        # `create_app` ran in both, which is what gave the worker them.
+        # the indexing registrations as much as the web process does.
         from archihub.api.search.write_hooks import register_index_hooks
 
         register_index_hooks()

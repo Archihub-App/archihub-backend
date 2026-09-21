@@ -9,11 +9,8 @@ TWO SHAPES THAT LOOK WRONG AND ARE NOT, both confirmed against
 * **Retrieving a form is a POST**, not a GET (``POST /forms/{slug}``).
   ``FormService.getForm`` sends ``method: "POST"`` and expects 200. Changing it
   to GET would break the client.
-* **Delete returns 204**, where the types domain returns 200.
-  ``FormService.deleteForm`` requires exactly 204 and reads no body - which is
-  the correct pairing, since HTTP forbids content on a 204. (The types domain
-  returning 200 while ``TypesService.deleteType`` expects 204 is the outlier,
-  and is a known pre-existing mismatch.)
+* **Delete returns 200 with a message**, like every delete in this API;
+  ``FormService.deleteForm`` checks ``response.ok``.
 
 Route order matters: ``/forms/fields`` is declared before ``/forms/{slug}`` so
 the literal path wins. They differ by method today, but relying on that would

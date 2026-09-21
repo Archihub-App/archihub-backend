@@ -3,10 +3,6 @@
 ArchiHUB's content model is runtime-defined - an administrator builds a form and
 a content type points at it - so this is the code that decides what a resource
 is allowed to contain. Nothing else does.
-
-The original was 285 lines of nine near-identical blocks, which is how several
-of these defects survived: they are present in some copies of the block and not
-others.
 """
 
 from __future__ import annotations
@@ -77,9 +73,8 @@ def mongo(monkeypatch):
 
 
 def test_a_path_through_a_non_mapping_returns_none_rather_than_raising():
-    """The original tested ``key in value`` without checking it was a mapping,
-    so a path descending through a string raised TypeError - which the caller
-    caught and reported as a validation error against the user's field."""
+    """A path descending through a string resolves to nothing; it is never
+    reported as an error in the user's field."""
     assert validation.get_value_by_path({"a": "text"}, "a.b.c") is None
     assert validation.get_value_by_path({"a": [1, 2]}, "a.b") is None
 
@@ -184,9 +179,8 @@ def test_a_text_field_rejects_a_non_string():
 
 
 def test_the_specific_message_survives():
-    """Every legacy validator wrapped its own message in a generic
-    'Error while validating the field X', so none of the specific text those
-    functions carefully produced ever reached a user."""
+    """The validator's own message reaches the user, not a generic
+    'Error while validating the field X'."""
     metadata = form(field("metadata.x", "number"))
     _body, errors = validation.validate_fields(published(metadata={"x": "abc"}), metadata)
     assert "must be a number" in errors["metadata.x"]
@@ -307,8 +301,7 @@ def test_a_relation_to_a_missing_resource_is_refused(mongo):
 
 
 def test_a_malformed_id_is_a_validation_error_not_a_bson_message():
-    """The original handed client input straight to ObjectId(), and the raw
-    InvalidId text became the message shown to the user."""
+    """A malformed id gets a translated message, never bson's InvalidId text."""
     metadata = form(field("metadata.x", "relation", relation_type="foto"))
     _body, errors = validation.validate_fields(
         published(metadata={"x": [{"id": "not-an-object-id"}]}), metadata
@@ -336,11 +329,10 @@ def test_a_hidden_conditional_field_is_cleared():
 
 
 def test_a_condition_on_the_first_field_of_the_form_is_honoured():
-    """THE bug.
+    """``conditionField`` is an index, and index 0 is a real condition.
 
-    ``conditionField`` is an index, and index 0 is falsy - so the original's
-    ``if hasCondition`` guard treated a field conditioned on the *first* field
-    of the form as unconditional, and kept a value the user had hidden.
+    A field conditioned on the *first* field of the form must not keep a value
+    the user has hidden.
     """
     metadata = form(
         field("metadata.toggle", "checkbox"),
@@ -433,8 +425,7 @@ def test_a_repeater_validates_each_row():
 
 
 def test_two_rows_with_the_same_problem_are_reported_separately():
-    """The original keyed errors by subfield name alone, so several bad rows
-    collapsed into one message and the user could not tell which to fix."""
+    """Errors are keyed by row, so the user can tell which one to fix."""
     metadata = form(repeater({"destiny": "n", "type": "number", "name": "Number"}))
     _body, errors = validation.validate_fields(
         published(metadata={"rows": [{"n": "a"}, {"n": "b"}]}), metadata
@@ -450,9 +441,7 @@ def test_a_missing_required_subfield_is_reported_on_publish():
 
 
 def test_a_missing_subfield_key_does_not_raise():
-    """The original subscripted ``v[subfield['destiny']]`` directly, so a row
-    saved before the subfield existed raised KeyError, and the raw key name
-    became the error message."""
+    """A row saved before the subfield existed is still readable."""
     metadata = form(repeater({"destiny": "n", "type": "text", "name": "Name"}))
     _body, errors = validation.validate_fields(published(metadata={"rows": [{}]}), metadata)
     assert errors == {}
@@ -469,8 +458,7 @@ def test_a_repeater_row_date_is_parsed_in_place():
 
 
 def test_validating_a_repeater_does_not_mutate_the_form_definition():
-    """The original wrote ``subfield['label'] = subfield['name']`` into the
-    shared, cached content-type definition on every save."""
+    """The shared, cached content-type definition is never written to."""
     subfield = {"destiny": "n", "type": "text", "name": "Name"}
     metadata = form(repeater(subfield))
 
@@ -530,8 +518,7 @@ def test_a_configured_access_right_is_accepted(monkeypatch):
 
 
 def test_a_failing_plugin_hook_does_not_take_the_save_down(monkeypatch):
-    """The original let the exception surface as that field's error message,
-    so a broken plugin looked to the user like bad data in their own form."""
+    """A broken plugin must not look to the user like bad data in their own form."""
 
     class Exploding:
         def call(self, *args, **kwargs):

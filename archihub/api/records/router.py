@@ -1,7 +1,7 @@
 """Record routes.
 
-Port of ``app/api/records/routes.py``. Records are the files themselves: the
-scans, recordings and documents that resources describe.
+Records are the files themselves: the scans, recordings and documents that
+resources describe.
 
 Every route that touches a record starts from ``services.load_visible``, which
 returns the record or the *real* refusal - a 404 for one that does not exist, a
@@ -78,9 +78,8 @@ def get_all(
     reduced to a field allowlist. **The safety of that choice rests on this
     role check**; see `services.reject_dangerous_operators`.
 
-    An empty result is 200 with an empty list. The legacy 404 made "nothing
-    matched" indistinguishable from a wrong endpoint, and broke pagination past
-    the last page.
+    An empty result is 200 with an empty list, not a 404, so paging past the
+    last page works.
     """
     return _respond(services.get_by_filters(body, current_user.username))
 
@@ -288,9 +287,8 @@ def get_stream_by_id(
     fetch and seek within. The archival master is never served here.
 
     ``start_ms``/``end_ms`` cut a fragment out of an audio or video recording.
-    The names say milliseconds and the values are **seconds** - the legacy route
-    passed them to ffmpeg's ``-ss``/``-t``, and its own Swagger documents them
-    as seconds. Kept because they are the wire contract.
+    The names say milliseconds and the values are **seconds** (they go to
+    ffmpeg's ``-ss``/``-t``). Kept because they are the wire contract.
     """
     record, error = services.load_visible(record_id, current_user.username)
     if error is not None:
@@ -422,11 +420,9 @@ def get_blocks(
     ``record_id`` may also be a **resource** id, in which case ``page`` is read
     as a gallery index and the record at that position is used - this is how the
     gallery viewer asks for the blocks of the image it is showing. The record
-    lookup is tried first and the gallery interpretation only on a miss, which
-    is the original's behaviour.
+    lookup is tried first and the gallery interpretation only on a miss.
 
-    The original answered 500 for a missing ``page``/``block``/``slug``; these
-    are malformed requests and answer 400.
+    A missing ``page``/``block``/``slug`` is a malformed request and answers 400.
     """
     # Spelled out rather than built from a loop variable: these three are
     # existing msgids in the translation catalogue, and a parameterised
@@ -613,8 +609,7 @@ def _edit_transcription(operation, record_id: str, body: dict, current_user: Cur
     """Shared preamble for the three transcription writes.
 
     Visibility first, then the per-record editing right. Stated once so the
-    three routes cannot drift apart - which is how the originals ended up each
-    checking a slightly different subset.
+    three routes cannot drift apart.
     """
     _record, error = services.load_visible(record_id, current_user.username)
     if error is not None:

@@ -1,37 +1,19 @@
 """massiveUpdater — import a spreadsheet back into the catalogue.
 
-Port of ``app/plugins/massiveUpdater/__init__.py``. The counterpart to
-``inventoryMaker``: an archivist exports a sheet, edits it, and uploads it here.
+The counterpart to ``inventoryMaker``: an archivist exports a sheet, edits it,
+and uploads it here. The *file format* — the sheet names, the two-row header
+convention, the column meanings — is the contract with spreadsheets already in
+people's hands, so it does not change.
 
-FOUR THINGS THIS IMPORTER MUST GET RIGHT, each of which fails on a whole
-spreadsheet rather than on one row:
-
-* **Any sheet with a `parent` column killed the whole import.** Line 305 called
-  ``get_value_by_path(row['parent'])`` — one argument to a two-argument function.
-  The call is not inside the per-field ``try``, so the ``TypeError`` propagated
-  out of the task and every row was lost, including the ones already applied.
-* **A content type could never be created, only updated.** The lookup result was
-  immediately overwritten by the row's own values (``type = {...}``), so the
-  ``if type == None`` branch below was unreachable.
-* **Only the last metadata standard in a sheet was ever imported.** The loop body
-  assigned ``form`` and nothing else; every statement that used it sat *outside*
-  the loop.
-* **A form's existence was checked against the wrong collection** —
-  ``mongodb.get_record('post_types', {'slug': form['slug']})``.
-* **The `overwrite` checkbox did nothing.** It was read from the request, passed
-  into the task signature, and never referenced in the body. It is honoured here:
-  see ``BLANK_CLEARS``.
-
-Reproducing those would mean shipping a feature that does not work. What is
-preserved exactly is the *file format* — the sheet names, the two-row header
-convention, the column meanings — because that is the contract with the
-spreadsheets already in people's hands.
+Every row of every sheet is imported: content types can be created as well as
+updated, every metadata standard in a sheet is written, a ``parent`` column is
+resolved per row, and the ``overwrite`` checkbox is honoured (see
+``BLANK_CLEARS``). One bad row is reported and skipped; it never ends the import.
 
 VALIDATION GOES THROUGH THE SAME PATH A FORM SUBMISSION DOES. Each row is
 assembled and handed to ``resources.write``/``plugins.framework.data``, which
-apply the content type's own rules. Validating field by field and then writing
-with ``update_record`` directly bypasses the resource write path, so an import
-could set fields a person editing the same resource could not.
+apply the content type's own rules, so an import cannot set fields a person
+editing the same resource could not.
 """
 
 from __future__ import annotations
@@ -62,11 +44,11 @@ TASK_UPDATE = "massiveUpdater.update_inventory"
 ALLOWED_EXTENSIONS = {"xlsx"}
 
 #: Sheet name -> importer. The first one present in the workbook decides what
-#: the file is, matching the original's precedence.
+#: the file is.
 SHEET_ORDER = ("Tipo", "Estandar", "Listado", "Recursos")
 
 #: Rows an import may contain. A spreadsheet is an unbounded input that turns
-#: into unbounded database writes; the original had no limit at all.
+#: into unbounded database writes.
 MAX_ROWS = 20000
 
 #: A module constant rather than an inline literal, because an implicitly
@@ -126,10 +108,8 @@ class MassiveUpdater(ArchiPlugin):
             if not files:
                 return json_response({"msg": _("No file was uploaded")}, 400)
 
-            # EVERY file is checked before ANY is stored. The original validated
-            # and queued inside one loop, so a request whose second file was a
-            # `.exe` had already stored and queued the first, then answered 400 —
-            # leaving a job running that the caller was told had not started.
+            # EVERY file is checked before ANY is stored, so a refused request
+            # never leaves a job running that the caller was told had not started.
             for upload in files:
                 if not filestore.is_allowed(upload.filename or "", ALLOWED_EXTENSIONS):
                     return json_response({"msg": _("File type not allowed")}, 400)
@@ -191,9 +171,7 @@ class MassiveUpdater(ArchiPlugin):
 def update_task(path: str, overwrite: bool, user: str) -> str:
     """Import a spreadsheet and write a report of what happened.
 
-    The uploaded file is removed whether the import succeeds or not — the
-    original's ``os.remove`` was the last statement of the happy path, so every
-    failed import left its spreadsheet in the temporal volume permanently.
+    The uploaded file is removed whether the import succeeds or not.
     """
     from archihub.core import files as filestore
     from archihub.plugins.inventoryMaker import export
@@ -210,8 +188,7 @@ def update_task(path: str, overwrite: bool, user: str) -> str:
         filestore.remove_quietly(path)
 
     directory = export.user_export_directory(user)
-    # The report goes beside the inventories, which is where the download route
-    # looks and where the original wrote it.
+    # The report goes beside the inventories, which is where the download route looks.
     filename = export.write_workbook(
         directory, {"Errores": errors or [{}], "Reporte": applied or [{}]}
     )
@@ -295,9 +272,6 @@ def _import_resources(frame, user: str, overwrite: bool, applied: list, errors: 
                     fields={"_id": 1, "post_type": 1, "status": 1},
                 )
                 if not existing:
-                    # The original read `resource['status']` BEFORE its own
-                    # `if resource == None` check, so a missing resource was a
-                    # TypeError rather than the reported error below it.
                     errors.append({"index": index, "id": resource_id, "error": "Resource not found"})
                     continue
                 post_type = existing["post_type"]
@@ -347,7 +321,7 @@ def _import_resources(frame, user: str, overwrite: bool, applied: list, errors: 
 _UNRESOLVED = object()
 
 #: When the operator ticks "blank clears content", an empty cell writes an empty
-#: value instead of being skipped. This is the checkbox the original ignored.
+#: value instead of being skipped.
 BLANK_CLEARS = "overwrite"
 
 
@@ -356,7 +330,7 @@ def _resource_update(row, fields: list[dict], post_type: str, overwrite: bool, e
 
     Values are converted, not validated — ``validate_fields`` downstream applies
     the content type's own rules, so this does not carry a second, divergent
-    copy of them (which is what the original had).
+    copy of them.
     """
     from archihub.api.resources.validation import set_value_by_path
 
@@ -419,9 +393,7 @@ def _resolve_options(field: dict, value, errors: list, index) -> list | None:
     """Vocabulary terms (or ids) to option ids.
 
     A term that is not in the list is an error on that row, and the row keeps
-    whatever it had — the original appended the error and then `continue`d the
-    *inner* loop, so the remaining terms were silently dropped and the field was
-    written with a partial list.
+    whatever it had rather than being written with a partial list.
     """
     import re
 
@@ -457,9 +429,8 @@ def _resolve_options(field: dict, value, errors: list, index) -> list | None:
 def _geocode(text: str) -> list[float] | None:
     """``[lng, lat]`` for a place name, via ArcGIS's public geocoder.
 
-    Timeouts added: the original's two ``requests.get`` calls had none, so an
-    unresponsive geocoder held a Celery worker per row. Still fire-and-forget on
-    failure — a row that cannot be geocoded is reported, not fatal.
+    Both requests carry a timeout, so an unresponsive geocoder cannot hold a
+    Celery worker. A row that cannot be geocoded is reported, not fatal.
     """
     import requests
 
@@ -496,9 +467,7 @@ def _resolve_parent(row, user: str):
     """The parent named in a row, if any.
 
     ``None`` when no parent was given, ``_UNRESOLVED`` when one was given and
-    could not be found. The original called ``get_value_by_path`` with a single
-    argument here, which is a ``TypeError`` — outside the per-field try, so it
-    aborted the entire import.
+    could not be found.
     """
     named = _cell(row, "parent")
     if not named:
@@ -518,9 +487,7 @@ def _resolve_parent(row, user: str):
     if not resource:
         return _UNRESOLVED
 
-    # The caller must be able to see the parent they are filing under. The
-    # original called `get_by_id(..., user)` and checked its status, which did
-    # apply this - it is preserved rather than dropped in the rewrite.
+    # The caller must be able to see the parent they are filing under.
     if not may_view_resource(str(resource["_id"]), user):
         return _UNRESOLVED
 
@@ -559,8 +526,6 @@ def _import_types(frame, user: str, applied: list, errors: list) -> None:
                 )
                 expected = 200
             else:
-                # Reachable at last: the original overwrote its lookup result
-                # with the row, so this branch could never run.
                 payload, status = types_services.create(body, user)
                 expected = 201
 
@@ -575,9 +540,7 @@ def _import_types(frame, user: str, applied: list, errors: list) -> None:
 def _import_forms(frame, fields_frame, user: str, applied: list, errors: list) -> None:
     """Create or update metadata standards.
 
-    EVERY row is imported. The original's loop body assigned ``form`` and
-    nothing else; the statements that used it sat outside the loop, so only the
-    last row of a multi-standard sheet was ever written.
+    Every row is imported, not only the last.
     """
     from archihub.api.forms import services as forms_services
 
@@ -601,9 +564,7 @@ def _import_forms(frame, fields_frame, user: str, applied: list, errors: list) -
                 "fields": fields,
             }
 
-            # Looked up in `forms`, not `post_types`. The original checked the
-            # wrong collection, so a standard whose slug matched no content type
-            # was "created" every time and one that did was never created at all.
+            # A metadata standard is looked up in `forms`, not `post_types`.
             existing = _mongo().get_record("forms", {"slug": str(slug)}) if slug else None
             if existing:
                 payload, status = forms_services.update_by_slug(str(slug), body, user)

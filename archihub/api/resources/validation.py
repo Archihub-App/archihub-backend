@@ -1,9 +1,5 @@
 """Metadata validation for the resource write path.
 
-Port of ``validate_fields``/``validate_files`` from
-``app/api/resources/services.py:919`` and the field validators they call in
-``app/api/system/services.py:282``.
-
 WHAT THIS IS. ArchiHUB's content model is defined at runtime: an administrator
 builds a Form, a content type points at it, and the fields it declares are what
 a resource of that type may carry. Nothing about that is expressible as a static
@@ -38,8 +34,7 @@ logger = logging.getLogger(__name__)
 NON_VALUE_TYPES = frozenset({"file", "separator"})
 
 #: Placed in a field whose condition is not met, per type. Types absent from
-#: this mapping keep whatever they were sent - matching the original, which
-#: applied condition-clearing to exactly these nine.
+#: this mapping keep whatever they were sent.
 CLEARED_WHEN_HIDDEN: dict[str, object] = {
     "text": "",
     "text-area": "",
@@ -74,10 +69,8 @@ def _mongo():
 def get_value_by_path(document, path: str):
     """Read a dotted path, or ``None`` if any segment is missing.
 
-    The original tested ``key in value`` without first checking that ``value``
-    is a mapping, so a path descending through a string or a list raised
-    ``TypeError`` - which the caller caught and reported as a validation error
-    against the field, blaming the user's data for a traversal mistake.
+    A path descending through a string or a list resolves to nothing rather
+    than raising, so a traversal is never reported as an error in the user's data.
     """
     current = document
     for key in path.split("."):
@@ -259,9 +252,8 @@ def _get_resource(resource_id):
 def _to_object_id(value):
     """A malformed id is a validation failure, not a crash.
 
-    The original passed client input straight to ``ObjectId()``, whose
-    ``InvalidId`` was caught by the blanket per-field handler and reported to
-    the user as the bson library's own message.
+    A malformed id is reported with a translated message, never the bson
+    library's own.
     """
     try:
         return ObjectId(value)
@@ -307,16 +299,8 @@ def resolve_condition_field(field: dict, fields: list[dict]) -> dict | None:
 
     ``conditionField`` is an *index* into the form's field list.
 
-    BUG FIXED. The original wrote::
-
-        hasCondition = int(field['conditionField']) if 'conditionField' in field else False
-        conditionField = metadata['fields'][hasCondition] if hasCondition else False
-
-    Index ``0`` is falsy, so a field conditioned on the *first* field of the
-    form was treated as unconditional - its value was kept even when the
-    controlling checkbox was unticked. An out-of-range or non-numeric index
-    raised instead, and the blanket handler reported the raw Python error
-    against the field.
+    Index ``0`` is a real condition (the form's first field), not "no
+    condition". An out-of-range or non-numeric index is logged and ignored.
     """
     if "conditionField" not in field:
         return None
@@ -346,8 +330,8 @@ def resolve_condition_field(field: dict, fields: list[dict]) -> dict | None:
 def _condition_is_met(field: dict, fields: list[dict], body: dict) -> bool:
     """Whether a conditional field should keep its value.
 
-    Only a checkbox can act as the condition, which is what the original
-    supported; a condition on any other type is ignored rather than guessed at.
+    Only a checkbox can act as the condition; a condition on any other type is
+    ignored rather than guessed at.
     """
     condition = resolve_condition_field(field, fields)
     if condition is None or condition.get("type") != "checkbox":
@@ -368,7 +352,7 @@ def validate_fields(body: dict, metadata: dict) -> tuple[dict, dict]:
     cleared, an absent title filled in.
 
     REQUIREDNESS ONLY BITES ON PUBLISH. A draft may be missing anything; that is
-    the point of a draft. Preserved from the original.
+    the point of a draft.
     """
     fields = (metadata or {}).get("fields") or []
     errors: dict[str, str] = {}
@@ -440,10 +424,8 @@ def _validate_repeater(
     """A repeatable group of simple subfields.
 
     Errors are keyed ``<destiny>.<row>.<subfield>`` rather than by the bare
-    subfield name. The original keyed them by subfield alone, so two rows with
-    the same problem collapsed into one message and the user could not tell
-    which row to fix - and two *different* repeaters sharing a subfield name
-    overwrote each other.
+    subfield name, so the user can tell which row to fix, and two repeaters
+    sharing a subfield name do not overwrite each other's errors.
     """
     errors: dict[str, str] = {}
     destiny = field.get("destiny")
@@ -464,10 +446,8 @@ def _validate_repeater(
             if not sub_destiny or validator is None:
                 continue
 
-            # Subfields carry `name` where top-level fields carry `label`;
-            # `_label` already falls back, so no mutation of the form is needed.
-            # (The original assigned subfield['label'] = subfield['name'],
-            # writing into the shared, cached form definition.)
+            # Subfields carry `name` where top-level fields carry `label`; `_label`
+            # falls back, so the shared, cached form definition is never mutated.
             key = f"{destiny}.{index}.{sub_destiny}"
             value = row.get(sub_destiny)
 
@@ -520,10 +500,8 @@ def validate_access_rights(body: dict) -> tuple[dict, str | None]:
 def _call_validate_field_hook(body: dict, field: dict, metadata: dict, errors: dict) -> dict:
     """Give plugins a chance to validate or rewrite a field.
 
-    Kept because plugins genuinely register here. A failing hook must not take
-    the whole save down: it is logged and the field is validated normally, which
-    is strictly safer than the original's behaviour of letting the exception
-    surface as that field's error message.
+    A failing hook must not take the whole save down: it is logged and the
+    field is validated normally.
     """
     from archihub.core.hooks import get_hook_handler
 

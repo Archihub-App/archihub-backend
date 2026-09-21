@@ -2,8 +2,7 @@
 
 The dialects are exercised against a **real HTTP server** rather than a mocked
 client, so the tests cover the wire format — request bodies, streaming framing,
-error shapes — and not just our own function calls. That matters here: every
-defect this rewrite fixes was a wire-level assumption that went unchecked.
+error shapes — and not just our own function calls.
 """
 
 from __future__ import annotations
@@ -133,7 +132,7 @@ def test_an_unmapped_5xx_is_treated_as_unavailable():
 
 
 def test_the_rate_limit_and_context_phrases_do_not_collide():
-    """'token limit' appears in both; the legacy code needed a special case."""
+    """'token limit' appears in both; the data file's order decides."""
     assert errors.classify(message="You exceeded your rate limit, 3 per min") is errors.Reason.RATE_LIMITED
     assert errors.classify(message="maximum context length is 8192 tokens") is errors.Reason.CONTEXT_LENGTH
 
@@ -269,11 +268,7 @@ def test_a_bare_list_response_is_understood(stub):
 
 
 def test_ollama_capabilities_come_from_the_daemon_not_from_the_name(stub):
-    """The legacy code guessed vision support from substrings of the model name.
-
-    A model whose name contains none of those strings was invisible as a vision
-    model; one that coincidentally did was wrongly advertised as one.
-    """
+    """Vision support is what the daemon reports, never a guess from the name."""
     stub.json("/api/tags", {"models": [{"model": "something-opaque:latest", "details": {"family": "x"}}]})
     stub.json(
         "/api/show",
@@ -297,7 +292,7 @@ def test_an_ollama_daemon_too_old_to_report_capabilities_claims_none(stub):
 
 
 def test_google_discovery_reads_the_real_token_limits(stub):
-    """These numbers were hardcoded per model name in the legacy module."""
+    """These numbers come from the provider, not from a table in the source."""
     stub.json(
         "/models",
         {
@@ -400,8 +395,7 @@ def test_content_returned_as_typed_parts_is_flattened(stub):
 
 
 def test_the_token_ceiling_field_is_the_callers_choice_not_a_name_prefix(stub):
-    """The legacy code chose between `max_tokens` and `max_completion_tokens`
-    by testing whether the model id started with gpt-5/o1/o3/o4."""
+    """`max_tokens` or `max_completion_tokens` is not chosen by model-name prefix."""
     stub.json("/chat/completions", _completion())
     dialect = OpenAICompatibleDialect(base_url=stub.base_url)
 
@@ -471,7 +465,7 @@ def test_ollama_takes_images_as_a_separate_list(stub):
 
 
 def test_google_puts_the_system_prompt_in_its_own_field(stub):
-    """The legacy converter turned it into an ordinary user turn."""
+    """It is sent as a system instruction, not as an ordinary user turn."""
     stub.json("/models/m:generateContent", {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]})
     messages = [{"role": "system", "content": "be brief"}, {"role": "user", "content": "hi"}]
 
@@ -523,11 +517,8 @@ def _provider(stub, dialect="openai-compatible"):
 
 
 def test_a_discovery_failure_is_reported_not_replaced_with_a_guess(stub, no_overrides, monkeypatch):
-    """The legacy code returned a hardcoded model list when discovery failed.
-
-    A provider with an expired key therefore presented a normal-looking
-    catalogue of models that could not be called.
-    """
+    """A provider with an expired key must not present a normal-looking
+    catalogue of models that cannot be called."""
     monkeypatch.setattr(catalogue, "decrypt_key", lambda key: None, raising=False)
     monkeypatch.setattr("archihub.api.aiservices.providers.decrypt_key", lambda key: None)
     catalogue.clear_cache()
@@ -667,8 +658,8 @@ def test_tool_arguments_survive_either_shape_and_malformed_json():
 
 
 def test_frames_are_separated_by_real_newlines():
-    """The legacy code emitted a literal backslash-n, so no standard SSE client
-    could read the stream."""
+    """Real newlines, not a literal backslash-n: a standard SSE client must be
+    able to read the stream."""
     rendered = streaming.frame({"delta": "hi"})
 
     assert rendered.endswith("\n\n")
@@ -734,11 +725,10 @@ def test_an_unknown_dialect_names_what_is_available():
 
 
 def test_no_module_in_this_package_contains_a_model_name_table():
-    """The point of the rewrite: model facts come from providers, not source.
+    """Model facts come from providers, not source.
 
-    A guard rather than a nicety - the legacy module accumulated three such
-    tables (`_OPENAI_META`, `_GOOGLE_META`, the Ollama family substrings), and
-    each was wrong the day a vendor shipped anything.
+    A guard rather than a nicety: a table of model names is wrong the day a
+    vendor ships anything.
 
     Parsed rather than grepped, so that *discussing* the old hardcoded lists in
     a docstring is fine and only a real string literal in executable code fails.
@@ -780,9 +770,8 @@ def test_no_module_in_this_package_contains_a_model_name_table():
 def test_recording_an_override_returns_something_json_serialisable(monkeypatch):
     """It writes first and returns second.
 
-    Returning a raw datetime made the response a 500 *after* the write had
-    already landed - the caller is told it failed when it did not. Found by
-    exercising the route live, not by these tests, which is why it is now one.
+    Returning a raw datetime would make the response a 500 *after* the write had
+    already landed - the caller would be told it failed when it did not.
     """
     import json
 

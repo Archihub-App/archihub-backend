@@ -162,9 +162,8 @@ def get_access_rights(
     """The access-rights vocabulary, as the stored list document.
 
     Returns the whole list - ``name`` and ``description`` alongside
-    ``options`` - because that is what the legacy route returned. The frontend
-    reads only ``options``, but this is also the shape an operator's own
-    tooling sees.
+    ``options``. The frontend reads only ``options``, but this is also the shape
+    an operator's own tooling sees.
     """
     from archihub.core.roles import access_rights_document
 
@@ -254,15 +253,13 @@ def get_actions(
     """Which plugin actions to offer at one place in the interface.
 
     Read from the plugins THIS PROCESS MOUNTED, not by re-importing every active
-    plugin package on each request as the legacy service did - which meant a
-    plugin that failed to import turned a menu into a 500.
+    plugin package on each request, so a plugin that fails to import cannot turn a
+    menu into a 500.
     """
     from archihub.plugins.framework.mounting import system_actions
 
     placement = body.get("placement")
     if not isinstance(placement, str) or not placement:
-        # The original indexed `body['placement']` directly, so an absent one
-        # was a KeyError reported as a 500.
         return json_response({"msg": _("You must specify a {field}", field="placement")}, 400)
 
     return json_response({"actions": system_actions(placement)}, 200)
@@ -368,11 +365,10 @@ def regenerate_index_geometries(
 def geo_load(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
     """Load the bundled administrative boundaries into MongoDB.
 
-    SYNCHRONOUS, and it should not be: it reads every bundled boundary file and
-    computes a spatial join per level, which on a full national dataset is
-    minutes. The legacy route was synchronous too and the frontend waits on it,
-    so the contract is preserved here rather than quietly changed to a queued
-    task -
+    SYNCHRONOUS, although it reads every bundled boundary file and computes a
+    spatial join per level, which on a full national dataset takes minutes: the
+    frontend waits on the response, so making it a queued task needs a frontend
+    change as well.
     """
     from archihub.api.geosystem import services as geo_services
 

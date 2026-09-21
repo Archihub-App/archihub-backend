@@ -95,8 +95,7 @@ def test_a_successful_extraction_returns_a_file(temporal, monkeypatch):
 
 
 def test_each_extraction_gets_a_fresh_name(temporal, monkeypatch):
-    """The original built the name from the record id and the offsets and reused
-    whatever it found, so a fragment left by a failed run was served as real."""
+    """A fragment left by a failed run is never served as real."""
     monkeypatch.setattr(subprocess, "run", _fake_run())
 
     first = media.extract_fragment("/in.mp3", 1.0, 3.0, "audio")
@@ -122,7 +121,7 @@ def test_an_empty_output_is_treated_as_failure(temporal, monkeypatch):
 
 
 def test_ffmpeg_stderr_never_reaches_the_caller(temporal, monkeypatch):
-    """It names paths on the server. The original returned it as the message."""
+    """It names paths on the server, so it is logged, never returned."""
     monkeypatch.setattr(
         subprocess, "run", _fake_run(returncode=1, stderr=b"/srv/archihub/webfiles/secret.mp3: bad")
     )
@@ -134,7 +133,7 @@ def test_ffmpeg_stderr_never_reaches_the_caller(temporal, monkeypatch):
 
 
 def test_a_hung_ffmpeg_is_killed_rather_than_holding_the_worker(temporal, monkeypatch):
-    """The original had no timeout at all."""
+    """A hung transcode cannot hold the worker indefinitely."""
 
     def hang(command, capture_output=False, timeout=None):
         raise subprocess.TimeoutExpired(command, timeout or 0)

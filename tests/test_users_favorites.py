@@ -109,8 +109,7 @@ def test_only_published_resources_can_be_favorited(mongo):
 def test_collections_without_a_status_field_are_not_rejected(mongo):
     """Only `resources` carries a status.
 
-    The legacy code subscripted `fav['status']` before checking the type, so a
-    record or snap - which have no such field - raised KeyError.
+    A record or snap has no such field.
     """
     mongo.records["records"] = {"_id": ObjectId(VALID_ID)}
     _payload, status = services.set_favorite("alice", {"type": "records", "id": VALID_ID})
@@ -197,8 +196,7 @@ def test_profile_omits_the_password_hash(mongo):
 
 
 def test_absent_profile_is_400_not_500(mongo):
-    """Legacy popped `password` on the line above its own existence check, so an
-    absent account raised AttributeError and surfaced as a 500."""
+    """An absent account is a 400, not a 500."""
     mongo.records["users"] = None
     _payload, status = services.get_profile("ghost")
     assert status == 400
