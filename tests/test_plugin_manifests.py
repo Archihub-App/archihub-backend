@@ -82,7 +82,9 @@ def test_a_plugin_that_shells_out_declares_the_binary(plugin):
     provided_by = {"ffmpeg": "ffmpeg", "libreoffice": "libreoffice", "soffice": "libreoffice"}
 
     source = "\n".join(
-        path.read_text() for path in plugin.rglob("*.py")
+        path.read_text()
+        for path in plugin.rglob("*.py")
+        if "tests" not in path.relative_to(plugin).parts
     )
     needed = {
         provided_by[binary]

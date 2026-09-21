@@ -13,4 +13,4 @@ would require every service module to bind its client to two different types at
 once.
 """
 
-__version__ = "2.0.0"
+__version__ = "2.0.0 beta"

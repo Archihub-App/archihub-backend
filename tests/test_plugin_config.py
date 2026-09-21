@@ -92,6 +92,44 @@ def test_a_plugin_with_no_env_file_is_not_an_error(plugin_dir, monkeypatch):
     assert config.read_env_file("somePlugin") == {}
 
 
+def test_a_configured_directory_supplies_the_env_file(plugin_dir, tmp_path, monkeypatch):
+    """A container reads plugin settings from a mounted directory, not from
+    beside the plugin code the image carries."""
+    mounted = tmp_path / "mounted"
+    (mounted / "somePlugin").mkdir(parents=True)
+    (mounted / "somePlugin" / ".env").write_text("SOME_TOKEN=from-the-mount\n")
+    (plugin_dir / ".env").write_text("SOME_TOKEN=beside-the-code\n")
+    monkeypatch.delenv("SOME_TOKEN", raising=False)
+    monkeypatch.setenv("PLUGIN_CONFIG_PATH", str(mounted))
+    assert config.get("somePlugin", "SOME_TOKEN") == "from-the-mount"
+
+    monkeypatch.delenv("PLUGIN_CONFIG_PATH")
+
+    assert config.get("somePlugin", "SOME_TOKEN") == "beside-the-code"
+
+
+def test_a_configured_directory_without_the_file_is_not_an_error(plugin_dir, tmp_path, monkeypatch):
+    monkeypatch.delenv("SOME_TOKEN", raising=False)
+    monkeypatch.setenv("PLUGIN_CONFIG_PATH", str(tmp_path / "empty"))
+    assert config.read_env_file("somePlugin") == {}
+
+
+def test_finding_the_env_file_does_not_need_the_backend_settings(plugin_dir, monkeypatch):
+    """A plugin setting is readable even where the backend's own required
+    configuration is not."""
+    from archihub.core import settings
+
+    def unavailable():
+        raise RuntimeError("backend settings consulted")
+
+    monkeypatch.setattr(settings, "get_settings", unavailable)
+    (plugin_dir / ".env").write_text("SOME_TOKEN=from-the-file\n")
+    monkeypatch.delenv("SOME_TOKEN", raising=False)
+    monkeypatch.delenv("PLUGIN_CONFIG_PATH", raising=False)
+
+    assert config.get("somePlugin", "SOME_TOKEN") == "from-the-file"
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [("true", True), ("1", True), ("on", True), ("false", False), ("0", False), ("", False)],
@@ -158,6 +196,10 @@ def test_the_backend_declares_no_setting_that_ONLY_a_plugin_reads():
     def is_plugin(path: pathlib.Path) -> bool:
         return path.parts[:2] == ("archihub", "plugins") and "framework" not in path.parts
 
+    def is_test(path: pathlib.Path) -> bool:
+        """A plugin's own tests, in its `tests/` folder - not code that reads a setting."""
+        return "tests" in path.relative_to("archihub").parts
+
     def names_used(paths, skip_declarations: bool = False) -> set[str]:
         """Attribute names and string literals actually present in the code.
 
@@ -188,7 +230,7 @@ def test_the_backend_declares_no_setting_that_ONLY_a_plugin_reads():
                         found.discard(getattr(node.value, "value", None))
         return found
 
-    plugin_names = names_used([p for p in PLUGIN_ROOT.rglob("*.py") if is_plugin(p)])
+    plugin_names = names_used([p for p in PLUGIN_ROOT.rglob("*.py") if is_plugin(p) and not is_test(p)])
 
     core_paths = [p for p in pathlib.Path("archihub").rglob("*.py") if not is_plugin(p)]
     core_names = names_used(core_paths)
@@ -278,7 +320,8 @@ def test_every_declared_setting_is_actually_read():
     code = body + "\n" + "\n".join(
         p.read_text(errors="replace")
         for p in pathlib.Path("archihub").rglob("*.py")
-        if p != declaration
+        # A plugin's own tests mention settings without reading them.
+        if p != declaration and "tests" not in p.relative_to("archihub").parts
     )
     shell = "\n".join(
         pathlib.Path(s).read_text() for s in ("start.sh", "start_celery.sh", "Dockerfile")

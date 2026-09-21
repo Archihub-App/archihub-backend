@@ -145,6 +145,6 @@ build-backend = "hatchling.build"
 packages = ["archihub"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "archihub/plugins"]
 pythonpath = ["."]
 asyncio_mode = "auto"

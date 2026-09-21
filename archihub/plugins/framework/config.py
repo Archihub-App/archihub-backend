@@ -23,10 +23,16 @@ plugins have been imported first - an ordering dependency between components
 that are supposed to be independent. Values are read and returned; nothing is
 written back into ``os.environ``.
 
-THE PROCESS ENVIRONMENT WINS over the file. A container injects real environment
-variables and has no ``.env`` at all; a developer's machine is configured by
-file. Both work, and a deployment can override one value without editing a file
-inside the plugin.
+THE PROCESS ENVIRONMENT WINS over the file - including an empty value, so a
+deployment that lists a plugin variable at all hides the plugin's file. A
+deployment can override one value without editing a file inside the plugin.
+
+WHERE THE FILE IS READ FROM. Beside the plugin's package by default. An image
+does not contain it (it holds credentials), so a container sets
+``PLUGIN_CONFIG_PATH`` to a mounted directory laid out the same way -
+``<PLUGIN_CONFIG_PATH>/<slug>/.env`` - and reads it from there. The code the
+container runs is still the image's: that directory is only ever read for
+``.env`` files, never imported.
 """
 
 from __future__ import annotations
@@ -40,6 +46,9 @@ logger = logging.getLogger(__name__)
 #: The file a plugin keeps its own settings in, beside its package.
 ENV_FILENAME = ".env"
 
+#: A directory holding ``<slug>/.env`` files, used instead of the plugins' own.
+CONFIG_PATH_VARIABLE = "PLUGIN_CONFIG_PATH"
+
 
 class MissingPluginSetting(RuntimeError):
     """A plugin needs a setting that this instance does not supply."""
@@ -50,6 +59,19 @@ def _plugin_directory(slug: str) -> Path:
     return (Path(__file__).resolve().parent.parent / slug).resolve()
 
 
+def env_file_path(slug: str) -> Path:
+    """Where ``slug``'s ``.env`` is read from.
+
+    Read from the process environment rather than the backend's settings, so
+    that finding a plugin's file never depends on the backend's own
+    configuration being complete.
+    """
+    root = os.environ.get(CONFIG_PATH_VARIABLE, "").strip()
+    if root:
+        return Path(root) / slug / ENV_FILENAME
+    return _plugin_directory(slug) / ENV_FILENAME
+
+
 def read_env_file(slug: str) -> dict[str, str]:
     """The plugin's own ``.env``, or an empty mapping if it has none.
 
@@ -58,7 +80,7 @@ def read_env_file(slug: str) -> dict[str, str]:
     environment, and the alternative - failing at import - takes the whole
     instance down for one malformed line.
     """
-    path = _plugin_directory(slug) / ENV_FILENAME
+    path = env_file_path(slug)
     if not path.is_file():
         return {}
 

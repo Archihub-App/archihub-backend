@@ -51,6 +51,8 @@ htmlcov
 
 # ---- not needed to run the service ----
 tests
+conftest.py
+archihub/plugins/*/tests
 tools
 node_modules
 

@@ -42,6 +42,14 @@ from importlib.metadata import packages_distributions
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PACKAGE_ROOT = REPO_ROOT / "archihub"
+
+
+def _sources(root: pathlib.Path = PACKAGE_ROOT):
+    """The application's modules. A plugin's own tests live in its `tests/`
+    folder, travel with the plugin and are not application source."""
+    for path in sorted(root.rglob("*.py")):
+        if "tests" not in path.relative_to(PACKAGE_ROOT).parts:
+            yield path
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 
 #: Ours, not third-party.
@@ -108,9 +116,7 @@ from archihub.plugins.framework import discovery
 def _imported() -> dict[str, set[str]]:
     """Third-party top-level module -> the files importing it."""
     found: dict[str, set[str]] = {}
-    for path in PACKAGE_ROOT.rglob("*.py"):
-        if path.name.startswith("test_") or path.name.endswith("_test.py"):
-            continue
+    for path in _sources():
         slug = _plugin_of(path)
         if slug and not discovery.is_mountable(slug):
             continue
@@ -300,7 +306,7 @@ def _json_response_calls() -> list[tuple[str, int]]:
     import ast
 
     calls = []
-    for path in sorted(PACKAGE_ROOT.rglob("*.py")):
+    for path in _sources():
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
             if (

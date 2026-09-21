@@ -29,6 +29,14 @@ PACKAGE_ROOT = pathlib.Path(__file__).resolve().parent.parent / "archihub"
 TESTS_ROOT = pathlib.Path(__file__).resolve().parent
 TOOLS_ROOT = pathlib.Path(__file__).resolve().parent.parent / "tools"
 
+
+def _sources(root: pathlib.Path = PACKAGE_ROOT):
+    """The application's modules. A plugin's own tests live in its `tests/`
+    folder, travel with the plugin and are not application source."""
+    for path in sorted(root.rglob("*.py")):
+        if "tests" not in path.relative_to(PACKAGE_ROOT).parts:
+            yield path
+
 #: One capital letter and one or two digits. Bounded to two digits so linter
 #: codes (`F401`) and HTTP-ish tokens do not match.
 FINDING_ID = re.compile(r"(?<![A-Za-z0-9_])[SFP]\d{1,2}(?![A-Za-z0-9_])")
@@ -72,9 +80,12 @@ def _prose(path: pathlib.Path) -> list[tuple[int, str]]:
 
 
 def _hits(pattern: re.Pattern, roots: tuple[pathlib.Path, ...] = (PACKAGE_ROOT,)) -> list[str]:
+    """With the default root, application source only; a root named explicitly
+    is read whole."""
     problems = []
     for root in roots:
-        for path in sorted(root.rglob("*.py")):
+        paths = _sources() if roots == (PACKAGE_ROOT,) else sorted(root.rglob("*.py"))
+        for path in paths:
             for lineno, text in _prose(path):
                 if pattern.search(text):
                     relative = path.relative_to(PACKAGE_ROOT.parent)
@@ -121,7 +132,7 @@ def test_no_module_docstring_compares_against_an_implementation_that_is_gone():
     import ast
 
     problems = []
-    for path in sorted(PACKAGE_ROOT.rglob("*.py")):
+    for path in _sources():
         docstring = ast.get_docstring(ast.parse(path.read_text(), filename=str(path)))
         if docstring and ARCHAEOLOGY.search(docstring):
             problems.append(f"  {path.relative_to(PACKAGE_ROOT.parent)}")

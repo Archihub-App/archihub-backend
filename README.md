@@ -25,7 +25,7 @@ Sigue los pasos de la [documentación oficial](https://archihub-app.github.io/ar
 
 Dos advertencias que suelen costar tiempo:
 
-- El archivo `.env` de _compose_ sirve para sustituir `${VARIABLE}` **dentro** del `docker-compose.yml`; no inyecta nada por sí solo en el contenedor. Una variable nueva debe aparecer además en los bloques `x-backend_env_variables` y `x-worker_env_variables`, porque el worker construye la misma configuración que la API y falla igual si le falta.
+- El archivo `.env` de _compose_ sirve para sustituir `${VARIABLE}` **dentro** del `docker-compose.yml`; no inyecta nada por sí solo en el contenedor. Una variable nueva debe aparecer además en el bloque `x-archihub_env_variables` (el worker lo hereda) y en `.env.bak`, porque el worker construye la misma configuración que la API y falla igual si le falta.
 - `JWT_SECRET_KEY` y `FERNET_KEY` son obligatorias y **no tienen valor por defecto**: el proceso se niega a arrancar sin ellas. Es deliberado; una clave por defecto en el código sería una clave compartida por todos los despliegues que nadie eligió.
 
 ---
@@ -201,8 +201,12 @@ PYTHONPATH=. python tools/create_indexes.py --stats      # tamaños y uso
 La suite no necesita infraestructura: Mongo, Redis, ElasticSearch y la caché están simulados o desactivados.
 
 ```bash
-pytest -q
+pytest -q                                  # el backend y todos los plugins instalados
+pytest -q tests                            # solo el backend
+pytest -q archihub/plugins/<slug>/tests    # solo un plugin
 ```
+
+`tests/` contiene solo las pruebas del backend. Las de cada plugin van en su propia carpeta, `archihub/plugins/<slug>/tests/`, para que viajen con el plugin; `pytest` las recoge de ahí, y `conftest.py`, en la raíz, prepara el entorno para ambas. Esas carpetas no se copian en la imagen. Como los nombres de los archivos de prueba no pueden repetirse entre carpetas, conviene incluir el nombre del plugin (`test_plugin_<slug>.py`).
 
 Si instalaste con pip sin el extra `dev`, instala `pytest`, `pytest-asyncio` y `deepdiff` antes.
 

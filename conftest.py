@@ -5,6 +5,9 @@ acquisition and the plugin framework. Broad per-domain behaviour is verified by
 
 Every fixture here avoids real infrastructure: these tests must run in CI with
 no MongoDB, Redis, Elasticsearch or Qdrant available.
+
+It sits at the repository root so that it also applies to the plugins' own
+tests, which live beside each plugin in ``archihub/plugins/<slug>/tests/``.
 """
 
 from __future__ import annotations

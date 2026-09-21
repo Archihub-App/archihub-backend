@@ -35,6 +35,14 @@ import pytest
 PACKAGE_ROOT = pathlib.Path(__file__).resolve().parent.parent / "archihub"
 
 
+def _sources(root: pathlib.Path = PACKAGE_ROOT):
+    """The application's modules. A plugin's own tests live in its `tests/`
+    folder, travel with the plugin and are not application source."""
+    for path in sorted(root.rglob("*.py")):
+        if "tests" not in path.relative_to(PACKAGE_ROOT).parts:
+            yield path
+
+
 def _accepted_keywords(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str] | None:
     """Keyword names this definition accepts, or None if it accepts anything."""
     if node.args.kwarg is not None:
@@ -47,7 +55,7 @@ def _definitions() -> dict[str, set[str] | None]:
     """Function name -> accepted keywords, for names defined exactly once."""
     seen: dict[str, list[set[str] | None]] = defaultdict(list)
 
-    for path in PACKAGE_ROOT.rglob("*.py"):
+    for path in _sources():
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -63,7 +71,7 @@ def _suspect_calls() -> list[tuple[str, int, str, str]]:
     """Every (file, line, function, keyword) that the definition does not accept."""
     problems: list[tuple[str, int, str, str]] = []
 
-    for path in sorted(PACKAGE_ROOT.rglob("*.py")):
+    for path in _sources():
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
