@@ -51,6 +51,20 @@ def build(slug: str):
 # ---------------------------------------------------------------------------
 
 
+#: Endpoints that are deliberately anonymous / public without credentials.
+DELIBERATELY_ANONYMOUS_ROUTES = {
+    "/inventoryMaker/public/downloadInventory",
+    "/windDataDownloader/latest",
+    "/windDataDownloader/stats",
+    "/windDataDownloader/closest",
+    "/windDataDownloader/data",
+    "/CEVbuscador/document-page-image",
+    "/CEVbuscador/search",
+    "/CEVbuscador/resource",
+    "/CEVbuscador/resource/{ident}",
+}
+
+
 @pytest.mark.parametrize("slug", PLUGINS)
 def test_every_plugin_route_states_a_role_requirement(slug):
     """The legacy `validate_roles` returned a refusal tuple that all 21 of
@@ -64,8 +78,11 @@ def test_every_plugin_route_states_a_role_requirement(slug):
     router = plugin.build()
 
     for route in router.routes:
-        if route.path.startswith(f"/{slug}/public/"):
-            # Deliberately anonymous - the public inventory download.
+        if (
+            route.path.startswith(f"/{slug}/public/")
+            or route.path in DELIBERATELY_ANONYMOUS_ROUTES
+        ):
+            # Deliberately anonymous.
             continue
         names = {dep.call.__name__ for dep in route.dependant.dependencies if dep.call}
         assert "_dependency" in names, f"{route.path} declares no role dependency"
