@@ -373,9 +373,12 @@ def validate_fields(body: dict, metadata: dict) -> tuple[dict, dict]:
                 errors[destiny] = title_error
 
         value = get_value_by_path(body, destiny)
+        # A field hidden by its condition cannot be filled in, so it cannot be
+        # required: the form does not show it, and its value is cleared below.
+        visible = _condition_is_met(field, fields, body)
 
         if value in (None, "", [], {}):
-            if field.get("required") and is_published and destiny != "accessRights":
+            if field.get("required") and is_published and visible and destiny != "accessRights":
                 errors.setdefault(
                     destiny, _("The field {label} is required", label=_label(field))
                 )
@@ -391,7 +394,7 @@ def validate_fields(body: dict, metadata: dict) -> tuple[dict, dict]:
                 elif new_value is not value:
                     body = set_value_by_path(body, destiny, new_value)
 
-        if not _condition_is_met(field, fields, body) and field_type in CLEARED_WHEN_HIDDEN:
+        if not visible and field_type in CLEARED_WHEN_HIDDEN:
             body = set_value_by_path(body, destiny, CLEARED_WHEN_HIDDEN[field_type])
 
     body, access_error = validate_access_rights(body)

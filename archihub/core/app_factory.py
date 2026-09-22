@@ -107,7 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "email": "contact@bit-sol.com.co",
         },
         license_info={
-            "name": "MIT",
+            "name": "GNU AGPL v3",
             "url": "https://archihub-app.github.io/archihub.github.io/en/licencia/",
         },
         lifespan=lifespan,

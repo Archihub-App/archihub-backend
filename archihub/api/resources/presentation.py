@@ -238,11 +238,33 @@ def build_fields(resource: dict, user: str | None, *, public: bool = False) -> l
             )
             continue
 
-        entry = _render(field, resource)
-        if entry is not None:
-            rendered.append(entry)
+        if field.get("type") in RENDERED_KINDS:
+            entry = _render(field, resource)
+            if entry is not None:
+                rendered.append(entry)
+        else:
+            rendered = _render_plugin_field(resource, field, rendered)
 
     return rendered
+
+
+def _render_plugin_field(resource: dict, field: dict, rendered: list[dict]) -> list[dict]:
+    """Let a plugin render a field kind it contributed to the forms builder.
+
+    The ``resource_field`` hook receives the resource, the field definition and
+    the list built so far, appends its entry and returns the list. A kind no
+    plugin handles is left out, as before. A failing plugin costs its own field,
+    never the detail screen.
+    """
+    from archihub.core.hooks import get_hook_handler
+
+    try:
+        result = get_hook_handler().call("resource_field", resource, field, rendered)
+    except Exception:
+        logger.exception("resource_field hook failed for %s", field.get("destiny"))
+        return rendered
+
+    return result if isinstance(result, list) else rendered
 
 
 def _may_read_field(field: dict, user: str | None, *, public: bool) -> bool:
@@ -260,6 +282,25 @@ def _may_read_field(field: dict, user: str | None, *, public: bool) -> bool:
     from archihub.api.users.services import has_role
 
     return has_role(user, "admin") or holds(user, required)
+
+
+#: The kinds ``_render`` draws. Any other kind was contributed by a plugin
+#: through ``get_fields_types`` and is drawn through ``resource_field``.
+RENDERED_KINDS = frozenset(
+    {
+        "text",
+        "text-area",
+        "pattern",
+        "number",
+        "location",
+        "simple-date",
+        "select",
+        "select-multiple2",
+        "author",
+        "relation",
+        "repeater",
+    }
+)
 
 
 def _render(field: dict, resource: dict) -> dict | None:

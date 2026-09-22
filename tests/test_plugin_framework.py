@@ -59,6 +59,10 @@ DELIBERATELY_ANONYMOUS_ROUTES = {
     "/CEVbuscador/search",
     "/CEVbuscador/resource",
     "/CEVbuscador/resource/{ident}",
+    # The canvas field's viewer script and its background image: the detail
+    # screen renders for anonymous visitors, and an <img> sends no token.
+    "/canvasFormField/initView",
+    "/canvasFormField/background",
 }
 
 

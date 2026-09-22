@@ -406,6 +406,21 @@ def test_each_type_is_cleared_to_its_own_empty_value(field_type, cleared):
     assert body["metadata"]["x"] == cleared
 
 
+def test_a_hidden_required_field_does_not_block_publishing():
+    """The form does not show a field whose checkbox is unticked, so nobody can
+    fill it in; requiring it would make the resource impossible to publish."""
+    metadata = form(
+        field("metadata.toggle", "checkbox"),
+        field("metadata.x", "text", conditionField=0, required=True),
+    )
+
+    _body, hidden_errors = validation.validate_fields(published(metadata={"toggle": False}), metadata)
+    _body, shown_errors = validation.validate_fields(published(metadata={"toggle": True}), metadata)
+
+    assert "metadata.x" not in hidden_errors
+    assert "metadata.x" in shown_errors
+
+
 # ---------------------------------------------------------------------------
 # Repeaters
 # ---------------------------------------------------------------------------
