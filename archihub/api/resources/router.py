@@ -211,17 +211,23 @@ def get_tree(
     * ``list`` - a flat, paginated level, optionally scoped to one content type
       (``postType``) instead of the client's ``activeTypes``.
 
+    ``purpose: "parent"`` marks the tree as a parent picker: it then offers only
+    resources the caller may see, even when metadata is open to all users.
+
     An unrecognised ``view`` returns 400.
     """
     view = body.get("view")
     root = body.get("root")
+    for_filing = body.get("purpose") == "parent"
     if not root:
         return JSONResponse(status_code=400, content={"msg": _("A root is required")})
 
     if view == "tree":
         requested = [item.get("slug") for item in (body.get("tree") or []) if item.get("slug")]
         slugs = hierarchy.visible_type_slugs(current_user.username, requested)
-        return _respond(hierarchy.get_tree(root, slugs, current_user.username))
+        return _respond(
+            hierarchy.get_tree(root, slugs, current_user.username, for_filing=for_filing)
+        )
 
     if view == "list":
         status = body.get("status") or "published"
@@ -255,6 +261,7 @@ def get_tree(
                 post_type=post_type,
                 page=int(page) if page is not None else 0,
                 status=status,
+                for_filing=for_filing,
             )
         )
 

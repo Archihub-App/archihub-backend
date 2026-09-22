@@ -456,7 +456,9 @@ def _type_display(slugs: set[str]) -> dict[str, dict]:
     }
 
 
-def _ids_with_children(ids: list[str], slugs: list[str], status_clause) -> set[str]:
+def _ids_with_children(
+    ids: list[str], slugs: list[str], status_clause, access_clause: dict | None = None
+) -> set[str]:
     """Which of ``ids`` have at least one descendant the caller could navigate to.
 
     One query for the whole level.
@@ -473,19 +475,22 @@ def _ids_with_children(ids: list[str], slugs: list[str], status_clause) -> set[s
     so the clause can only ever exclude rows whose stored ``parents`` entries are
     missing a ``post_type`` - hiding real children when the data is incomplete,
     which is the wrong way round for a navigation aid.
+
+    ``access_clause`` is the one the level was fetched with, for the same reason:
+    a folder whose children the caller may not see is a leaf to them.
     """
     if not ids or not slugs:
         return set()
 
-    rows = _mongo().get_all_records(
-        COLLECTION,
-        {
-            "post_type": {"$in": slugs},
-            "parents.id": {"$in": ids},
-            "status": status_clause,
-        },
-        fields={"parents.id": 1},
-    )
+    filters = {
+        "post_type": {"$in": slugs},
+        "parents.id": {"$in": ids},
+        "status": status_clause,
+    }
+    if access_clause:
+        filters["$and"] = [access_clause]
+
+    rows = _mongo().get_all_records(COLLECTION, filters, fields={"parents.id": 1})
 
     wanted = set(ids)
     found: set[str] = set()
@@ -505,8 +510,13 @@ def get_tree(
     post_type: str | None = None,
     page: int | None = None,
     status: str = "published",
+    for_filing: bool = False,
 ) -> tuple[list | dict, int]:
     """One level of the navigation tree.
+
+    ``for_filing`` is set when the caller is choosing where to file a resource:
+    only parents they may see are offered, whatever the metadata setting, since
+    a resource filed under any other would inherit rights they do not hold.
 
     ``root`` is a resource id, or ``'all'`` for the top level. ``slugs`` are the
     content types the caller has already been narrowed to by
@@ -521,8 +531,11 @@ def get_tree(
     if not slugs:
         return [], 200
 
+    from archihub.api.resources.access import navigation_clause
+
+    is_admin = has_role(user, "admin")
     try:
-        status_clause = _status_filter(status, user, has_role(user, "admin"))
+        status_clause = _status_filter(status, user, is_admin)
     except PermissionDeniedError as exc:
         # Rendered rather than raised: this service returns (payload, status)
         # like the rest of the domain, and the router is what turns that into a
@@ -546,6 +559,10 @@ def get_tree(
             "status": status_clause,
         }
 
+    access_clause = navigation_clause(user, is_admin, for_filing=for_filing)
+    if access_clause:
+        filters["$and"] = [access_clause]
+
     limit = TREE_PAGE_SIZE if page is not None else 0
     skip = (page or 0) * TREE_PAGE_SIZE if page is not None else 0
 
@@ -567,7 +584,9 @@ def get_tree(
 
     display = _type_display({n["post_type"] for n in nodes if n["post_type"]})
     child_types = [post_type] if post_type else slugs
-    with_children = _ids_with_children([n["id"] for n in nodes], child_types, status_clause)
+    with_children = _ids_with_children(
+        [n["id"] for n in nodes], child_types, status_clause, access_clause
+    )
 
     for node in nodes:
         info = display.get(node["post_type"], {})

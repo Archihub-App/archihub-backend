@@ -256,6 +256,31 @@ def test_one_failure_does_not_stop_the_others():
     assert len(result["created"]) > 0
 
 
+def test_a_failed_build_logs_a_short_reason_not_the_document(caplog):
+    """A geometry index failure quotes the boundary it could not index."""
+    import logging
+
+    import pymongo
+
+    coordinates = ", ".join(f"[{i}.5, {i}.25]" for i in range(20000))
+    error = pymongo.errors.OperationFailure(
+        f"Can't extract geo keys: {{ geometry: {{ coordinates: [[{coordinates}]] }} }}",
+        code=16755,
+        details={"errmsg": f"Can't extract geo keys: {{ coordinates: [[{coordinates}]] }}"},
+    )
+    mongo = FakeMongo({"shapes": FakeCollection(fail_with=error)})
+
+    with caplog.at_level(logging.WARNING, logger="archihub.infra.indexes"):
+        ensure_indexes(mongo)
+
+    failures = [r for r in caplog.records if "shapes" in r.getMessage()]
+    assert failures
+    for record in failures:
+        assert record.exc_info is None
+        assert len(record.getMessage()) < indexes.MAX_REASON_LENGTH + 200
+        assert "Can't extract geo keys" in record.getMessage()
+
+
 def test_never_raises_even_when_everything_fails():
     """A missing index is slow; a backend that will not start is down."""
 

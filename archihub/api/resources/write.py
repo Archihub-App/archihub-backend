@@ -102,6 +102,36 @@ def may_modify(user: str, resource: dict, is_admin: bool) -> bool:
     return access.owns_or_supervises(user, resource, is_admin)
 
 
+def unseen_parent(parents, user: str, is_admin: bool, keep=()) -> str | None:
+    """The first direct parent the caller may not see, or ``None``.
+
+    Filing a resource under a parent it inherits access rights from, when the
+    caller does not hold them, would hide the new resource from its own author.
+    Parents in ``keep`` are exempt: an update may leave a resource where someone
+    else filed it.
+    """
+    if is_admin:
+        return None
+
+    for parent in parents or []:
+        parent_id = parent.get("id")
+        if not parent_id or parent_id in keep:
+            continue
+        object_id = _to_object_id(parent_id)
+        record = (
+            _mongo().get_record(COLLECTION, {"_id": object_id}, fields={"accessRights": 1, "parents": 1})
+            if object_id is not None
+            else None
+        )
+        if record is None or not access.may_view_resource(user, record, is_admin):
+            return parent_id
+    return None
+
+
+def _parent_denied() -> tuple[dict, int]:
+    return {"msg": _("You don't have access to the selected parent")}, ROLE_FAILURE_STATUS
+
+
 # ---------------------------------------------------------------------------
 # Create
 # ---------------------------------------------------------------------------
@@ -141,6 +171,9 @@ def create(body: dict, user: str, incoming_files=None) -> tuple[dict, int]:
         payload = hierarchy.validate_parent(payload)
     except BusinessError as exc:
         return {"msg": exc.message}, exc.status_code
+
+    if unseen_parent(payload.get("parent"), user, is_admin):
+        return _parent_denied()
 
     payload = _call_hook("resource_pre_create", payload)
 
@@ -305,6 +338,13 @@ def update(resource_id: str, body: dict, user: str, incoming_files=None) -> tupl
         payload = hierarchy.validate_parent(payload, update=True)
     except BusinessError as exc:
         return {"msg": exc.message}, exc.status_code
+
+    stored = existing.get("parent") or []
+    if isinstance(stored, dict):
+        stored = [stored]
+    current = {p.get("id") for p in stored if isinstance(p, dict)}
+    if unseen_parent(payload.get("parent"), user, is_admin, keep=current):
+        return _parent_denied()
 
     moved = hierarchy.has_changed_parent(resource_id, payload.get("parent"))
 

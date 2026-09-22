@@ -333,6 +333,19 @@ INDEXES: list[IndexSpec] = [
 ]
 
 
+#: How much of a database error message is logged.
+MAX_REASON_LENGTH = 300
+
+
+def _short_reason(exc: Exception) -> str:
+    details = getattr(exc, "details", None) or {}
+    message = details.get("errmsg") if isinstance(details, dict) else None
+    message = " ".join(str(message or exc).split())
+    if len(message) > MAX_REASON_LENGTH:
+        message = message[:MAX_REASON_LENGTH] + "..."
+    return f"{type(exc).__name__}: {message}"
+
+
 def ensure_indexes(mongo=None, *, dry_run: bool = False) -> dict[str, list[str]]:
     """Create every declared index. Idempotent and safe to call at startup.
 
@@ -414,12 +427,12 @@ def ensure_indexes(mongo=None, *, dry_run: bool = False) -> dict[str, list[str]]
                 label,
                 [key for key, _ in spec.keys],
             )
-        except Exception:
+        except Exception as exc:
             result["failed"].append(label)
-            if spec.tolerate_failure:
-                logger.error("Could not create index %s", label, exc_info=True)
-            else:
-                logger.warning("Could not create index %s", label, exc_info=True)
+            # The reason only, shortened: a failed geometry index quotes the
+            # document it could not index, and a boundary is thousands of
+            # coordinates - repeated on every start until the data is repaired.
+            logger.error("Could not create index %s: %s", label, _short_reason(exc))
 
     logger.info(
         "Index check complete: %d created, %d already present, %d failed",

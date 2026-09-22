@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import logging
 
+from archihub.infra.cache import cached
+
 logger = logging.getLogger(__name__)
 
 # A resource with no access rights is public to authenticated users. All four
@@ -45,9 +47,119 @@ def user_access_rights(username: str | None) -> list:
     return (user or {}).get("accessRights") or []
 
 
+def _holds(required, held) -> bool:
+    """Whether rights ``held`` satisfy a stored ``accessRights`` value."""
+    if isinstance(required, list):
+        return bool(set(required) & set(held))
+    return required in held
+
+
+@cached("resources")
+def restricted_ancestors() -> list[dict]:
+    """Every resource that declares access rights AND has resources filed under it.
+
+    ``[{"id", "accessRights", "parents": [ancestor ids]}]``. These are the only
+    resources whose access rights can be inherited, so they are all a listing
+    needs to decide what a descendant inherits. Independent of the caller, which
+    is what lets it be cached.
+    """
+    mongo = _mongo()
+    rows = list(
+        mongo.get_all_records(
+            "resources",
+            {"$nor": _NO_RIGHTS_CLAUSES},
+            fields={"accessRights": 1, "parents.id": 1},
+        )
+    )
+    if not rows:
+        return []
+
+    ids = [str(row["_id"]) for row in rows]
+    with_children = set(mongo.distinct("resources", "parents.id", {"parents.id": {"$in": ids}}))
+
+    return [
+        {
+            "id": str(row["_id"]),
+            "accessRights": row.get("accessRights"),
+            "parents": [p.get("id") for p in row.get("parents") or [] if isinstance(p, dict) and p.get("id")],
+        }
+        for row in rows
+        if str(row["_id"]) in with_children
+    ]
+
+
+def _inherited_exclusions(held: list) -> list[dict]:
+    """Clauses matching the resources whose INHERITED access right the caller lacks.
+
+    A resource without rights of its own is governed by its nearest ancestor that
+    has some. For each ancestor the caller may not see, that is every descendant
+    without rights of its own, except those with a rights-bearing ancestor
+    nearer to them - which is exactly a rights-bearing descendant of that
+    ancestor. ``parents`` holds the full ancestry, so both tests are plain
+    membership tests and nesting in any order is decided correctly.
+    """
+    nodes = restricted_ancestors()
+    exclusions = []
+    for node in nodes:
+        if _holds(node["accessRights"], held):
+            continue
+        nearer = [other["id"] for other in nodes if node["id"] in other["parents"]]
+        exclusions.append(
+            {
+                "$and": [
+                    {"$or": _NO_RIGHTS_CLAUSES},
+                    {"parents.id": node["id"]},
+                    {"parents.id": {"$nin": nearer}},
+                ]
+            }
+        )
+    return exclusions
+
+
 def access_rights_clause(username: str | None) -> dict:
-    """The `$or` a non-admin's queries must satisfy."""
-    return {"$or": [{"accessRights": {"$in": user_access_rights(username)}}, *_NO_RIGHTS_CLAUSES]}
+    """The clause a non-admin's queries must satisfy.
+
+    A resource is visible when its effective access right - its own, or else the
+    one it inherits from its nearest rights-bearing ancestor - is absent or held
+    by the caller. The same rule as :func:`may_view_resource`, stated as a query.
+    """
+    held = user_access_rights(username)
+    own = {"$or": [{"accessRights": {"$in": held}}, *_NO_RIGHTS_CLAUSES]}
+    exclusions = _inherited_exclusions(held)
+    if not exclusions:
+        return own
+    return {"$and": [own, {"$nor": exclusions}]}
+
+
+def metadata_open_to_all() -> bool:
+    """Whether the administrator has opened every resource's metadata to all users.
+
+    The ``metadata_access`` entry of the ``access_rights`` settings. An instance
+    whose settings predate the entry reads as closed: the setting widens what
+    people see, so its absence must not.
+    """
+    from archihub.api.system.services import get_setting_value
+
+    return get_setting_value("access_rights", "metadata_access") is True
+
+
+def navigation_clause(
+    username: str | None, is_admin: bool, *, for_filing: bool = False
+) -> dict | None:
+    """The access clause the navigation tree applies, or ``None`` for no restriction.
+
+    While metadata is not open to all users, the tree shows a caller only the
+    resources whose effective access rights they hold, the same rule the listing
+    applies; an anonymous caller holds none. Administrators see everything.
+
+    ``for_filing`` applies the rule regardless of the setting: the tree is then
+    a parent picker, and a parent the caller may not see is one they cannot use.
+    """
+    if is_admin:
+        return None
+    if not for_filing and metadata_open_to_all():
+        return None
+    return access_rights_clause(username)
 
 
 def effective_access_right(resource: dict) -> str | None:
@@ -110,13 +222,10 @@ def may_view_resource(username: str, resource: dict, is_admin: bool) -> bool:
     if not required:
         return True
 
-    held = user_access_rights(username)
     # The field is declared a single id, but list-valued documents exist in real
     # data - which is why the "no rights" clauses above have to enumerate the
     # empty list too. A list means any one of them is sufficient.
-    if isinstance(required, list):
-        return bool(set(required) & set(held))
-    return required in held
+    return _holds(required, user_access_rights(username))
 
 
 def holds_edit_role(username: str, post_type: str | None, is_admin: bool) -> bool:

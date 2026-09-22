@@ -474,6 +474,7 @@ def _resolve_parent(row, user: str):
         return None
 
     from archihub.api.resources.access import may_view_resource
+    from archihub.api.users.services import has_role
 
     candidates: list[dict] = []
     object_id = _object_id(named, quiet=True)
@@ -482,13 +483,15 @@ def _resolve_parent(row, user: str):
     candidates.append({"metadata.firstLevel.title": str(named)})
 
     resource = _mongo().get_record(
-        "resources", {"$or": candidates}, fields={"_id": 1, "post_type": 1}
+        "resources",
+        {"$or": candidates},
+        fields={"_id": 1, "post_type": 1, "accessRights": 1, "parents": 1},
     )
     if not resource:
         return _UNRESOLVED
 
     # The caller must be able to see the parent they are filing under.
-    if not may_view_resource(str(resource["_id"]), user):
+    if not may_view_resource(user, resource, has_role(user, "admin")):
         return _UNRESOLVED
 
     return {"id": str(resource["_id"]), "post_type": resource.get("post_type")}

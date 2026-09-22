@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 
 from archihub.api.resources import hierarchy
+from archihub.api.resources.access import metadata_open_to_all as _REAL_METADATA_OPEN_TO_ALL
 from archihub.core.errors import ValidationError
 
 
@@ -65,7 +66,13 @@ def _dig(doc, dotted):
 
 def _matches(doc, filters):
     for key, expected in filters.items():
-        if not _field_matches(doc, key, expected):
+        if key == "$and":
+            if not all(_matches(doc, clause) for clause in expected):
+                return False
+        elif key == "$or":
+            if not any(_matches(doc, clause) for clause in expected):
+                return False
+        elif not _field_matches(doc, key, expected):
             return False
     return True
 
@@ -82,6 +89,8 @@ def _field_matches(doc, key, expected):
 
 
 def _compare(value, expected):
+    if isinstance(expected, dict) and "$exists" in expected:
+        return (value is not None) == expected["$exists"]
     if isinstance(expected, dict) and "$in" in expected:
         options = expected["$in"]
         # A whole-value match first: `parent: {'$in': [None, []]}` is asking
@@ -115,6 +124,18 @@ def test_a_malformed_id_never_reaches_the_database():
 
     assert _to_object_id("not-an-object-id") is None
     assert _to_object_id("507f1f77bcf86cd799439011") is not None
+
+
+@pytest.fixture(autouse=True)
+def access_settings(monkeypatch):
+    """Default access state: metadata closed, and the caller holds no access rights."""
+    from archihub.api.resources import access
+
+    state = {"open": False, "rights": {}}
+    monkeypatch.setattr(access, "metadata_open_to_all", lambda: state["open"])
+    monkeypatch.setattr(access, "user_access_rights", lambda u: state["rights"].get(u, []))
+    monkeypatch.setattr(access, "restricted_ancestors", lambda: [])
+    return state
 
 
 @pytest.fixture(autouse=True)
@@ -578,3 +599,89 @@ def test_a_level_is_paginated_when_a_page_is_given(tree_data):
 
     assert len(first) == hierarchy.TREE_PAGE_SIZE
     assert {n["id"] for n in first} & {n["id"] for n in second} == set()
+
+
+# ---------------------------------------------------------------------------
+# Access rights in the tree
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def restricted_tree(tree_data):
+    """``reserved`` is a fondo only holders of the ``internal`` right may see."""
+    tree_data.resources["reserved"] = {
+        "post_type": "fondo",
+        "parent": [],
+        "status": "published",
+        "accessRights": "internal",
+        "metadata": {"firstLevel": {"title": "Reservado"}},
+    }
+    tree_data.resources["hidden_child"] = {
+        "post_type": "foto",
+        "parent": [{"id": "root"}],
+        "parents": [{"id": "root", "post_type": "fondo"}],
+        "status": "published",
+        "accessRights": "internal",
+        "metadata": {"firstLevel": {"title": "Foto reservada"}},
+    }
+    tree_data.resources.pop("child")
+    return tree_data
+
+
+def _ids(nodes):
+    return {node["id"] for node in nodes}
+
+
+def test_a_resource_the_caller_has_no_right_to_is_not_in_the_tree(restricted_tree):
+    nodes, _status = hierarchy.get_tree("all", ["fondo", "foto"], "alice")
+    assert _ids(nodes) == {"root"}
+
+
+def test_a_folder_whose_only_children_are_restricted_is_a_leaf(restricted_tree):
+    nodes, _status = hierarchy.get_tree("all", ["fondo", "foto"], "alice")
+    assert nodes[0]["children"] is False
+
+
+def test_holding_the_right_shows_the_resource(restricted_tree, access_settings):
+    access_settings["rights"]["alice"] = ["internal"]
+    nodes, _status = hierarchy.get_tree("all", ["fondo", "foto"], "alice")
+    assert _ids(nodes) == {"root", "reserved"}
+    assert next(n for n in nodes if n["id"] == "root")["children"] is True
+
+
+def test_an_anonymous_caller_sees_only_unrestricted_resources(restricted_tree):
+    nodes, _status = hierarchy.get_tree("all", ["fondo", "foto"], None)
+    assert _ids(nodes) == {"root"}
+
+
+def test_an_admin_sees_every_resource(restricted_tree, monkeypatch):
+    import archihub.api.users.services as users
+
+    monkeypatch.setattr(users, "has_role", lambda u, r: r == "admin")
+    nodes, _status = hierarchy.get_tree("all", ["fondo", "foto"], "admin")
+    assert _ids(nodes) == {"root", "reserved"}
+
+
+def test_opening_metadata_to_all_users_shows_every_resource(restricted_tree, access_settings):
+    access_settings["open"] = True
+    nodes, _status = hierarchy.get_tree("all", ["fondo", "foto"], "alice")
+    assert _ids(nodes) == {"root", "reserved"}
+    assert next(n for n in nodes if n["id"] == "root")["children"] is True
+
+
+@pytest.mark.parametrize(
+    "stored, expected", [(None, False), (False, False), ("true", False), (True, True)]
+)
+def test_metadata_is_closed_unless_the_setting_is_true(monkeypatch, stored, expected):
+    import archihub.api.system.services as system
+
+    monkeypatch.setattr(system, "get_setting_value", lambda *args, **kwargs: stored)
+    assert _REAL_METADATA_OPEN_TO_ALL() is expected
+
+
+def test_a_parent_picker_hides_what_the_caller_may_not_see_even_when_metadata_is_open(
+    restricted_tree, access_settings
+):
+    access_settings["open"] = True
+    nodes, _status = hierarchy.get_tree("all", ["fondo", "foto"], "alice", for_filing=True)
+    assert _ids(nodes) == {"root"}

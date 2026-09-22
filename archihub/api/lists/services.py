@@ -15,6 +15,7 @@ from bson import json_util
 from bson.objectid import ObjectId
 
 from archihub.core.i18n import gettext as _
+from archihub.infra.cache import cached
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,23 @@ def get_all() -> tuple[list | dict, int]:
         return {"msg": str(exc)}, 500
 
 
+@cached("lists", "options")
+def _resolved_list(list_id: str) -> dict | None:
+    """A list with its options resolved, or ``None`` if it does not exist.
+
+    Cached: forms render the same list in many fields, and every write to
+    either collection invalidates it.
+    """
+    record = _mongo().get_record(COLLECTION, {"_id": ObjectId(list_id)})
+    if not record:
+        return None
+    return {
+        "name": record.get("name"),
+        "description": record.get("description", ""),
+        "options": _load_options(record.get("options") or []),
+    }
+
+
 def get_by_id(list_id: str) -> tuple[dict, int]:
     """One list with its options resolved and ordered.
 
@@ -91,16 +109,10 @@ def get_by_id(list_id: str) -> tuple[dict, int]:
         return {"msg": _("List not found")}, 404
 
     try:
-        record = _mongo().get_record(COLLECTION, {"_id": object_id})
-        # The existence check comes first.
-        if not record:
+        payload = _resolved_list(str(object_id))
+        if payload is None:
             return {"msg": _("List not found")}, 404
-
-        return {
-            "name": record.get("name"),
-            "description": record.get("description", ""),
-            "options": _load_options(record.get("options") or []),
-        }, 200
+        return payload, 200
     except Exception as exc:
         logger.exception("Could not load list %s", list_id)
         return {"msg": str(exc)}, 500

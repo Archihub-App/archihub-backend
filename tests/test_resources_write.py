@@ -344,9 +344,10 @@ def test_moving_a_resource_rewrites_its_descendants_ancestry(mongo):
     mongo.resources[CHILD_ID] = resource(
         _id=ObjectId(CHILD_ID), parent=[{"id": RESOURCE_ID, "post_type": "carpeta"}]
     )
-    mongo.resources["root"] = {"_id": "root", "post_type": "carpeta", "parent": [], "parents": []}
+    root_id = "6a70b833497d4440325c94b9"
+    mongo.resources[root_id] = {"_id": root_id, "post_type": "carpeta", "parent": [], "parents": []}
 
-    write.update(RESOURCE_ID, body(parent=[{"id": "root", "post_type": "carpeta"}]), "alice")
+    write.update(RESOURCE_ID, body(parent=[{"id": root_id, "post_type": "carpeta"}]), "alice")
 
     written = [w for w in mongo.writes if str(w[1].get("_id")) == CHILD_ID]
     assert written and "parents" in written[-1][2]
@@ -593,3 +594,76 @@ def test_a_reciprocal_update_touches_only_that_field(related):
 
     reciprocal = [w for w in related.writes if str(w[1].get("_id")) == CHILD_ID]
     assert set(reciprocal[-1][2]) == {"metadata.related", "updatedAt", "updatedBy"}
+
+
+# ---------------------------------------------------------------------------
+# Parents the caller may not see
+# ---------------------------------------------------------------------------
+
+GRANDPARENT_ID = "6a70b833497d4440325c94b3"
+
+
+def _under(parent_id):
+    return [{"id": parent_id, "post_type": "carpeta"}]
+
+
+def test_filing_under_a_parent_the_caller_may_not_see_is_refused(mongo):
+    mongo.resources[RESOURCE_ID] = resource(accessRights="reserved")
+
+    payload, status = write.create(body(parent=_under(RESOURCE_ID)), "alice")
+
+    assert status == 403
+    assert "parent" in payload["msg"]
+    assert mongo.inserted == []
+
+
+def test_a_parent_restricted_only_by_its_own_ancestor_is_refused_too(mongo):
+    mongo.resources[GRANDPARENT_ID] = resource(_id=ObjectId(GRANDPARENT_ID), accessRights="reserved")
+    mongo.resources[RESOURCE_ID] = resource(parent=_under(GRANDPARENT_ID), parents=_under(GRANDPARENT_ID))
+
+    _payload, status = write.create(body(parent=_under(RESOURCE_ID)), "alice")
+
+    assert status == 403
+    assert mongo.inserted == []
+
+
+def test_holding_the_parents_right_allows_filing_under_it(mongo):
+    mongo.resources[RESOURCE_ID] = resource(accessRights="reserved")
+    mongo.user = {"accessRights": ["reserved"]}
+
+    _payload, status = write.create(body(parent=_under(RESOURCE_ID)), "alice")
+
+    assert status == 201
+
+
+def test_an_admin_may_file_under_any_parent(mongo, monkeypatch):
+    with_roles(monkeypatch, "admin")
+    mongo.resources[RESOURCE_ID] = resource(accessRights="reserved")
+
+    _payload, status = write.create(body(parent=_under(RESOURCE_ID)), "root")
+
+    assert status == 201
+
+
+def test_moving_under_a_parent_the_caller_may_not_see_is_refused(mongo):
+    mongo.resources[CHILD_ID] = resource(_id=ObjectId(CHILD_ID))
+    mongo.resources[RESOURCE_ID] = resource(accessRights="reserved")
+
+    _payload, status = write.update(CHILD_ID, body(parent=_under(RESOURCE_ID)), "alice")
+
+    assert status == 403
+    assert mongo.writes == []
+
+
+def test_an_update_may_leave_a_resource_where_someone_else_filed_it(mongo):
+    """The resource's own right governs it, so its author can still edit it."""
+    mongo.resources[RESOURCE_ID] = resource(accessRights="reserved")
+    mongo.resources[CHILD_ID] = resource(
+        _id=ObjectId(CHILD_ID), accessRights="open",
+        parent=_under(RESOURCE_ID), parents=_under(RESOURCE_ID),
+    )
+    mongo.user = {"accessRights": ["open"]}
+
+    _payload, status = write.update(CHILD_ID, body(parent=_under(RESOURCE_ID)), "alice")
+
+    assert status == 200
