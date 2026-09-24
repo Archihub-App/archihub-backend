@@ -25,6 +25,7 @@ from bson import json_util
 from bson.objectid import ObjectId
 
 from archihub.api.resources import access, presentation
+from archihub.core.clock import isoformat_utc
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
@@ -78,6 +79,12 @@ def _to_object_id(value):
         return None
 
 
+# The resource's own timestamps: instants, sent with their UTC offset so the
+# browser shows them in the viewer's timezone. A metadata date is a calendar
+# date and keeps its offset-free form.
+TIMESTAMP_FIELDS = frozenset({"createdAt", "updatedAt"})
+
+
 def _isoformat_in_place(document: dict, field_path: str) -> None:
     """Convert a dotted-path datetime to ISO, in place.
 
@@ -93,7 +100,11 @@ def _isoformat_in_place(document: dict, field_path: str) -> None:
 
     last = keys[-1]
     if isinstance(current, dict) and isinstance(current.get(last), datetime):
-        current[last] = current[last].isoformat()
+        value = current[last]
+        if field_path in TIMESTAMP_FIELDS:
+            current[last] = isoformat_utc(value)
+        else:
+            current[last] = value.isoformat()
 
 
 # ---------------------------------------------------------------------------

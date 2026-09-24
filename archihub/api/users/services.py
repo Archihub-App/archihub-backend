@@ -25,6 +25,7 @@ import bcrypt
 import datetime
 import logging
 
+from archihub.core.clock import as_utc, isoformat_utc, utcnow
 from archihub.core.errors import NotFoundError, RateLimitError
 from archihub.core.i18n import gettext as _
 from archihub.infra.cache import cached
@@ -135,7 +136,7 @@ def register_user(body: dict) -> tuple[dict, int]:
         "accessRights": rights,
         "loginType": body.get("loginType", "local"),
         "verified": body.get("verified", True),
-        "createdAt": datetime.datetime.now(),
+        "createdAt": utcnow(),
     }
     mongo.insert_record("users", record)
     logger.info("Created account %s", record["username"])
@@ -176,8 +177,8 @@ def has_right(username: str, right: str) -> bool:
 
 
 def _is_date_in_current_week(value: datetime.datetime) -> bool:
-    now = datetime.datetime.now()
-    return value.isocalendar()[:2] == now.isocalendar()[:2]
+    """Whether ``value`` falls in this ISO week, both read in UTC."""
+    return as_utc(value).isocalendar()[:2] == utcnow().isocalendar()[:2]
 
 
 def add_request(username: str) -> None:
@@ -209,7 +210,7 @@ def add_request(username: str) -> None:
     mongo.update_record(
         "users",
         {"username": username},
-        {"requests": requests, "lastRequest": datetime.datetime.now()},
+        {"requests": requests, "lastRequest": utcnow()},
     )
 
 
@@ -380,11 +381,12 @@ def present_profile(user: dict) -> dict:
     # string, because it is read by `new Date(...)`, which does not understand
     # the wrapped form and yields an invalid date from it without failing.
     #
-    # No trailing `Z` and no offset: the value is stored naive and in local
-    # time, so stamping it as UTC would move it by the server's offset - and for
-    # a timestamp near midnight, move the day the interface reports.
+    # With its UTC offset, so the browser converts it to the viewer's timezone.
     created = user.get("createdAt")
-    user["created_at"] = created.isoformat() if hasattr(created, "isoformat") else created
+    if isinstance(created, datetime.datetime):
+        user["created_at"] = isoformat_utc(created)
+    else:
+        user["created_at"] = created
     return user
 
 

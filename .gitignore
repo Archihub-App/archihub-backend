@@ -1,5 +1,7 @@
 **/__pycache__/
 .env
+# Every environment file (tests.env, ...) holds credentials.
+*.env
 # A plugin keeps its own settings and credentials beside its package. The five
 # bundled plugins are tracked, so theirs would otherwise be committed.
 archihub/plugins/*/.env

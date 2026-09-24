@@ -20,9 +20,10 @@ whole `processing` block as they last read it. ``store_processing_result``
 
 from __future__ import annotations
 
-import datetime
 import logging
 from typing import Any
+
+from archihub.core.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ def store_processing_result(record_id: str, key: str, result: dict) -> bool:
             "$set": {
                 f"processing.{key}": result,
                 "updatedBy": "system",
-                "updatedAt": datetime.datetime.now(),
+                "updatedAt": utcnow(),
             }
         },
     )
@@ -130,7 +131,7 @@ def update_resource(resource_id: str, update: dict) -> tuple[dict, int]:
     if errors:
         return {"msg": errors}, 400
 
-    body["updatedAt"] = datetime.datetime.now()
+    body["updatedAt"] = utcnow()
     body["updatedBy"] = "system"
     body.pop("_id", None)
 

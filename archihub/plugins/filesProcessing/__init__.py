@@ -27,7 +27,6 @@ through ``core.files.resolve_within``.
 
 from __future__ import annotations
 
-import datetime
 import logging
 from pathlib import Path
 
@@ -35,6 +34,7 @@ from celery import current_task, shared_task
 from fastapi import Body, Depends
 from fastapi.responses import JSONResponse
 
+from archihub.core.clock import isoformat_utc, utcnow
 from archihub.core.i18n import gettext as _
 from archihub.core.responses import json_response
 from archihub.core.security.jwt import CurrentUser
@@ -568,7 +568,7 @@ def _progress(status: str, percent: float) -> None:
             meta={
                 "status": status,
                 "progress": percent,
-                "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "time": isoformat_utc(utcnow()),
             },
         )
     except Exception:

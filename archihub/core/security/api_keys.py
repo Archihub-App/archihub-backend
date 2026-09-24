@@ -51,6 +51,8 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from archihub.core.clock import as_utc, isoformat_utc, utcnow
+
 logger = logging.getLogger(__name__)
 
 COLLECTION = "api_keys"
@@ -142,7 +144,7 @@ def create_key(
 
     key_id = secrets.token_hex(KEY_ID_BYTES)
     secret = secrets.token_urlsafe(SECRET_BYTES)
-    now = datetime.now()
+    now = utcnow()
 
     _mongo().insert_record(
         COLLECTION,
@@ -169,7 +171,7 @@ def revoke_key(key_id: str, username: str | None = None) -> bool:
     if username is not None:
         filters["user"] = username
 
-    result = _mongo().update_record(COLLECTION, filters, {"revoked_at": datetime.now()})
+    result = _mongo().update_record(COLLECTION, filters, {"revoked_at": utcnow()})
     revoked = bool(getattr(result, "modified_count", 0))
     if revoked:
         logger.info("Revoked API key %s", key_id)
@@ -193,7 +195,7 @@ def revoke_all(username: str, scope: str | None = None, name: str | None = None)
         filters["scope"] = scope
     if name:
         filters["name"] = name
-    _mongo().update_records(COLLECTION, filters, {"revoked_at": datetime.now()})
+    _mongo().update_records(COLLECTION, filters, {"revoked_at": utcnow()})
     logger.info(
         "Revoked live keys for %s (scope=%s, name=%s)", username, scope or "*", name or "*"
     )
@@ -236,7 +238,7 @@ def list_keys(username: str) -> list[dict]:
 
 
 def _iso(value) -> str | None:
-    return value.isoformat() if isinstance(value, datetime) else None
+    return isoformat_utc(value) if isinstance(value, datetime) else None
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +274,7 @@ def verify_key(presented: str, *, required_scope: str | None = None) -> ApiKeyId
         return None
 
     expires_at = record.get("expires_at")
-    if isinstance(expires_at, datetime) and expires_at < datetime.now():
+    if isinstance(expires_at, datetime) and as_utc(expires_at) < utcnow():
         return None
 
     if required_scope and record.get("scope") != required_scope:
@@ -287,9 +289,9 @@ def verify_key(presented: str, *, required_scope: str | None = None) -> ApiKeyId
 def _touch(record: dict) -> None:
     """Refresh ``last_used_at``, at most once per resolution window."""
     last_used = record.get("last_used_at")
-    now = datetime.now()
+    now = utcnow()
 
-    if isinstance(last_used, datetime) and now - last_used < LAST_USED_RESOLUTION:
+    if isinstance(last_used, datetime) and now - as_utc(last_used) < LAST_USED_RESOLUTION:
         return
 
     try:

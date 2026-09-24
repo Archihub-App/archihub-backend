@@ -122,7 +122,7 @@ def test_created_at_is_a_plain_iso_string(mongo):
 
     payload, _status = services.get_profile("alice")
 
-    assert payload["created_at"] == "2024-03-15T10:30:00"
+    assert payload["created_at"] == "2024-03-15T10:30:00+00:00"
     assert isinstance(payload["created_at"], str)
 
 

@@ -28,6 +28,7 @@ import re
 from pathlib import Path
 
 from archihub.core import files as filestore
+from archihub.core.clock import isoformat_utc
 from archihub.core.i18n import gettext as _
 from archihub.core.settings import get_settings
 
@@ -160,7 +161,7 @@ def present(record: dict, *, include_content: bool = False) -> dict:
 
 
 def _iso(value):
-    return value.isoformat() if isinstance(value, datetime.datetime) else value
+    return isoformat_utc(value) if isinstance(value, datetime.datetime) else value
 
 
 def _fields(include_content: bool) -> dict:

@@ -185,6 +185,23 @@ def test_seeding_adds_only_unseen_entries(mongo, monkeypatch):
     assert update["data"][0]["value"] == "configured"
 
 
+def test_seeding_leaves_a_group_of_plain_values_untouched(mongo, monkeypatch):
+    """The active plugin list is the operator's choice, and seeding runs twice
+    during a reset - so an existing list of slugs must neither crash the merge
+    nor gain the defaults back."""
+    monkeypatch.setattr(
+        "archihub.api.system.default_settings.settings",
+        [{"name": "active_plugins", "data": ["a", "b"]}],
+        raising=False,
+    )
+    mongo.records["system"] = {"name": "active_plugins", "data": ["a"]}
+
+    services.set_system_setting()
+
+    assert mongo.updated == []
+    assert mongo.inserted == []
+
+
 def test_seeding_creates_a_missing_group(mongo, monkeypatch):
     monkeypatch.setattr(
         "archihub.api.system.default_settings.settings",

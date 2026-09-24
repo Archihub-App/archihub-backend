@@ -8,10 +8,11 @@ use it to avoid launching the same job twice.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any
 
 from celery.result import AsyncResult
+
+from archihub.core.clock import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ def add_task(
             "status": STATUS_PENDING,
             "name": task_name,
             "resultType": result_type,
-            "date": datetime.now(),
+            "date": utcnow(),
             "params": params or {},
         },
     )

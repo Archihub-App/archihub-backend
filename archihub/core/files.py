@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from archihub.core.clock import utcnow
 from archihub.core.i18n import gettext as _
 from archihub.core.settings import get_settings
 
@@ -142,7 +143,7 @@ def dated_directory(root: str | os.PathLike, when: datetime | None = None) -> Pa
     The layout the archive already uses on disk; keeping it means stored paths
     stay valid across upgrades.
     """
-    moment = when or datetime.now()
+    moment = when or utcnow()
     path = Path(root) / moment.strftime("%Y") / moment.strftime("%m") / moment.strftime("%d")
     path.mkdir(parents=True, exist_ok=True)
     return path

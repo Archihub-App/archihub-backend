@@ -76,6 +76,7 @@ from archihub.api.aiservices import (
     thinking,
 )
 from archihub.api.aiservices import errors as ai_errors
+from archihub.core.clock import utcnow
 from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,7 @@ def _mongo():
 
 
 def _now() -> datetime.datetime:
-    return datetime.datetime.now()
+    return utcnow()
 
 
 class AssistantError(Exception):

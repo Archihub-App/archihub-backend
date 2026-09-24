@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import timedelta
 
-from fastapi import APIRouter, Body, Depends, File, Form, Header, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Body, Depends, File, Form, Header, Request, UploadFile
+from fastapi.responses import JSONResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from archihub.api.external import services
 from archihub.api.records.storage import IncomingFile, UnsupportedFileType
@@ -55,13 +57,15 @@ def _enabled(entry_id: str) -> bool:
     return bool(get_setting_value("api_activation", entry_id))
 
 
-def _unavailable() -> JSONResponse:
-    """What an external caller saw when the API was switched off: a plain 404.
+def _not_found() -> StarletteHTTPException:
+    """The refusal for a switched-off API and for an endpoint that is not there.
 
-    Deliberately indistinguishable from a route that does not exist, because to
-    the caller it did not.
+    Raised exactly the way an unrouted path is, so the response is
+    byte-identical to one: to the caller, the route does not exist. A translated
+    message here ("No encontrado" where an unrouted path says "Not Found") would
+    tell a prober the route is real and was deliberately refused.
     """
-    return JSONResponse(status_code=404, content={"msg": _("Not Found")})
+    return StarletteHTTPException(status_code=404)
 
 
 # ---------------------------------------------------------------------------
@@ -77,15 +81,7 @@ def _refuse_if_switched_off(entry_id: str) -> None:
     a handler body it would run after FastAPI had already resolved the token.
     """
     if not _enabled(entry_id):
-        from starlette.exceptions import HTTPException as StarletteHTTPException
-
-        # Raised the way an unrouted path raises it, so the response is
-        # byte-identical to one. NOT a translated `NotFoundError`: that renders
-        # "No encontrado" where a genuinely missing route renders "Not Found",
-        # and that single difference tells a prober the route is really there
-        # and was deliberately refused - which is the whole thing this is
-        # supposed to hide.
-        raise StarletteHTTPException(status_code=404)
+        raise _not_found()
 
 
 def _require_admin_api() -> None:
@@ -157,7 +153,7 @@ def _parse_data(data: str) -> dict:
 def get_system_info(identity: ApiIdentity = Depends(admin_identity)) -> JSONResponse:
     """Content types, active capabilities and a couple of counts."""
     if not _enabled(ADMIN_SETTING):
-        return _unavailable()
+        raise _not_found()
     return _respond(services.system_info(identity.username))
 
 
@@ -169,7 +165,7 @@ def create_resource(
 ) -> JSONResponse:
     """Create a resource, filling in the fields an integration may omit."""
     if not _enabled(ADMIN_SETTING):
-        return _unavailable()
+        raise _not_found()
 
     from archihub.api.resources import write
 
@@ -193,7 +189,7 @@ def update_resource(
     The id is its own form field.
     """
     if not _enabled(ADMIN_SETTING):
-        return _unavailable()
+        raise _not_found()
 
     from archihub.api.resources import write
 
@@ -216,7 +212,7 @@ def get_resource_id(
     body is never used as a Mongo filter.
     """
     if not _enabled(ADMIN_SETTING):
-        return _unavailable()
+        raise _not_found()
     return _respond(services.find_resource(body))
 
 
@@ -227,7 +223,7 @@ def get_option_id(
 ) -> JSONResponse:
     """Find a controlled-vocabulary option by its display term."""
     if not _enabled(ADMIN_SETTING):
-        return _unavailable()
+        raise _not_found()
     return _respond(services.find_option(body))
 
 
@@ -238,7 +234,7 @@ def create_type(
 ) -> JSONResponse:
     """Create a content type."""
     if not _enabled(ADMIN_SETTING):
-        return _unavailable()
+        raise _not_found()
 
     from archihub.api.types import services as type_services
 
@@ -255,7 +251,7 @@ def update_type(
     A missing `slug` is a 400.
     """
     if not _enabled(ADMIN_SETTING):
-        return _unavailable()
+        raise _not_found()
 
     slug = body.get("slug")
     if not isinstance(slug, str) or not slug:
@@ -270,7 +266,7 @@ def update_type(
 def get_type(slug: str, identity: ApiIdentity = Depends(admin_identity)) -> JSONResponse:
     """One content type by slug."""
     if not _enabled(ADMIN_SETTING):
-        return _unavailable()
+        raise _not_found()
 
     from archihub.api.types import services as type_services
 
@@ -289,42 +285,58 @@ def get_list(list_id: str, identity: ApiIdentity = Depends(admin_identity)) -> J
     path, the method and the response shape are fixed.
     """
     if not _enabled(ADMIN_SETTING):
-        return _unavailable()
+        raise _not_found()
 
     from archihub.api.lists import services as list_services
 
     return _respond(list_services.get_by_id(list_id))
 
 
+# How long the session minted for one forwarded call lives. It is checked when
+# the plugin route authenticates, at the start of the call, so it only has to
+# outlast the hop - an upload that streams for longer is not cut off by it.
+PLUGIN_CALL_SESSION = timedelta(minutes=2)
+
+# Headers of the outside request that must not reach the plugin route: the API
+# token is replaced by the session below, and a browser cookie has no business
+# on a call made with an API token.
+_NOT_FORWARDED = {b"authorization", b"cookie"}
+
+_ROUTING_KEYS = {"route", "endpoint", "path_params", "router"}
+
+
 @admin_router.api_route(
     "/plugins/{plugin}/{plugin_endpoint:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    responses={501: {"description": "Forwarding to a plugin with an API token is not implemented"}},
+    responses={
+        200: {"description": "Whatever the plugin endpoint answers, passed through unchanged"},
+        404: {"description": "No active plugin with that name, or no such endpoint in it"},
+    },
 )
 def plugin_proxy(
+    request: Request,
     plugin: str,
     plugin_endpoint: str,
     identity: ApiIdentity = Depends(admin_identity),
-) -> JSONResponse:
-    """Reach a plugin's endpoint with an admin API token instead of a JWT.
+) -> Response:
+    """Call an active plugin's endpoint with an admin API token.
 
-    THE TARGET IS RESOLVED, NEVER ASSEMBLED. The named plugin is looked up in the
-    **mounted registry** — so it must be active — and the endpoint must match one
-    of that plugin's own declared route paths *exactly*. A traversal string does
-    not match any of them: there is nothing to filter when the only reachable
-    values come from a list the application built.
+    The request - method, query string, headers and body, streamed - is handed
+    to the plugin route as if the token's owner had made it from a browser, and
+    the plugin's answer comes back unchanged, streamed too.
 
-    It answers 501, deliberately: resolution is implemented and
-    testable, but re-dispatching a request into the ASGI stack with a *different*
-    identity is a second, separate decision (the inner route's own
-    ``Depends(get_current_user)`` would reject a Fernet identity, so honouring
-    this means teaching those routes about a second principal). Nothing in
-    ``upgrade_front`` calls it; an outside integration that does gets an explicit
-    "not implemented" rather than a proxy with an authorisation model nobody has
-    reviewed.
+    **The plugin route still decides.** Its own authentication and role checks
+    run against a short-lived session minted here for the token's owner, never
+    returned to the caller; the token only establishes who that owner is. So a
+    call through here can do exactly what that administrator can do in the
+    interface, and nothing a plugin route would refuse them.
+
+    **The target is resolved, never assembled.** The plugin must be mounted
+    (active), and the path must match one of that plugin's own declared routes;
+    anything else is the same 404 as a path that does not exist.
     """
     if not _enabled(ADMIN_SETTING):
-        return _unavailable()
+        raise _not_found()
 
     target = resolve_plugin_route(plugin, plugin_endpoint)
     if target is None:
@@ -332,24 +344,60 @@ def plugin_proxy(
             "Plugin proxy: no route %s/%s (asked for by %s)",
             plugin, plugin_endpoint, identity.username,
         )
-        # The same body as any path that does not exist - which, to an outside
-        # integration asking for an endpoint of a plugin this instance does not
-        # run, it does not.
-        return _unavailable()
+        raise _not_found()
 
-    logger.info("Plugin proxy resolved %s but dispatch is not implemented", target)
-    return JSONResponse(
-        status_code=501,
-        content={"msg": _("Plugin endpoints are not available in this build yet")},
-    )
+    logger.info("Plugin proxy: %s %s as %s", request.method, target, identity.username)
+    return _PluginCall(target, identity.username)
+
+
+class _PluginCall(Response):
+    """Runs the resolved plugin route in place of a response.
+
+    The outer handler never reads the request body, so the ASGI ``receive``
+    channel is still untouched and is passed straight on: uploads stream into
+    the plugin route, and its response streams out through ``send``. The call
+    goes through the whole application, so the error handlers and request
+    logging apply to it as to any other request.
+    """
+
+    def __init__(self, path: str, username: str) -> None:
+        super().__init__()
+        self.target_path = path
+        self.username = username
+
+    async def __call__(self, scope, receive, send) -> None:
+        from archihub.core.security import tokens
+
+        session = tokens.create_access_token(self.username, expires_delta=PLUGIN_CALL_SESSION)
+        headers = [
+            (name, value) for name, value in scope["headers"] if name.lower() not in _NOT_FORWARDED
+        ]
+        headers.append((b"authorization", f"Bearer {session}".encode()))
+
+        # What routing and FastAPI attached to the outer request stays behind;
+        # the inner one is routed afresh and gets its own.
+        inner = {
+            key: value
+            for key, value in scope.items()
+            if key not in _ROUTING_KEYS and not key.startswith("fastapi_")
+        }
+        inner.update(path=self.target_path, raw_path=self.target_path.encode(), headers=headers)
+        await scope["app"](inner, receive, send)
+
+
+def _unsafe_segment(segment: str) -> bool:
+    return segment in ("", ".", "..") or "%" in segment or "\\" in segment
 
 
 def resolve_plugin_route(plugin: str, plugin_endpoint: str) -> str | None:
-    """The full path of a mounted plugin's endpoint, or ``None``.
+    """The path to call on a mounted plugin, or ``None``.
 
-    Returns a value drawn from the application's own route table, never one
-    built from the request. Separated from the handler so it can be tested
-    against traversal attempts without an app or a token.
+    The path must match one of the plugin's declared routes - a route with a
+    parameter (``/download/{task_id}``) matches one concrete value per segment,
+    never a ``/``. A segment that is empty, ``.`` or ``..``, or that still holds
+    a ``%`` or ``\\`` after decoding, is refused before the match, so no request
+    path can name anything but that plugin's own routes. Separated from the
+    handler so it can be tested without an app or a token.
     """
     from archihub.plugins.framework.mounting import get_plugin
 
@@ -357,10 +405,15 @@ def resolve_plugin_route(plugin: str, plugin_endpoint: str) -> str | None:
     if mounted is None:
         return None
 
-    wanted = f"/{plugin}/{plugin_endpoint.strip('/')}"
+    segments = plugin_endpoint.strip("/").split("/")
+    if any(_unsafe_segment(segment) for segment in segments):
+        return None
+
+    wanted = "/" + "/".join([plugin, *segments])
     for route in mounted.router.routes:
-        if getattr(route, "path", None) == wanted:
-            return route.path
+        regex = getattr(route, "path_regex", None)
+        if regex is not None and regex.match(wanted):
+            return wanted
     return None
 
 
@@ -381,7 +434,7 @@ def list_resources(
     but published material —
     """
     if not _enabled(PUBLIC_SETTING):
-        return _unavailable()
+        raise _not_found()
 
     keyword = body.get("keyword")
     if isinstance(keyword, str) and keyword.strip():
@@ -398,7 +451,7 @@ def list_resources(
 def list_types(identity: ApiIdentity = Depends(public_identity)) -> JSONResponse:
     """The instance's content types."""
     if not _enabled(PUBLIC_SETTING):
-        return _unavailable()
+        raise _not_found()
 
     from archihub.api.types import services as type_services
 
@@ -412,7 +465,7 @@ def get_resource(
 ) -> JSONResponse:
     """One published resource, through the public visibility rule."""
     if not _enabled(PUBLIC_SETTING):
-        return _unavailable()
+        raise _not_found()
 
     from archihub.api.resources import public as resources_public
 

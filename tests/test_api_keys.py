@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from archihub.core.clock import as_utc, utcnow
 from archihub.core.security import api_keys
 
 
@@ -208,10 +209,10 @@ def test_last_used_is_refreshed_once_the_window_passes(mongo):
     key = api_keys.create_key("alice")
     api_keys.verify_key(key)
 
-    mongo.rows[0]["last_used_at"] = datetime.now() - api_keys.LAST_USED_RESOLUTION * 2
+    mongo.rows[0]["last_used_at"] = utcnow() - api_keys.LAST_USED_RESOLUTION * 2
     api_keys.verify_key(key)
 
-    assert datetime.now() - mongo.rows[0]["last_used_at"] < timedelta(minutes=1)
+    assert utcnow() - as_utc(mongo.rows[0]["last_used_at"]) < timedelta(minutes=1)
 
 
 def test_bookkeeping_failure_does_not_fail_the_request(mongo, monkeypatch):

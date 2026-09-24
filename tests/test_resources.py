@@ -265,7 +265,26 @@ def test_dates_are_serialised(mongo, as_admin, monkeypatch):
     mongo.rows["resources"] = [{"_id": ObjectId(VALID_ID), "createdAt": datetime(2026, 1, 2, 3, 4, 5)}]
 
     payload, _status = services.get_all({"post_type": ["x"]}, "admin")
-    assert payload["resources"][0]["createdAt"] == "2026-01-02T03:04:05"
+    assert payload["resources"][0]["createdAt"] == "2026-01-02T03:04:05+00:00"
+
+
+def test_a_metadata_date_column_keeps_its_offset_free_form(mongo, as_admin, monkeypatch):
+    """A metadata date is a calendar date, not an instant: stamping it UTC
+    would move the day the interface shows."""
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    mongo.rows["resources"] = [{
+        "_id": ObjectId(VALID_ID),
+        "metadata": {"firstLevel": {"fecha": datetime(2026, 1, 2, 5, 0)}},
+    }]
+
+    payload, _status = services.get_all(
+        {
+            "post_type": ["x"],
+            "activeColumns": [{"destiny": "metadata.firstLevel.fecha", "label": "Fecha"}],
+        },
+        "admin",
+    )
+    assert payload["resources"][0]["metadata"]["firstLevel"]["fecha"] == "2026-01-02T05:00:00"
 
 
 # ---------------------------------------------------------------------------

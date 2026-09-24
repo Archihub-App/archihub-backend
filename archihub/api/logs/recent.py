@@ -34,6 +34,7 @@ from __future__ import annotations
 import datetime
 import logging
 
+from archihub.core.clock import as_utc, isoformat_utc
 from archihub.core.i18n import gettext as _
 from archihub.core.log_actions import log_actions
 
@@ -179,12 +180,11 @@ def visibility_clause(username: str, *, is_admin: bool, is_editor: bool) -> dict
 
 
 def parse_since(value) -> datetime.datetime | None:
-    """An ISO 8601 instant, in the frame the stored dates use.
+    """An ISO 8601 instant, as the naive UTC value MongoDB stores and returns.
 
-    Entries are written with a naive local timestamp, so an offset-aware value
-    is converted to local time and its offset dropped. Comparing an aware value
-    against naive storage otherwise selects a window hours away from the one
-    that was asked for, silently and plausibly.
+    A value with an offset is converted to UTC; one without is taken to be UTC
+    already. Comparing an aware value against naive storage would otherwise
+    select a window hours away from the one that was asked for.
     """
     if value in (None, ""):
         return None
@@ -198,9 +198,7 @@ def parse_since(value) -> datetime.datetime | None:
     else:
         raise ValueError(_("Invalid date"))
 
-    if parsed.tzinfo is not None:
-        parsed = parsed.astimezone().replace(tzinfo=None)
-    return parsed
+    return as_utc(parsed).replace(tzinfo=None)
 
 
 def _limit(value) -> int:
@@ -497,10 +495,9 @@ def _present(row: dict, people: dict, resources: dict, services) -> dict:
     when = row.get("date")
     return {
         "id": str(row.get("_id")) if row.get("_id") else None,
-        # A plain ISO string, in the frame the entry was written in - naive and
-        # local. A trailing `Z` here would claim UTC for a local timestamp and
-        # move every entry by the server's offset.
-        "timestamp": when.isoformat() if hasattr(when, "isoformat") else when,
+        # A plain ISO string with its UTC offset (`new Date` does not read the
+        # wrapped `$date` form); the browser shows it in the viewer's timezone.
+        "timestamp": isoformat_utc(when) if isinstance(when, datetime.datetime) else when,
         "action": action,
         "category": category_of(action),
         "level": level_of(action),

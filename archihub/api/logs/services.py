@@ -21,7 +21,7 @@ from datetime import datetime
 
 from bson import json_util
 
-from archihub.core.i18n import gettext as _
+from archihub.core.clock import utcnow
 from archihub.core.log_actions import log_actions
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def parse_result(result):
 
 
 def get_current_date() -> datetime:
-    return datetime.now()
+    return utcnow()
 
 
 def sanitize_log_filters(filters) -> dict:

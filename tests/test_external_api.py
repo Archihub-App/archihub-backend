@@ -8,6 +8,7 @@ handed to an integration, so "the caller is trusted" is not a defence.
 from __future__ import annotations
 
 import pytest
+from fastapi import Request
 
 from archihub.api.external import services
 
@@ -237,14 +238,17 @@ def test_no_default_content_type_configured_is_a_clear_refusal(monkeypatch):
 
 
 def test_a_switched_off_api_is_indistinguishable_from_a_missing_route(monkeypatch):
-    """A plain 404."""
+    """The handler refuses the way an unrouted path is refused."""
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
     from archihub.api.external import router
 
     monkeypatch.setattr(router, "_enabled", lambda entry: False)
 
-    response = router.get_system_info(identity=None)
+    with pytest.raises(StarletteHTTPException) as refused:
+        router.get_system_info(identity=None)
 
-    assert response.status_code == 404
+    assert refused.value.status_code == 404
 
 
 @pytest.mark.parametrize(
@@ -309,11 +313,15 @@ def test_the_plugin_proxy_refuses_rather_than_reaching_a_route_that_is_not_there
     class Identity:
         username = "root"
 
-    response = router.plugin_proxy("x", "../../users/delete", identity=Identity())
+    from starlette.exceptions import HTTPException as StarletteHTTPException
 
     # 404: no plugin named "x" is mounted, so there is nothing to resolve
     # against - which is the answer whatever the endpoint string contained.
-    assert response.status_code == 404
+    with pytest.raises(StarletteHTTPException) as refused:
+        router.plugin_proxy(
+            request=None, plugin="x", plugin_endpoint="../../users/delete", identity=Identity()
+        )
+    assert refused.value.status_code == 404
 
 
 @pytest.mark.parametrize(
@@ -323,6 +331,12 @@ def test_the_plugin_proxy_refuses_rather_than_reaching_a_route_that_is_not_there
         "..%2f..%2fusers",
         "bulk/../../../system/clear-cache",
         "settings/../../../../etc/passwd",
+        "filedownload/../bulk",
+        "filedownload/abc/../../../users",
+        "filedownload/a/b",
+        "filedownload/..",
+        "filedownload/%2e%2e",
+        "filedownload/.",
         "",
     ],
 )
@@ -356,8 +370,130 @@ def test_a_real_plugin_endpoint_resolves():
     try:
         assert router.resolve_plugin_route("liquidText", "bulk") == "/liquidText/bulk"
         assert router.resolve_plugin_route("liquidText", "/bulk/") == "/liquidText/bulk"
+        # A route with a parameter takes one concrete value in that segment.
+        assert (
+            router.resolve_plugin_route("liquidText", "filedownload/6ab3dd714de35380d592d678")
+            == "/liquidText/filedownload/6ab3dd714de35380d592d678"
+        )
     finally:
         _mounted.clear()
+
+
+# ---------------------------------------------------------------------------
+# The plugin proxy, end to end
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def proxied(monkeypatch):
+    """An app with the admin API and a fake plugin whose routes authenticate
+    the way every plugin route does - a session, through get_current_user."""
+    from fastapi import APIRouter, Depends, FastAPI
+    from fastapi.responses import Response
+    from fastapi.testclient import TestClient
+
+    from archihub.api.external import router
+    from archihub.core.security.api_auth import ApiIdentity
+    from archihub.core.security.jwt import CurrentUser, get_current_user
+    from archihub.plugins.framework.mounting import _mounted
+
+    plugin_router = APIRouter(prefix="/fake")
+
+    @plugin_router.api_route("/echo/{item}", methods=["GET", "POST"])
+    async def echo(item: str, request: Request, user: CurrentUser = Depends(get_current_user)):
+        return {
+            "user": user.username,
+            "item": item,
+            "method": request.method,
+            "query": dict(request.query_params),
+            "body": (await request.body()).decode(),
+            "content_type": request.headers.get("content-type", ""),
+            "cookie": request.headers.get("cookie"),
+        }
+
+    @plugin_router.get("/file")
+    def file(user: CurrentUser = Depends(get_current_user)):
+        return Response(
+            content=b"%PDF-1.4 fake",
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'attachment; filename="report.pdf"'},
+        )
+
+    class Plugin:
+        pass
+
+    fake = Plugin()
+    fake.router = plugin_router
+    _mounted["fake"] = fake
+
+    app = FastAPI()
+    app.include_router(router.admin_router)
+    app.include_router(plugin_router)
+    app.dependency_overrides[router.admin_identity] = lambda: ApiIdentity(
+        username="root", is_admin=True
+    )
+    monkeypatch.setattr(router, "_enabled", lambda entry: True)
+    try:
+        yield TestClient(app, raise_server_exceptions=False)
+    finally:
+        _mounted.clear()
+
+
+def test_the_proxy_reaches_the_plugin_route_as_the_token_owner(proxied):
+    response = proxied.get(
+        "/adminApi/plugins/fake/echo/abc?page=2&q=x",
+        headers={"Authorization": "Bearer an-admin-api-token", "Cookie": "session=browser"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["user"] == "root"
+    assert body["item"] == "abc"
+    assert body["query"] == {"page": "2", "q": "x"}
+    # The browser cookie does not ride along on a call made with an API token.
+    assert body["cookie"] is None
+
+
+def test_the_proxy_forwards_a_json_body(proxied):
+    response = proxied.post("/adminApi/plugins/fake/echo/abc", json={"records": ["1", "2"]})
+
+    assert response.status_code == 200
+    assert response.json()["method"] == "POST"
+    assert response.json()["body"] == '{"records":["1","2"]}'
+
+
+def test_the_proxy_forwards_a_multipart_upload(proxied):
+    response = proxied.post(
+        "/adminApi/plugins/fake/echo/abc",
+        data={"data": '{"a": 1}'},
+        files={"file": ("notes.txt", b"hello", "text/plain")},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["content_type"].startswith("multipart/form-data; boundary=")
+    assert 'name="data"' in body["body"] and "hello" in body["body"]
+
+
+def test_the_proxy_passes_a_file_download_through(proxied):
+    response = proxied.get("/adminApi/plugins/fake/file")
+
+    assert response.status_code == 200
+    assert response.content == b"%PDF-1.4 fake"
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-disposition"] == 'attachment; filename="report.pdf"'
+
+
+def test_an_undeclared_endpoint_is_a_plain_404(proxied):
+    response = proxied.get("/adminApi/plugins/fake/nothing-here")
+
+    assert response.status_code == 404
+
+
+def test_a_method_the_route_does_not_take_is_refused_by_the_route(proxied):
+    response = proxied.delete("/adminApi/plugins/fake/echo/abc")
+
+    assert response.status_code == 405
 
 
 def test_the_routes_keep_their_published_paths():
@@ -387,3 +523,33 @@ def test_the_routes_keep_their_published_paths():
         "/adminApi/plugins/{plugin}/{plugin_endpoint:path}",
     }
     assert public == {"/publicApi", "/publicApi/types", "/publicApi/resources/{resource_id}"}
+
+
+def test_an_unknown_plugin_is_answered_exactly_like_a_missing_route(monkeypatch):
+    """Through the real app, with a valid admin identity: a plugin or endpoint
+    this instance does not run gets the same bytes as a path that does not
+    exist, not a translated variant of them."""
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from archihub.api.external import router
+    from archihub.core import i18n
+    from archihub.core.security.api_auth import ApiIdentity
+    from main import app
+
+    monkeypatch.setattr(router, "_enabled", lambda entry: True)
+    # Spanish, where a translated "Not Found" reads differently from Starlette's.
+    monkeypatch.setattr(i18n, "_locale_cache", ("es", time.monotonic()))
+    app.dependency_overrides[router.admin_identity] = lambda: ApiIdentity(
+        username="root", is_admin=True
+    )
+    try:
+        client = TestClient(app, raise_server_exceptions=False)
+        unknown = client.get("/adminApi/plugins/no-such-plugin/anything")
+        missing = client.get("/no-such-route-at-all")
+    finally:
+        app.dependency_overrides.pop(router.admin_identity, None)
+
+    assert unknown.status_code == missing.status_code == 404
+    assert unknown.content == missing.content

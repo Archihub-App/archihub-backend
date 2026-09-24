@@ -320,14 +320,12 @@ def test_since_accepts_a_plain_instant():
 
 
 def test_since_brings_an_offset_into_the_frame_the_entries_use():
-    """Entries are written naive and local. Comparing an aware value against
-    naive storage selects a window hours from the one that was asked for."""
-    parsed = recent.parse_since("2026-08-27T12:00:00+00:00")
+    """Entries are stored in UTC and read back naive. Comparing an aware value
+    against naive storage selects a window hours from the one asked for."""
+    parsed = recent.parse_since("2026-08-27T07:00:00-05:00")
 
     assert parsed.tzinfo is None
-    assert parsed == datetime.datetime(
-        2026, 8, 27, 12, 0, tzinfo=datetime.timezone.utc
-    ).astimezone().replace(tzinfo=None)
+    assert parsed == datetime.datetime(2026, 8, 27, 12, 0)
 
 
 def test_an_unparseable_since_is_refused(mongo, roles):
@@ -354,13 +352,15 @@ def test_since_filters(mongo, roles):
 # ---------------------------------------------------------------------------
 
 
-def test_the_timestamp_is_a_plain_iso_string(mongo, roles):
+def test_the_timestamp_is_a_plain_iso_string_in_utc(mongo, roles):
+    """A string (`new Date` cannot read the wrapped form) with its offset, so
+    the browser shows it in the viewer's timezone."""
     roles["alice"] = {"admin"}
     mongo.logs = [entry("RESOURCE_CREATE", when=datetime.datetime(2026, 8, 27, 12, 45, 30))]
 
     payload, _status = recent.recent({}, "alice")
 
-    assert payload["data"][0]["timestamp"] == "2026-08-27T12:45:30"
+    assert payload["data"][0]["timestamp"] == "2026-08-27T12:45:30+00:00"
 
 
 def test_people_are_resolved_in_one_query_not_one_per_entry(mongo, roles):

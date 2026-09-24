@@ -17,10 +17,10 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
 
 from bson import json_util
 
+from archihub.core.clock import utcnow
 from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
@@ -216,7 +216,7 @@ def delete_by_slug(slug: str, user: str) -> tuple[dict, int]:
     mongo.update_records(
         "resources",
         {"post_type": slug},
-        {"status": "deleted", "updatedAt": datetime.now(), "updatedBy": user or "system"},
+        {"status": "deleted", "updatedAt": utcnow(), "updatedBy": user or "system"},
     )
 
     _register_log(user, "type_delete", {"post_type": {"name": post_type.get("name"), "slug": post_type.get("slug")}})

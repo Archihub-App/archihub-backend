@@ -22,6 +22,7 @@ from bson.objectid import ObjectId
 
 from archihub.api.aiservices import catalogue
 from archihub.api.aiservices.dialects import DIALECTS, DIALECT_NAMES
+from archihub.core.clock import isoformat_utc
 from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
@@ -126,7 +127,7 @@ def present(provider: dict) -> dict:
 
 
 def _iso(value):
-    return value.isoformat() if isinstance(value, datetime.datetime) else value
+    return isoformat_utc(value) if isinstance(value, datetime.datetime) else value
 
 
 def dialects() -> list[dict]:

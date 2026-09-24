@@ -20,6 +20,7 @@ import numbers
 from bson.objectid import ObjectId
 
 from archihub.api.resources import access, hierarchy
+from archihub.core.clock import isoformat_utc
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
@@ -56,7 +57,7 @@ def serialise(value):
     ``createdAt``, a location's captured timestamp), which are not serialisable.
     """
     if isinstance(value, datetime.datetime):
-        return value.isoformat() + "Z"
+        return isoformat_utc(value)
     if isinstance(value, list):
         return [serialise(item) for item in value]
     if isinstance(value, dict):

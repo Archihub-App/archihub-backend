@@ -16,7 +16,6 @@ failure as a sentence about a Python import from inside a Celery task.
 
 from __future__ import annotations
 
-import datetime
 import logging
 import os
 
@@ -24,6 +23,7 @@ from celery import shared_task
 from fastapi import Body, Depends
 from fastapi.responses import JSONResponse
 
+from archihub.core.clock import utcnow
 from archihub.core.i18n import gettext as _
 from archihub.core.responses import json_response
 from archihub.core.security.jwt import CurrentUser
@@ -190,7 +190,7 @@ class LiquidText(ArchiPlugin):
                 "result": {
                     "text": text,
                     "status": "completed",
-                    "date": datetime.datetime.now(),
+                    "date": utcnow(),
                 },
             },
         )
@@ -239,7 +239,7 @@ def generate_task(body: dict, user: str) -> str:
                 "result": {
                     "text": text,
                     "status": "completed",
-                    "date": datetime.datetime.now(),
+                    "date": utcnow(),
                 },
             },
         )

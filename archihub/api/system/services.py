@@ -68,8 +68,16 @@ def set_system_setting() -> None:
             logger.info("Seeded settings group %s", setting["name"])
             continue
 
-        known = {entry.get("id") for entry in existing.get("data") or []}
-        added = [entry for entry in setting.get("data") or [] if entry.get("id") not in known]
+        defaults_data = setting.get("data") or []
+        if not all(isinstance(entry, dict) for entry in defaults_data):
+            # A group of plain values (the active plugin slugs) is the
+            # operator's choice as a whole, not a set of settings entries:
+            # merging defaults into it would reactivate what they turned off.
+            continue
+
+        stored = [entry for entry in existing.get("data") or [] if isinstance(entry, dict)]
+        known = {entry.get("id") for entry in stored}
+        added = [entry for entry in defaults_data if entry.get("id") not in known]
 
         if added:
             mongo.update_record(

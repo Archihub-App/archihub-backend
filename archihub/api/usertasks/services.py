@@ -13,10 +13,10 @@ one key or the other per route. Do not tidy it without a paired frontend change.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 
 from bson.objectid import ObjectId
 
+from archihub.core.clock import utcnow
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
@@ -184,7 +184,7 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
             )
             return {"error": message}, 400
 
-        now = datetime.now()
+        now = utcnow()
         record = {
             target_field: target_value,
             "user": body["user"],
@@ -230,7 +230,7 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
         comment = (body.get("comment") or "").strip()
         if comment:
             update["comment"] = (task.get("comment") or []) + [
-                {"user": user, "comment": comment, "createdAt": datetime.now()}
+                {"user": user, "comment": comment, "createdAt": utcnow()}
             ]
 
         if body.get("status") == STATUS_APPROVED:
@@ -238,7 +238,7 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
                 return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
             update["status"] = STATUS_APPROVED
             update["approvedBy"] = user
-            update["approvedAt"] = datetime.now()
+            update["approvedAt"] = utcnow()
 
         if not update:
             return {"error": _("No changes were made")}, 400

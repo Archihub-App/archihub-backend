@@ -28,6 +28,7 @@ from dataclasses import dataclass
 
 from archihub.api.aiservices import errors
 from archihub.api.aiservices.dialects import ModelInfo, get_dialect
+from archihub.core.clock import isoformat_utc
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +206,7 @@ def set_override(provider_id: str, model_id: str, values: dict, user: str | None
     # handing that straight to a JSON response is a 500 after the write has
     # already happened - the worst shape of failure, because the caller is told
     # it did not work when it did.
-    return {**permitted, "updatedAt": permitted["updatedAt"].isoformat()}
+    return {**permitted, "updatedAt": isoformat_utc(permitted["updatedAt"])}
 
 
 def find_model(provider: dict, model_id: str) -> ModelInfo | None:
