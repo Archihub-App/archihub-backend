@@ -90,6 +90,10 @@ class ArchiPlugin:
     #: Set by each plugin package.
     slug: str = ""
 
+    #: Who may read and change this plugin's settings. A plugin whose settings
+    #: reach further than its own behaviour narrows this.
+    settings_roles: tuple[str, ...] = SETTINGS_ROLES
+
     def __init__(self, slug: str, info: dict, module_file: str | None = None) -> None:
         self.slug = slug
         self.info = dict(info)
@@ -298,7 +302,7 @@ class ArchiPlugin:
         )
         def get_settings(
             kind: str,
-            current_user: CurrentUser = Depends(require_roles(*SETTINGS_ROLES)),
+            current_user: CurrentUser = Depends(require_roles(*plugin.settings_roles)),
         ) -> JSONResponse:
             """This plugin's settings form definition, with current values."""
             payload, status_code = plugin.settings_payload(kind)
@@ -310,7 +314,7 @@ class ArchiPlugin:
         )
         def set_settings(
             data: str = Form(...),
-            current_user: CurrentUser = Depends(require_roles(*SETTINGS_ROLES)),
+            current_user: CurrentUser = Depends(require_roles(*plugin.settings_roles)),
         ) -> JSONResponse:
             """Save this plugin's settings.
 

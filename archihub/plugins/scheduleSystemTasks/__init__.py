@@ -8,7 +8,9 @@ which is how the schedule builder knows to read its settings.
 
 THIS PLUGIN'S ROLE CHECKS CARRY MORE WEIGHT THAN MOST. Its settings ARE a task
 scheduler: writing them makes the workers run something, repeatedly, forever.
-The role is a dependency on the route, resolved before the handler body runs.
+They are for administrators only, and test-runner tasks are never offered or
+accepted. The role is a dependency on the route, resolved before the handler
+body runs.
 """
 
 from __future__ import annotations
@@ -33,8 +35,12 @@ PERIODICITIES = (
 
 INTERVAL_PERIODICITIES = {"every_x_minutes", "every_x_hours"}
 
+UNSCHEDULABLE_PREFIXES = ("testcontrol.",)
+
 
 class ScheduleSystemTasks(ArchiPlugin):
+    settings_roles = ("admin",)
+
     def settings_payload(self, kind: str):
         """The settings form, with the task picker filled from the live workers.
 
@@ -77,7 +83,7 @@ class ScheduleSystemTasks(ArchiPlugin):
             # forever and fail every time, recorded only as a stream of failed
             # jobs. Checked only when the list could actually be read - an
             # unreachable broker must not block a settings save.
-            if known and task not in known:
+            if (known and task not in known) or str(task).startswith(UNSCHEDULABLE_PREFIXES):
                 return {"msg": _("Unknown task {task}", task=task)}, 400
 
             row = dict(row)
@@ -122,7 +128,7 @@ def registered_task_names() -> list[str]:
     names: set[str] = set()
     for tasks in registered.values():
         names.update(tasks or [])
-    return sorted(names)
+    return sorted(name for name in names if not name.startswith(UNSCHEDULABLE_PREFIXES))
 
 
 def _find_group(settings: dict, group_id: str) -> dict | None:

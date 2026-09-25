@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from archihub import __version__
 from archihub.core.errors import register_exception_handlers
 from archihub.core.logging import RequestIdMiddleware, configure_logging
-from archihub.core.settings import Settings, get_settings
+from archihub.core.settings import Settings, get_settings, secret_warnings
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         json_output=not settings.is_dev,
         access_log=settings.access_log_enabled,
     )
+
+    for warning in secret_warnings(settings):
+        logger.warning(warning)
 
     # Bind the Celery application to this process before anything can dispatch.
     #

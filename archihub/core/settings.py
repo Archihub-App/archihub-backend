@@ -186,6 +186,16 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # Derived values
     # ------------------------------------------------------------------
+    @field_validator("jwt_secret_key", "fernet_key")
+    @classmethod
+    def _refuse_blank_secret(cls, value: str) -> str:
+        """A blank key is refused. A weak one is only reported, by
+        :func:`secret_warnings`, so an installation that has not rotated its
+        keys yet still starts."""
+        if not value or not value.strip():
+            raise ValueError("must not be empty")
+        return value
+
     @field_validator("archihub_test_mode", "celery_worker", mode="before")
     @classmethod
     def _parse_loose_bool(cls, value: object) -> object:
@@ -260,6 +270,37 @@ class Settings(BaseSettings):
     @property
     def elastic_base_url(self) -> str:
         return f"{self.elastic_domain}:{self.elastic_port}"
+
+
+#: RFC 7518 section 3.2: an HS256 key at least as long as the hash.
+MIN_JWT_SECRET_BYTES = 32
+
+
+def secret_warnings(settings: Settings) -> list[str]:
+    """What is weak about the configured keys, as messages for the operator.
+
+    Never refused: replacing ``JWT_SECRET_KEY`` signs everyone out, and
+    replacing ``FERNET_KEY`` makes the values encrypted with it unreadable.
+    """
+    from cryptography.fernet import Fernet
+
+    warnings = []
+
+    if len(settings.jwt_secret_key.encode()) < MIN_JWT_SECRET_BYTES:
+        warnings.append(
+            f"JWT_SECRET_KEY is shorter than {MIN_JWT_SECRET_BYTES} bytes. Generate "
+            "a new one (openssl rand -hex 32); everyone will have to sign in again."
+        )
+
+    try:
+        Fernet(settings.fernet_key)
+    except (ValueError, TypeError):
+        warnings.append(
+            "FERNET_KEY is not a valid Fernet key, so saving encrypted values "
+            "will fail. Generate one with: openssl rand -base64 32 | tr '+/' '-_'"
+        )
+
+    return warnings
 
 
 @lru_cache(maxsize=1)

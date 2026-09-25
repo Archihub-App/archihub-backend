@@ -19,7 +19,11 @@ the obvious alternative is weaker:
    alone fails behind NAT and against distributed sources. Requiring both means
    neither pattern gets a free pass.
 
-3. **It fails CLOSED.** If Redis is unavailable, login is refused rather than
+3. **An attempt is counted before the password is checked, and the check and
+   the count are one atomic operation** (the Redis script below), so no number
+   of simultaneous attempts gets past a budget.
+
+4. **It fails CLOSED.** If Redis is unavailable, login is refused rather than
    allowed through unthrottled. This is the one place in the codebase where an
    infrastructure outage should reduce availability instead of protection: the
    alternative is that brute-force defence silently disappears at exactly the
@@ -28,7 +32,6 @@ the obvious alternative is weaker:
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 
@@ -42,6 +45,36 @@ MAX_ATTEMPTS_PER_IP = 20
 
 KEY_PREFIX = "login_attempts"
 
+# Each key holds a JSON list of attempt timestamps. KEYS are the budgets to
+# charge; ARGV is now, the window, then one limit per key. Answers 0 when the
+# attempt was recorded in every budget, or the 1-based index of the budget that
+# is exhausted - in which case nothing is recorded.
+_ACQUIRE = """
+local now = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local cutoff = now - window
+local lists = {}
+for i, key in ipairs(KEYS) do
+  local list = {}
+  local raw = redis.call('GET', key)
+  if raw then
+    local ok, stored = pcall(cjson.decode, raw)
+    if ok and type(stored) == 'table' then
+      for _, ts in ipairs(stored) do
+        if type(ts) == 'number' and ts > cutoff then list[#list + 1] = ts end
+      end
+    end
+  end
+  if #list >= tonumber(ARGV[2 + i]) then return i end
+  lists[i] = list
+end
+for i, key in ipairs(KEYS) do
+  local list = lists[i]
+  list[#list + 1] = now
+  redis.call('SET', key, cjson.encode(list), 'EX', window)
+end
+return 0
+"""
 
 class RateLimitUnavailable(RuntimeError):
     """Raised when the attempt store cannot be reached - callers must refuse."""
@@ -57,68 +90,51 @@ def _key(scope: str, value: str) -> str:
     return f"{KEY_PREFIX}:{scope}:{value}"
 
 
-def _recent_attempts(key: str) -> list[float]:
-    """Timestamps inside the window. Raises if the store is unreachable."""
+def _budgets(username: str, client_ip: str | None) -> list[tuple[str, str, int]]:
+    budgets = []
+    if username:
+        budgets.append(("account", _key("user", username), MAX_ATTEMPTS_PER_USERNAME))
+    if client_ip:
+        budgets.append(("address", _key("ip", client_ip), MAX_ATTEMPTS_PER_IP))
+    return budgets
+
+
+def acquire(username: str, client_ip: str | None = None) -> bool:
+    """Charge one login attempt to the account's and the address's budgets.
+
+    Returns ``False`` when either budget is exhausted and the attempt must be
+    refused without checking credentials. Raises :class:`RateLimitUnavailable`
+    when the store cannot be reached.
+    """
+    now = time.time()
+    budgets = _budgets(username, client_ip)
+    if not budgets:
+        return True
+
+    keys = [key for _, key, _ in budgets]
+    limits = [limit for _, _, limit in budgets]
     try:
-        raw = _redis().get(key)
+        exhausted = int(_redis().eval(_ACQUIRE, len(keys), *keys, now, WINDOW_SECONDS, *limits))
     except Exception as exc:
         raise RateLimitUnavailable(str(exc)) from exc
 
-    if not raw:
-        return []
-
-    try:
-        attempts = json.loads(raw)
-    except (TypeError, ValueError):
-        return []
-
-    cutoff = time.time() - WINDOW_SECONDS
-    return [float(ts) for ts in attempts if isinstance(ts, (int, float)) and float(ts) > cutoff]
-
-
-def is_rate_limited(username: str, client_ip: str | None = None) -> bool:
-    """Whether this login attempt should be refused before checking credentials.
-
-    Raises :class:`RateLimitUnavailable` when the store cannot be reached, so
-    the caller refuses rather than silently proceeding unprotected.
-    """
-    if len(_recent_attempts(_key("user", username))) >= MAX_ATTEMPTS_PER_USERNAME:
-        logger.warning("Login throttled for account %s", username)
-        return True
-
-    if client_ip and len(_recent_attempts(_key("ip", client_ip))) >= MAX_ATTEMPTS_PER_IP:
-        logger.warning("Login throttled for address %s", client_ip)
-        return True
-
-    return False
-
-
-def record_attempt(username: str, client_ip: str | None = None) -> None:
-    """Record one failed attempt against both budgets."""
-    now = time.time()
-
-    for scope, value in (("user", username), ("ip", client_ip)):
-        if not value:
-            continue
-        key = _key(scope, value)
-        try:
-            attempts = _recent_attempts(key)
-            attempts.append(now)
-            # TTL derived from the same constant as the window, so the record
-            # cannot outlive - or under-live - the period it represents.
-            _redis().setex(key, WINDOW_SECONDS, json.dumps(attempts))
-        except Exception:
-            # Recording is best-effort; the gate itself fails closed, so a
-            # write failure cannot open the door.
-            logger.warning("Could not record login attempt for %s", scope, exc_info=True)
+    if exhausted:
+        scope = budgets[exhausted - 1][0]
+        subject = username if scope == "account" else client_ip
+        logger.warning("Login throttled for %s %s", scope, subject)
+        return False
+    return True
 
 
 def clear_attempts(username: str, client_ip: str | None = None) -> None:
-    """Reset both budgets after a successful login."""
-    for scope, value in (("user", username), ("ip", client_ip)):
-        if not value:
-            continue
+    """Reset both budgets after a successful login.
+
+    The address budget is cleared too: behind a proxy that does not forward
+    the client's address, every user shares one, and failures that outlived a
+    success would lock the whole organisation out.
+    """
+    for _, key, _ in _budgets(username, client_ip):
         try:
-            _redis().delete(_key(scope, value))
+            _redis().delete(key)
         except Exception:
-            logger.debug("Could not clear login attempts for %s", scope, exc_info=True)
+            logger.debug("Could not clear login attempts", exc_info=True)

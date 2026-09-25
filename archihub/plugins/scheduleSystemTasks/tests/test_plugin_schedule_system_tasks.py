@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 
@@ -104,3 +106,84 @@ def test_the_task_picker_is_found_by_id_not_by_position(monkeypatch, mongo):
 
     assert scheduleSystemTasks._find_group(settings, "schedule_tasks") is settings["settings"][1]
     assert scheduleSystemTasks._find_group(settings, "absent") is None
+
+
+# ---------------------------------------------------------------------------
+# Who may change the schedule, and what it may contain
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def client_as(monkeypatch):
+    """A client for this plugin's routes, signed in as a user holding ``roles``."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from archihub.core.errors import register_exception_handlers
+    from archihub.core.security import tokens
+
+    def make(*roles):
+        monkeypatch.setattr(
+            "archihub.api.users.services.has_role", lambda username, role: role in roles
+        )
+        app = FastAPI()
+        register_exception_handlers(app)
+        app.include_router(build("scheduleSystemTasks").build())
+        client = TestClient(app, raise_server_exceptions=False)
+        client.headers["Authorization"] = f"Bearer {tokens.create_access_token('someone')}"
+        return client
+
+    return make
+
+
+def test_only_an_administrator_may_read_or_change_the_schedule(client_as, mongo, monkeypatch):
+    monkeypatch.setattr(
+        "archihub.plugins.scheduleSystemTasks.registered_task_names",
+        lambda: ["system.index_resources"],
+    )
+    row = {"task": "system.index_resources", "periodicity": "every_x_minutes", "interval_value": 1}
+    data = {"data": json.dumps({"schedule_tasks": [row]})}
+
+    processing = client_as("processing")
+    assert processing.get("/scheduleSystemTasks/settings/all").status_code == 403
+    assert processing.post("/scheduleSystemTasks/settings", data=data).status_code == 403
+    assert mongo.operations == []
+
+    admin = client_as("admin")
+    assert admin.post("/scheduleSystemTasks/settings", data=data).status_code == 200
+
+
+def test_other_plugins_keep_their_settings_open_to_processing():
+    from archihub.plugins.framework.base import SETTINGS_ROLES
+
+    assert build("filesProcessing").settings_roles == SETTINGS_ROLES
+    assert build("scheduleSystemTasks").settings_roles == ("admin",)
+
+
+@pytest.mark.parametrize("tasks", [("testcontrol.reset", "system.index_resources"), ()])
+def test_a_test_runner_task_is_never_scheduled(monkeypatch, mongo, tasks):
+    """Refused whether or not the workers could be asked what they run."""
+    plugin = _schedule_plugin(monkeypatch, mongo, tasks=tasks)
+
+    row = {"task": "testcontrol.reset", "periodicity": "every_x_minutes", "interval_value": 5}
+
+    payload, status = plugin.save_settings({"schedule_tasks": [row]})
+
+    assert status == 400
+    assert mongo.operations == []
+
+
+def test_the_picker_does_not_offer_test_runner_tasks(monkeypatch):
+    from archihub.plugins import scheduleSystemTasks
+
+    class Inspector:
+        def registered(self):
+            return {"worker@a": ["testcontrol.reset", "system.index_resources"]}
+
+    class Control:
+        def inspect(self, timeout):
+            return Inspector()
+
+    monkeypatch.setattr("archihub.worker.celery_app.celery_app.control", Control())
+
+    assert scheduleSystemTasks.registered_task_names() == ["system.index_resources"]

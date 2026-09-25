@@ -69,16 +69,17 @@ def archihub_login(username: str, password: str, client_ip: str | None = None) -
     """Authenticate and issue an access token."""
     username = (username or "").strip()
 
+    # Counted before the credentials are checked; only a success clears it.
     try:
-        if rate_limit.is_rate_limited(username, client_ip):
-            return {"msg": _(MSG_THROTTLED)}, 429
+        allowed = rate_limit.acquire(username, client_ip)
     except rate_limit.RateLimitUnavailable:
         # Fail closed - see the rate_limit module docstring.
         logger.error("Login refused: the attempt store is unavailable")
         return {"msg": _(MSG_THROTTLED)}, 429
+    if not allowed:
+        return {"msg": _(MSG_THROTTLED)}, 429
 
     if not username or not password:
-        rate_limit.record_attempt(username, client_ip)
         return _reject()
 
     # -- directory first, when configured -------------------------------
@@ -100,7 +101,6 @@ def archihub_login(username: str, password: str, client_ip: str | None = None) -
     password_ok = _verify_password(password, (user or {}).get("password"))
 
     if not user or not password_ok:
-        rate_limit.record_attempt(username, client_ip)
         return _reject()
 
     rate_limit.clear_attempts(username, client_ip)

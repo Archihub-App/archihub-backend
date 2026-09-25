@@ -9,14 +9,22 @@ everything absent from it unreachable, and the list is never complete.
 the single serialiser that builds every response, rather than by each query
 remembering to project it away — one place to be right instead of many places to
 forget. It is reported as a fingerprint, so an operator can tell two keys apart
-without seeing either.
+without seeing either. Header values are never returned either: responses
+list only which headers are set.
+
+**Only an administrator may give a provider an internal address** (private,
+loopback or link-local), as a local model server needs. Other roles may use
+public addresses only.
 """
 
 from __future__ import annotations
 
 import datetime
 import hashlib
+import ipaddress
 import logging
+import socket
+from urllib.parse import urlsplit, urlunsplit
 
 from bson.objectid import ObjectId
 
@@ -38,6 +46,10 @@ REQUIRED_FIELDS = ("name", "dialect")
 #: Header names a provider record may not set, because they are ours to control
 #: or would leak the credential somewhere it should not go.
 RESERVED_HEADERS = frozenset({"authorization", "x-api-key", "cookie", "host", "content-length"})
+
+#: Shown in place of every header value. Sent back unchanged, it keeps the
+#: stored value, so a client can round-trip a provider without knowing them.
+MASKED_HEADER_VALUE = "********"
 
 
 def _mongo():
@@ -115,8 +127,8 @@ def present(provider: dict) -> dict:
         "id": str(provider.get("_id") or provider.get("id") or ""),
         "name": provider.get("name"),
         "dialect": provider.get("dialect"),
-        "base_url": provider.get("base_url"),
-        "headers": provider.get("headers") or {},
+        "base_url": _without_credentials(provider.get("base_url")),
+        "headers": {name: MASKED_HEADER_VALUE for name in provider.get("headers") or {}},
         "default_model": provider.get("default_model"),
         "enabled": provider.get("enabled", True),
         "has_key": bool(provider.get("key")),
@@ -148,7 +160,56 @@ def dialects() -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def _validate(payload: dict, *, creating: bool) -> str | None:
+def _without_credentials(url):
+    """``url`` with any ``user:password@`` removed."""
+    if not isinstance(url, str):
+        return url
+    parts = urlsplit(url)
+    if parts.username is None and parts.password is None:
+        return url
+    host = parts.hostname or ""
+    if ":" in host:
+        host = f"[{host}]"
+    netloc = f"{host}:{parts.port}" if parts.port else host
+    return urlunsplit(parts._replace(netloc=netloc))
+
+
+def _is_internal_host(host: str) -> bool:
+    """Whether ``host`` is, or resolves to, an address not on the public internet.
+
+    A name that does not resolve counts as internal: what it will point to
+    when the provider is called cannot be checked now.
+    """
+    try:
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except (OSError, UnicodeError):
+        return True
+    for info in infos:
+        address = ipaddress.ip_address(info[4][0].split("%", 1)[0])
+        if not address.is_global:
+            return True
+    return False
+
+
+def _validate_base_url(base_url, *, allow_internal: bool) -> str | None:
+    if not isinstance(base_url, str) or not base_url.startswith(("http://", "https://")):
+        return _("The base URL must be an http or https address")
+    try:
+        parts = urlsplit(base_url)
+        host = parts.hostname
+        parts.port  # noqa: B018 - raises on an invalid port
+    except ValueError:
+        return _("The base URL must be an http or https address")
+    if not host:
+        return _("The base URL must be an http or https address")
+    if parts.username is not None or parts.password is not None:
+        return _("Put the credential in the key field, not in the base URL")
+    if not allow_internal and _is_internal_host(host):
+        return _("Only an administrator can connect a provider on an internal address")
+    return None
+
+
+def _validate(payload: dict, *, creating: bool, allow_internal: bool = False) -> str | None:
     if creating:
         for field in REQUIRED_FIELDS:
             if not payload.get(field):
@@ -162,10 +223,10 @@ def _validate(payload: dict, *, creating: bool) -> str | None:
         if adapter.requires_base_url and creating and not payload.get("base_url"):
             return _("This dialect requires a base URL")
 
-    base_url = payload.get("base_url")
-    if base_url is not None:
-        if not isinstance(base_url, str) or not base_url.startswith(("http://", "https://")):
-            return _("The base URL must be an http or https address")
+    if payload.get("base_url") is not None:
+        message = _validate_base_url(payload["base_url"], allow_internal=allow_internal)
+        if message:
+            return message
 
     headers = payload.get("headers")
     if headers is not None:
@@ -212,9 +273,11 @@ def load(provider_id: str) -> dict | None:
     return _mongo().get_record(COLLECTION, {"_id": object_id})
 
 
-def create(body: dict, user: str) -> tuple[dict, int]:
+def create(body: dict, user: str, *, is_admin: bool = False) -> tuple[dict, int]:
     payload = _client_fields(body)
-    message = _validate(payload, creating=True)
+    message = _validate(payload, creating=True, allow_internal=is_admin)
+    if not message and MASKED_HEADER_VALUE in (payload.get("headers") or {}).values():
+        message = _("Every header needs a value")
     if message:
         return {"msg": message}, 400
 
@@ -234,13 +297,32 @@ def create(body: dict, user: str) -> tuple[dict, int]:
     return {"msg": _("Provider created successfully"), "id": provider_id}, 201
 
 
-def update(provider_id: str, body: dict, user: str) -> tuple[dict, int]:
+def update(provider_id: str, body: dict, user: str, *, is_admin: bool = False) -> tuple[dict, int]:
     provider = load(provider_id)
     if provider is None:
         return {"msg": _("Provider not found")}, 404
 
     payload = _client_fields(body)
-    message = _validate(payload, creating=False)
+
+    # The address as it was shown is the address as stored: saving a form that
+    # did not change it must not re-check or rewrite it.
+    stored_url = provider.get("base_url")
+    unchanged = (stored_url, _without_credentials(stored_url))
+    if "base_url" in payload and payload["base_url"] in unchanged:
+        del payload["base_url"]
+
+    if isinstance(payload.get("headers"), dict):
+        stored_headers = provider.get("headers") or {}
+        headers = {}
+        for name, value in payload["headers"].items():
+            if value == MASKED_HEADER_VALUE:
+                if name not in stored_headers:
+                    return {"msg": _("Every header needs a value")}, 400
+                value = stored_headers[name]
+            headers[name] = value
+        payload["headers"] = headers
+
+    message = _validate(payload, creating=False, allow_internal=is_admin)
     if message:
         return {"msg": message}, 400
 

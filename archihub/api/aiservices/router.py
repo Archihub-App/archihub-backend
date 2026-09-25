@@ -5,7 +5,8 @@ Two resources, deliberately separate: ``/aiservices/providers`` holds provider
 each provider rather than stored** at ``/providers/{id}/models``.
 
 Roles: reading needs ``admin``, ``processing`` or ``llm``; configuring a
-provider needs ``admin`` or ``processing``.
+provider needs ``admin`` or ``processing``, and only ``admin`` may give one an
+internal address (see ``providers``).
 """
 
 from __future__ import annotations
@@ -112,6 +113,12 @@ def list_providers() -> JSONResponse:
     return _respond(providers.list_providers())
 
 
+def _is_admin(current_user: CurrentUser) -> bool:
+    from archihub.api.users.services import has_role
+
+    return has_role(current_user.username, "admin")
+
+
 @router.post(
     "/providers",
     status_code=201,
@@ -126,7 +133,7 @@ def create_provider(
     current_user: CurrentUser = Depends(require_operator),
 ) -> JSONResponse:
     """Connect this archive to a model endpoint."""
-    return _respond(providers.create(body, current_user.username))
+    return _respond(providers.create(body, current_user.username, is_admin=_is_admin(current_user)))
 
 
 @router.get(
@@ -152,7 +159,9 @@ def update_provider(
     Omitting ``key`` leaves the stored credential alone; sending an empty one
     clears it, so saving the form without retyping the key keeps it.
     """
-    return _respond(providers.update(provider_id, body, current_user.username))
+    return _respond(
+        providers.update(provider_id, body, current_user.username, is_admin=_is_admin(current_user))
+    )
 
 
 @router.delete(

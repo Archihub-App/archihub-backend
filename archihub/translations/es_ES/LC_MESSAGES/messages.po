@@ -25,6 +25,15 @@ msgstr " (copia)"
 msgid " … [earlier message shortened to fit]"
 msgstr " … [mensaje anterior acortado para que quepa]"
 
+msgid "Every header needs a value"
+msgstr "Cada cabecera necesita un valor"
+
+msgid "Only an administrator can connect a provider on an internal address"
+msgstr "Solo un administrador puede conectar un proveedor en una dirección interna"
+
+msgid "Put the credential in the key field, not in the base URL"
+msgstr "Escriba la credencial en el campo de la clave, no en la URL base"
+
 msgid "\"{field}\" must be a list of text values"
 msgstr "\"{field}\" debe ser una lista de valores de texto"
 
