@@ -14,7 +14,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def _role_ids(value: Any) -> Any:
+    """Roles arrive as ids or as the picker's ``{id, term}`` options; only the id is stored."""
+    if isinstance(value, list):
+        return [item.get("id") if isinstance(item, dict) and "id" in item else item for item in value]
+    return value
 
 
 class PostTypeCreate(BaseModel):
@@ -39,6 +46,8 @@ class PostTypeCreate(BaseModel):
     isArticle: bool = False
     post_count: int = 0
 
+    _roles_as_ids = field_validator("editRoles", "viewRoles", mode="before")(_role_ids)
+
 
 class PostTypeUpdate(BaseModel):
     """Body of ``PUT /types/{slug}``. Every field optional - it is a patch."""
@@ -54,6 +63,8 @@ class PostTypeUpdate(BaseModel):
     editRoles: list[str] | None = None
     viewRoles: list[str] | None = None
     isArticle: bool | None = None
+
+    _roles_as_ids = field_validator("editRoles", "viewRoles", mode="before")(_role_ids)
 
 
 class TypeVizRequest(BaseModel):

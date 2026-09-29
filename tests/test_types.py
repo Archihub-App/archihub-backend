@@ -267,6 +267,72 @@ def test_update_missing_type_is_404(mongo):
 
 
 # ---------------------------------------------------------------------------
+# Roles
+# ---------------------------------------------------------------------------
+
+ROLE_OPTIONS = {"options": [{"id": "editor", "term": "Editor"}, {"id": "team", "term": "Equipo"}]}
+
+
+@pytest.fixture
+def roles(monkeypatch):
+    from archihub.core import roles as core_roles
+
+    monkeypatch.setattr(core_roles, "get_roles", lambda: ROLE_OPTIONS)
+
+
+@pytest.mark.parametrize("model", ["PostTypeCreate", "PostTypeUpdate"])
+def test_the_request_accepts_roles_as_the_pickers_options(model):
+    """The types screen sends each chosen role as ``{id, term}``."""
+    from archihub.api.types import schemas
+
+    body = {"name": "Report", "editRoles": [{"id": "editor", "term": "Editor"}], "viewRoles": ["team"]}
+    parsed = getattr(schemas, model)(**body)
+
+    assert parsed.editRoles == ["editor"]
+    assert parsed.viewRoles == ["team"]
+
+
+def test_create_stores_role_ids(mongo, roles):
+    _payload, status = services.create(
+        {"name": "Report", "slug": "report", "editRoles": [{"id": "editor", "term": "Editor"}], "viewRoles": ["team"]},
+        "admin",
+    )
+
+    assert status == 201
+    _collection, record = mongo.inserted[0]
+    assert record["editRoles"] == ["editor"]
+    assert record["viewRoles"] == ["team"]
+
+
+def test_update_stores_role_ids(mongo, roles):
+    mongo.records["post_types"] = {"slug": "report"}
+
+    _payload, status = services.update_by_slug(
+        "report", {"viewRoles": [{"id": "team", "term": "Equipo"}]}, "admin"
+    )
+
+    assert status == 200
+    _collection, _filters, update = mongo.updated[0]
+    assert update["viewRoles"] == ["team"]
+
+
+def test_create_refuses_an_unknown_role(mongo, roles):
+    _payload, status = services.create({"name": "Report", "slug": "report", "editRoles": ["ghost"]}, "admin")
+
+    assert status == 400
+    assert mongo.inserted == []
+
+
+def test_update_refuses_an_unknown_role(mongo, roles):
+    mongo.records["post_types"] = {"slug": "report"}
+
+    _payload, status = services.update_by_slug("report", {"editRoles": ["ghost"]}, "admin")
+
+    assert status == 400
+    assert mongo.updated == []
+
+
+# ---------------------------------------------------------------------------
 # Info-panel statistics
 #
 # `type` arrives in a request body and selects an aggregation. It indexes a fixed

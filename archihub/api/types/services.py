@@ -110,6 +110,11 @@ def create(body: dict, user: str) -> tuple[dict, int]:
             return {"msg": _("Name and slug are required")}, 400
 
         from archihub.api.types.schemas import PostTypeCreate
+        from archihub.core.roles import verify_roles_exist
+
+        for field in ("editRoles", "viewRoles"):
+            if body.get(field):
+                body[field] = verify_roles_exist(body[field])
 
         post_type = PostTypeCreate(**body)
         # No `id` is declared on the model, so MongoDB assigns the ObjectId -
@@ -119,6 +124,8 @@ def create(body: dict, user: str) -> tuple[dict, int]:
         _register_log(user, "type_create", {"post_type": {"name": post_type.name, "slug": post_type.slug}})
         invalidate_cache()
         return {"msg": _("Post type created successfully")}, 201
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
     except Exception as exc:
         logger.exception("Could not create content type")
         return {"msg": str(exc)}, 500
@@ -200,6 +207,8 @@ def update_by_slug(slug: str, body: dict, user: str) -> tuple[dict, int]:
         _register_log(user, "type_update", {"post_type": body})
         invalidate_cache()
         return {"msg": _("Post type updated successfully")}, 200
+    except ValueError as exc:
+        return {"msg": str(exc)}, 400
     except Exception as exc:
         logger.exception("Could not update content type %s", slug)
         return {"msg": str(exc)}, 500
