@@ -32,8 +32,9 @@ upload_geojson.py
 # at it rather than replacing these.
 /archihub/data/geo/*
 
-/skills/*
-!/skills/system
+skills/
+.agents/
+agents
 
 # Avoid VSCode settings folder
 .vscode/
