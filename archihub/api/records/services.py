@@ -183,7 +183,10 @@ def _summarise_processing(processing) -> dict | None:
 
         entry: dict = {"type": value.get("type")}
         if "metadata" in value:
-            entry["metadata"] = important_exif(value["metadata"])
+            if key == "fileProcessing":
+                entry["metadata"] = important_exif(value["metadata"])
+            else:
+                entry["metadata"] = value["metadata"]
         if key == "fileProcessing":
             if "cloud" in value:
                 entry["cloud"] = value["cloud"]
@@ -430,7 +433,9 @@ def get_processing_metadata(record: dict, slug: str) -> tuple[dict, int]:
     if metadata is None:
         return {"msg": _("Record does not contain metadata")}, 404
 
-    return parse_result(important_exif(metadata)), 200
+    if slug == "fileProcessing":
+        return parse_result(important_exif(metadata)), 200
+    return parse_result(metadata), 200
 
 
 # ---------------------------------------------------------------------------
