@@ -412,3 +412,44 @@ def test_correcting_a_transcription_is_recorded(audit_log, monkeypatch):
     transcription._save(VALID_ID, processing, "whisper", [], "alice")
 
     assert audit_log[-1]["metadata"] == {"record": VALID_ID, "edit": "transcription", "processing": "whisper"}
+
+
+# ---------------------------------------------------------------------------
+# Rewriting entries stored under a key
+# ---------------------------------------------------------------------------
+
+
+def test_the_rewrite_plans_only_keys_that_are_in_use():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("normalise", ROOT.parent / "tools" / "normalise_log_actions.py")
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+
+    stored = {"user_update": 3, "user_delete": 0, "USER_UPDATE": 9}
+    mongo = SimpleNamespace(count=lambda collection, filters: stored.get(filters["action"], 0))
+
+    assert tool.plan(mongo, {"user_update": "USER_UPDATE", "user_delete": "USER_DELETE"}) == [
+        ("user_update", "USER_UPDATE", 3)
+    ]
+
+
+def test_a_signed_in_caller_opening_a_file_is_recorded(audit_log, monkeypatch):
+    from archihub.api.records import services
+
+    monkeypatch.setattr(services, "load_visible", lambda record_id, user: ({"_id": ObjectId(VALID_ID)}, None))
+    monkeypatch.setattr(services, "_describe_parents", lambda parents: [])
+
+    services.get_by_id(VALID_ID, "alice")
+
+    assert (audit_log[-1]["action"], audit_log[-1]["metadata"]) == ("RECORD_GET", {"record": VALID_ID})
+
+
+def test_a_file_that_may_not_be_seen_is_not_recorded_as_opened(audit_log, monkeypatch):
+    from archihub.api.records import services
+
+    monkeypatch.setattr(services, "load_visible", lambda record_id, user: (None, ({"msg": "no"}, 404)))
+
+    services.get_by_id(VALID_ID, "alice")
+
+    assert audit_log == []

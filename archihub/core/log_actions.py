@@ -27,7 +27,6 @@ log_actions = {
     'resource_granular_update': 'RESOURCE_GRANULAR_UPDATE',
     'resource_delete': 'RESOURCE_DELETE',
     'resource_restore': 'RESOURCE_RESTORE',
-    'resource_open': 'RESOURCE_OPEN',
     'record_create': 'RECORD_CREATE',
     'record_update': 'RECORD_UPDATE',
     'record_delete': 'RECORD_DELETE',

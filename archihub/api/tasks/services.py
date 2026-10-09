@@ -13,6 +13,7 @@ from typing import Any
 from celery.result import AsyncResult
 
 from archihub.core.clock import utcnow
+from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
 
@@ -237,9 +238,9 @@ def get_tasks(user: str, body: dict) -> tuple[list | dict, int]:
             resolved.append(entry)
 
         return resolved, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list tasks for %s", user)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def get_tasks_total(user: str) -> int:
@@ -261,9 +262,9 @@ def stop_task(task_id: str, current_user: str) -> tuple[dict, int]:
         from archihub.worker.celery_app import celery_app
 
         celery_app.control.revoke(task_id, terminate=True)
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not revoke task %s", task_id)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
     _mongo().update_record(
         "tasks", {"taskId": task_id}, {"status": STATUS_FAILED, "result": ""}

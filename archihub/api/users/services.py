@@ -297,9 +297,9 @@ def get_all(body: dict, current_user: str) -> tuple[list | dict, int]:
             user["roles"] = [roles[r] for r in (user.get("roles") or []) if r in roles]
 
         return users, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list users")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 # ---------------------------------------------------------------------------

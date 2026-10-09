@@ -26,6 +26,9 @@ from archihub.core.i18n import gettext as _
 logger = logging.getLogger(__name__)
 
 COLLECTION = "post_types"
+#: The fields a resource's search document is built from. Changing either one
+#: makes every indexed resource of the type out of date.
+REINDEX_FIELDS = ("metadata", "isArticle")
 #: The collection the info-panel statistics aggregate over.
 COLLECTION_RESOURCES = "resources"
 
@@ -99,9 +102,9 @@ def get_all() -> tuple[list | dict, int]:
             for post_type in records
         ]
         return post_types, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list content types")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def create(body: dict, user: str) -> tuple[dict, int]:
@@ -126,9 +129,9 @@ def create(body: dict, user: str) -> tuple[dict, int]:
         return {"msg": _("Post type created successfully")}, 201
     except ValueError as exc:
         return {"msg": str(exc)}, 400
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not create content type")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def get_by_slug(slug: str):
@@ -175,9 +178,9 @@ def get_by_slug(slug: str):
             post_type["metadata"] = None
 
         return post_type
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not load content type %s", slug)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def update_by_slug(slug: str, body: dict, user: str) -> tuple[dict, int]:
@@ -202,16 +205,26 @@ def update_by_slug(slug: str, body: dict, user: str) -> tuple[dict, int]:
             body["parentType"] = [parent for parent in parent_types if parent.get("id") != slug]
 
         update = PostTypeUpdate(**body)
-        _mongo().update_record(COLLECTION, {"slug": slug}, update.model_dump(exclude_unset=True))
+        changes = update.model_dump(exclude_unset=True)
+        _mongo().update_record(COLLECTION, {"slug": slug}, changes)
 
         _register_log(user, "type_update", {"post_type": body})
         invalidate_cache()
+
+        if any(field in changes and changes[field] != post_type.get(field) for field in REINDEX_FIELDS):
+            # Every search document of this type is built from these fields, so
+            # each one is rebuilt. The recycle bin stays out of the index, as it
+            # does when a single resource is deleted.
+            _call_hook(
+                "resources_update_by_filter",
+                {"post_type": slug, "status": {"$ne": "deleted"}},
+            )
         return {"msg": _("Post type updated successfully")}, 200
     except ValueError as exc:
         return {"msg": str(exc)}, 400
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not update content type %s", slug)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def delete_by_slug(slug: str, user: str) -> tuple[dict, int]:
@@ -365,9 +378,9 @@ def get_form_by_slug(slug: str):
         )
         form.pop("_id", None)
         return parse_result(form)
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not load form %s", slug)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def get_metadata(post_type_slug: str):

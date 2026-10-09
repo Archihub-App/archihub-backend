@@ -200,3 +200,43 @@ def test_a_reset_still_starts_when_its_bookkeeping_row_cannot_be_written(monkeyp
     payload, status_code = testcontrol_services.start_reset()
 
     assert (status_code, payload["task_id"]) == (202, "task-2")
+
+
+SECRET = "mongodb://admin:hunter2@db-internal:27017"
+
+
+def test_a_failing_driver_never_reaches_the_anonymous_response(client: TestClient, monkeypatch):
+    """The driver's message names hosts, ports and sometimes credentials; this
+    route answers anyone, so it reports only that the dependency is unreachable."""
+
+    class Broken:
+        def ping(self):
+            raise ConnectionError(SECRET)
+
+    monkeypatch.setattr("archihub.infra.mongo.get_mongo", lambda: Broken())
+    monkeypatch.setattr(services, "check_redis", lambda: (True, None))
+    monkeypatch.setattr(services, "check_celery", lambda: (True, None))
+    monkeypatch.setattr(services, "check_elasticsearch", lambda *a: (services.DISABLED, None))
+    monkeypatch.setattr(services, "check_qdrant", lambda *a: (services.DISABLED, None))
+
+    response = client.get("/health/ready")
+
+    assert response.json()["checks"]["mongo"] == {"status": "error", "error": "unreachable"}
+    assert "hunter2" not in response.text and "db-internal" not in response.text
+
+
+def test_a_check_that_crashes_is_reported_without_its_message(client: TestClient, monkeypatch):
+    def crash():
+        raise RuntimeError(SECRET)
+
+    monkeypatch.setattr(services, "check_mongo", lambda: (True, None))
+    monkeypatch.setattr(services, "load_index_management", lambda: None)
+    monkeypatch.setattr(services, "check_redis", crash)
+    monkeypatch.setattr(services, "check_celery", lambda: (True, None))
+    monkeypatch.setattr(services, "check_elasticsearch", lambda *a: (services.DISABLED, None))
+    monkeypatch.setattr(services, "check_qdrant", lambda *a: (services.DISABLED, None))
+
+    response = client.get("/health/ready")
+
+    assert response.json()["checks"]["redis"] == {"status": "error", "error": "unreachable"}
+    assert "hunter2" not in response.text

@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from archihub.api.aiservices import errors
 from archihub.api.aiservices.dialects import ModelInfo, get_dialect
 from archihub.core.clock import isoformat_utc
+from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +100,9 @@ def for_provider(provider: dict, *, refresh: bool = False) -> Catalogue:
     except errors.ProviderError as exc:
         logger.warning("Model discovery failed for provider %s: %s", provider_id, exc)
         return _failure(provider_id, str(exc), exc.reason.value)
-    except Exception as exc:
+    except Exception:
         logger.exception("Model discovery failed for provider %s", provider_id)
-        return _failure(provider_id, str(exc), errors.Reason.UNKNOWN.value)
+        return _failure(provider_id, _("The models could not be listed"), errors.Reason.UNKNOWN.value)
 
     models = apply_overrides(provider_id, discovered)
     with _lock:

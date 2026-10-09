@@ -117,9 +117,9 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
                 task["resourceType"] = _resource_type(task["resourceId"])
 
         return {"results": tasks, "total": mongo.count(COLLECTION, query)}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list review tasks")
-        return {"error": str(exc)}, 500
+        return {"error": _("Error while processing the request")}, 500
 
 
 def get_editors() -> tuple[list | dict, int]:
@@ -145,9 +145,9 @@ def get_editors() -> tuple[list | dict, int]:
             for editor in editors
         ]
         return options, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list editors")
-        return {"error": str(exc)}, 500
+        return {"error": _("Error while processing the request")}, 500
 
 
 # ---------------------------------------------------------------------------
@@ -206,9 +206,9 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
             "assignee": body["user"],
         })
         return created, 201
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not create a review task")
-        return {"error": str(exc)}, 500
+        return {"error": _("Error while processing the request")}, 500
 
 
 def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tuple[dict, int]:
@@ -266,9 +266,9 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
             entry["createdAt"] = _iso(entry.get("createdAt"))
 
         return updated, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not update review task %s", task_id)
-        return {"error": str(exc)}, 500
+        return {"error": _("Error while processing the request")}, 500
 
 
 def _resource_type(resource_id: str):

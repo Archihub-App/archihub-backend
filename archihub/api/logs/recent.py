@@ -60,7 +60,7 @@ _CATEGORY_BY_KEY = {
     "resource_create": CATALOGING, "resource_update": CATALOGING,
     "resource_article_update": CATALOGING, "resource_granular_update": CATALOGING,
     "resource_delete": CATALOGING, "resource_restore": CATALOGING,
-    "resource_open": CATALOGING, "resource_files_order_update": CATALOGING,
+    "resource_files_order_update": CATALOGING,
     "record_create": CATALOGING, "record_update": CATALOGING,
     "record_delete": CATALOGING, "record_get": CATALOGING, "record_get_all": CATALOGING,
     "type_create": CATALOGING, "type_update": CATALOGING, "type_delete": CATALOGING,
@@ -248,7 +248,6 @@ _DESCRIPTIONS = {
     "resource_article_update": "%(user)s edited the article of “%(title)s”",
     "resource_delete": "%(user)s moved the resource “%(title)s” to the recycle bin",
     "resource_restore": "%(user)s restored the resource “%(title)s”",
-    "resource_open": "%(user)s opened the resource “%(title)s”",
     "resource_files_order_update": "%(user)s reordered the files of “%(title)s”",
     "record_create": "%(user)s added a file to the archive",
     "record_update": "%(user)s updated a stored file",
@@ -514,9 +513,9 @@ def recent(params: dict, username: str) -> tuple[dict, int]:
             "offset": offset,
             "data": [_present(row, people, resources, services) for row in rows],
         }, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not read recent activity")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def _present(row: dict, people: dict, resources: dict, services) -> dict:

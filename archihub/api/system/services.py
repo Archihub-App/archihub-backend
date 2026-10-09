@@ -104,9 +104,9 @@ def get_all_settings() -> tuple[dict, int]:
             COLLECTION, {"name": {"$nin": list(_HIDDEN_SETTINGS)}}
         )
         return {"settings": parse_result(list(records))}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not read settings")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def get_setting(name: str) -> dict | None:
@@ -223,9 +223,9 @@ def update_settings(body: dict, current_user: str) -> tuple[dict, int]:
         clear_system_cache()
         _register_log(current_user, "system_update", {"settings": list((body or {}).keys())})
         return {"msg": _("Settings updated successfully")}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not update settings")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def get_access_rights_id():
@@ -613,9 +613,9 @@ def get_plugins() -> tuple[dict, int]:
         # Wrapped, not bare: `SystemService.getListPlugins`'s two callers both
         # read `response.plugins`.
         return {"plugins": plugins}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list plugins")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def set_plugin_active(slug: str, active: bool, current_user: str) -> tuple[dict, int]:

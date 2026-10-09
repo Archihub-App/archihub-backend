@@ -24,6 +24,11 @@ from concurrent.futures import TimeoutError as FuturesTimeout
 
 logger = logging.getLogger(__name__)
 
+#: What a failed check reports. This route answers anonymous callers, so the
+#: driver's own message - which names hosts, ports and sometimes credentials -
+#: goes to the process log and never into the response.
+UNREACHABLE = "unreachable"
+
 # status value meaning "the feature is switched off, don't count it against readiness"
 DISABLED = "disabled"
 
@@ -61,9 +66,9 @@ def check_mongo() -> tuple[bool | str, str | None]:
 
         get_mongo().ping()
         return True, None
-    except Exception as exc:
+    except Exception:
         logger.warning("Mongo readiness check failed", exc_info=True)
-        return False, str(exc)
+        return False, UNREACHABLE
 
 
 def check_redis() -> tuple[bool | str, str | None]:
@@ -72,9 +77,9 @@ def check_redis() -> tuple[bool | str, str | None]:
 
         get_cache().ping()
         return True, None
-    except Exception as exc:
+    except Exception:
         logger.warning("Redis readiness check failed", exc_info=True)
-        return False, str(exc)
+        return False, UNREACHABLE
 
 
 def check_elasticsearch(index_management: dict | None = None) -> tuple[bool | str, str | None]:
@@ -86,9 +91,9 @@ def check_elasticsearch(index_management: dict | None = None) -> tuple[bool | st
 
         get_search().ping()
         return True, None
-    except Exception as exc:
+    except Exception:
         logger.warning("Elasticsearch readiness check failed", exc_info=True)
-        return False, str(exc)
+        return False, UNREACHABLE
 
 
 def check_qdrant(index_management: dict | None = None) -> tuple[bool | str, str | None]:
@@ -102,9 +107,9 @@ def check_qdrant(index_management: dict | None = None) -> tuple[bool | str, str 
         # sentence-transformers load.
         get_vectors(load_model=False).ping()
         return True, None
-    except Exception as exc:
+    except Exception:
         logger.warning("Qdrant readiness check failed", exc_info=True)
-        return False, str(exc)
+        return False, UNREACHABLE
 
 
 def check_celery() -> tuple[bool | str, str | None]:
@@ -115,9 +120,9 @@ def check_celery() -> tuple[bool | str, str | None]:
         if not pings:
             return False, "No Celery worker responded"
         return True, None
-    except Exception as exc:
+    except Exception:
         logger.warning("Celery readiness check failed", exc_info=True)
-        return False, str(exc)
+        return False, UNREACHABLE
 
 
 def _run_parallel(jobs: dict[str, object], timeout: float) -> dict[str, tuple]:
@@ -141,8 +146,9 @@ def _run_parallel(jobs: dict[str, object], timeout: float) -> dict[str, tuple]:
                 results[name] = future.result(timeout=timeout)
             except FuturesTimeout:
                 results[name] = (False, f"check timed out after {timeout}s")
-            except Exception as exc:  # a check itself blew up
-                results[name] = (False, str(exc))
+            except Exception:  # a check itself blew up
+                logger.warning("Readiness check %s raised", name, exc_info=True)
+                results[name] = (False, UNREACHABLE)
     return results
 
 

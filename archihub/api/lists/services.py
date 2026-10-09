@@ -76,9 +76,9 @@ def get_all() -> tuple[list | dict, int]:
         records = _mongo().get_all_records(COLLECTION, {}, sort=[("name", 1)])
         lists = [{"name": record.get("name"), "id": str(record["_id"])} for record in records]
         return lists, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list vocabularies")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 @cached("lists", "options")
@@ -113,9 +113,9 @@ def get_by_id(list_id: str) -> tuple[dict, int]:
         if payload is None:
             return {"msg": _("List not found")}, 404
         return payload, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not load list %s", list_id)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def get_option_by_id(option_id: str):
@@ -160,9 +160,9 @@ def create(body: dict, user: str) -> tuple[dict, int]:
             user, "list_create", {"list": {"name": payload["name"], "id": str(new_list.inserted_id)}}
         )
         return {"msg": _("List created successfully")}, 201
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not create list")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def update_by_id(list_id: str, body: dict, user: str) -> tuple[dict, int]:
@@ -219,9 +219,9 @@ def update_by_id(list_id: str, body: dict, user: str) -> tuple[dict, int]:
         _invalidate_role_caches(list_id)
 
         return {"msg": _("List updated successfully")}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not update list %s", list_id)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def delete_by_id(list_id: str, user: str) -> tuple[dict, int]:
@@ -243,9 +243,9 @@ def delete_by_id(list_id: str, user: str) -> tuple[dict, int]:
             {"list": {"name": existing.get("name"), "id": str(existing["_id"])}},
         )
         return {"msg": _("List deleted successfully")}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not delete list %s", list_id)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 # ---------------------------------------------------------------------------

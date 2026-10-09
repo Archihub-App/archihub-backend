@@ -2273,3 +2273,6 @@ msgstr "{count} imágenes"
 
 msgid "{field} is missing"
 msgstr "{field} está faltando"
+
+msgid "The models could not be listed"
+msgstr "No se pudieron listar los modelos"
