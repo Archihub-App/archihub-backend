@@ -78,9 +78,9 @@ def _denied() -> tuple[dict, int]:
 
 def may_publish(user: str, is_admin: bool) -> bool:
     """Publishing is its own privilege, separate from editing."""
-    from archihub.api.users.services import has_role
+    from archihub.api.users.services import has_permission
 
-    return is_admin or has_role(user, "publisher")
+    return is_admin or has_permission(user, "resources.publish")
 
 
 def may_create(user: str, post_type: str, is_admin: bool) -> bool:

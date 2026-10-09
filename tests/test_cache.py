@@ -385,6 +385,9 @@ def test_a_failed_bulk_insert_still_invalidates(monkeypatch):
 DECLARED = {
     ("archihub.api.users.services", "has_role"): ("users", "system"),
     ("archihub.api.users.services", "has_right"): ("users", "system"),
+    # The roles come from `users` through `has_role`, the configured ones from `system`.
+    ("archihub.api.users.services", "has_permission"): ("users", "system"),
+    ("archihub.core.permissions", "get_mappings"): ("system",),
     ("archihub.core.roles", "get_roles"): ("system", "lists"),
     ("archihub.core.roles", "get_access_rights"): ("system", "lists"),
     ("archihub.api.system.storage", "catalogued_files"): ("records",),

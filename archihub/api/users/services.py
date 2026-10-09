@@ -192,6 +192,36 @@ def has_right(username: str, right: str) -> bool:
     return right in (user.get("accessRights") or [])
 
 
+@cached("users", "system")
+def has_permission(username: str, point: str) -> bool:
+    """Whether ``username`` passes the permission point ``point``. Always a real bool.
+
+    True when they hold any of the point's built-in roles or any role an
+    administrator has added to it (``archihub.core.permissions``). Same two
+    collections as `has_role`; the configured roles live in `system` too.
+    Raises ``KeyError`` for a point the catalogue does not define, so a typo
+    fails loudly instead of denying everyone.
+    """
+    from archihub.core.permissions import allowed_roles
+
+    if not username:
+        return False
+    return any(has_role(username, role) for role in allowed_roles(point))
+
+
+def has_builtin_permission(username: str, point: str) -> bool:
+    """Whether ``username`` holds one of ``point``'s built-in roles. Always a real bool.
+
+    For the parts of a point that reach role administration: a role an
+    administrator added to the point passes the point, but not those parts.
+    """
+    from archihub.core.permissions import get_point
+
+    if not username:
+        return False
+    return any(has_role(username, role) for role in get_point(point).default_roles)
+
+
 def _is_date_in_current_week(value: datetime.datetime) -> bool:
     """Whether ``value`` falls in this ISO week, both read in UTC."""
     return as_utc(value).isocalendar()[:2] == utcnow().isocalendar()[:2]

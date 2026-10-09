@@ -158,3 +158,36 @@ def audit_log(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict]]:
     sink = _AuditSink()
     monkeypatch.setattr(logs, "_mongo", lambda: sink)
     yield sink.entries
+
+
+class _RoleMappingsStore:
+    """Stands in for the database behind the permission points' configured roles."""
+
+    def __init__(self, mappings: dict) -> None:
+        self.mappings = mappings
+
+    def get_record(self, collection: str, filters: dict, fields: dict | None = None):
+        return {"name": "role_mappings", "data": self.mappings}
+
+    def upsert_record(self, collection: str, filters: dict, document: dict) -> None:
+        self.mappings.clear()
+        self.mappings.update(document["data"])
+
+
+@pytest.fixture(autouse=True)
+def role_mappings(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict]:
+    """The roles configured on permission points, held in memory and empty by default.
+
+    Every permission check reads them, so without this a test would read the
+    ``system`` collection of whatever MongoDB the local settings name. A test
+    adds roles by mutating the yielded dict: ``role_mappings["forms.manage"] =
+    ["curator"]``.
+    """
+    from archihub.api.system import role_mappings as service
+    from archihub.core import permissions
+
+    mappings: dict = {}
+    store = _RoleMappingsStore(mappings)
+    monkeypatch.setattr(permissions, "_mongo", lambda: store)
+    monkeypatch.setattr(service, "_mongo", lambda: store)
+    yield mappings

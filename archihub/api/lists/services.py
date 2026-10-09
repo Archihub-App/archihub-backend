@@ -15,6 +15,7 @@ from bson import json_util
 from bson.objectid import ObjectId
 
 from archihub.core.i18n import gettext as _
+from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 from archihub.infra.cache import cached
 
 logger = logging.getLogger(__name__)
@@ -165,6 +166,46 @@ def create(body: dict, user: str) -> tuple[dict, int]:
         return {"msg": _("Error while processing the request")}, 500
 
 
+def _relabels_authorisation_vocabulary(options: list, user: str) -> str | None:
+    """The first option id in ``options`` whose term change is role administration.
+
+    That is an option the roles or access-rights vocabulary references, decided
+    by the option rather than by the list it is edited through, since one option
+    may belong to several lists. Changing its term needs a built-in role of
+    ``lists.manage``; ``None`` when nothing needs one or ``user`` holds one.
+    Keeping the term, or dropping the option from another list, is not a change.
+    """
+    from archihub.api.users.services import has_builtin_permission
+    from archihub.core.roles import get_access_rights_id, get_roles_id
+
+    wanted = {
+        str(option["id"]): option.get("term")
+        for option in options
+        if option.get("id") and not option.get("deleted")
+    }
+    if not wanted:
+        return None
+
+    mongo = _mongo()
+    protected: set[str] = set()
+    for vocabulary_id in (get_roles_id(), get_access_rights_id()):
+        vocabulary_oid = _to_object_id(str(vocabulary_id)) if vocabulary_id else None
+        vocabulary = mongo.get_record(COLLECTION, {"_id": vocabulary_oid}) if vocabulary_oid else None
+        protected.update(str(i) for i in (vocabulary or {}).get("options") or [])
+
+    shared = [oid for oid in (_to_object_id(i) for i in wanted if i in protected) if oid]
+    if not shared:
+        return None
+    stored = {
+        str(record["_id"]): record.get("term")
+        for record in mongo.get_all_records(OPTIONS_COLLECTION, {"_id": {"$in": shared}})
+    }
+    changed = [i for i in map(str, shared) if wanted[i] != stored.get(i)]
+    if not changed or has_builtin_permission(user, "lists.manage"):
+        return None
+    return changed[0]
+
+
 def update_by_id(list_id: str, body: dict, user: str) -> tuple[dict, int]:
     """Update a list, reconciling its options.
 
@@ -175,6 +216,10 @@ def update_by_id(list_id: str, body: dict, user: str) -> tuple[dict, int]:
 
     A patch that does NOT include ``options`` updates the remaining fields and
     leaves the options alone.
+
+    AN OPTION ID MUST ALREADY BELONG TO THIS LIST, AND APPEAR ONCE. An update
+    changes only this list's own options, each at most once. A request naming
+    any other id, or one id twice, is refused whole before anything is written.
     """
     object_id = _to_object_id(list_id)
     if object_id is None:
@@ -184,6 +229,22 @@ def update_by_id(list_id: str, body: dict, user: str) -> tuple[dict, int]:
     existing = mongo.get_record(COLLECTION, {"_id": object_id})
     if not existing:
         return {"msg": _("List not found")}, 404
+
+    named = [str(option["id"]) for option in body.get("options") or [] if option.get("id")]
+    if len(named) != len(set(named)):
+        # One entry per option: what is checked is exactly what is written.
+        return {"msg": _("An option may appear only once in a list")}, 400
+
+    owned = {str(option_id) for option_id in existing.get("options") or []}
+    for option in body.get("options") or []:
+        if option.get("id") and str(option["id"]) not in owned:
+            logger.info("Refused %s an edit to option %s outside list %s", user, option["id"], list_id)
+            return {"msg": _("The option {option} does not belong to this list", option=option["id"])}, 400
+
+    relabelled = _relabels_authorisation_vocabulary(body.get("options") or [], user)
+    if relabelled is not None:
+        logger.info("Refused %s a change to authorisation option %s via list %s", user, relabelled, list_id)
+        return {"msg": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
 
     try:
         update: dict = {}

@@ -26,6 +26,7 @@ from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
+    require_permission,
     require_role_any,
 )
 from archihub.core.responses import json_response
@@ -35,9 +36,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/system", tags=["System settings"])
 
 require_admin = require_role_any("admin")
-require_admin_or_editor = require_role_any(
-    "admin", "editor"
-)
 #: The plugins listing is what the processing screens read to build themselves,
 #: so it admits `processing` as well as `admin` - narrowing it to admin alone
 #: leaves an operator holding only `processing` with an empty page.
@@ -157,7 +155,7 @@ def get_default_cataloging_type(
     responses={200: {"description": "Configured access rights"}, **_ROLE_RESPONSES},
 )
 def get_access_rights(
-    current_user: CurrentUser = Depends(require_admin_or_editor),
+    current_user: CurrentUser = Depends(require_permission("access_rights.read")),
 ) -> JSONResponse:
     """The access-rights vocabulary, as the stored list document.
 
@@ -176,6 +174,59 @@ def get_roles(current_user: CurrentUser = Depends(require_admin)) -> JSONRespons
     from archihub.core.roles import get_roles as _get
 
     return json_response(_get(), 200)
+
+
+# ---------------------------------------------------------------------------
+# Permission points
+#
+# Administrators only, all three: choosing who passes a check is the same
+# authority as assigning roles.
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/permission-points",
+    responses={200: {"description": "Every permission point"}, **_ROLE_RESPONSES},
+)
+def get_permission_points(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """The catalogue of role checks an administrator may add roles to."""
+    from archihub.api.system import role_mappings
+
+    return _respond(role_mappings.list_points())
+
+
+@router.get(
+    "/role-mappings",
+    responses={200: {"description": "The roles added to each point"}, **_ROLE_RESPONSES},
+)
+def get_role_mappings(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """The roles added to each permission point, beyond its built-in ones."""
+    from archihub.api.system import role_mappings
+
+    return _respond(role_mappings.get_role_mappings())
+
+
+@router.put(
+    "/role-mappings",
+    responses={
+        200: {"description": "Role mappings updated"},
+        400: {"description": "An unknown point or role, or a malformed body"},
+        **_ROLE_RESPONSES,
+    },
+)
+def update_role_mappings(
+    body: dict = Body(...),
+    current_user: CurrentUser = Depends(require_admin),
+) -> JSONResponse:
+    """Set the roles added to one or more permission points.
+
+    ``{"mappings": {"resources.see_deleted": ["curator"]}}``. Points not named
+    keep their roles; an empty list removes a point's added roles. Built-in
+    roles always pass and cannot be removed.
+    """
+    from archihub.api.system import role_mappings
+
+    return _respond(role_mappings.update_role_mappings(body, current_user.username))
 
 
 # ---------------------------------------------------------------------------

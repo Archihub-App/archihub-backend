@@ -30,7 +30,9 @@ COLLECTION = "system"
 #: `runtime_control` holds the restart counter every process polls - writing it
 #: from a settings form would restart the whole deployment as a side effect of
 #: saving an unrelated preference.
-_HIDDEN_SETTINGS = {"active_plugins", "runtime_control"}
+#: `role_mappings` widens permission points, and is changed through its own
+#: routes, which check every point and role it names.
+_HIDDEN_SETTINGS = {"active_plugins", "runtime_control", "role_mappings"}
 
 
 def _mongo():

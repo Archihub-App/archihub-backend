@@ -22,7 +22,7 @@ from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
-    require_role_any,
+    require_permission,
 )
 from archihub.core.responses import json_response
 
@@ -45,9 +45,7 @@ def _respond(result) -> JSONResponse:
 
 # The editorial routes are gated twice: coarsely here, so a reader never reaches
 # the service at all, and precisely inside it against the specific resource.
-require_editor = require_role_any(
-    "admin", "editor", "super_editor"
-)
+require_editor = require_permission("resources.edit")
 
 
 @router.post(
@@ -234,11 +232,9 @@ def get_tree(
         post_type = body.get("postType") or None
 
         if status == "draft":
-            from archihub.api.users.services import has_role
+            from archihub.api.users.services import has_permission
 
-            if not has_role(current_user.username, "editor") and not has_role(
-                current_user.username, "admin"
-            ):
+            if not has_permission(current_user.username, "resources.browse_drafts"):
                 return JSONResponse(
                     status_code=ROLE_FAILURE_STATUS,
                     content={"msg": _("You don't have the required authorization")},

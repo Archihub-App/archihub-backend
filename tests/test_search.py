@@ -20,14 +20,14 @@ from archihub.api.search import query, rss, services
 def test_a_public_caller_always_gets_published_whatever_they_ask_for(requested):
     """16 real drafts were reachable this way."""
     assert query.resolve_status(
-        requested, public=True, may_see_drafts=True, may_see_deleted=True
+        requested, public=True, may_see_deleted=True
     ) == ["published"]
 
 
 def test_the_built_public_query_can_only_match_published():
     built = query.build(
         {"post_type": ["x"], "status": "draft"},
-        statuses=query.resolve_status("draft", public=True, may_see_drafts=True, may_see_deleted=True),
+        statuses=query.resolve_status("draft", public=True, may_see_deleted=True),
         access_rights=["public"],
         declared_fields=set(),
         sortable_text_fields=set(),
@@ -39,30 +39,25 @@ def test_the_built_public_query_can_only_match_published():
     assert status_filter == {"terms": {"status.keyword": ["published"]}}
 
 
-def test_an_authenticated_caller_without_the_role_cannot_search_drafts():
+@pytest.mark.parametrize("requested", ["draft", "created", "updated"])
+def test_nobody_can_search_drafts(requested):
+    """Not even a caller who may see every other state."""
     with pytest.raises(query.InvalidSearch):
-        query.resolve_status("draft", public=False, may_see_drafts=False, may_see_deleted=False)
-
-
-def test_a_publisher_searching_drafts_gets_all_three_pre_publication_states():
-    """"draft" covers three states, exactly as the resources listing treats it."""
-    assert query.resolve_status(
-        "draft", public=False, may_see_drafts=True, may_see_deleted=False
-    ) == ["draft", "created", "updated"]
+        query.resolve_status(requested, public=False, may_see_deleted=True)
 
 
 def test_the_recycle_bin_needs_an_administrator():
     with pytest.raises(query.InvalidSearch):
-        query.resolve_status("deleted", public=False, may_see_drafts=True, may_see_deleted=False)
+        query.resolve_status("deleted", public=False, may_see_deleted=False)
 
     assert query.resolve_status(
-        "deleted", public=False, may_see_drafts=True, may_see_deleted=True
+        "deleted", public=False, may_see_deleted=True
     ) == ["deleted"]
 
 
 def test_an_unknown_status_is_refused():
     with pytest.raises(query.InvalidSearch):
-        query.resolve_status("invented", public=False, may_see_drafts=True, may_see_deleted=True)
+        query.resolve_status("invented", public=False, may_see_deleted=True)
 
 
 def test_an_anonymous_caller_only_holds_the_public_right():

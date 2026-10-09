@@ -31,6 +31,7 @@ from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
+    require_permission,
     require_role_any,
 )
 from archihub.core.responses import json_response
@@ -39,12 +40,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/aiservices", tags=["AI services"])
 
-require_reader = require_role_any(
-    "admin", "processing", "llm"
-)
+require_reader = require_permission("ai.use")
+#: The providers hold the instance's credentials: global configuration, so not
+#: a permission point.
 require_operator = require_role_any(
     "admin", "processing"
 )
+require_skill_manager = require_permission("ai.manage_skills")
 
 _RESPONSES = {
     401: {"description": "Missing or invalid token"},
@@ -342,7 +344,7 @@ def list_skills(
     "/skills/sync",
     responses={200: {"description": "What was reconciled"}, **_RESPONSES},
 )
-def sync_skills(current_user: CurrentUser = Depends(require_operator)) -> JSONResponse:
+def sync_skills(current_user: CurrentUser = Depends(require_skill_manager)) -> JSONResponse:
     """Reconcile the skills directory with the collection.
 
     Declared before ``/skills/{skill_path}`` so the literal segment wins.
@@ -367,7 +369,7 @@ def sync_skills(current_user: CurrentUser = Depends(require_operator)) -> JSONRe
 )
 def create_skill(
     body: dict = Body(default_factory=dict),
-    current_user: CurrentUser = Depends(require_operator),
+    current_user: CurrentUser = Depends(require_skill_manager),
 ) -> JSONResponse:
     """Create a skill from a path and its Markdown."""
     try:
@@ -399,7 +401,7 @@ def get_skill(skill_path: str) -> JSONResponse:
 def update_skill(
     skill_path: str,
     body: dict = Body(default_factory=dict),
-    current_user: CurrentUser = Depends(require_operator),
+    current_user: CurrentUser = Depends(require_skill_manager),
 ) -> JSONResponse:
     """Replace a skill's content."""
     try:
@@ -415,7 +417,7 @@ def update_skill(
 )
 def delete_skill(
     skill_path: str,
-    current_user: CurrentUser = Depends(require_operator),
+    current_user: CurrentUser = Depends(require_skill_manager),
 ) -> JSONResponse:
     """Remove a skill and retire its record."""
     try:

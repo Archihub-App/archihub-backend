@@ -84,6 +84,7 @@ _CATEGORY_BY_KEY = {
     "user_profile_update": SECURITY, "user_password_change": SECURITY,
     "user_accept_terms": SECURITY,
     "api_key_create": SECURITY, "api_key_revoke": SECURITY,
+    "role_mappings_update": SECURITY,
 
     # Everything else - settings, restarts, index and cache maintenance, AI
     # providers and skills - falls through to SYSTEM.
@@ -121,6 +122,7 @@ _LEVELS = {
     "snap_delete": "warning", "user_delete": "warning", "api_key_revoke": "warning",
     "task_cancel": "warning", "llm_provider_delete": "warning", "ai_skill_delete": "warning",
     "system_restart": "warning", "cache_clear": "warning", "generated_files_delete": "warning",
+    "role_mappings_update": "warning",
     "av_transcribe": "success", "lt_extraction": "success",
     "img_analyze": "success", "docseg_extraction": "success",
     "resource_restore": "success",
@@ -272,6 +274,7 @@ _DESCRIPTIONS = {
     "search": "%(user)s searched the archive",
     "user_login": "%(user)s signed in",
     "system_update": "%(user)s changed the system settings",
+    "role_mappings_update": "%(user)s changed which roles pass the permission points",
     "av_transcribe": "%(user)s ran a transcription over %(count)s file(s)",
     "img_analyze": "%(user)s ran an image analysis over %(count)s file(s)",
     "lt_extraction": "%(user)s ran a text extraction over %(count)s file(s)",
@@ -466,7 +469,7 @@ def recent(params: dict, username: str) -> tuple[dict, int]:
 
     try:
         is_admin = user_services.has_role(username, "admin")
-        is_editor = is_admin or user_services.has_role(username, "editor")
+        is_editor = is_admin or user_services.has_permission(username, "activity.catalogue")
 
         clauses: list[dict] = []
 

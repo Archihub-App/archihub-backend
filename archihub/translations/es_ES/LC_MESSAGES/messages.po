@@ -2276,3 +2276,96 @@ msgstr "{field} está faltando"
 
 msgid "The models could not be listed"
 msgstr "No se pudieron listar los modelos"
+
+msgid "Create content types"
+msgstr "Crear tipos de contenido"
+
+msgid "Read, edit and delete content types, including their edit and view roles"
+msgstr "Consultar, editar y eliminar tipos de contenido, incluidos sus roles de edición y de visualización"
+
+msgid "Create, edit, duplicate and delete metadata forms"
+msgstr "Crear, editar, duplicar y eliminar formularios de metadatos"
+
+msgid "Create, edit and delete controlled vocabularies"
+msgstr "Crear, editar y eliminar listas"
+
+msgid "Create, edit and delete the saved views the explore screens are built from"
+msgstr "Crear, editar y eliminar las vistas guardadas con las que se construyen las pantallas de exploración"
+
+msgid "Read the access-rights vocabulary, as the cataloguing forms do"
+msgstr "Consultar la lista de derechos de acceso, como hacen los formularios de catalogación"
+
+msgid "Delete, restore, reorder, re-type and partially edit resources. The content type's edit roles and the ownership rule still apply"
+msgstr "Eliminar, restaurar, reordenar, cambiar de tipo y editar parcialmente recursos. Se siguen aplicando los roles de edición del tipo de contenido y la regla de autoría"
+
+msgid "Edit and delete resources created by other users"
+msgstr "Editar y eliminar recursos creados por otros usuarios"
+
+msgid "Publish resources"
+msgstr "Publicar recursos"
+
+msgid "See and search the recycle bin"
+msgstr "Ver y buscar en la papelera"
+
+msgid "See other users' drafts in the catalogue listing"
+msgstr "Ver los borradores de otros usuarios en el listado del catálogo"
+
+msgid "Built in: users holding both publisher and admin"
+msgstr "Por defecto: usuarios que tienen a la vez publisher y admin"
+
+msgid "Browse drafts in the flat listing of the navigation tree"
+msgstr "Consultar borradores en el listado plano del árbol de navegación"
+
+msgid "Edit the block layout of records they can open"
+msgstr "Editar la disposición en bloques de los registros que puede abrir"
+
+msgid "Correct transcriptions of records with an open task assigned to them"
+msgstr "Corregir transcripciones de registros con una tarea abierta asignada"
+
+msgid "Correct any transcription, without an assigned task. Also needs records.transcribe"
+msgstr "Corregir cualquier transcripción, sin tarea asignada. También requiere records.transcribe"
+
+msgid "Built in: admin and team_lead; editor too, unless they also hold transcriber"
+msgstr "Por defecto: admin y team_lead; también editor, salvo que tenga además transcriber"
+
+msgid "Create, assign, list and approve user tasks"
+msgstr "Crear, asignar, listar y aprobar tareas de usuario"
+
+msgid "Comment on user tasks"
+msgstr "Comentar tareas de usuario"
+
+msgid "See other users' cataloguing and processing activity in the activity feed"
+msgstr "Ver la actividad de catalogación y procesamiento de otros usuarios en el registro de actividad"
+
+msgid "Use the language models: providers and skills listings, chat, the record assistant"
+msgstr "Usar los modelos de lenguaje: listados de proveedores y habilidades, chat y asistente de registros"
+
+msgid "Create, edit, delete and synchronise AI skills"
+msgstr "Crear, editar, eliminar y sincronizar habilidades del asistente"
+
+msgid "\"{field}\" must be a non-empty object"
+msgstr "\"{field}\" debe ser un objeto no vacío"
+
+msgid "The permission point {point} does not exist"
+msgstr "El punto de permiso {point} no existe"
+
+msgid "The roles of {point} must be a list of role ids"
+msgstr "Los roles de {point} deben ser una lista de identificadores de rol"
+
+msgid "Role mappings updated"
+msgstr "Asignación de roles actualizada"
+
+msgid "%(user)s changed which roles pass the permission points"
+msgstr "%(user)s cambió qué roles tienen acceso a los puntos de permiso"
+
+msgid "Drafts cannot be searched"
+msgstr "No se pueden buscar borradores"
+
+msgid "{role} is a built-in role and cannot be added to a permission point"
+msgstr "{role} es un rol predefinido y no se puede añadir a un punto de permiso"
+
+msgid "An option may appear only once in a list"
+msgstr "Una opción solo puede aparecer una vez en una lista"
+
+msgid "The option {option} does not belong to this list"
+msgstr "La opción {option} no pertenece a esta lista"

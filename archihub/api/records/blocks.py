@@ -60,16 +60,17 @@ def _now() -> datetime.datetime:
 def may_edit(user: str, record: dict, is_admin: bool) -> bool:
     """Whether this caller may rewrite this record's block layout.
 
-    Administrators may. An editor may, but only for a record they could open in
-    the first place - nobody edits what they cannot read.
+    Administrators may. The ``records.edit_blocks`` permission may, but only
+    for a record they could open in the first place - nobody edits what they
+    cannot read.
     """
-    from archihub.api.users.services import has_role
+    from archihub.api.users.services import has_permission
 
     if is_admin:
         return True
     if not access.may_view_record(user, record, is_admin):
         return False
-    return has_role(user, "editor")
+    return has_permission(user, "records.edit_blocks")
 
 
 # ---------------------------------------------------------------------------

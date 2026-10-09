@@ -55,6 +55,10 @@ def mongo(monkeypatch):
     monkeypatch.setattr(services, "_mongo", lambda: fake)
     monkeypatch.setattr(services, "_register_log", lambda *a, **k: None)
     monkeypatch.setattr(services, "_invalidate_role_caches", lambda *a, **k: None)
+    # No authorisation vocabularies unless a test names one; the real lookup
+    # reads the `system` collection.
+    monkeypatch.setattr("archihub.core.roles.get_roles_id", lambda: None)
+    monkeypatch.setattr("archihub.core.roles.get_access_rights_id", lambda: None)
     return fake
 
 
@@ -179,8 +183,8 @@ def test_new_options_are_created_and_referenced(mongo):
 
 
 def test_existing_options_are_updated_in_place(mongo):
-    mongo.records["lists"] = {"_id": ObjectId(VALID_ID), "name": "L"}
     option_id = "600000000000000000000001"
+    mongo.records["lists"] = {"_id": ObjectId(VALID_ID), "name": "L", "options": [option_id]}
 
     services.update_by_id(
         VALID_ID, {"options": [{"id": option_id, "term": "Renamed"}]}, "admin"
@@ -193,8 +197,8 @@ def test_existing_options_are_updated_in_place(mongo):
 
 
 def test_deleted_options_are_dropped_from_the_list(mongo):
-    mongo.records["lists"] = {"_id": ObjectId(VALID_ID), "name": "L"}
     keep, drop = "600000000000000000000001", "600000000000000000000002"
+    mongo.records["lists"] = {"_id": ObjectId(VALID_ID), "name": "L", "options": [keep, drop]}
 
     services.update_by_id(
         VALID_ID,
@@ -204,6 +208,99 @@ def test_deleted_options_are_dropped_from_the_list(mongo):
 
     _collection, _filters, update = mongo.updated[-1]
     assert update["options"] == [keep]
+
+
+@pytest.mark.parametrize("deleted", [False, True])
+def test_an_option_of_another_list_cannot_be_touched(mongo, deleted):
+    """An update changes only the edited list's own options."""
+    own, foreign = "600000000000000000000001", "600000000000000000000009"
+    mongo.records["lists"] = {"_id": ObjectId(VALID_ID), "name": "L", "options": [own]}
+
+    payload, status = services.update_by_id(
+        VALID_ID,
+        {"name": "N", "options": [{"id": own, "term": "a"},
+                                  {"id": foreign, "term": "admin", "deleted": deleted}]},
+        "editor",
+    )
+
+    assert status == 400
+    assert foreign in payload["msg"]
+    assert mongo.updated == []
+    assert mongo.inserted == []
+
+
+ROLES_LIST = "6a70b8c3497d4440325c9400"
+SHARED = "600000000000000000000005"
+
+
+@pytest.fixture
+def shared_role_option(mongo, monkeypatch):
+    """A list that shares an option with the roles vocabulary, labelled ``curator``."""
+    monkeypatch.setattr("archihub.core.roles.get_roles_id", lambda: ROLES_LIST)
+    lists = {
+        VALID_ID: {"_id": ObjectId(VALID_ID), "name": "L", "options": [SHARED]},
+        ROLES_LIST: {"_id": ObjectId(ROLES_LIST), "name": "Roles", "options": [SHARED]},
+    }
+    mongo.records["lists"] = lambda filters: lists.get(str(filters["_id"]))
+    mongo.collections["options"] = [{"_id": ObjectId(SHARED), "term": "curator"}]
+    return mongo
+
+
+@pytest.fixture
+def builtin_manager(monkeypatch):
+    held: set[str] = set()
+    monkeypatch.setattr(
+        "archihub.api.users.services.has_role", lambda username, role: role in held
+    )
+    return held
+
+
+def test_a_shared_role_option_cannot_be_relabelled_by_an_added_role(
+    shared_role_option, builtin_manager
+):
+    builtin_manager.add("curator")
+    payload, status = services.update_by_id(
+        VALID_ID, {"options": [{"id": SHARED, "term": "admin"}]}, "someone"
+    )
+    assert status == 403
+    assert shared_role_option.updated == []
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        [{"id": SHARED, "term": "admin"}, {"id": SHARED, "term": "curator"}],
+        [{"id": SHARED, "term": "curator"}, {"id": SHARED, "term": "curator"}],
+        [{"id": SHARED, "term": "admin"}, {"id": SHARED, "deleted": True}],
+    ],
+)
+def test_an_option_named_twice_is_refused(shared_role_option, builtin_manager, options):
+    builtin_manager.add("editor")
+    _payload, status = services.update_by_id(VALID_ID, {"options": options}, "someone")
+    assert status == 400
+    assert shared_role_option.updated == []
+    assert shared_role_option.inserted == []
+
+
+def test_a_shared_role_option_may_keep_its_label_or_be_dropped(
+    shared_role_option, builtin_manager
+):
+    _payload, status = services.update_by_id(
+        VALID_ID, {"options": [{"id": SHARED, "term": "curator"}]}, "someone"
+    )
+    assert status == 200
+    _payload, status = services.update_by_id(
+        VALID_ID, {"options": [{"id": SHARED, "term": "x", "deleted": True}]}, "someone"
+    )
+    assert status == 200
+
+
+def test_a_built_in_list_manager_may_relabel_a_shared_option(shared_role_option, builtin_manager):
+    builtin_manager.add("editor")
+    _payload, status = services.update_by_id(
+        VALID_ID, {"options": [{"id": SHARED, "term": "Curador"}]}, "someone"
+    )
+    assert status == 200
 
 
 def test_update_missing_list_is_404(mongo):

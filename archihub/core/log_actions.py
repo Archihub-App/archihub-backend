@@ -36,6 +36,7 @@ log_actions = {
     'system_setup': 'SYSTEM_SETUP',
     'system_restart': 'SYSTEM_RESTART',
     'cache_clear': 'CACHE_CLEAR',
+    'role_mappings_update': 'ROLE_MAPPINGS_UPDATE',
     'index_regenerate': 'INDEX_REGENERATE',
     'index_resources': 'INDEX_RESOURCES',
     'geo_index_regenerate': 'GEO_INDEX_REGENERATE',

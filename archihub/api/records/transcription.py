@@ -359,18 +359,25 @@ def _vision_segments(result: dict, groups: list, seen: set) -> dict:
 def may_edit(record_id: str, user: str) -> bool:
     """Whether this caller may correct this record's transcription.
 
-    Administrators and team leads may, anywhere. A transcriber may only where
-    they hold an open task on *this* record - the assignment is the grant, and
-    holding the role alone grants nothing.
+    Administrators and team leads may, anywhere, and so may a role an
+    administrator added to ``records.transcribe_any``. A transcriber, or a role
+    added to ``records.transcribe``, may only where they hold an open task on
+    *this* record - the assignment is the grant, and holding the role alone
+    grants nothing.
 
     Always a real bool; the route states which roles reach it.
     """
     from archihub.api.users.services import has_role
+    from archihub.core.permissions import configured_roles
 
     if has_role(user, "admin") or has_role(user, "team_lead"):
         return True
+    if any(has_role(user, role) for role in configured_roles("records.transcribe_any")):
+        return True
 
-    if has_role(user, "transcriber"):
+    if has_role(user, "transcriber") or any(
+        has_role(user, role) for role in configured_roles("records.transcribe")
+    ):
         task = _mongo().get_record(
             "usertasks",
             {"recordId": record_id, "user": user, "status": {"$in": list(OPEN_TASK_STATES)}},

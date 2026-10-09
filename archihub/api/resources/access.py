@@ -249,17 +249,18 @@ def holds_edit_role(username: str, post_type: str | None, is_admin: bool) -> boo
 
 
 def owns_or_supervises(username: str, resource: dict, is_admin: bool) -> bool:
-    """The ownership half of the write rule: creator, ``super_editor``, or admin.
+    """The ownership half of the write rule: the creator, the
+    ``resources.super_edit`` permission, or an administrator.
 
     ``createdBy`` is read with ``.get``: documents predating the field exist.
     """
-    from archihub.api.users.services import has_role
+    from archihub.api.users.services import has_permission
 
     if is_admin:
         return True
     if resource.get("createdBy") == username:
         return True
-    return has_role(username, "super_editor")
+    return has_permission(username, "resources.super_edit")
 
 
 def is_public(resource: dict) -> bool:
@@ -294,19 +295,29 @@ def is_public(resource: dict) -> bool:
 
 
 def may_see_deleted(username: str | None, is_admin: bool) -> bool:
-    """Only administrators may browse the recycle bin."""
-    return is_admin
+    """Administrators, and the ``resources.see_deleted`` permission, may browse
+    the recycle bin."""
+    from archihub.api.users.services import has_permission
+
+    if is_admin:
+        return True
+    return bool(username) and has_permission(username, "resources.see_deleted")
 
 
-def may_see_all_drafts(is_publisher: bool, is_admin: bool) -> bool:
+def may_see_all_drafts(username: str | None, is_publisher: bool, is_admin: bool) -> bool:
     """Whether the caller may see drafts other than their own.
 
-    ONLY SOMEONE WHO IS BOTH publisher AND admin sees everyone's drafts; anyone
-    else sees their own. This is stricter than "either role", deliberately: it
-    fails closed, and widening who can read other people's unpublished work is a
-    decision for whoever hands out these roles.
+    BUILT IN, ONLY SOMEONE WHO IS BOTH publisher AND admin sees everyone's
+    drafts; anyone else sees their own. This is stricter than "either role",
+    deliberately: it fails closed, and widening who can read other people's
+    unpublished work is a decision for whoever hands out these roles - which is
+    what the ``resources.see_all_drafts`` permission is for.
     """
-    return is_publisher and is_admin
+    from archihub.api.users.services import has_permission
+
+    if is_publisher and is_admin:
+        return True
+    return bool(username) and has_permission(username, "resources.see_all_drafts")
 
 
 def build_listing_filters(
@@ -340,7 +351,7 @@ def build_listing_filters(
         branches = [
             {"status": state, **filters} for state in ("draft", "created", "updated")
         ]
-        if not may_see_all_drafts(is_publisher, is_admin):
+        if not may_see_all_drafts(username, is_publisher, is_admin):
             for branch in branches:
                 branch["createdBy"] = username
         filters = {"$or": branches}

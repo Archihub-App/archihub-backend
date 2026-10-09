@@ -16,10 +16,11 @@ from fastapi.responses import JSONResponse
 
 from archihub.api.lists import services
 from archihub.api.lists.schemas import ListCreate, ListUpdate
+from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
-    require_role_any,
+    require_permission,
 )
 from archihub.core.responses import json_response
 
@@ -27,12 +28,27 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/lists", tags=["Lists"])
 
-require_admin_or_editor = require_role_any(
-    "admin", "editor"
-)
+require_list_manager = require_permission("lists.manage")
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
         403: {"description": "Insufficient role"}}
+
+
+def _refuse_authorisation_vocabulary(list_id: str, username: str) -> JSONResponse | None:
+    """Keep the roles and access-rights vocabularies out of added roles' reach.
+
+    Changing either list creates or removes roles or access rights, which is
+    role administration. A role an administrator added to ``lists.manage``
+    manages every other list; these two need one of its built-in roles.
+    """
+    from archihub.api.users.services import has_builtin_permission
+    from archihub.core.roles import get_access_rights_id, get_roles_id
+
+    protected = {str(value) for value in (get_roles_id(), get_access_rights_id()) if value}
+    if list_id not in protected or has_builtin_permission(username, "lists.manage"):
+        return None
+    logger.info("Denied %s a change to authorisation vocabulary %s", username, list_id)
+    return json_response({"msg": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS)
 
 
 def _respond(result) -> JSONResponse:
@@ -49,7 +65,7 @@ def _respond(result) -> JSONResponse:
     "",
     responses={200: {"description": "All lists, as name + id"}, **_ROLE_RESPONSES},
 )
-def get_all(current_user: CurrentUser = Depends(require_admin_or_editor)) -> JSONResponse:
+def get_all(current_user: CurrentUser = Depends(require_list_manager)) -> JSONResponse:
     """Get every controlled vocabulary, alphabetically, as ``{name, id}``."""
     return _respond(services.get_all())
 
@@ -61,7 +77,7 @@ def get_all(current_user: CurrentUser = Depends(require_admin_or_editor)) -> JSO
 )
 def create(
     body: ListCreate = Body(...),
-    current_user: CurrentUser = Depends(require_admin_or_editor),
+    current_user: CurrentUser = Depends(require_list_manager),
 ) -> JSONResponse:
     """Create a vocabulary and its options.
 
@@ -81,7 +97,7 @@ def create(
 )
 def get_by_id(
     list_id: str,
-    current_user: CurrentUser = Depends(require_admin_or_editor),
+    current_user: CurrentUser = Depends(require_list_manager),
 ) -> JSONResponse:
     """Get one vocabulary by id, with its options resolved to ``{id, term}``.
 
@@ -101,7 +117,7 @@ def get_by_id(
 def update_by_id(
     list_id: str,
     body: ListUpdate = Body(...),
-    current_user: CurrentUser = Depends(require_admin_or_editor),
+    current_user: CurrentUser = Depends(require_list_manager),
 ) -> JSONResponse:
     """Update a vocabulary, reconciling its options.
 
@@ -109,6 +125,9 @@ def update_by_id(
     options flagged ``deleted`` are removed from the list. A patch that omits
     ``options`` entirely leaves them untouched.
     """
+    refused = _refuse_authorisation_vocabulary(list_id, current_user.username)
+    if refused is not None:
+        return refused
     return _respond(
         services.update_by_id(list_id, body.model_dump(exclude_unset=True), current_user.username)
     )
@@ -124,11 +143,14 @@ def update_by_id(
 )
 def delete_by_id(
     list_id: str,
-    current_user: CurrentUser = Depends(require_admin_or_editor),
+    current_user: CurrentUser = Depends(require_list_manager),
 ) -> JSONResponse:
     """Delete a vocabulary.
 
     The option documents it referenced are left in place - they may be shared,
     and orphan cleanup is not part of this path.
     """
+    refused = _refuse_authorisation_vocabulary(list_id, current_user.username)
+    if refused is not None:
+        return refused
     return _respond(services.delete_by_id(list_id, current_user.username))
