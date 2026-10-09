@@ -230,13 +230,10 @@ def delete_by_slug(slug: str, user: str) -> tuple[dict, int]:
 
     _register_log(user, "type_delete", {"post_type": {"name": post_type.get("name"), "slug": post_type.get("slug")}})
 
-    # NOTE: this raises 'resources_update_by_filters' (plural), and the only
-    # subscriber anywhere registers 'resources_update_by_filter' (singular) - so
-    # nothing runs. That is left as it stands rather than quietly corrected:
-    # whatever the singular hook does has never run on type deletion, and
-    # connecting it is a behaviour change to make deliberately rather than as a
-    # side effect of fixing a name.
-    _call_hook("resources_update_by_filters", {"slug": slug})
+    # The resources above went to the recycle bin in a single write, so no
+    # per-resource `resource_delete` fired. This one carries the type instead,
+    # and its subscribers act on every resource of it at once.
+    _call_hook("type_delete", {"post_type": slug, "slug": slug})
 
     invalidate_cache()
     return {"msg": _("Post type deleted successfully")}, 200

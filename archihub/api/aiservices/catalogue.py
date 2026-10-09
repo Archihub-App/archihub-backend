@@ -201,6 +201,11 @@ def set_override(provider_id: str, model_id: str, values: dict, user: str | None
         OVERRIDES_COLLECTION, {"provider": provider_id, "model": model_id}, permitted
     )
     clear_cache(provider_id)
+    _audit(user, "llm_model_update", {
+        "provider": provider_id,
+        "model": model_id,
+        "fields": sorted(key for key in values if key in permitted),
+    })
 
     # Returned JSON-safe: the stored document carries a real datetime, and
     # handing that straight to a JSON response is a 500 after the write has
@@ -215,3 +220,9 @@ def find_model(provider: dict, model_id: str) -> ModelInfo | None:
         if model.id == model_id:
             return model
     return None
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

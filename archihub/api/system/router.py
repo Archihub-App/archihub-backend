@@ -273,7 +273,7 @@ def get_actions(
 @router.get("/clear-cache", responses={200: {"description": "Cache cleared"}, **_ROLE_RESPONSES})
 def clear_cache(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
     """Flush the shared cache."""
-    return _respond(services.clear_cache())
+    return _respond(services.clear_cache(current_user.username))
 
 
 @router.get(
@@ -291,7 +291,7 @@ def restart(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
     system-action helper, which sends one for every button it renders. The path
     and method are the contract with that screen.
     """
-    return _respond(services.restart_system())
+    return _respond(services.restart_system(current_user.username))
 
 
 # ---------------------------------------------------------------------------
@@ -372,7 +372,7 @@ def geo_load(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse
     """
     from archihub.api.geosystem import services as geo_services
 
-    return _respond(geo_services.upload_shapes())
+    return _respond(geo_services.upload_shapes(current_user.username))
 
 
 @router.get("/zip-files-delete", responses={200: {"description": "Removed"}, **_ROLE_RESPONSES})
@@ -380,7 +380,7 @@ def zip_files_delete(current_user: CurrentUser = Depends(require_admin)) -> JSON
     """Delete the cached bulk-download archives."""
     from archihub.api.resources import files as resource_files
 
-    return _respond(resource_files.delete_generated("zipfiles"))
+    return _respond(resource_files.delete_generated("zipfiles", current_user.username))
 
 
 @router.get(
@@ -393,7 +393,7 @@ def inventory_files_delete(current_user: CurrentUser = Depends(require_admin)) -
     """
     from archihub.api.resources import files as resource_files
 
-    return _respond(resource_files.delete_generated("inventoryMaker"))
+    return _respond(resource_files.delete_generated("inventoryMaker", current_user.username))
 
 
 @router.get(
@@ -406,4 +406,4 @@ def node_clear_cache(identity: ApiIdentity = Depends(node_api_dependency)) -> JS
     Authenticated with a node API key rather than a session, because the caller
     is another ArchiHUB node propagating an invalidation - not a person.
     """
-    return _respond(services.clear_cache())
+    return _respond(services.clear_cache(identity.username, via="node"))

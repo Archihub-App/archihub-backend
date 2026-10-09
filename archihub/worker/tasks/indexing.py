@@ -154,6 +154,31 @@ def index_resources_delete_task(body: dict | None = None) -> str:
     return _("Resource %(id)s deleted from index", id=str(resource_id))
 
 
+@shared_task(ignore_result=False, name="system.index_resources_delete_by_type")
+def index_resources_delete_by_type_task(body: dict | None = None) -> str:
+    """Remove every resource of one content type from the search index.
+
+    Fired when a content type is deleted. Its resources go to the recycle bin
+    in one ``update_records`` call, so there is no per-resource delete to hang
+    the index removal on - and the index would otherwise go on returning them
+    under the status they had before.
+    """
+    from archihub.core.i18n import gettext as _
+
+    post_type = (body or {}).get("post_type")
+    if not isinstance(post_type, str) or not post_type:
+        raise ValueError("index_resources_delete_by_type requires a post_type")
+
+    result = _client().delete_all_documents(
+        RESOURCES_INDEX, {"term": {"post_type.keyword": post_type}}
+    )
+    return _(
+        "%(count)s resources of type %(type)s deleted from index",
+        count=result.get("deleted", 0),
+        type=post_type,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Building one document
 # ---------------------------------------------------------------------------

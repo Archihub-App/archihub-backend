@@ -240,6 +240,18 @@ def test_delete_missing_type_is_404(mongo):
     assert status == 404
 
 
+def test_delete_fires_type_delete_with_the_content_type(mongo, monkeypatch):
+    """The resources go to the recycle bin in one write, so no per-resource
+    hook fires; this one is what takes them out of the search index."""
+    fired: list = []
+    monkeypatch.setattr(services, "_call_hook", lambda name, payload: fired.append((name, payload)))
+    mongo.records["post_types"] = {"slug": "report", "name": "Report"}
+
+    services.delete_by_slug("report", "admin")
+
+    assert ("type_delete", {"post_type": "report", "slug": "report"}) in fired
+
+
 def test_update_strips_self_from_parent_types(mongo):
     """A type must not become its own parent - the parent walk would loop."""
     mongo.records["post_types"] = {"slug": "folder"}

@@ -352,6 +352,29 @@ def test_deleting_a_resource_that_is_not_indexed_is_not_an_error(stubbed):
     assert "deleted from index" in indexing.index_resources_delete_task({"_id": "abc"})
 
 
+def test_deleting_a_content_type_removes_exactly_its_resources(stubbed):
+    class Recording(FakeSearch):
+        def delete_all_documents(self, suffix, query=None):
+            self.query = query
+            return {"deleted": 3}
+
+    _mongo, client = stubbed(FakeMongo(), Recording())
+
+    message = indexing.index_resources_delete_by_type_task({"post_type": "report"})
+
+    assert client.query == {"term": {"post_type.keyword": "report"}}
+    assert "3" in message
+
+
+@pytest.mark.parametrize("body", [None, {}, {"post_type": ""}, {"post_type": {"$ne": ""}}])
+def test_deleting_by_type_refuses_anything_but_a_type_name(stubbed, body):
+    """An empty or structured value must never reach a delete-by-query."""
+    stubbed(FakeMongo(), FakeSearch())
+
+    with pytest.raises(ValueError):
+        indexing.index_resources_delete_by_type_task(body)
+
+
 # ---------------------------------------------------------------------------
 # Geometry
 # ---------------------------------------------------------------------------
@@ -495,6 +518,7 @@ def test_the_registered_task_names_are_stable():
         "system.regenerate_index",
         "system.index_resources",
         "system.index_resources_delete",
+        "system.index_resources_delete_by_type",
         "geosystem.regenerate_index_shapes",
         "geosystem.index_shapes",
         "testcontrol.reset",

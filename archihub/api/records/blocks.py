@@ -157,6 +157,7 @@ def _write(record_id: str, path: str, blocks: list, user: str | None) -> None:
         {"_id": ObjectId(record_id)},
         {path: blocks, "updatedBy": user or "system", "updatedAt": _now()},
     )
+    _audit(user, "record_update", {"record": record_id, "edit": "blocks", "field": path})
     _call_hook("record_update", {"_id": record_id, "updatedBy": user or "system"})
 
 
@@ -266,3 +267,9 @@ def _call_hook(name: str, payload: dict) -> None:
         get_hook_handler().call(name, payload)
     except Exception:
         logger.exception("%s hook failed", name)
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

@@ -581,7 +581,7 @@ def delete(ids, user: str) -> tuple[dict, int]:
         _cascade_delete(resource_id, user)
         _detach_records(resource, resource_id, user)
 
-        _call_hook("resource_delete", {"_id": resource_id})
+        _call_hook("resource_delete", {"_id": resource_id, "post_type": resource.get("post_type")})
         _audit(user, "resource_delete", {"resource": resource_id})
         deleted.append(resource_id)
 
@@ -628,7 +628,7 @@ def _cascade_delete(resource_id: str, user: str) -> None:
             seen.add(child_id)
 
             _mark_deleted(child_id, user)
-            _call_hook("resource_delete", {"_id": child_id})
+            _call_hook("resource_delete", {"_id": child_id, "post_type": child.get("post_type")})
             queue.append(child_id)
 
 
@@ -686,7 +686,7 @@ def _restore_one(resource_id: str, resource: dict, user: str) -> None:
     )
 
     _restore_records_of(resource, user)
-    _call_hook("resource_restore", {"_id": resource_id})
+    _call_hook("resource_restore", {"_id": resource_id, "post_type": resource.get("post_type")})
     _audit(user, "resource_restore", {"resource": resource_id})
 
 

@@ -200,6 +200,11 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         for comment in created["comment"]:
             comment["createdAt"] = _iso(comment["createdAt"])
 
+        _audit(user, "usertask_create", {
+            "resource" if resource_id else "record": target_value,
+            "task": created["_id"],
+            "assignee": body["user"],
+        })
         return created, 201
     except Exception as exc:
         logger.exception("Could not create a review task")
@@ -245,6 +250,14 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
 
         mongo.update_record(COLLECTION, {"_id": object_id}, update)
 
+        target = {"resource": task["resourceId"]} if task.get("resourceId") else {"record": task.get("recordId")}
+        _audit(user, "usertask_update", {
+            **target,
+            "task": task_id,
+            "approved": update.get("status") == STATUS_APPROVED,
+            "commented": "comment" in update,
+        })
+
         updated = mongo.get_record(COLLECTION, {"_id": object_id}) or {}
         updated["_id"] = str(updated.get("_id"))
         updated["createdAt"] = _iso(updated.get("createdAt"))
@@ -267,3 +280,9 @@ def _resource_type(resource_id: str):
     except ImportError:
         logger.debug("resources domain not ported yet; resourceType omitted")
         return None
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

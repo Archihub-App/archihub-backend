@@ -130,3 +130,31 @@ def pinned_locale(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     )
     yield
     i18n.reset_locale_cache()
+
+
+class _AuditSink:
+    """Stands in for the database behind ``register_log``; keeps what it is given."""
+
+    def __init__(self) -> None:
+        self.entries: list[dict] = []
+
+    def insert_record(self, collection: str, document: dict) -> None:
+        self.entries.append(dict(document))
+
+
+@pytest.fixture(autouse=True)
+def audit_log(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict]]:
+    """Capture audit entries in memory instead of writing them anywhere.
+
+    ``register_log`` is reached from almost every write path, and it resolves its
+    database lazily, so a test that does not stub it would write into whatever
+    MongoDB the local settings name - on a developer machine, a real one. The
+    entries are yielded so a test can assert on what was recorded; a test that
+    needs the real write path replaces ``logs.services._mongo`` itself, which
+    runs after this and wins.
+    """
+    from archihub.api.logs import services as logs
+
+    sink = _AuditSink()
+    monkeypatch.setattr(logs, "_mongo", lambda: sink)
+    yield sink.entries

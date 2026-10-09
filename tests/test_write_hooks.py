@@ -177,6 +177,65 @@ def test_registering_twice_does_not_double_the_indexing(monkeypatch, hooks):
     assert len(hooks.hooks["resource_create"]) == 1
 
 
+
+def test_a_restored_resource_goes_back_into_the_index(hooks, monkeypatch):
+    """Deleting a resource takes it out of the index; restoring must put it back."""
+    from archihub.api.search import write_hooks
+    from archihub.worker.tasks.indexing import index_resources_task
+
+    monkeypatch.setattr("archihub.api.search.services.indexing_enabled", lambda: True)
+    write_hooks.register_index_hooks()
+
+    assert [func for _q, func, _a, _k in hooks.hooks["resource_restore"]] == [index_resources_task]
+
+
+def test_deleting_a_content_type_takes_its_resources_out_of_the_index(hooks, monkeypatch):
+    from archihub.api.search import write_hooks
+    from archihub.worker.tasks.indexing import index_resources_delete_by_type_task
+
+    monkeypatch.setattr("archihub.api.search.services.indexing_enabled", lambda: True)
+    write_hooks.register_index_hooks()
+
+    assert [func for _q, func, _a, _k in hooks.hooks["type_delete"]] == [
+        index_resources_delete_by_type_task
+    ]
+
+
+def _resource_hook_bodies() -> list[tuple[str, int, str, set[str]]]:
+    """Every literal body a `resource*` hook is fired with under `api/resources`.
+
+    A body built by spreading another dict cannot be read statically and is
+    left to the unit tests of the function that builds it.
+    """
+    found = []
+    root = pathlib.Path(__file__).resolve().parent.parent / "archihub" / "api" / "resources"
+    for path in sorted(root.glob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text())):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                continue
+            if node.func.id != "_call_hook" or len(node.args) < 2:
+                continue
+            name, body = node.args[0], node.args[1]
+            if not (isinstance(name, ast.Constant) and str(name.value).startswith("resource")):
+                continue
+            if not isinstance(body, ast.Dict) or None in body.keys:
+                continue
+            keys = {key.value for key in body.keys if isinstance(key, ast.Constant)}
+            found.append((path.name, node.lineno, name.value, keys))
+    return found
+
+
+def test_every_resource_hook_states_the_content_type():
+    """Automatic subscribers compare `post_type` against their configuration
+    before doing anything, so a body without it turns every one of them into a
+    no-op - whichever hook an operator chose to attach them to."""
+    bodies = _resource_hook_bodies()
+    assert bodies, "found no resource hook calls to check"
+
+    missing = [f"{name}:{line} {hook}" for name, line, hook, keys in bodies if "post_type" not in keys]
+    assert not missing, f"resource hooks fired without post_type: {missing}"
+
+
 # ---------------------------------------------------------------------------
 # The body a hook is fired with
 # ---------------------------------------------------------------------------

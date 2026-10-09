@@ -351,7 +351,7 @@ def sync_skills(current_user: CurrentUser = Depends(require_operator)) -> JSONRe
     a git checkout and have it picked up. One unreadable file does not abort
     the whole run.
     """
-    synced = skills.sync()
+    synced = skills.sync(current_user.username)
     return JSONResponse(status_code=200, content={"skills": synced, "count": len(synced)})
 
 

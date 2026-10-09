@@ -430,3 +430,29 @@ def test_syncing_an_unchanged_pair_refreshes_the_record(skills_root, mongo):
 
     assert [s["path"] for s in synced] == ["same.md"]
     assert (skills_root / "same.md").read_text() == content
+
+
+# ---------------------------------------------------------------------------
+# The audit trail
+# ---------------------------------------------------------------------------
+
+
+def test_a_skill_is_created_once_and_updated_after(skills_root, mongo, audit_log):
+    """Whether a save created or replaced the skill is read from the disk, not
+    from which route was used - the two routes share this function."""
+    skills.save_skill("folder/a", "# One", "alice")
+    skills.save_skill("folder/a", "# Two", "alice")
+
+    assert [(e["action"], e["metadata"]) for e in audit_log] == [
+        ("AI_SKILL_CREATE", {"skill": "folder/a.md"}),
+        ("AI_SKILL_UPDATE", {"skill": "folder/a.md"}),
+    ]
+
+
+def test_deleting_and_synchronising_skills_are_recorded(skills_root, mongo, audit_log):
+    skills.save_skill("folder/a", "# A", "alice")
+    skills.delete_skill("folder/a", "alice")
+    skills.sync("bob")
+
+    assert [e["action"] for e in audit_log[1:]] == ["AI_SKILL_DELETE", "AI_SKILL_SYNC"]
+    assert audit_log[-1]["username"] == "bob"

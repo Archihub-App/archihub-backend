@@ -269,4 +269,11 @@ def stop_task(task_id: str, current_user: str) -> tuple[dict, int]:
         "tasks", {"taskId": task_id}, {"status": STATUS_FAILED, "result": ""}
     )
     logger.info("Task %s revoked by %s", task_id, current_user)
+    _audit(current_user, "task_cancel", {"taskId": task_id})
     return {"msg": _("Task stopped successfully")}, 200
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

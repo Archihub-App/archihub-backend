@@ -435,6 +435,7 @@ def _save(record_id: str, processing: dict, slug: str, segments: list, user: str
         "updatedAt": _now(),
     }
     _mongo().update_record(COLLECTION, {"_id": ObjectId(record_id)}, update)
+    _audit(user, "record_update", {"record": record_id, "edit": "transcription", "processing": slug})
     _call_hook("record_update", {"_id": record_id, "updatedBy": user or "system"})
 
 
@@ -544,3 +545,9 @@ def _call_hook(name: str, payload: dict) -> None:
         get_hook_handler().call(name, payload)
     except Exception:
         logger.exception("%s hook failed", name)
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

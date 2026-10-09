@@ -25,6 +25,105 @@ msgstr " (copia)"
 msgid " … [earlier message shortened to fit]"
 msgstr " … [mensaje anterior acortado para que quepa]"
 
+msgid "%(count)s resources of type %(type)s deleted from index"
+msgstr "%(count)s recursos del tipo %(type)s eliminados del índice"
+
+msgid "%(user)s accepted the terms of use"
+msgstr "%(user)s aceptó los términos de uso"
+
+msgid "%(user)s added an AI provider"
+msgstr "%(user)s añadió un proveedor de IA"
+
+msgid "%(user)s assigned a task"
+msgstr "%(user)s asignó una tarea"
+
+msgid "%(user)s changed a user's roles or access rights"
+msgstr "%(user)s cambió los roles o niveles de acceso de un usuario"
+
+msgid "%(user)s changed an AI model's settings"
+msgstr "%(user)s cambió la configuración de un modelo de IA"
+
+msgid "%(user)s changed their password"
+msgstr "%(user)s cambió su contraseña"
+
+msgid "%(user)s cleared the cache"
+msgstr "%(user)s limpió la caché"
+
+msgid "%(user)s completed the initial setup"
+msgstr "%(user)s completó la configuración inicial"
+
+msgid "%(user)s created a user account"
+msgstr "%(user)s creó una cuenta de usuario"
+
+msgid "%(user)s created an API key"
+msgstr "%(user)s creó una clave de API"
+
+msgid "%(user)s created an assistant skill"
+msgstr "%(user)s creó una habilidad del asistente"
+
+msgid "%(user)s deleted a user account"
+msgstr "%(user)s eliminó una cuenta de usuario"
+
+msgid "%(user)s deleted an AI provider"
+msgstr "%(user)s eliminó un proveedor de IA"
+
+msgid "%(user)s deleted an assistant skill"
+msgstr "%(user)s eliminó una habilidad del asistente"
+
+msgid "%(user)s deleted generated files"
+msgstr "%(user)s eliminó archivos generados"
+
+msgid "%(user)s indexed the geometries"
+msgstr "%(user)s indexó las geometrías"
+
+msgid "%(user)s launched a plugin task"
+msgstr "%(user)s lanzó una tarea de un plugin"
+
+msgid "%(user)s loaded the administrative boundaries"
+msgstr "%(user)s cargó los límites administrativos"
+
+msgid "%(user)s opened a stored file"
+msgstr "%(user)s abrió un archivo almacenado"
+
+msgid "%(user)s queried the stored files"
+msgstr "%(user)s consultó los archivos almacenados"
+
+msgid "%(user)s rebuilt the geometry index"
+msgstr "%(user)s regeneró el índice de geometrías"
+
+msgid "%(user)s rebuilt the search index"
+msgstr "%(user)s regeneró el índice de búsqueda"
+
+msgid "%(user)s registered an account"
+msgstr "%(user)s registró una cuenta"
+
+msgid "%(user)s reindexed every resource"
+msgstr "%(user)s reindexó todos los recursos"
+
+msgid "%(user)s restarted the system"
+msgstr "%(user)s reinició el sistema"
+
+msgid "%(user)s revoked an API key"
+msgstr "%(user)s revocó una clave de API"
+
+msgid "%(user)s stopped a background task"
+msgstr "%(user)s detuvo una tarea en segundo plano"
+
+msgid "%(user)s synchronised the assistant skills"
+msgstr "%(user)s sincronizó las habilidades del asistente"
+
+msgid "%(user)s updated a task"
+msgstr "%(user)s actualizó una tarea"
+
+msgid "%(user)s updated an AI provider"
+msgstr "%(user)s actualizó un proveedor de IA"
+
+msgid "%(user)s updated an assistant skill"
+msgstr "%(user)s actualizó una habilidad del asistente"
+
+msgid "%(user)s updated their profile"
+msgstr "%(user)s actualizó su perfil"
+
 msgid "Every header needs a value"
 msgstr "Cada cabecera necesita un valor"
 
