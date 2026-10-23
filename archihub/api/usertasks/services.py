@@ -149,7 +149,11 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
             if task.get("resourceId"):
                 task["resourceType"] = _resource_type(task["resourceId"])
 
-        return {"results": tasks, "total": mongo.count(COLLECTION, query)}, 200
+        total = mongo.count(COLLECTION, query) or 0
+        return {
+            "results": tasks or [],
+            "total": total,
+        }, 200
     except Exception as exc:
         logger.exception("Could not list review tasks")
         return {"error": str(exc)}, 500
