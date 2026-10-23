@@ -35,5 +35,7 @@ log_actions = {
     'lt_extraction': 'LT_EXTRACTION',
     'img_analyze': 'IMG_ANALYZE',
     'search': 'SEARCH',
-    'resource_files_order_update': 'RESOURCE_FILES_ORDER_UPDATE'
+    'resource_files_order_update': 'RESOURCE_FILES_ORDER_UPDATE',
+    'usertask_create': 'USERTASK_CREATE',
+    'usertask_update': 'USERTASK_UPDATE',
 }
