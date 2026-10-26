@@ -60,7 +60,7 @@ _CATEGORY_BY_KEY = {
     "resource_create": CATALOGING, "resource_update": CATALOGING,
     "resource_article_update": CATALOGING, "resource_granular_update": CATALOGING,
     "resource_delete": CATALOGING, "resource_restore": CATALOGING,
-    "resource_open": CATALOGING, "resource_files_order_update": CATALOGING,
+    "resource_files_order_update": CATALOGING,
     "record_create": CATALOGING, "record_update": CATALOGING,
     "record_delete": CATALOGING, "record_get": CATALOGING, "record_get_all": CATALOGING,
     "type_create": CATALOGING, "type_update": CATALOGING, "type_delete": CATALOGING,
@@ -69,16 +69,25 @@ _CATEGORY_BY_KEY = {
     "list_create": CATALOGING, "list_update": CATALOGING, "list_delete": CATALOGING,
     "view_create": CATALOGING, "view_update": CATALOGING, "view_delete": CATALOGING,
     "snap_create": CATALOGING, "snap_delete": CATALOGING,
+    "usertask_create": CATALOGING, "usertask_update": CATALOGING,
     "search": CATALOGING,
 
-    # Work handed to a worker: transcription, extraction, analysis.
+    # Work handed to a worker: transcription, extraction, analysis, and any
+    # plugin job a person launched or stopped.
     "av_transcribe": PROCESSING, "lt_extraction": PROCESSING,
     "img_analyze": PROCESSING, "docseg_extraction": PROCESSING,
+    "plugin_task": PROCESSING, "task_cancel": PROCESSING,
 
     # Who someone is and what they are allowed to do.
-    "user_login": SECURITY,
+    "user_login": SECURITY, "user_create": SECURITY, "user_register": SECURITY,
+    "user_update": SECURITY, "user_delete": SECURITY,
+    "user_profile_update": SECURITY, "user_password_change": SECURITY,
+    "user_accept_terms": SECURITY,
+    "api_key_create": SECURITY, "api_key_revoke": SECURITY,
+    "role_mappings_update": SECURITY,
 
-    # Everything else, including "system_update", falls through to SYSTEM.
+    # Everything else - settings, restarts, index and cache maintenance, AI
+    # providers and skills - falls through to SYSTEM.
 }
 
 
@@ -110,7 +119,10 @@ EDITOR_CATEGORIES = (CATALOGING, PROCESSING)
 _LEVELS = {
     "resource_delete": "warning", "record_delete": "warning", "type_delete": "warning",
     "form_delete": "warning", "list_delete": "warning", "view_delete": "warning",
-    "snap_delete": "warning",
+    "snap_delete": "warning", "user_delete": "warning", "api_key_revoke": "warning",
+    "task_cancel": "warning", "llm_provider_delete": "warning", "ai_skill_delete": "warning",
+    "system_restart": "warning", "cache_clear": "warning", "generated_files_delete": "warning",
+    "role_mappings_update": "warning",
     "av_transcribe": "success", "lt_extraction": "success",
     "img_analyze": "success", "docseg_extraction": "success",
     "resource_restore": "success",
@@ -238,11 +250,12 @@ _DESCRIPTIONS = {
     "resource_article_update": "%(user)s edited the article of “%(title)s”",
     "resource_delete": "%(user)s moved the resource “%(title)s” to the recycle bin",
     "resource_restore": "%(user)s restored the resource “%(title)s”",
-    "resource_open": "%(user)s opened the resource “%(title)s”",
     "resource_files_order_update": "%(user)s reordered the files of “%(title)s”",
     "record_create": "%(user)s added a file to the archive",
     "record_update": "%(user)s updated a stored file",
     "record_delete": "%(user)s deleted a stored file",
+    "record_get": "%(user)s opened a stored file",
+    "record_get_all": "%(user)s queried the stored files",
     "type_create": "%(user)s created a content type",
     "type_update": "%(user)s updated a content type",
     "type_delete": "%(user)s deleted a content type",
@@ -261,10 +274,41 @@ _DESCRIPTIONS = {
     "search": "%(user)s searched the archive",
     "user_login": "%(user)s signed in",
     "system_update": "%(user)s changed the system settings",
+    "role_mappings_update": "%(user)s changed which roles pass the permission points",
     "av_transcribe": "%(user)s ran a transcription over %(count)s file(s)",
     "img_analyze": "%(user)s ran an image analysis over %(count)s file(s)",
     "lt_extraction": "%(user)s ran a text extraction over %(count)s file(s)",
     "docseg_extraction": "%(user)s ran a document segmentation over %(count)s file(s)",
+    "user_create": "%(user)s created a user account",
+    "user_register": "%(user)s registered an account",
+    "user_update": "%(user)s changed a user's roles or access rights",
+    "user_delete": "%(user)s deleted a user account",
+    "user_profile_update": "%(user)s updated their profile",
+    "user_password_change": "%(user)s changed their password",
+    "user_accept_terms": "%(user)s accepted the terms of use",
+    "api_key_create": "%(user)s created an API key",
+    "api_key_revoke": "%(user)s revoked an API key",
+    "usertask_create": "%(user)s assigned a task",
+    "usertask_update": "%(user)s updated a task",
+    "plugin_task": "%(user)s launched a plugin task",
+    "task_cancel": "%(user)s stopped a background task",
+    "system_setup": "%(user)s completed the initial setup",
+    "system_restart": "%(user)s restarted the system",
+    "cache_clear": "%(user)s cleared the cache",
+    "index_regenerate": "%(user)s rebuilt the search index",
+    "index_resources": "%(user)s reindexed every resource",
+    "geo_index_regenerate": "%(user)s rebuilt the geometry index",
+    "geo_index": "%(user)s indexed the geometries",
+    "geo_load": "%(user)s loaded the administrative boundaries",
+    "generated_files_delete": "%(user)s deleted generated files",
+    "llm_provider_create": "%(user)s added an AI provider",
+    "llm_provider_update": "%(user)s updated an AI provider",
+    "llm_provider_delete": "%(user)s deleted an AI provider",
+    "llm_model_update": "%(user)s changed an AI model's settings",
+    "ai_skill_create": "%(user)s created an assistant skill",
+    "ai_skill_update": "%(user)s updated an assistant skill",
+    "ai_skill_delete": "%(user)s deleted an assistant skill",
+    "ai_skill_sync": "%(user)s synchronised the assistant skills",
 }
 
 _TEMPLATE_BY_VALUE = {
@@ -425,7 +469,7 @@ def recent(params: dict, username: str) -> tuple[dict, int]:
 
     try:
         is_admin = user_services.has_role(username, "admin")
-        is_editor = is_admin or user_services.has_role(username, "editor")
+        is_editor = is_admin or user_services.has_permission(username, "activity.catalogue")
 
         clauses: list[dict] = []
 
@@ -472,9 +516,9 @@ def recent(params: dict, username: str) -> tuple[dict, int]:
             "offset": offset,
             "data": [_present(row, people, resources, services) for row in rows],
         }, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not read recent activity")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def _present(row: dict, people: dict, resources: dict, services) -> dict:

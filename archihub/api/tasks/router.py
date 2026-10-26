@@ -79,9 +79,9 @@ def get_active(current_user: CurrentUser = Depends(require_admin)) -> JSONRespon
 
         active = celery_app.control.inspect().active()
         return JSONResponse(status_code=200, content=active or {})
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not inspect active tasks")
-        return JSONResponse(status_code=500, content={"msg": str(exc)})
+        return JSONResponse(status_code=500, content={"msg": _("Error while processing the request")})
 
 
 @router.post(

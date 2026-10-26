@@ -24,7 +24,7 @@ from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
-    require_role_any,
+    require_permission,
 )
 from archihub.core.responses import json_response
 
@@ -32,10 +32,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/usertasks", tags=["Review tasks"])
 
-require_lead = require_role_any("admin", "team_lead")
-require_editor_or_lead = require_role_any(
-    "admin", "team_lead", "editor"
-)
+require_lead = require_permission("usertasks.manage")
+require_editor_or_lead = require_permission("usertasks.comment")
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
         403: {"description": "Insufficient role"}}
@@ -133,11 +131,9 @@ def update_task(
 
     Approval is restricted to team leads - see the service.
     """
-    from archihub.api.users.services import has_role
+    from archihub.api.users.services import has_permission
 
-    is_team_lead = has_role(current_user.username, "team_lead") or has_role(
-        current_user.username, "admin"
-    )
+    is_team_lead = has_permission(current_user.username, "usertasks.manage")
     return _respond(services.update_task(task_id, body, current_user.username, is_team_lead))
 
 

@@ -163,6 +163,11 @@ def get_by_id(record_id: str, user: str | None, full_fields: bool = False) -> tu
     record["parent"] = _describe_parents(record.get("parent") or [])
     record.pop("parents", None)
 
+    # Opening a file is audited for a signed-in caller only; the public route
+    # does not come through here.
+    if user:
+        _audit(user, "record_get", {"record": record_id})
+
     return parse_result(record), 200
 
 

@@ -438,7 +438,7 @@ GENERATED_DIRECTORIES = {
 }
 
 
-def delete_generated(directory: str) -> tuple[dict, int]:
+def delete_generated(directory: str, user: str | None = None) -> tuple[dict, int]:
     """Empty one of the generated-file directories.
 
     Only regular files, and only directly inside the directory. The originals,
@@ -471,4 +471,11 @@ def delete_generated(directory: str) -> tuple[dict, int]:
             logger.warning("Could not remove %s", entry)
 
     logger.info("Removed %d file(s) from %s", removed, directory)
+    _audit(user, "generated_files_delete", {"directory": directory, "removed": removed})
     return {"msg": _(message)}, 200
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

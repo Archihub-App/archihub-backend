@@ -29,7 +29,7 @@ from archihub.api.forms.schemas import FormCreate, FormUpdate
 from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
-    require_role_any,
+    require_permission,
 )
 from archihub.core.responses import json_response
 
@@ -37,10 +37,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/forms", tags=["Forms"])
 
-require_admin = require_role_any("admin")
+require_form_manager = require_permission("forms.manage")
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
-        403: {"description": "The admin role is required"}}
+        403: {"description": "Lacks the forms.manage permission"}}
 
 
 def _respond(result) -> JSONResponse:
@@ -57,7 +57,7 @@ def _respond(result) -> JSONResponse:
     "/fields",
     responses={200: {"description": "Available field types, labels translated"}, **_ROLE_RESPONSES},
 )
-def get_all_fields(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+def get_all_fields(current_user: CurrentUser = Depends(require_form_manager)) -> JSONResponse:
     """Get every field type a form can use, including plugin-contributed ones."""
     return _respond(services.get_all_fields_types())
 
@@ -66,7 +66,7 @@ def get_all_fields(current_user: CurrentUser = Depends(require_admin)) -> JSONRe
     "",
     responses={200: {"description": "All forms, as name + description + slug"}, **_ROLE_RESPONSES},
 )
-def get_all(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+def get_all(current_user: CurrentUser = Depends(require_form_manager)) -> JSONResponse:
     """Get every metadata form."""
     return _respond(services.get_all())
 
@@ -82,7 +82,7 @@ def get_all(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
 )
 def create(
     body: FormCreate = Body(...),
-    current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_form_manager),
 ) -> JSONResponse:
     """Create a metadata form.
 
@@ -103,7 +103,7 @@ def create(
 )
 def get_by_slug(
     slug: str,
-    current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_form_manager),
 ) -> JSONResponse:
     """Get one form by slug.
 
@@ -124,7 +124,7 @@ def get_by_slug(
 def update_by_slug(
     slug: str,
     body: FormUpdate = Body(...),
-    current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_form_manager),
 ) -> JSONResponse:
     """Update a form definition."""
     return _respond(
@@ -143,7 +143,7 @@ def update_by_slug(
 )
 def delete_by_slug(
     slug: str,
-    current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_form_manager),
 ) -> JSONResponse:
     """Delete a form, unless a content type still references it.
 
@@ -167,7 +167,7 @@ def delete_by_slug(
 )
 def duplicate_by_slug(
     slug: str,
-    current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_form_manager),
 ) -> JSONResponse:
     """Duplicate a form under a new, unique slug."""
     return _respond(services.duplicate_by_slug(slug, current_user.username))

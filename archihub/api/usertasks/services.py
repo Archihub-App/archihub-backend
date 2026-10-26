@@ -117,9 +117,9 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
                 task["resourceType"] = _resource_type(task["resourceId"])
 
         return {"results": tasks, "total": mongo.count(COLLECTION, query)}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list review tasks")
-        return {"error": str(exc)}, 500
+        return {"error": _("Error while processing the request")}, 500
 
 
 def get_editors() -> tuple[list | dict, int]:
@@ -145,9 +145,9 @@ def get_editors() -> tuple[list | dict, int]:
             for editor in editors
         ]
         return options, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list editors")
-        return {"error": str(exc)}, 500
+        return {"error": _("Error while processing the request")}, 500
 
 
 # ---------------------------------------------------------------------------
@@ -200,10 +200,15 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         for comment in created["comment"]:
             comment["createdAt"] = _iso(comment["createdAt"])
 
+        _audit(user, "usertask_create", {
+            "resource" if resource_id else "record": target_value,
+            "task": created["_id"],
+            "assignee": body["user"],
+        })
         return created, 201
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not create a review task")
-        return {"error": str(exc)}, 500
+        return {"error": _("Error while processing the request")}, 500
 
 
 def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tuple[dict, int]:
@@ -245,6 +250,14 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
 
         mongo.update_record(COLLECTION, {"_id": object_id}, update)
 
+        target = {"resource": task["resourceId"]} if task.get("resourceId") else {"record": task.get("recordId")}
+        _audit(user, "usertask_update", {
+            **target,
+            "task": task_id,
+            "approved": update.get("status") == STATUS_APPROVED,
+            "commented": "comment" in update,
+        })
+
         updated = mongo.get_record(COLLECTION, {"_id": object_id}) or {}
         updated["_id"] = str(updated.get("_id"))
         updated["createdAt"] = _iso(updated.get("createdAt"))
@@ -253,9 +266,9 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
             entry["createdAt"] = _iso(entry.get("createdAt"))
 
         return updated, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not update review task %s", task_id)
-        return {"error": str(exc)}, 500
+        return {"error": _("Error while processing the request")}, 500
 
 
 def _resource_type(resource_id: str):
@@ -267,3 +280,9 @@ def _resource_type(resource_id: str):
     except ImportError:
         logger.debug("resources domain not ported yet; resourceType omitted")
         return None
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

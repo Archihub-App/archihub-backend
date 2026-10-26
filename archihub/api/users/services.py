@@ -100,13 +100,19 @@ def get_user(username: str) -> dict | None:
     return user
 
 
-def register_user(body: dict) -> tuple[dict, int]:
+def register_user(
+    body: dict, actor: str | None = None, action: str = "user_create"
+) -> tuple[dict, int]:
     """Create a user account.
 
     Roles and access rights are validated against the configured vocabularies:
     an unrecognised value is rejected rather than stored, because a role that
     does not exist would silently grant nothing and look like a configuration
     that had been applied.
+
+    ``actor`` is who created it, for the audit entry: an administrator, the new
+    user themselves (``action="user_register"``), or ``None`` when the system
+    provisioned it - a directory login or the initial setup.
     """
     from archihub.core.roles import verify_access_rights_exist, verify_roles_exist
 
@@ -140,6 +146,16 @@ def register_user(body: dict) -> tuple[dict, int]:
     }
     mongo.insert_record("users", record)
     logger.info("Created account %s", record["username"])
+    _register_log(
+        actor,
+        action,
+        {
+            "user": record["username"],
+            "roles": roles,
+            "accessRights": rights,
+            "loginType": record["loginType"],
+        },
+    )
     return {"msg": _("User created successfully")}, 201
 
 
@@ -174,6 +190,36 @@ def has_right(username: str, right: str) -> bool:
     if not user:
         return False
     return right in (user.get("accessRights") or [])
+
+
+@cached("users", "system")
+def has_permission(username: str, point: str) -> bool:
+    """Whether ``username`` passes the permission point ``point``. Always a real bool.
+
+    True when they hold any of the point's built-in roles or any role an
+    administrator has added to it (``archihub.core.permissions``). Same two
+    collections as `has_role`; the configured roles live in `system` too.
+    Raises ``KeyError`` for a point the catalogue does not define, so a typo
+    fails loudly instead of denying everyone.
+    """
+    from archihub.core.permissions import allowed_roles
+
+    if not username:
+        return False
+    return any(has_role(username, role) for role in allowed_roles(point))
+
+
+def has_builtin_permission(username: str, point: str) -> bool:
+    """Whether ``username`` holds one of ``point``'s built-in roles. Always a real bool.
+
+    For the parts of a point that reach role administration: a role an
+    administrator added to the point passes the point, but not those parts.
+    """
+    from archihub.core.permissions import get_point
+
+    if not username:
+        return False
+    return any(has_role(username, role) for role in get_point(point).default_roles)
 
 
 def _is_date_in_current_week(value: datetime.datetime) -> bool:
@@ -281,9 +327,9 @@ def get_all(body: dict, current_user: str) -> tuple[list | dict, int]:
             user["roles"] = [roles[r] for r in (user.get("roles") or []) if r in roles]
 
         return users, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list users")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 # ---------------------------------------------------------------------------
@@ -624,7 +670,7 @@ def register_me(body: dict) -> tuple[dict, int]:
         "accessRights": [],
         "verified": False,
     }
-    return register_user(payload)
+    return register_user(payload, actor=payload["username"], action="user_register")
 
 
 def forgot_password(body: dict) -> tuple[dict, int]:
@@ -707,7 +753,11 @@ def update_user(body: dict, current_user: str) -> tuple[dict, int]:
         update["name"] = body["name"]
 
     mongo.update_record("users", {"_id": object_id}, update)
-    _register_log(current_user, "user_update", {"user": user.get("username")})
+    _register_log(
+        current_user,
+        "user_update",
+        {"user": user.get("username"), "roles": roles, "accessRights": rights},
+    )
     return {"msg": _("User updated successfully")}, 200
 
 
@@ -810,6 +860,14 @@ def update_me(body: dict, current_user: str) -> tuple[dict, int]:
 
     mongo.update_record("users", {"username": current_user}, update)
 
+    # The field names are recorded, never their values: a password hash has no
+    # place in the audit collection, and neither does a phone number.
+    _register_log(
+        current_user,
+        "user_password_change" if "password" in update else "user_profile_update",
+        {"user": current_user, "fields": sorted(field for field in update if field != "password")},
+    )
+
     if "password" in update:
         # A password change must not leave previously issued keys usable - that
         # is usually the point of changing it.
@@ -888,6 +946,7 @@ def clear_avatar(username: str) -> tuple[dict, int]:
 
 def accept_compromise(username: str) -> tuple[dict, int]:
     _mongo().update_record("users", {"username": username}, {"compromise": True})
+    _register_log(username, "user_accept_terms", {"user": username})
     return {"msg": _("Compromise accepted successfully")}, 200
 
 
@@ -964,7 +1023,11 @@ def issue_api_key(
     except ValueError as exc:
         return {"msg": str(exc)}, 400
 
-    _register_log(username, "user_update", {"api_key": {"scope": scope}})
+    _register_log(
+        username,
+        "api_key_create",
+        {"user": username, "api_key": {"scope": scope, "name": name or api_keys.default_name(scope)}},
+    )
     return {
         "access_token": key,
         # Stated in the payload as well as the docs: this response is the only
@@ -1038,4 +1101,5 @@ def revoke_api_key(username: str, key_id: str) -> tuple[dict, int]:
 
     if not api_keys.revoke_key(key_id, username):
         return {"msg": _("API key not found")}, 404
+    _register_log(username, "api_key_revoke", {"user": username, "api_key": {"id": key_id}})
     return {"msg": _("API key revoked")}, 200

@@ -148,7 +148,6 @@ def search(body: dict, user: str | None, *, public: bool) -> tuple[dict, int]:
         statuses = query_builder.resolve_status(
             body.get("status"),
             public=public,
-            may_see_drafts=_may_see_drafts(user),
             may_see_deleted=_may_see_deleted(user),
         )
 
@@ -182,20 +181,13 @@ def search(body: dict, user: str | None, *, public: bool) -> tuple[dict, int]:
     return response, 200
 
 
-def _may_see_drafts(user: str | None) -> bool:
-    if user is None:
-        return False
-    from archihub.api.users.services import has_role
-
-    return has_role(user, "admin") or has_role(user, "publisher") or has_role(user, "editor")
-
-
 def _may_see_deleted(user: str | None) -> bool:
     if user is None:
         return False
+    from archihub.api.resources.access import may_see_deleted
     from archihub.api.users.services import has_role
 
-    return has_role(user, "admin")
+    return may_see_deleted(user, has_role(user, "admin"))
 
 
 # ---------------------------------------------------------------------------
