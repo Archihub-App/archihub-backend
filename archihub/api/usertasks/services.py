@@ -26,7 +26,12 @@ COLLECTION = "usertasks"
 PAGE_SIZE = 10
 
 STATUS_PENDING = "pending"
+STATUS_REVIEW = "review"
+STATUS_REJECTED = "rejected"
 STATUS_APPROVED = "approved"
+
+VALID_STATUSES = {STATUS_PENDING, STATUS_REVIEW, STATUS_REJECTED, STATUS_APPROVED}
+OPEN_STATUSES = [STATUS_PENDING, STATUS_REVIEW, STATUS_REJECTED]
 
 _LIST_PROJECTION = {"user": 1, "status": 1, "createdAt": 1, "resourceId": 1, "recordId": 1}
 
@@ -48,8 +53,28 @@ def _to_object_id(value):
         return None
 
 
+def _audit(user: str | None, action: str, details: dict) -> None:
+    try:
+        from archihub.api.logs.services import register_log
+
+        register_log(user, action, details)
+    except Exception:
+        logger.exception("Could not record audit log for %s", action)
+
+
+def _call_hook(name: str, payload: dict) -> None:
+    try:
+        from archihub.core.hooks import get_hook_handler
+
+        get_hook_handler().call(name, payload)
+    except Exception:
+        logger.exception("Hook %s failed", name)
+
+
 def process_comments(comments) -> str:
     """Flatten a task's comment thread into readable text."""
+    if isinstance(comments, str):
+        return comments
     lines = []
     for comment in comments or []:
         if isinstance(comment, dict):
@@ -65,24 +90,32 @@ def process_comments(comments) -> str:
 
 
 def get_resource_tasks(resource_id: str) -> tuple[dict, int]:
-    task = _mongo().get_record(COLLECTION, {"resourceId": resource_id, "status": STATUS_PENDING})
+    task = _mongo().get_record(
+        COLLECTION,
+        {"resourceId": resource_id, "status": {"$in": OPEN_STATUSES}},
+    )
     if not task:
         # `msg`, not `error` - see the module docstring.
         return {"msg": _("There are no tasks for this resource")}, 404
 
     task["_id"] = str(task["_id"])
     task["createdAt"] = _iso(task.get("createdAt"))
+    task["comment"] = process_comments(task.get("comment"))
     return task, 200
 
 
 def get_record_tasks(record_id: str) -> tuple[dict, int]:
-    task = _mongo().get_record(COLLECTION, {"recordId": record_id, "status": STATUS_PENDING})
+    task = _mongo().get_record(
+        COLLECTION,
+        {"recordId": record_id, "status": {"$in": OPEN_STATUSES}},
+    )
     if not task:
         # `msg`, not `error` - see the module docstring.
         return {"msg": _("There are no tasks for this record")}, 404
 
     task["_id"] = str(task["_id"])
     task["createdAt"] = _iso(task.get("createdAt"))
+    task["comment"] = process_comments(task.get("comment"))
     return task, 200
 
 
@@ -116,8 +149,12 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
             if task.get("resourceId"):
                 task["resourceType"] = _resource_type(task["resourceId"])
 
-        return {"results": tasks, "total": mongo.count(COLLECTION, query)}, 200
-    except Exception:
+        total = mongo.count(COLLECTION, query) or 0
+        return {
+            "results": tasks or [],
+            "total": total,
+        }, 200
+    except Exception as exc:
         logger.exception("Could not list review tasks")
         return {"error": _("Error while processing the request")}, 500
 
@@ -176,7 +213,7 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         target_field = "resourceId" if resource_id else "recordId"
         target_value = resource_id or record_id
 
-        if mongo.get_record(COLLECTION, {target_field: target_value, "status": STATUS_PENDING}):
+        if mongo.get_record(COLLECTION, {target_field: target_value, "status": {"$in": OPEN_STATUSES}}):
             message = (
                 _("There is already a task for this resource")
                 if resource_id
@@ -200,11 +237,14 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         for comment in created["comment"]:
             comment["createdAt"] = _iso(comment["createdAt"])
 
-        _audit(user, "usertask_create", {
-            "resource" if resource_id else "record": target_value,
-            "task": created["_id"],
-            "assignee": body["user"],
-        })
+        audit_details = {
+            target_field: target_value,
+            "assignedUser": body["user"],
+            "taskId": created["_id"],
+        }
+        _audit(user, "usertask_create", audit_details)
+        _call_hook("usertask_create", created)
+
         return created, 201
     except Exception:
         logger.exception("Could not create a review task")
@@ -212,10 +252,10 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
 
 
 def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tuple[dict, int]:
-    """Comment on a task, and optionally approve it.
+    """Comment on a task, or update its status.
 
-    ONLY A TEAM LEAD MAY APPROVE. An editor can add comments to their own task
-    but cannot sign off their own work - which is the point of the review step.
+    ONLY A TEAM LEAD (OR ADMIN) MAY APPROVE OR REJECT. An editor can update their
+    own task and advance it to 'review', but cannot sign off their own work.
     """
     object_id = _to_object_id(task_id)
     if object_id is None:
@@ -230,6 +270,9 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
         if task.get("status") == STATUS_APPROVED:
             return {"error": _("Task already approved")}, 400
 
+        if not is_team_lead and task.get("user") and task.get("user") != user:
+            return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+
         update: dict = {}
 
         comment = (body.get("comment") or "").strip()
@@ -238,12 +281,26 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
                 {"user": user, "comment": comment, "createdAt": utcnow()}
             ]
 
-        if body.get("status") == STATUS_APPROVED:
-            if not is_team_lead:
-                return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
-            update["status"] = STATUS_APPROVED
-            update["approvedBy"] = user
-            update["approvedAt"] = utcnow()
+        new_status = body.get("status")
+        if new_status:
+            if new_status not in VALID_STATUSES:
+                return {"error": _("Invalid status")}, 400
+
+            if new_status == STATUS_APPROVED:
+                if not is_team_lead:
+                    return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+                update["status"] = STATUS_APPROVED
+                update["approvedBy"] = user
+                update["approvedAt"] = utcnow()
+            elif new_status == STATUS_REJECTED:
+                if not is_team_lead:
+                    return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+                update["status"] = STATUS_REJECTED
+            elif new_status == STATUS_REVIEW:
+                update["status"] = STATUS_REVIEW
+            elif new_status == STATUS_PENDING:
+                if is_team_lead:
+                    update["status"] = STATUS_PENDING
 
         if not update:
             return {"error": _("No changes were made")}, 400
@@ -263,7 +320,21 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
         updated["createdAt"] = _iso(updated.get("createdAt"))
         updated["approvedAt"] = _iso(updated.get("approvedAt"))
         for entry in updated.get("comment") or []:
-            entry["createdAt"] = _iso(entry.get("createdAt"))
+            if isinstance(entry, dict):
+                entry["createdAt"] = _iso(entry.get("createdAt"))
+
+        audit_details = {
+            "taskId": task_id,
+            "status": updated.get("status"),
+            "user": user,
+        }
+        if updated.get("resourceId"):
+            audit_details["resourceId"] = str(updated["resourceId"])
+        elif updated.get("recordId"):
+            audit_details["recordId"] = str(updated["recordId"])
+
+        _audit(user, "usertask_update", audit_details)
+        _call_hook("usertask_update", updated)
 
         return updated, 200
     except Exception:
@@ -277,12 +348,7 @@ def _resource_type(resource_id: str):
         from archihub.api.resources.services import get_resource_type
 
         return get_resource_type(resource_id)
-    except ImportError:
-        logger.debug("resources domain not ported yet; resourceType omitted")
+    except Exception:
+        logger.debug("Could not resolve content type for %s", resource_id)
         return None
 
-
-def _audit(user: str | None, action: str, details: dict) -> None:
-    from archihub.api.logs.services import register_log
-
-    register_log(user, action, details)
