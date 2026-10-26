@@ -308,8 +308,8 @@ def test_create_task_records_audit_and_hook(mongo, monkeypatch):
     assert status == 201
     assert len(audits) == 1
     assert audits[0][1] == "usertask_create"
-    assert audits[0][2]["assignedUser"] == "e@x.test"
-    assert audits[0][2]["resourceId"] == "r1"
+    assert audits[0][2]["assignee"] == "e@x.test"
+    assert audits[0][2]["resource"] == "r1"
     assert len(hooks) == 1
     assert hooks[0][0] == "usertask_create"
 
@@ -373,4 +373,86 @@ def test_listing_tasks_as_editor_constrains_to_self(monkeypatch):
     # 3. Editor querying someone else's tasks -> 403 Forbidden
     resp = client.post("/usertasks/tasks", json={"status": ["pending"], "user": "someone_else"})
     assert resp.status_code == 403
+
+
+def test_listing_tasks_as_admin_or_team_lead_allows_all(monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from archihub.api.usertasks.router import router, require_task_reader
+    from archihub.core.security.jwt import CurrentUser
+    from archihub.api.users import services as user_services
+
+    app = FastAPI()
+    app.include_router(router)
+
+    # Simulate admin caller
+    app.dependency_overrides[require_task_reader] = lambda: CurrentUser(username="admin@x.test", claims={})
+    monkeypatch.setattr(user_services, "has_role", lambda user, role: role in ("admin", "team_lead"))
+
+    called_filters = []
+    monkeypatch.setattr(
+        services, "get_all_tasks", lambda f: (called_filters.append(f) or {"results": [], "total": 0}, 200)
+    )
+
+    client = TestClient(app)
+
+    # 1. Admin querying without user filter -> sees all tasks
+    resp = client.post("/usertasks/tasks", json={"status": ["pending"]})
+    assert resp.status_code == 200
+    assert called_filters[-1]["user"] is None
+    assert called_filters[-1]["include_created"] is False
+
+    # 2. Admin querying someone else's tasks -> allowed
+    resp = client.post("/usertasks/tasks", json={"status": ["pending"], "user": "editor@x.test"})
+    assert resp.status_code == 200
+    assert called_filters[-1]["user"] == "editor@x.test"
+
+
+def test_get_all_tasks_query_filters_by_created_or_assigned(mongo):
+    queries = []
+    mongo.get_all_records = lambda coll, q, **kw: queries.append(q) or []
+    mongo.count = lambda coll, q: 0
+
+    # Editor query: includes assigned and created
+    services.get_all_tasks({"status": ["pending"], "user": "ed@x.test", "include_created": True})
+    assert len(queries) == 1
+    assert queries[0]["status"] == {"$in": ["pending"]}
+    assert "$or" in queries[0]
+    assert {"user": "ed@x.test"} in queries[0]["$or"]
+    assert {"createdBy": "ed@x.test"} in queries[0]["$or"]
+
+    # Admin query without user: matches all
+    services.get_all_tasks({"status": ["pending"]})
+    assert len(queries) == 2
+    assert "$or" not in queries[1]
+    assert queries[1]["user"] == {"$exists": True}
+
+
+def test_creator_of_task_can_comment_and_update(mongo):
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "status": "pending",
+        "user": "assignee@x.test",
+        "createdBy": "creator@x.test",
+        "comment": [],
+    }
+
+    payload, status = services.update_task(
+        VALID_ID, {"comment": "check notes"}, "creator@x.test", is_team_lead=False
+    )
+    assert status == 200
+    assert len(mongo.updated) == 1
+
+
+def test_create_task_records_created_by_field(mongo):
+    mongo.records["usertasks"] = None
+    created, status = services.create_task(
+        {"resourceId": "r1", "user": "assignee@x.test", "comment": "work on this"},
+        "creator@x.test",
+    )
+    assert status == 201
+    assert created["createdBy"] == "creator@x.test"
+    _coll, record = mongo.inserted[0]
+    assert record["createdBy"] == "creator@x.test"
+
 

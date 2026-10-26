@@ -2,9 +2,11 @@
 
 Permission levels enforced:
 
-* Assigning work requires ``admin`` or ``team_lead``.
-* Listing and reading tasks admits editors and transcribers for their own work;
-  inspecting someone else's tasks requires ``admin`` or ``team_lead``.
+* Assigning/creating work admits ``admin``, ``team_lead``, and ``editor``.
+* Listing tasks:
+  - Admins and team leads can inspect all tasks or filter by user.
+  - Editors and transcribers can view tasks they created or that are assigned to them.
+* Reading tasks for a resource/record admits editors, team leads, admins (and transcribers for records).
 * Updating a task admits ``editor``, ``team_lead``, and ``admin``; only a
   team lead or admin may approve or reject a review task.
 
@@ -25,6 +27,7 @@ from archihub.core.security.jwt import (
     CurrentUser,
     get_current_user,
     require_permission,
+    require_role_any,
 )
 from archihub.core.responses import json_response
 
@@ -34,6 +37,9 @@ router = APIRouter(prefix="/usertasks", tags=["Review tasks"])
 
 require_lead = require_permission("usertasks.manage")
 require_editor_or_lead = require_permission("usertasks.comment")
+require_task_reader = require_role_any(
+    "admin", "team_lead", "editor", "transcriber"
+)
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
         403: {"description": "Insufficient role"}}
@@ -59,18 +65,24 @@ def get_tasks(
 ) -> JSONResponse:
     """List review tasks by status.
 
-    A caller may always list their own; requesting someone else's requires
-    admin or team_lead.
+    Admins and team leads may view all tasks or filter by user.
+    Editors and transcribers can view tasks they created or that are assigned to them.
     """
-    from archihub.api.users.services import has_role
+    from archihub.api.users.services import has_permission, has_role
 
     if "status" not in body:
         return JSONResponse(
             status_code=400, content={"error": _("You must specify the status of the tasks")}
         )
 
-    is_lead = has_role(current_user.username, "admin") or has_role(current_user.username, "team_lead")
+    is_lead = (
+        has_role(current_user.username, "admin")
+        or has_role(current_user.username, "team_lead")
+        or has_permission(current_user.username, "usertasks.manage")
+    )
     requested_user = body.get("user")
+    include_created = False
+
     if not is_lead:
         if requested_user and requested_user != current_user.username:
             return JSONResponse(
@@ -78,12 +90,14 @@ def get_tasks(
                 content={"error": _("You do not have sufficient permissions")},
             )
         requested_user = current_user.username
+        include_created = True
 
     return _respond(
         services.get_all_tasks(
             {
                 "status": body["status"],
                 "user": requested_user,
+                "include_created": include_created,
                 "page": body.get("page", 0),
             }
         )
@@ -118,7 +132,7 @@ def get_record_tasks(
 )
 def create_task(
     body: dict = Body(...),
-    current_user: CurrentUser = Depends(require_lead),
+    current_user: CurrentUser = Depends(require_editor_or_lead),
 ) -> JSONResponse:
     """Assign review work on a resource or record."""
     return _respond(services.create_task(body, current_user.username))
@@ -142,9 +156,13 @@ def update_task(
 
     Approval and rejection are restricted to team leads - see the service.
     """
-    from archihub.api.users.services import has_permission
+    from archihub.api.users.services import has_permission, has_role
 
-    is_team_lead = has_permission(current_user.username, "usertasks.manage")
+    is_team_lead = (
+        has_role(current_user.username, "admin")
+        or has_role(current_user.username, "team_lead")
+        or has_permission(current_user.username, "usertasks.manage")
+    )
     return _respond(services.update_task(task_id, body, current_user.username, is_team_lead))
 
 

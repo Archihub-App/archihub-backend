@@ -33,7 +33,14 @@ STATUS_APPROVED = "approved"
 VALID_STATUSES = {STATUS_PENDING, STATUS_REVIEW, STATUS_REJECTED, STATUS_APPROVED}
 OPEN_STATUSES = [STATUS_PENDING, STATUS_REVIEW, STATUS_REJECTED]
 
-_LIST_PROJECTION = {"user": 1, "status": 1, "createdAt": 1, "resourceId": 1, "recordId": 1}
+_LIST_PROJECTION = {
+    "user": 1,
+    "createdBy": 1,
+    "status": 1,
+    "createdAt": 1,
+    "resourceId": 1,
+    "recordId": 1,
+}
 
 
 def _mongo():
@@ -127,9 +134,18 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
             statuses = [statuses]
 
         query: dict = {"status": {"$in": statuses}}
-        # An absent user means "any", expressed as a presence check rather than
-        # an omitted key so the shape of the query stays constant.
-        query["user"] = filters["user"] if filters.get("user") else {"$exists": True}
+        username = filters.get("user")
+        if username:
+            if filters.get("include_created"):
+                query["$or"] = [
+                    {"user": username},
+                    {"createdBy": username},
+                    {"comment.0.user": username},
+                ]
+            else:
+                query["user"] = username
+        else:
+            query["user"] = {"$exists": True}
 
         page = int(filters.get("page") or 0)
         mongo = _mongo()
@@ -225,6 +241,7 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         record = {
             target_field: target_value,
             "user": body["user"],
+            "createdBy": user,
             "status": STATUS_PENDING,
             "createdAt": now,
             "comment": [{"user": user, "comment": body["comment"], "createdAt": now}],
@@ -237,12 +254,12 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         for comment in created["comment"]:
             comment["createdAt"] = _iso(comment["createdAt"])
 
-        audit_details = {
-            target_field: target_value,
-            "assignedUser": body["user"],
-            "taskId": created["_id"],
-        }
-        _audit(user, "usertask_create", audit_details)
+        target_name = "resource" if resource_id else "record"
+        _audit(user, "usertask_create", {
+            target_name: target_value,
+            "task": created["_id"],
+            "assignee": body["user"],
+        })
         _call_hook("usertask_create", created)
 
         return created, 201
@@ -270,7 +287,12 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
         if task.get("status") == STATUS_APPROVED:
             return {"error": _("Task already approved")}, 400
 
-        if not is_team_lead and task.get("user") and task.get("user") != user:
+        creator = task.get("createdBy") or (
+            task.get("comment") and isinstance(task["comment"], list) and task["comment"][0].get("user")
+        )
+        has_owner = bool(task.get("user") or creator)
+        is_owner = (task.get("user") == user) or (creator == user)
+        if not is_team_lead and has_owner and not is_owner:
             return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
 
         update: dict = {}
@@ -307,14 +329,6 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
 
         mongo.update_record(COLLECTION, {"_id": object_id}, update)
 
-        target = {"resource": task["resourceId"]} if task.get("resourceId") else {"record": task.get("recordId")}
-        _audit(user, "usertask_update", {
-            **target,
-            "task": task_id,
-            "approved": update.get("status") == STATUS_APPROVED,
-            "commented": "comment" in update,
-        })
-
         updated = mongo.get_record(COLLECTION, {"_id": object_id}) or {}
         updated["_id"] = str(updated.get("_id"))
         updated["createdAt"] = _iso(updated.get("createdAt"))
@@ -323,15 +337,14 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
             if isinstance(entry, dict):
                 entry["createdAt"] = _iso(entry.get("createdAt"))
 
+        target = {"resource": task["resourceId"]} if task.get("resourceId") else {"record": task.get("recordId")}
         audit_details = {
-            "taskId": task_id,
+            **target,
+            "task": task_id,
             "status": updated.get("status"),
-            "user": user,
+            "approved": update.get("status") == STATUS_APPROVED,
+            "commented": "comment" in update,
         }
-        if updated.get("resourceId"):
-            audit_details["resourceId"] = str(updated["resourceId"])
-        elif updated.get("recordId"):
-            audit_details["recordId"] = str(updated["recordId"])
 
         _audit(user, "usertask_update", audit_details)
         _call_hook("usertask_update", updated)

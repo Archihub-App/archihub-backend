@@ -77,7 +77,7 @@ class InvalidTokenError(BusinessError):
     frontend.
     """
 
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 class NotFoundError(BusinessError):
@@ -133,7 +133,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         # under a separate key for debugging.
         logger.info("Request validation failed on %s %s", request.method, request.url.path)
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             content={
                 "msg": _("The request could not be processed. Check the submitted fields."),
                 "detail": jsonable_encoder(exc.errors()),
