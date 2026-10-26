@@ -98,13 +98,18 @@ def _bounded_int(value, *, default: int, minimum: int, maximum: int, field: str)
     return min(number, maximum)
 
 
-def resolve_status(requested, *, public: bool, may_see_drafts: bool, may_see_deleted: bool) -> list[str]:
+def resolve_status(requested, *, public: bool, may_see_deleted: bool) -> list[str]:
     """Which publication states this caller may search.
 
     A public caller gets ``published`` and nothing else, whatever they asked
     for — not an error, because a request naming a state they cannot see is
     answered with what they can, and telling them otherwise confirms the state
     exists.
+
+    DRAFTS ARE NEVER SEARCHABLE, by anyone. Unpublished work is reached only
+    through the catalogue listing, which decides whose drafts each caller sees.
+    Search answers for published resources and, for those allowed the recycle
+    bin, deleted ones.
     """
     if public:
         return [PUBLIC_STATUS]
@@ -120,11 +125,7 @@ def resolve_status(requested, *, public: bool, may_see_drafts: bool, may_see_del
         return ["deleted"]
 
     if requested in DRAFT_STATES:
-        if not may_see_drafts:
-            raise InvalidSearch(_("You don't have the required authorization"))
-        # "draft" covers the three pre-publication states, exactly as the
-        # resources listing treats it.
-        return list(DRAFT_STATES)
+        raise InvalidSearch(_("Drafts cannot be searched"))
 
     return [PUBLIC_STATUS]
 

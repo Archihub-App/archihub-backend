@@ -252,6 +252,7 @@ def save_skill(skill_path: str, content: str, user: str | None = None) -> dict:
         raise SkillError(_("The skill is too large"), 413)
 
     target = absolute(relative)
+    existed = target.is_file()
     target.parent.mkdir(parents=True, exist_ok=True)
 
     # Written to a temporary neighbour and moved into place, so a failure part
@@ -266,7 +267,9 @@ def save_skill(skill_path: str, content: str, user: str | None = None) -> dict:
         logger.exception("Could not write the skill %s", relative)
         raise SkillError(_("The skill could not be saved"), 500) from None
 
-    return _record_file(target, relative, user)
+    recorded = _record_file(target, relative, user)
+    _audit(user, "ai_skill_update" if existed else "ai_skill_create", {"skill": relative})
+    return recorded
 
 
 def delete_skill(skill_path: str, user: str | None = None) -> None:
@@ -293,6 +296,7 @@ def delete_skill(skill_path: str, user: str | None = None) -> None:
         {"$set": {"active": False, "updated_at": _now(), "updatedBy": user or "system"}},
     )
     prune_empty_directories()
+    _audit(user, "ai_skill_delete", {"skill": relative})
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +304,7 @@ def delete_skill(skill_path: str, user: str | None = None) -> None:
 # ---------------------------------------------------------------------------
 
 
-def sync() -> list[dict]:
+def sync(user: str | None = None) -> list[dict]:
     """Reconcile the skills directory with the collection, newer side winning.
 
     Per file: present on one side only, it is copied to the other; present on
@@ -332,6 +336,7 @@ def sync() -> list[dict]:
             logger.exception("Could not synchronise the skill %s", relative)
 
     prune_empty_directories()
+    _audit(user, "ai_skill_sync", {"skills": len(synced)})
     return synced
 
 
@@ -452,3 +457,9 @@ def prune_empty_directories() -> None:
             path.rmdir()
         except OSError:
             continue
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

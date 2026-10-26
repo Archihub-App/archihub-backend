@@ -122,7 +122,8 @@ def search(
     """Search the catalogue as this caller.
 
     A requested publication state is honoured only as far as the caller's roles
-    allow: drafts need publisher or editor, the recycle bin needs administrator.
+    allow: drafts are never searchable (400), and the recycle bin needs the
+    ``resources.see_deleted`` permission.
     A content type the caller cannot view is a **403**: the caller is known and
     is not permitted, which signing in again does not change.
     """

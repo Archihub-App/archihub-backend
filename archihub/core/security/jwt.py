@@ -115,6 +115,32 @@ def require_role_any(*roles: str, status_code: int | None = None) -> Callable[..
     return _dependency
 
 
+def require_permission(point: str, status_code: int | None = None) -> Callable[..., CurrentUser]:
+    """Dependency factory: require the permission point ``point``.
+
+    Passes for the point's built-in roles and for any role an administrator has
+    added to it (see ``archihub.core.permissions``). The id is checked here,
+    when the route is declared, so an unknown point stops the application from
+    starting rather than refusing every caller.
+    """
+    from archihub.core.permissions import get_point
+
+    get_point(point)
+
+    def _dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        from archihub.api.users.services import has_permission
+
+        if not has_permission(current_user.username, point):
+            logger.info("Denied %s access requiring permission %s", current_user.username, point)
+            raise PermissionDeniedError(
+                _(MSG_INSUFFICIENT_PERMISSIONS), status_code=status_code
+            )
+        return current_user
+
+    _dependency.permission_point = point
+    return _dependency
+
+
 def require_right(right: str) -> Callable[..., CurrentUser]:
     """Dependency factory: require a specific access right."""
 

@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from archihub.api.aiservices import errors
 from archihub.api.aiservices.dialects import ModelInfo, get_dialect
 from archihub.core.clock import isoformat_utc
+from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
 
@@ -99,9 +100,9 @@ def for_provider(provider: dict, *, refresh: bool = False) -> Catalogue:
     except errors.ProviderError as exc:
         logger.warning("Model discovery failed for provider %s: %s", provider_id, exc)
         return _failure(provider_id, str(exc), exc.reason.value)
-    except Exception as exc:
+    except Exception:
         logger.exception("Model discovery failed for provider %s", provider_id)
-        return _failure(provider_id, str(exc), errors.Reason.UNKNOWN.value)
+        return _failure(provider_id, _("The models could not be listed"), errors.Reason.UNKNOWN.value)
 
     models = apply_overrides(provider_id, discovered)
     with _lock:
@@ -201,6 +202,11 @@ def set_override(provider_id: str, model_id: str, values: dict, user: str | None
         OVERRIDES_COLLECTION, {"provider": provider_id, "model": model_id}, permitted
     )
     clear_cache(provider_id)
+    _audit(user, "llm_model_update", {
+        "provider": provider_id,
+        "model": model_id,
+        "fields": sorted(key for key in values if key in permitted),
+    })
 
     # Returned JSON-safe: the stored document carries a real datetime, and
     # handing that straight to a JSON response is a 500 after the write has
@@ -215,3 +221,9 @@ def find_model(provider: dict, model_id: str) -> ModelInfo | None:
         if model.id == model_id:
             return model
     return None
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

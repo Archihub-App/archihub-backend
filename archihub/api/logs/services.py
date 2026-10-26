@@ -22,6 +22,7 @@ from datetime import datetime
 from bson import json_util
 
 from archihub.core.clock import utcnow
+from archihub.core.i18n import gettext as _
 from archihub.core.log_actions import log_actions
 
 logger = logging.getLogger(__name__)
@@ -210,9 +211,9 @@ def filter_logs(body: dict) -> tuple[list | dict, int]:
             entry["total"] = total
 
         return logs, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not read the audit log")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def get_log_actions() -> tuple[dict, int]:
@@ -235,9 +236,9 @@ def get_logs_for_resource(body: dict, resource_id: str) -> tuple[list | dict, in
             )
         )
         return extract_changes(parse_result(logs)), 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not read the history for resource %s", resource_id)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def compare_objects(old_obj, new_obj, path_prefix: str, date) -> list[dict]:

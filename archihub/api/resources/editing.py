@@ -322,7 +322,7 @@ def update_resource_granular(
 
 def _refuse_granular_edit(user: str, resource: dict, is_admin: bool) -> tuple[dict, int] | None:
     """All four gates, in one place. ``None`` means allowed."""
-    from archihub.api.users.services import has_role
+    from archihub.api.users.services import has_permission
 
     if is_admin:
         return None
@@ -333,7 +333,7 @@ def _refuse_granular_edit(user: str, resource: dict, is_admin: bool) -> tuple[di
         return _denied()
     if not access.holds_edit_role(user, resource.get("post_type"), is_admin):
         return _denied()
-    if resource.get("status") == "published" and not has_role(user, "publisher"):
+    if resource.get("status") == "published" and not has_permission(user, "resources.publish"):
         return _denied()
 
     return None

@@ -232,9 +232,9 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
                 _isoformat_in_place(resource, field_path)
 
         return {"total": total, "resources": parse_result(resources)}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list resources")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def _access_right_term(access_right):
@@ -307,9 +307,9 @@ def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
         # renders datetimes as HTTP dates.
         resource["_id"] = str(resource["_id"])
         return resource, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not load resource %s", resource_id)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def load_visible(

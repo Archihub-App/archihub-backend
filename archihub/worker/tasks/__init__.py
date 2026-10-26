@@ -26,6 +26,7 @@ REGISTERED_TASK_NAMES = frozenset(
         "system.regenerate_index",
         "system.index_resources",
         "system.index_resources_delete",
+        "system.index_resources_delete_by_type",
         "geosystem.regenerate_index_shapes",
         "geosystem.index_shapes",
         "testcontrol.reset",

@@ -25,6 +25,105 @@ msgstr " (copia)"
 msgid " … [earlier message shortened to fit]"
 msgstr " … [mensaje anterior acortado para que quepa]"
 
+msgid "%(count)s resources of type %(type)s deleted from index"
+msgstr "%(count)s recursos del tipo %(type)s eliminados del índice"
+
+msgid "%(user)s accepted the terms of use"
+msgstr "%(user)s aceptó los términos de uso"
+
+msgid "%(user)s added an AI provider"
+msgstr "%(user)s añadió un proveedor de IA"
+
+msgid "%(user)s assigned a task"
+msgstr "%(user)s asignó una tarea"
+
+msgid "%(user)s changed a user's roles or access rights"
+msgstr "%(user)s cambió los roles o niveles de acceso de un usuario"
+
+msgid "%(user)s changed an AI model's settings"
+msgstr "%(user)s cambió la configuración de un modelo de IA"
+
+msgid "%(user)s changed their password"
+msgstr "%(user)s cambió su contraseña"
+
+msgid "%(user)s cleared the cache"
+msgstr "%(user)s limpió la caché"
+
+msgid "%(user)s completed the initial setup"
+msgstr "%(user)s completó la configuración inicial"
+
+msgid "%(user)s created a user account"
+msgstr "%(user)s creó una cuenta de usuario"
+
+msgid "%(user)s created an API key"
+msgstr "%(user)s creó una clave de API"
+
+msgid "%(user)s created an assistant skill"
+msgstr "%(user)s creó una habilidad del asistente"
+
+msgid "%(user)s deleted a user account"
+msgstr "%(user)s eliminó una cuenta de usuario"
+
+msgid "%(user)s deleted an AI provider"
+msgstr "%(user)s eliminó un proveedor de IA"
+
+msgid "%(user)s deleted an assistant skill"
+msgstr "%(user)s eliminó una habilidad del asistente"
+
+msgid "%(user)s deleted generated files"
+msgstr "%(user)s eliminó archivos generados"
+
+msgid "%(user)s indexed the geometries"
+msgstr "%(user)s indexó las geometrías"
+
+msgid "%(user)s launched a plugin task"
+msgstr "%(user)s lanzó una tarea de un plugin"
+
+msgid "%(user)s loaded the administrative boundaries"
+msgstr "%(user)s cargó los límites administrativos"
+
+msgid "%(user)s opened a stored file"
+msgstr "%(user)s abrió un archivo almacenado"
+
+msgid "%(user)s queried the stored files"
+msgstr "%(user)s consultó los archivos almacenados"
+
+msgid "%(user)s rebuilt the geometry index"
+msgstr "%(user)s regeneró el índice de geometrías"
+
+msgid "%(user)s rebuilt the search index"
+msgstr "%(user)s regeneró el índice de búsqueda"
+
+msgid "%(user)s registered an account"
+msgstr "%(user)s registró una cuenta"
+
+msgid "%(user)s reindexed every resource"
+msgstr "%(user)s reindexó todos los recursos"
+
+msgid "%(user)s restarted the system"
+msgstr "%(user)s reinició el sistema"
+
+msgid "%(user)s revoked an API key"
+msgstr "%(user)s revocó una clave de API"
+
+msgid "%(user)s stopped a background task"
+msgstr "%(user)s detuvo una tarea en segundo plano"
+
+msgid "%(user)s synchronised the assistant skills"
+msgstr "%(user)s sincronizó las habilidades del asistente"
+
+msgid "%(user)s updated a task"
+msgstr "%(user)s actualizó una tarea"
+
+msgid "%(user)s updated an AI provider"
+msgstr "%(user)s actualizó un proveedor de IA"
+
+msgid "%(user)s updated an assistant skill"
+msgstr "%(user)s actualizó una habilidad del asistente"
+
+msgid "%(user)s updated their profile"
+msgstr "%(user)s actualizó su perfil"
+
 msgid "Every header needs a value"
 msgstr "Cada cabecera necesita un valor"
 
@@ -2174,3 +2273,99 @@ msgstr "{count} imágenes"
 
 msgid "{field} is missing"
 msgstr "{field} está faltando"
+
+msgid "The models could not be listed"
+msgstr "No se pudieron listar los modelos"
+
+msgid "Create content types"
+msgstr "Crear tipos de contenido"
+
+msgid "Read, edit and delete content types, including their edit and view roles"
+msgstr "Consultar, editar y eliminar tipos de contenido, incluidos sus roles de edición y de visualización"
+
+msgid "Create, edit, duplicate and delete metadata forms"
+msgstr "Crear, editar, duplicar y eliminar formularios de metadatos"
+
+msgid "Create, edit and delete controlled vocabularies"
+msgstr "Crear, editar y eliminar listas"
+
+msgid "Create, edit and delete the saved views the explore screens are built from"
+msgstr "Crear, editar y eliminar las vistas guardadas con las que se construyen las pantallas de exploración"
+
+msgid "Read the access-rights vocabulary, as the cataloguing forms do"
+msgstr "Consultar la lista de derechos de acceso, como hacen los formularios de catalogación"
+
+msgid "Delete, restore, reorder, re-type and partially edit resources. The content type's edit roles and the ownership rule still apply"
+msgstr "Eliminar, restaurar, reordenar, cambiar de tipo y editar parcialmente recursos. Se siguen aplicando los roles de edición del tipo de contenido y la regla de autoría"
+
+msgid "Edit and delete resources created by other users"
+msgstr "Editar y eliminar recursos creados por otros usuarios"
+
+msgid "Publish resources"
+msgstr "Publicar recursos"
+
+msgid "See and search the recycle bin"
+msgstr "Ver y buscar en la papelera"
+
+msgid "See other users' drafts in the catalogue listing"
+msgstr "Ver los borradores de otros usuarios en el listado del catálogo"
+
+msgid "Built in: users holding both publisher and admin"
+msgstr "Por defecto: usuarios que tienen a la vez publisher y admin"
+
+msgid "Browse drafts in the flat listing of the navigation tree"
+msgstr "Consultar borradores en el listado plano del árbol de navegación"
+
+msgid "Edit the block layout of records they can open"
+msgstr "Editar la disposición en bloques de los registros que puede abrir"
+
+msgid "Correct transcriptions of records with an open task assigned to them"
+msgstr "Corregir transcripciones de registros con una tarea abierta asignada"
+
+msgid "Correct any transcription, without an assigned task. Also needs records.transcribe"
+msgstr "Corregir cualquier transcripción, sin tarea asignada. También requiere records.transcribe"
+
+msgid "Built in: admin and team_lead; editor too, unless they also hold transcriber"
+msgstr "Por defecto: admin y team_lead; también editor, salvo que tenga además transcriber"
+
+msgid "Create, assign, list and approve user tasks"
+msgstr "Crear, asignar, listar y aprobar tareas de usuario"
+
+msgid "Comment on user tasks"
+msgstr "Comentar tareas de usuario"
+
+msgid "See other users' cataloguing and processing activity in the activity feed"
+msgstr "Ver la actividad de catalogación y procesamiento de otros usuarios en el registro de actividad"
+
+msgid "Use the language models: providers and skills listings, chat, the record assistant"
+msgstr "Usar los modelos de lenguaje: listados de proveedores y habilidades, chat y asistente de registros"
+
+msgid "Create, edit, delete and synchronise AI skills"
+msgstr "Crear, editar, eliminar y sincronizar habilidades del asistente"
+
+msgid "\"{field}\" must be a non-empty object"
+msgstr "\"{field}\" debe ser un objeto no vacío"
+
+msgid "The permission point {point} does not exist"
+msgstr "El punto de permiso {point} no existe"
+
+msgid "The roles of {point} must be a list of role ids"
+msgstr "Los roles de {point} deben ser una lista de identificadores de rol"
+
+msgid "Role mappings updated"
+msgstr "Asignación de roles actualizada"
+
+msgid "%(user)s changed which roles pass the permission points"
+msgstr "%(user)s cambió qué roles tienen acceso a los puntos de permiso"
+
+msgid "Drafts cannot be searched"
+msgstr "No se pueden buscar borradores"
+
+msgid "{role} is a built-in role and cannot be added to a permission point"
+msgstr "{role} es un rol predefinido y no se puede añadir a un punto de permiso"
+
+msgid "An option may appear only once in a list"
+msgstr "Una opción solo puede aparecer una vez en una lista"
+
+msgid "The option {option} does not belong to this list"
+msgstr "La opción {option} no pertenece a esta lista"

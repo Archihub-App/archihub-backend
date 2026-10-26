@@ -27,6 +27,7 @@ from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
+    require_permission,
     require_role_any,
 )
 from archihub.core.responses import json_response
@@ -36,12 +37,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/records", tags=["Records"])
 
 require_admin = require_role_any("admin")
-require_block_editor = require_role_any(
-    "admin", "editor"
-)
-require_transcriber = require_role_any(
-    "admin", "editor", "transcriber"
-)
+require_block_editor = require_permission("records.edit_blocks")
+require_transcriber = require_permission("records.transcribe")
 
 _RESPONSES = {
     401: {"description": "Missing/invalid token, or no access to this record"},

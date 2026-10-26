@@ -407,7 +407,9 @@ def _status_filter(status: str, username: str, is_admin: bool):
     structure around it.
     """
     if status == "deleted":
-        if not is_admin:
+        from archihub.api.resources.access import may_see_deleted
+
+        if not may_see_deleted(username, is_admin):
             raise PermissionDeniedError(_("You don't have the required authorization"))
         return "deleted"
     if status == "draft":

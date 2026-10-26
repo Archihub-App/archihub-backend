@@ -358,6 +358,16 @@ def queue(task, task_name: str, user: str, result_type: str, *args, params: dict
     except Exception:
         logger.warning("Task %s queued but not recorded", queued.id)
 
+    # Every plugin job a person launches passes through here, so this one entry
+    # audits all of them. The parameters are left out: they can be whole forms.
+    from archihub.api.logs.services import register_log
+
+    register_log(
+        user,
+        "plugin_task",
+        {"plugin": task_name.split(".", 1)[0], "task": task_name, "taskId": queued.id},
+    )
+
     return queued
 
 

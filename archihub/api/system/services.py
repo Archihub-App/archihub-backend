@@ -30,7 +30,9 @@ COLLECTION = "system"
 #: `runtime_control` holds the restart counter every process polls - writing it
 #: from a settings form would restart the whole deployment as a side effect of
 #: saving an unrelated preference.
-_HIDDEN_SETTINGS = {"active_plugins", "runtime_control"}
+#: `role_mappings` widens permission points, and is changed through its own
+#: routes, which check every point and role it names.
+_HIDDEN_SETTINGS = {"active_plugins", "runtime_control", "role_mappings"}
 
 
 def _mongo():
@@ -104,9 +106,9 @@ def get_all_settings() -> tuple[dict, int]:
             COLLECTION, {"name": {"$nin": list(_HIDDEN_SETTINGS)}}
         )
         return {"settings": parse_result(list(records))}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not read settings")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def get_setting(name: str) -> dict | None:
@@ -223,9 +225,9 @@ def update_settings(body: dict, current_user: str) -> tuple[dict, int]:
         clear_system_cache()
         _register_log(current_user, "system_update", {"settings": list((body or {}).keys())})
         return {"msg": _("Settings updated successfully")}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not update settings")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def get_access_rights_id():
@@ -399,6 +401,7 @@ def set_first_time(body: dict) -> tuple[dict, int]:
         logger.error("Instance configured but the starter catalogue is incomplete: %s", error)
         return {"msg": error}, 500
 
+    _register_log(body["username"], "system_setup", {"template": body["typeTemplate"]})
     logger.info("Instance configured; administrator created and starter catalogue seeded")
     return {"msg": _("System configured successfully")}, 201
 
@@ -612,9 +615,9 @@ def get_plugins() -> tuple[dict, int]:
         # Wrapped, not bare: `SystemService.getListPlugins`'s two callers both
         # read `response.plugins`.
         return {"plugins": plugins}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list plugins")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def set_plugin_active(slug: str, active: bool, current_user: str) -> tuple[dict, int]:
@@ -690,7 +693,7 @@ def _request_restart(reason: str) -> None:
         logger.exception("Could not request a runtime restart (%s)", reason)
 
 
-def restart_system() -> tuple[dict, int]:
+def restart_system(user: str | None = None) -> tuple[dict, int]:
     """Restart every process of the deployment.
 
     Reached from the button in the system settings screen. The revision counter
@@ -706,6 +709,7 @@ def restart_system() -> tuple[dict, int]:
         logger.exception("Could not record the restart request")
         return {"msg": _("Error while processing the request")}, 500
 
+    _register_log(user, "system_restart", {})
     schedule_local_restart()
     return {"msg": _("System restart requested successfully")}, 200
 
@@ -745,7 +749,7 @@ def clear_system_cache() -> None:
     reset_locale_cache()
 
 
-def clear_cache() -> tuple[dict, int]:
+def clear_cache(user: str | None = None, *, via: str = "admin") -> tuple[dict, int]:
     """Flush the shared cache.
 
     NOTE: this is a Redis ``FLUSHDB``, so it clears the entire database - which
@@ -757,6 +761,7 @@ def clear_cache() -> tuple[dict, int]:
 
     get_cache().clear_cache()
     clear_system_cache()
+    _register_log(user, "cache_clear", {"via": via})
     return {"msg": _("Cache cleared successfully")}, 200
 
 
@@ -769,8 +774,8 @@ def clear_cache() -> tuple[dict, int]:
 # those task modules - not here.
 
 
-def _queue(task, user: str, name: str, message: str, *args) -> tuple[dict, int]:
-    """Queue a task, record it against ``user``, and report it as accepted.
+def _queue(task, user: str, action: str, name: str, message: str, *args) -> tuple[dict, int]:
+    """Queue a task, record it against ``user``, audit it, and report it as accepted.
 
     A broker that is down answers 503, not 200 and not 500. The distinction is
     for the operator reading it: 503 says the queue is unreachable, where a
@@ -791,6 +796,7 @@ def _queue(task, user: str, name: str, message: str, *args) -> tuple[dict, int]:
         # operator it had not started when it had, and they would start it again.
         logger.warning("Task %s queued but not recorded", queued.id)
 
+    _register_log(user, action, {"task": name, "taskId": queued.id})
     return {"msg": message}, 200
 
 
@@ -832,6 +838,7 @@ def regenerate_index(user: str) -> tuple[dict, int]:
     return _queue(
         regenerate_index_task,
         user,
+        "index_regenerate",
         "system.regenerate_index",
         _("The process has been added to the processing queue"),
         mapping,
@@ -852,6 +859,7 @@ def index_resources(user: str) -> tuple[dict, int]:
     return _queue(
         index_resources_task,
         user,
+        "index_resources",
         "system.index_resources",
         _("The full content indexing task was added to the processing queue"),
     )
@@ -868,6 +876,7 @@ def regenerate_index_geometries(user: str) -> tuple[dict, int]:
     return _queue(
         regenerate_index_shapes,
         user,
+        "geo_index_regenerate",
         "geosystem.regenerate_index_shapes",
         _("Geometry regeneration started"),
     )
@@ -877,7 +886,9 @@ def index_geometries(user: str) -> tuple[dict, int]:
     """Queue an indexing pass over the stored boundary shapes."""
     from archihub.worker.tasks.geometries import index_shapes
 
-    return _queue(index_shapes, user, "geosystem.index_shapes", _("Geometry indexing started"))
+    return _queue(
+        index_shapes, user, "geo_index", "geosystem.index_shapes", _("Geometry indexing started")
+    )
 
 
 def _register_log(user: str, action_key: str, metadata: dict) -> None:

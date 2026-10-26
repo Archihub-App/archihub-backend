@@ -290,7 +290,9 @@ def register(
     current_user: CurrentUser = Depends(require_admin),
 ) -> JSONResponse:
     """Create an account (administrative)."""
-    return _respond(services.register_user(body.model_dump(exclude_unset=True)))
+    return _respond(
+        services.register_user(body.model_dump(exclude_unset=True), actor=current_user.username)
+    )
 
 
 @router.post(
