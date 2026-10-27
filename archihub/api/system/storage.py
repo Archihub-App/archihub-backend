@@ -3,8 +3,9 @@
 THE TOTAL IS SUMMED, NOT WALKED. Every record carries the size of the file it
 was stored with, so the whole figure is one aggregation over an index rather
 than a stat() per file - milliseconds instead of a traversal of the entire media
-tree. That is what makes this answerable on request at all, and it is why the
-cache below is a backstop rather than the mechanism.
+tree. The assembled report is then kept for ``REPORT_TTL``: depositing a file
+still replaces it at once (it is cached on `records`), and the database size and
+disk capacity, which no write here announces, are at most that old.
 
 WHAT IS COUNTED, AND WHAT IS NOT. `total_cataloged_bytes` is the archive's own
 holdings: the master files as they were deposited, plus what the database
@@ -28,6 +29,9 @@ from archihub.infra.cache import cached
 logger = logging.getLogger(__name__)
 
 GIGABYTE = 1024 ** 3
+
+#: Seconds the assembled report is reused when no record has been written.
+REPORT_TTL = 3 * 60 * 60
 
 #: Records whose file is no longer on disk contribute nothing to a disk figure.
 _NOT_DELETED = {"$ne": "deleted"}
@@ -71,8 +75,20 @@ def catalogued_files() -> dict:
     return {"bytes": int(rows[0].get("bytes") or 0), "files": int(rows[0].get("files") or 0)}
 
 
+class _ReadingFailed(Exception):
+    """A figure could not be read; the report built around it is not kept."""
+
+
+def _read_database_bytes() -> int:
+    try:
+        return int(_mongo().db.command("dbStats").get("dataSize") or 0)
+    except Exception as exc:
+        logger.warning("Could not read the database size", exc_info=True)
+        raise _ReadingFailed from exc
+
+
 def database_bytes() -> int:
-    """What the database itself occupies.
+    """What the database itself occupies, or 0 when it cannot be read.
 
     `dataSize` rather than `storageSize`: the question is how much catalogue
     there is, not how much room the storage engine has claimed for it - the
@@ -80,32 +96,26 @@ def database_bytes() -> int:
     while the archive shrinks.
     """
     try:
-        return int(_mongo().db.command("dbStats").get("dataSize") or 0)
-    except Exception:
-        logger.warning("Could not read the database size", exc_info=True)
+        return _read_database_bytes()
+    except _ReadingFailed:
         return 0
 
 
-def disk_capacity() -> dict:
-    """The volume the masters are stored on.
+_NO_CAPACITY = {"total_bytes": 0, "available_bytes": 0, "used_percentage": 0.0}
 
-    Read live: a single `statvfs`, and nothing in the database changes when the
-    disk fills, so a cached answer here would go stale for the one reason an
-    operator is looking at it.
-    """
+
+def _read_disk_capacity() -> dict:
     from archihub.core.settings import get_settings
 
     root = get_settings().original_files_path
     if not root:
-        return {"total_bytes": 0, "available_bytes": 0, "used_percentage": 0.0}
+        return dict(_NO_CAPACITY)
 
     try:
         usage = shutil.disk_usage(root)
-    except OSError:
-        # An unmounted or unreachable volume is itself worth reporting, and the
-        # rest of the figures are still true.
+    except OSError as exc:
         logger.warning("Could not read the capacity of %s", root, exc_info=True)
-        return {"total_bytes": 0, "available_bytes": 0, "used_percentage": 0.0}
+        raise _ReadingFailed from exc
 
     used = usage.total - usage.free
     return {
@@ -115,12 +125,22 @@ def disk_capacity() -> dict:
     }
 
 
-def storage_report() -> dict:
-    """The whole block, assembled from the three questions above."""
-    files = catalogued_files()
-    metadata = database_bytes()
-    total = files["bytes"] + metadata
+def disk_capacity() -> dict:
+    """The volume the masters are stored on, or zeros when it cannot be read.
 
+    A single `statvfs`. Nothing in the database changes when the disk fills,
+    so through `storage_report` this figure is as old as the cached report.
+    An unmounted or unreachable volume is itself worth reporting, and the rest
+    of the figures are still true.
+    """
+    try:
+        return _read_disk_capacity()
+    except _ReadingFailed:
+        return dict(_NO_CAPACITY)
+
+
+def _assemble(files: dict, metadata: int, capacity: dict) -> dict:
+    total = files["bytes"] + metadata
     return {
         "total_cataloged_bytes": total,
         "total_cataloged_gb": round(total / GIGABYTE, 2),
@@ -130,5 +150,23 @@ def storage_report() -> dict:
             "multimedia_files_bytes": files["bytes"],
             "database_metadata_bytes": metadata,
         },
-        "disk_capacity": disk_capacity(),
+        "disk_capacity": capacity,
     }
+
+
+@cached("records", ttl=REPORT_TTL)
+def _measured_report() -> dict:
+    """The report when every figure was read; raises otherwise, so nothing is kept."""
+    return _assemble(catalogued_files(), _read_database_bytes(), _read_disk_capacity())
+
+
+def storage_report() -> dict:
+    """The whole block, assembled from the three questions above.
+
+    A report with a figure that could not be read is answered but never cached:
+    the next request reads again instead of repeating the failure for hours.
+    """
+    try:
+        return _measured_report()
+    except _ReadingFailed:
+        return _assemble(catalogued_files(), database_bytes(), disk_capacity())

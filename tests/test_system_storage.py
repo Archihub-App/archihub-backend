@@ -215,3 +215,60 @@ def test_the_report_is_declared_as_depending_on_records():
     leave it wrong for the rest of its window.
     """
     assert storage.catalogued_files.cache_collections == ("records",)
+
+
+def test_the_assembled_report_is_kept_for_three_hours():
+    """The whole report is cached on `records`, with a three-hour window."""
+    assert storage._measured_report.cache_collections == ("records",)
+    assert storage.REPORT_TTL == 3 * 60 * 60
+
+
+@pytest.mark.parametrize("failing", ["database", "disk"])
+def test_a_report_with_a_failed_reading_is_not_cached(mongo, a_disk, monkeypatch, failing):
+    """A failed reading reaches the caller but is not repeated from the cache."""
+    stored = []
+
+    class Client:
+        enabled = True
+
+        def lookup(self, prefix, collections, fingerprint):
+            return "key", None
+
+        def set(self, key, value, ttl):
+            stored.append(value)
+
+    import archihub.infra.cache as cache_module
+    monkeypatch.setattr(cache_module, "get_cache", lambda: Client())
+    if failing == "database":
+        mongo.db_stats = None
+    else:
+        def explode(_path):
+            raise OSError("not mounted")
+        monkeypatch.setattr(storage.shutil, "disk_usage", explode)
+    mongo.records = [{"size": 100, "status": "uploaded"}]
+
+    report = storage.storage_report()
+
+    assert report["breakdown"]["multimedia_files_bytes"] == 100
+    assert all("disk_capacity" not in value for value in stored)
+
+
+def test_a_complete_report_is_cached(mongo, a_disk, monkeypatch):
+    stored = []
+
+    class Client:
+        enabled = True
+
+        def lookup(self, prefix, collections, fingerprint):
+            return "key", None
+
+        def set(self, key, value, ttl):
+            stored.append((value, ttl))
+
+    import archihub.infra.cache as cache_module
+    monkeypatch.setattr(cache_module, "get_cache", lambda: Client())
+    mongo.records = [{"size": 100, "status": "uploaded"}]
+
+    report = storage.storage_report()
+
+    assert (report, storage.REPORT_TTL) in stored
