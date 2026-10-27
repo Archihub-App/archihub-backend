@@ -28,16 +28,18 @@ import os
 
 logger = logging.getLogger(__name__)
 
+# An empty value counts as unset: a compose file forwards every variable it
+# names, set or not.
 LDAP_HOST = os.environ.get("LDAP_HOST") or None
-LDAP_BASE_DN = os.environ.get("LDAP_BASE_DN", "dc=example,dc=com")
-LDAP_USER_DN = os.environ.get("LDAP_USER_DN", "ou=users")
-LDAP_GROUP_DN = os.environ.get("LDAP_GROUP_DN", "ou=groups")
+LDAP_BASE_DN = os.environ.get("LDAP_BASE_DN") or "dc=example,dc=com"
+LDAP_USER_DN = os.environ.get("LDAP_USER_DN") or "ou=users"
+LDAP_GROUP_DN = os.environ.get("LDAP_GROUP_DN") or "ou=groups"
 LDAP_TLS_CACERTFILE = os.environ.get("LDAP_TLS_CACERTFILE") or None
-LDAP_TLS_REQUIRE_CERT = os.environ.get("LDAP_TLS_REQUIRE_CERT", "demand")
+LDAP_TLS_REQUIRE_CERT = os.environ.get("LDAP_TLS_REQUIRE_CERT") or "demand"
 
 # Timeouts: an unresponsive directory must not hold a request thread open.
-LDAP_NETWORK_TIMEOUT = float(os.environ.get("LDAP_NETWORK_TIMEOUT", 10))
-LDAP_TIMEOUT = float(os.environ.get("LDAP_TIMEOUT", 15))
+LDAP_NETWORK_TIMEOUT = float(os.environ.get("LDAP_NETWORK_TIMEOUT") or 10)
+LDAP_TIMEOUT = float(os.environ.get("LDAP_TIMEOUT") or 15)
 
 
 def is_enabled() -> bool:
