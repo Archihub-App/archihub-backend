@@ -852,7 +852,13 @@ def reset_password(body: dict) -> tuple[dict, int]:
         return invalid
 
     hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-    mongo.update_record("users", {"username": claims["sub"]}, {"password": hashed})
+    # Conditioned on the password the link was issued for: of two requests
+    # racing with the same link, only the first finds it still in place.
+    result = mongo.update_record(
+        "users", {"username": claims["sub"], "password": user.get("password")}, {"password": hashed}
+    )
+    if not getattr(result, "modified_count", 0):
+        return invalid
     revoke_sessions(claims["sub"])
     return {"msg": _("Password updated")}, 200
 

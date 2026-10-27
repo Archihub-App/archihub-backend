@@ -348,8 +348,13 @@ class _RecoveryMongo:
         return dict(self.user) if self.user else None
 
     def update_record(self, collection, filters, update):
+        from types import SimpleNamespace
+
+        if any(self.user.get(k) != v for k, v in filters.items()):
+            return SimpleNamespace(modified_count=0)
         self.updated.append(update)
         self.user.update(update)
+        return SimpleNamespace(modified_count=1)
 
 
 def _recovery_link(username, stored_hash):
@@ -434,3 +439,18 @@ def test_user_options_carry_only_identifying_fields(monkeypatch):
     assert set(options[0]) == {"id", "username", "name"}
     assert seen["fields"] == {"_id": 1, "username": 1, "name": 1}
     assert seen["limit"] == user_services.MAX_USER_OPTIONS
+
+
+def test_a_recovery_link_raced_by_two_requests_changes_the_password_once(recovery):
+    """Both read the old password; only the conditioned write of the first lands."""
+    from archihub.api.users import services as user_services
+
+    link = _recovery_link("ana", "old-hash")
+    stale = dict(recovery.user)
+    recovery.get_record = lambda collection, filters, fields=None: dict(stale)
+
+    first = user_services.reset_password({"token": link, "password": "one"})[1]
+    second = user_services.reset_password({"token": link, "password": "two"})[1]
+
+    assert (first, second) == (200, 400)
+    assert recovery.revoked == 1
