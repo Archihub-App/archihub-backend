@@ -147,6 +147,23 @@ def resource(**overrides):
     }
 
 
+def test_reordering_reindexes_the_resource(mongo, monkeypatch):
+    fired = []
+
+    def record(name, payload):
+        fired.append((name, payload))
+        return payload
+
+    monkeypatch.setattr(editing, "_call_hook", record)
+    mongo.resources[VALID_ID] = resource()
+    mongo.user = {"accessRights": []}
+    mongo.type = {"editRoles": [], "viewRoles": []}
+
+    editing.update_files_order(VALID_ID, {"files": [{"id": "b", "order": 0}]}, "alice")
+
+    assert fired == [("resource_update", {"_id": VALID_ID, "post_type": "foto"})]
+
+
 def test_reordering_writes_only_the_files_and_audit_fields(mongo):
     mongo.resources[VALID_ID] = resource()
     mongo.user = {"accessRights": []}
