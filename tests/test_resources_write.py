@@ -667,3 +667,14 @@ def test_an_update_may_leave_a_resource_where_someone_else_filed_it(mongo):
     _payload, status = write.update(CHILD_ID, body(parent=_under(RESOURCE_ID)), "alice")
 
     assert status == 200
+
+
+def test_an_update_cannot_change_the_content_type(mongo):
+    """Changing type has its own route and its own checks."""
+    mongo.resources[RESOURCE_ID] = resource()
+    stored_type = mongo.resources[RESOURCE_ID]["post_type"]
+
+    _payload, status = write.update(RESOURCE_ID, body(post_type=stored_type + "-other"), "alice")
+
+    assert status == 400
+    assert mongo.resources[RESOURCE_ID]["post_type"] == stored_type

@@ -324,7 +324,11 @@ def update(resource_id: str, body: dict, user: str, incoming_files=None) -> tupl
         logger.info("Denied %s an update of resource %s", user, resource_id)
         return _denied()
 
-    post_type = body.get("post_type") or existing.get("post_type")
+    post_type = existing.get("post_type")
+    if body.get("post_type") and body.get("post_type") != post_type:
+        # Changing type has its own route, which checks both types and the
+        # metadata against the target form.
+        return {"msg": _("Use change-post-type to change a resource's type")}, 400
     status = body.get("status") or existing.get("status") or STATUS_DRAFT
     if status == STATUS_PUBLISHED and not may_publish(user, is_admin):
         return _denied()
