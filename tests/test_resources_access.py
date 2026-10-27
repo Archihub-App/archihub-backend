@@ -344,3 +344,11 @@ def test_the_other_pre_publication_states_list_as_drafts(monkeypatch, status):
     )
 
     assert all(branch["createdBy"] == "alice" for branch in filters["$or"])
+
+
+def test_open_metadata_never_opens_the_tree_to_anonymous_callers(monkeypatch):
+    monkeypatch.setattr(access, "metadata_open_to_all", lambda: True)
+    monkeypatch.setattr(access, "access_rights_clause", lambda user: {"rule": user})
+
+    assert access.navigation_clause("alice", False) is None
+    assert access.navigation_clause(None, False) == {"rule": None}

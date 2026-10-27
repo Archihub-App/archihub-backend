@@ -154,10 +154,14 @@ def navigation_clause(
 
     ``for_filing`` applies the rule regardless of the setting: the tree is then
     a parent picker, and a parent the caller may not see is one they cannot use.
+
+    Opening metadata to all users opens it to signed-in users: an anonymous
+    caller always gets the rule, so the public tree never names a resource that
+    is not public.
     """
     if is_admin:
         return None
-    if not for_filing and metadata_open_to_all():
+    if not for_filing and username and metadata_open_to_all():
         return None
     return access_rights_clause(username)
 
