@@ -128,3 +128,38 @@ def test_a_definition_sheet_needs_its_permission(monkeypatch, sheet):
 
     with pytest.raises(PermissionError):
         massive._import_workbook("x.xlsx", "processor", False, [], [])
+
+
+def test_an_unknown_type_slug_is_created_not_updated(monkeypatch):
+    import pandas as pd
+
+    import archihub.api.types.services as types_services
+    import archihub.api.users.services as users
+
+    calls = []
+    monkeypatch.setattr(types_services, "get_by_slug", lambda slug: ({"msg": "nope"}, 404))
+    monkeypatch.setattr(
+        types_services, "create", lambda body, user: calls.append("create") or ({}, 201)
+    )
+    monkeypatch.setattr(
+        types_services, "update_by_slug", lambda *a: calls.append("update") or ({}, 200)
+    )
+    monkeypatch.setattr(users, "has_permission", lambda user, point: True)
+
+    applied, errors = [], []
+    frame = pd.DataFrame([{"slug": "new-type", "name": "New"}])
+    massive._import_types(frame, "admin", applied, errors)
+
+    assert calls == ["create"] and errors == []
+
+
+def test_a_form_field_keeps_its_full_definition():
+    import json
+
+    import pandas as pd
+
+    field = {"destiny": "metadata.x", "type": "select", "list": "abc", "conditionals": [{"a": 1}]}
+    row = pd.Series({"label": "X", "type": "select", "destiny": "metadata.x",
+                     "definition": json.dumps(field)})
+
+    assert massive._form_field(row) == field

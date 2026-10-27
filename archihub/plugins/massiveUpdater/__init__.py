@@ -571,7 +571,9 @@ def _import_types(frame, user: str, applied: list, errors: list) -> None:
                 "viewRoles": _json_list(_cell(row, "viewRoles")),
             }
 
-            existing = types_services.get_by_slug(str(slug)) if slug else None
+            # `get_by_slug` answers a document, or a `(payload, status)` refusal.
+            found = types_services.get_by_slug(str(slug)) if slug else None
+            existing = found if isinstance(found, dict) else None
             if not existing and not has_permission(user, "types.create"):
                 errors.append({"index": index, "id": identifier or slug, "error": "Not authorised to create types"})
                 continue
@@ -599,15 +601,7 @@ def _import_forms(frame, fields_frame, user: str, applied: list, errors: list) -
     """
     from archihub.api.forms import services as forms_services
 
-    fields = [
-        {
-            "label": _cell(row, "label"),
-            "type": _cell(row, "type"),
-            "destiny": _cell(row, "destiny"),
-            "required": bool(_cell(row, "required")),
-        }
-        for _, row in fields_frame.iterrows()
-    ]
+    fields = [_form_field(row) for _, row in fields_frame.iterrows()]
 
     for index, row in frame.iterrows():
         slug = _cell(row, "slug")
@@ -634,6 +628,32 @@ def _import_forms(frame, fields_frame, user: str, applied: list, errors: list) -
             applied.append({"id": slug, "status": "Actualizado"})
         except Exception as exc:
             errors.append({"index": index, "id": slug, "error": str(exc)[:300]})
+
+
+def _form_field(row) -> dict:
+    """One field of the ``Campos`` sheet.
+
+    The ``definition`` column, written by the inventory export, carries the
+    whole field - its list, conditions and subfields; the other columns are the
+    readable summary, and are all a hand-written sheet needs.
+    """
+    import json
+
+    definition = _cell(row, "definition")
+    if isinstance(definition, str) and definition.strip():
+        try:
+            parsed = json.loads(definition)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return parsed
+
+    return {
+        "label": _cell(row, "label"),
+        "type": _cell(row, "type"),
+        "destiny": _cell(row, "destiny"),
+        "required": bool(_cell(row, "required")),
+    }
 
 
 def _import_lists(frame, user: str, applied: list, errors: list) -> None:

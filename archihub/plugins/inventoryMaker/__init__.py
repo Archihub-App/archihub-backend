@@ -378,6 +378,8 @@ def lists_task(body: dict, user: str) -> str:
 @shared_task(ignore_result=False, name=TASK_FORMS)
 def forms_task(body: dict, user: str) -> str:
     """Export one metadata standard and its fields."""
+    import json
+
     forms = list(_mongo().get_all_records("forms", {"slug": str(body.get("parent"))}))
 
     form_rows = [{"id": "id", "name": "name", "slug": "slug", "description": "description"}]
@@ -400,6 +402,8 @@ def forms_task(body: dict, user: str) -> str:
                     "destiny": field.get("destiny"),
                     "required": field.get("required"),
                     "instructions": field.get("instructions", ""),
+                    # The whole field, so a re-import loses nothing.
+                    "definition": json.dumps(field, default=str, ensure_ascii=False),
                 }
             )
 

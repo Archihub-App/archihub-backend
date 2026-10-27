@@ -96,8 +96,10 @@ def metadata_fields(post_types: list[str]) -> list[dict]:
 
     seen: dict[str, dict] = {}
     for slug in post_types:
-        post_type = types_services.get_by_slug(slug)
-        fields = ((post_type or {}).get("metadata") or {}).get("fields") or []
+        found = types_services.get_by_slug(slug)
+        # A document, or a `(payload, status)` refusal for an unknown slug.
+        post_type = found if isinstance(found, dict) else {}
+        fields = (post_type.get("metadata") or {}).get("fields") or []
         for field in fields:
             destiny = field.get("destiny")
             if destiny and destiny not in seen and field.get("type") != "file":
