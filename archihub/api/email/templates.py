@@ -36,7 +36,7 @@ def forgot_password_template(link: str) -> str:
     return _wrap(
         [
             f"<p>{_('Hello,')}</p>",
-            f"<p>{_('You have one day to reset your password, click on the following link:')}</p>",
+            f"<p>{_('This link works for one hour. To reset your password, click on the following link:')}</p>",
             f'<a href="{safe_link}">{_("Reset password")}</a>',
             f"<p>{_('If you did not request a password reset, please ignore this email.')}</p>",
         ]

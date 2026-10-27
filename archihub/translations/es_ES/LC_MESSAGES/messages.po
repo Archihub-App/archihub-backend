@@ -1,14 +1,7 @@
-# Spanish translations for the FastAPI backend.
+# Spanish translations for the ArchiHUB backend.
 #
-# This catalogue holds ONLY msgids introduced by the rewrite. The legacy
-# catalogue under app/translations/ is the primary source and is deliberately
-# left untouched: app/ is the reference implementation the diff harness compares
-# against, so nothing in the port writes to it. archihub/core/i18n.py registers
-# this directory as a fallback, consulted only for strings the legacy catalogue
-# does not define - so an existing translation always wins.
-#
-# At Phase 7 cutover, when app/ is deleted, the two catalogues merge into this
-# one.
+# Edit this file, then run compile_translations.sh: the runtime reads only the
+# compiled messages.mo.
 msgid ""
 msgstr ""
 "Project-Id-Version: archihub\n"
@@ -257,7 +250,7 @@ msgstr "(sin título)"
 
 #: api/resources/services.py:2125 api/resources/services.py:2183
 msgid "A list of resource ids is required"
-msgstr "resourceId o recordId es requerido"
+msgstr "Se requiere una lista de identificadores de recursos"
 
 msgid "A provider with that name already exists"
 msgstr "Ya existe un proveedor con ese nombre"
@@ -310,7 +303,7 @@ msgstr "Agente no encontrado"
 
 #: api/system/services.py:942
 msgid "All fields are required"
-msgstr "El nombre y el slug son requeridos"
+msgstr "Todos los campos son obligatorios"
 
 msgid "An unexpected error occurred"
 msgstr "Ocurrió un error inesperado"
@@ -320,11 +313,11 @@ msgstr "El cuerpo del artículo tiene un formato inválido"
 
 #: api/resources/services.py:1786
 msgid "Article body is required"
-msgstr "Los metadatos son requeridos"
+msgstr "El cuerpo del artículo es obligatorio"
 
 #: api/resources/services.py:1809
 msgid "Article body updated"
-msgstr "Registro actualizado"
+msgstr "Artículo actualizado"
 
 #: api/resources/services.py:1506
 msgid "Asociated files"
@@ -357,14 +350,14 @@ msgstr "Bloque eliminado"
 #: api/resources/services.py:1848 api/resources/services.py:1853
 #: api/resources/services.py:1860
 msgid "Block does not exist"
-msgstr "Rol no existe"
+msgstr "El bloque no existe"
 
 msgid "Block has an invalid format"
 msgstr "El bloque tiene un formato inválido"
 
 #: api/resources/services.py:1846
 msgid "Block index must be an integer"
-msgstr "Duración debe ser un entero o falso"
+msgstr "El índice del bloque debe ser un número entero"
 
 #: api/records/services.py:905 api/records/services.py:946
 msgid "Block updated"
@@ -388,7 +381,7 @@ msgstr "Elige una fila válida"
 
 #: api/resources/services.py:1839
 msgid "Comment is required"
-msgstr "comentario es requerido"
+msgstr "El comentario es obligatorio"
 
 #: api/users/services.py:443
 msgid "Compromise accepted successfully"
@@ -626,7 +619,7 @@ msgstr "Error: el subcampo debe tener un {key}"
 
 #: api/forms/services.py:287
 msgid "Error: the subfields attribute cannot be empty"
-msgstr "Error: el subcampo no puede estar vacío"
+msgstr "Error: el atributo subfields no puede estar vacío"
 
 #: api/forms/services.py:285
 msgid "Error: the subfields attribute must be a list"
@@ -659,7 +652,7 @@ msgstr "Archivo"
 
 #: api/resources/services.py:1968
 msgid "File does not exist"
-msgstr "Rol no existe"
+msgstr "El archivo no existe"
 
 #: api/snaps/services.py:241 api/snaps/services.py:243
 #: api/snaps/services.py:245 api/snaps/services.py:247
@@ -682,7 +675,7 @@ msgstr "La descarga de archivos no está activa"
 
 #: api/resources/services.py:1770
 msgid "Files order updated"
-msgstr "Registro actualizado"
+msgstr "Orden de los archivos actualizado"
 
 msgid "Filter operator \"{op}\" is not allowed"
 msgstr "El operador de filtro \"{op}\" no está permitido"
@@ -722,7 +715,7 @@ msgid ""
 "Form updated successfully. If new fields were added or the type of any "
 "existing fields was changed, it is important to regenerate the index from "
 "the option in the system settings"
-msgstr "Formulario actualizado con éxito"
+msgstr "Formulario actualizado con éxito. Si se agregaron campos nuevos o cambió el tipo de alguno existente, es importante regenerar el índice desde la opción en los ajustes del sistema"
 
 msgid "Fragment extraction is not available yet"
 msgstr "La extracción de fragmentos aún no está disponible"
@@ -748,7 +741,7 @@ msgstr "Regeneración de geometrías iniciada"
 
 #: plugins/labelsEndpoints/__init__.py:109
 msgid "Group parameter is required"
-msgstr "usuario es requerido"
+msgstr "El parámetro de grupo es obligatorio"
 
 msgid "Headers must be a map of text values"
 msgstr "Las cabeceras deben ser un mapa de valores de texto"
@@ -853,7 +846,7 @@ msgstr "Los ajustes enviados no son válidos"
 #: api/records/services.py:746 api/records/services.py:748
 #: api/records/services.py:755 api/records/services.py:757
 msgid "Invalid start_ms or end_ms"
-msgstr "Contraseña inválida"
+msgstr "start_ms o end_ms inválidos"
 
 #: api/resources/services.py:2013
 msgid "Inventory files deleted"
@@ -913,7 +906,7 @@ msgstr "El contenido del mensaje debe ser texto o una lista de partes"
 
 #: api/resources/services.py:581 api/resources/services.py:647
 msgid "Metadata path is required"
-msgstr "Los metadatos son requeridos"
+msgstr "La ruta del metadato es obligatoria"
 
 #: api/users/routes.py:749
 msgid "Missing page field in body"
@@ -1083,7 +1076,7 @@ msgstr "Complementos actualizados con éxito, por favor reinicie el sistema"
 
 #: api/resources/services.py:2673
 msgid "Post type changed"
-msgstr "Tipo de publicación cambiado"
+msgstr "Tipo de contenido cambiado"
 
 #: api/types/services.py:75
 msgid "Post type created successfully"
@@ -1095,7 +1088,7 @@ msgstr "Tipo de contenido eliminado con éxito"
 
 #: api/resources/services.py:2370 utils/functions.py:972
 msgid "Post type does not exist"
-msgstr "El tipo de publicación no existe"
+msgstr "El tipo de contenido no existe"
 
 #: api/types/services.py:89 api/types/services.py:130
 #: api/types/services.py:161 api/types/services.py:272
@@ -1179,7 +1172,7 @@ msgstr "El registro no tiene archivos"
 
 #: api/resources/services.py:592
 msgid "Record does not have parent resources"
-msgstr "El registro no tiene el recurso como padre"
+msgstr "El registro no tiene recursos padre"
 
 #: api/records/public_services.py:367 api/records/services.py:1245
 msgid "Record does not have processing"
@@ -1222,7 +1215,7 @@ msgstr "El registro no es de tipo audio, video o imagen"
 
 #: api/snaps/services.py:36
 msgid "Record not found"
-msgstr "Archivo no encontrado"
+msgstr "Registro no encontrado"
 
 #: api/records/services.py:192
 msgid "Record updated"
@@ -1273,15 +1266,15 @@ msgstr "Recurso no publicado"
 #: api/resources/services.py:574 api/resources/services.py:636
 #: api/resources/services.py:735
 msgid "Resource updated successfully"
-msgstr "Recurso creado con éxito"
+msgstr "Recurso actualizado con éxito"
 
 #: api/resources/services.py:2176
 msgid "Resources deleted"
-msgstr "Recurso eliminado"
+msgstr "Recursos eliminados"
 
 #: api/resources/services.py:2222
 msgid "Resources restored"
-msgstr "Recurso eliminado"
+msgstr "Recursos restaurados"
 
 #: api/system/services.py:231
 msgid "Resources schema updated successfully"
@@ -1408,7 +1401,7 @@ msgstr "Sistema configurado con éxito, ya puede iniciar sesión"
 
 #: api/system/services.py:931
 msgid "System restart requested successfully"
-msgstr "El sistema se reinició con éxito"
+msgstr "Se solicitó el reinicio del sistema"
 
 #: api/system/services.py:137
 msgid "System updates applied successfully"
@@ -1524,7 +1517,7 @@ msgstr "El campo para la gestión de índices no existe en el sistema"
 
 #: api/forms/services.py:385
 msgid "The field {field} has two different types"
-msgstr "Error: el campo {field} tiene dos tipos diferentes"
+msgstr "El campo {field} tiene dos tipos diferentes"
 
 msgid "The field {label} has an invalid author"
 msgstr "El campo {label} tiene un autor inválido"
@@ -1635,7 +1628,7 @@ msgstr ""
 
 #: api/forms/services.py:238
 msgid "The form is being used by a post type"
-msgstr "El formulario está siendo utilizado por un tipo de publicación"
+msgstr "El formulario está siendo utilizado por un tipo de contenido"
 
 msgid "The fragment could not be extracted"
 msgstr "No se pudo extraer el fragmento"
@@ -1671,7 +1664,7 @@ msgid "The parent resource does not exist"
 msgstr "El recurso padre no existe"
 
 msgid "The post type must have a parent"
-msgstr "El tipo de publicación debe tener un padre"
+msgstr "El tipo de contenido debe tener un padre"
 
 #: api/system/services.py:749
 msgid "The process has been added to the processing queue"
@@ -1712,7 +1705,7 @@ msgstr "El recurso debe tener derechos de acceso válidos"
 
 #: api/resources/services.py:859
 msgid "The resource post type is not allowed to have a parent of this type"
-msgstr "El tipo de publicación no puede tener un padre de este tipo"
+msgstr "El tipo de contenido del recurso no puede tener un padre de este tipo"
 
 #: utils/functions.py:144
 msgid "The role {role} does not exist"
@@ -2014,7 +2007,7 @@ msgstr "No puedes revisar esta tarea"
 #: api/records/services.py:1072 api/records/services.py:1122
 #: api/records/services.py:1181
 msgid "You do not have permission to edit this transcription"
-msgstr "No tienes permiso para ver este registro"
+msgstr "No tienes permiso para editar esta transcripción"
 
 #: utils/FernetAuth.py:68 utils/FernetAuth.py:123 utils/FernetAuth.py:164
 msgid "You do not have permission to perform this action"
@@ -2118,7 +2111,7 @@ msgstr "Debe seleccionar un tipo de contenido y una plantilla"
 
 #: plugins/atlasWiki/routes.py:54
 msgid "You must select an AI provider and model"
-msgstr "Debe seleccionar un tipo de contenido y una plantilla"
+msgstr "Debe seleccionar un proveedor de IA y un modelo"
 
 #: api/records/routes.py:592 api/resources/services.py:1842
 msgid "You must specify a block"
@@ -2241,7 +2234,7 @@ msgstr "recordId no puede estar vacío"
 
 #: api/resources/routes.py:445
 msgid "recursive must be a boolean"
-msgstr "El campo {label} debe ser un booleano"
+msgstr "recursive debe ser un booleano"
 
 #: api/usertasks/services.py:110
 msgid "resourceId cannot be empty"
@@ -2369,3 +2362,39 @@ msgstr "Una opción solo puede aparecer una vez en una lista"
 
 msgid "The option {option} does not belong to this list"
 msgstr "La opción {option} no pertenece a esta lista"
+
+msgid "The document is too large to send"
+msgstr "El documento es demasiado grande para enviarlo"
+
+msgid "This provider cannot be sent a whole document; choose OCR text or an image instead"
+msgstr "A este proveedor no se le puede enviar un documento completo; elija el texto OCR o una imagen"
+
+msgid "This provider has been disabled"
+msgstr "Este proveedor ha sido deshabilitado"
+
+msgid "At most {count} pages per request"
+msgstr "Como máximo {count} páginas por solicitud"
+
+msgid "Temporary record deleted successfully"
+msgstr "Registro temporal eliminado con éxito"
+
+msgid "Use change-post-type to change a resource's type"
+msgstr "Use change-post-type para cambiar el tipo de un recurso"
+
+msgid "That username is not available"
+msgstr "Ese nombre de usuario no está disponible"
+
+msgid "The recovery link is invalid or has expired"
+msgstr "El enlace de recuperación no es válido o ha expirado"
+
+msgid "Password updated"
+msgstr "Contraseña actualizada"
+
+msgid "Invalid status"
+msgstr "Estado inválido"
+
+msgid "Select exactly one record to export"
+msgstr "Seleccione exactamente un registro para exportar"
+
+msgid "This link works for one hour. To reset your password, click on the following link:"
+msgstr "Este enlace funciona durante una hora. Para restablecer su contraseña, haga clic en el siguiente enlace:"
