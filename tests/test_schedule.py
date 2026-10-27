@@ -88,7 +88,7 @@ def test_calendar_periodicities():
         hour=3, minute=0
     )
     assert sched.get_schedule({"periodicity": "once_a_week", "hour_execution": "03:00"}) == crontab(
-        hour=3, minute=0, day_of_week="0"
+        hour=3, minute=0, day_of_week="1"
     )
     assert sched.get_schedule({"periodicity": "once_a_month", "hour_execution": "03:00"}) == crontab(
         hour=3, minute=0, day_of_month="1"
@@ -219,3 +219,20 @@ def test_no_settings_yields_an_empty_schedule(monkeypatch):
         "archihub.worker.schedule.get_active_plugin_slugs", lambda mongo=None: []
     )
     assert sched.build_plugin_beat_schedule(FakeMongo({})) == {}
+
+
+def test_a_scheduled_entry_carries_its_arguments():
+    entry = sched.build_schedule_entry({
+        "task": "system.index_resources", "periodicity": "once_a_day", "hour_execution": "02:00",
+        "args": [{"post_type": "fondo"}], "kwargs": {"x": 1},
+    })
+
+    assert entry["args"] == ({"post_type": "fondo"},)
+    assert entry["kwargs"] == {"x": 1}
+
+
+def test_the_scheduler_time_zone_is_configurable(monkeypatch):
+    from archihub.core.settings import Settings
+
+    monkeypatch.setenv("CELERY_TIMEZONE", "Europe/Madrid")
+    assert Settings().celery_timezone == "Europe/Madrid"

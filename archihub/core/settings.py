@@ -111,6 +111,8 @@ class Settings(BaseSettings):
     celery_beat_refresh_interval: int = Field(
         default=60, validation_alias="CELERY_BEAT_REFRESH_INTERVAL"
     )
+    #: The time zone scheduled tasks' hours are read in.
+    celery_timezone: str = Field(default="America/Bogota", validation_alias="CELERY_TIMEZONE")
     # Set by start_celery.sh to mark a worker process. Plugin hook
     # registration is NOT gated on it - every process registers.
     celery_worker: bool = Field(default=False, validation_alias="CELERY_WORKER")

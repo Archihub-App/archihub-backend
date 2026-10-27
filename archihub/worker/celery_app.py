@@ -39,7 +39,7 @@ celery_app.conf.update(
     # Results are polled through AsyncResult by the tasks API, so keep them.
     task_ignore_result=False,
     enable_utc=False,
-    timezone="America/Bogota",
+    timezone=settings.celery_timezone,
     worker_prefetch_multiplier=1,
     task_acks_late=True,
     broker_transport_options={"visibility_timeout": 43200},

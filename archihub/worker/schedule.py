@@ -96,7 +96,8 @@ def get_schedule(task_config: dict) -> timedelta | crontab | None:
     if periodicity == "once_a_day":
         return crontab(hour=hour, minute=minute)
     if periodicity == "once_a_week":
-        return crontab(hour=hour, minute=minute, day_of_week="0")
+        # Monday: crontab counts the week from Sunday, which is 0.
+        return crontab(hour=hour, minute=minute, day_of_week="1")
     if periodicity == "once_a_month":
         return crontab(hour=hour, minute=minute, day_of_month="1")
     if periodicity == "once_a_year":
@@ -131,11 +132,13 @@ def build_schedule_entry(task_config: dict) -> dict | None:
     if schedule is None:
         return None
 
+    args = task_config.get("args")
+    kwargs = task_config.get("kwargs")
     return {
         "task": task_name,
         "schedule": schedule,
-        "args": (),
-        "kwargs": {},
+        "args": tuple(args) if isinstance(args, list) else (),
+        "kwargs": dict(kwargs) if isinstance(kwargs, dict) else {},
         "options": {},
     }
 
