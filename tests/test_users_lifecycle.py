@@ -324,3 +324,81 @@ def test_the_scheduled_task_prefix_cannot_be_registered(username, monkeypatch):
     _payload, status = user_services.register_user({"username": username, "password": "x"})
 
     assert status == 400
+
+
+# ---------------------------------------------------------------------------
+# Password recovery
+# ---------------------------------------------------------------------------
+
+
+class _RecoveryMongo:
+    def __init__(self, user):
+        self.user = user
+        self.updated = []
+
+    def get_record(self, collection, filters, fields=None):
+        return dict(self.user) if self.user else None
+
+    def update_record(self, collection, filters, update):
+        self.updated.append(update)
+        self.user.update(update)
+
+
+def _recovery_link(username, stored_hash):
+    from cryptography.fernet import Fernet
+
+    from archihub.api.users import services as user_services
+    from archihub.core.security import tokens
+    from archihub.core.settings import get_settings
+
+    token = tokens.create_password_reset_token(
+        username, user_services._password_fingerprint(stored_hash)
+    )
+    return Fernet(get_settings().fernet_key).encrypt(token.encode()).decode()
+
+
+@pytest.fixture
+def recovery(monkeypatch):
+    from archihub.api.users import services as user_services
+
+    fake = _RecoveryMongo({"username": "ana", "password": "old-hash"})
+    monkeypatch.setattr(user_services, "_mongo", lambda: fake)
+    monkeypatch.setattr(user_services, "password_recovery_enabled", lambda: True)
+    return fake
+
+
+def test_a_recovery_link_changes_the_password_once(recovery):
+    from archihub.api.users import services as user_services
+
+    link = _recovery_link("ana", "old-hash")
+
+    assert user_services.reset_password({"token": link, "password": "new"})[1] == 200
+    assert user_services.reset_password({"token": link, "password": "again"})[1] == 400
+    assert len(recovery.updated) == 1
+
+
+def test_a_recovery_token_never_opens_a_session(recovery):
+    from cryptography.fernet import Fernet
+
+    from archihub.core.errors import InvalidTokenError
+    from archihub.core.security import tokens
+    from archihub.core.settings import get_settings
+
+    token = Fernet(get_settings().fernet_key).decrypt(_recovery_link("ana", "old-hash").encode())
+
+    with pytest.raises(InvalidTokenError):
+        tokens.decode_access_token(token.decode())
+
+
+def test_a_session_token_is_not_a_recovery_link(recovery):
+    from cryptography.fernet import Fernet
+
+    from archihub.api.users import services as user_services
+    from archihub.core.security import tokens
+    from archihub.core.settings import get_settings
+
+    session = tokens.create_access_token("ana")
+    cipher = Fernet(get_settings().fernet_key).encrypt(session.encode()).decode()
+
+    assert user_services.reset_password({"token": cipher, "password": "new"})[1] == 400
+    assert recovery.updated == []

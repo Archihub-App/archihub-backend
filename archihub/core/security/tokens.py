@@ -146,3 +146,46 @@ def get_identity(claims: dict) -> str:
     if not subject:
         raise InvalidTokenError(_("Invalid or expired token"))
     return str(subject)
+
+
+#: The ``type`` of a password-reset token. Never an access token: the decoder
+#: above refuses it, so a reset link cannot open a session.
+PASSWORD_RESET_TOKEN_TYPE = "password_reset"
+
+#: How long a reset link works.
+PASSWORD_RESET_LIFETIME = timedelta(hours=1)
+
+
+def create_password_reset_token(identity: str, password_fingerprint: str) -> str:
+    """A token that permits one password change for ``identity``.
+
+    ``password_fingerprint`` is derived from the stored password, so the token
+    stops working as soon as the password changes - which makes it single-use.
+    """
+    settings = get_settings()
+    now = datetime.now(timezone.utc)
+    payload = {
+        "type": PASSWORD_RESET_TOKEN_TYPE,
+        "sub": str(identity),
+        "pwd": password_fingerprint,
+        "iat": now,
+        "exp": now + PASSWORD_RESET_LIFETIME,
+    }
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
+
+
+def decode_password_reset_token(token: str) -> dict | None:
+    """The claims of a valid reset token, or ``None``."""
+    settings = get_settings()
+    try:
+        claims = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[ALGORITHM],
+            options={"require": ["sub", "exp", "type", "pwd"]},
+        )
+    except jwt.InvalidTokenError:
+        return None
+    if claims.get("type") != PASSWORD_RESET_TOKEN_TYPE:
+        return None
+    return claims

@@ -329,6 +329,18 @@ def forgot_password(body: ForgotPasswordRequest = Body(...)) -> JSONResponse:
     return _respond(services.forgot_password(body.model_dump(exclude_unset=True)))
 
 
+@router.post(
+    "/reset-password",
+    responses={
+        200: {"description": "Password changed"},
+        400: {"description": "The link is invalid, expired or already used"},
+    },
+)
+def reset_password(body: dict = Body(...)) -> JSONResponse:
+    """Set a new password from a recovery link. **Unauthenticated.**"""
+    return _respond(services.reset_password(body))
+
+
 @router.put(
     "/update",
     responses={200: {"description": "Account updated"}, 404: {"description": "User not found"}, **_ROLE_RESPONSES},

@@ -744,9 +744,14 @@ def forgot_password(body: dict) -> tuple[dict, int]:
     }, 200
 
 
+def _password_fingerprint(stored_hash: str | None) -> str:
+    import hashlib
+
+    return hashlib.sha256((stored_hash or "").encode("utf-8")).hexdigest()[:32]
+
+
 def _send_recovery_email(username: str) -> None:
     import os
-    from datetime import timedelta
 
     from cryptography.fernet import Fernet
 
@@ -755,11 +760,56 @@ def _send_recovery_email(username: str) -> None:
     from archihub.core.security import tokens
     from archihub.core.settings import get_settings
 
-    token = tokens.create_access_token(username, expires_delta=timedelta(days=1))
+    user = _mongo().get_record("users", {"username": username}, {"password": 1})
+    token = tokens.create_password_reset_token(
+        username, _password_fingerprint((user or {}).get("password"))
+    )
     cipher = Fernet(get_settings().fernet_key).encrypt(token.encode()).decode()
 
     link = f"{os.environ.get('REDIRECT_URL', '')}/reset-password?token={cipher}"
     send_email(username, _("Password recovery"), forgot_password_template(link))
+
+
+def reset_password(body: dict) -> tuple[dict, int]:
+    """Set a new password from a recovery link.
+
+    Every unusable link - malformed, expired, already used, for an account that
+    no longer exists - gets the same answer.
+    """
+    from cryptography.fernet import Fernet, InvalidToken
+
+    from archihub.core.security import tokens
+    from archihub.core.settings import get_settings
+
+    if not password_recovery_enabled():
+        return {"msg": _("Password recovery disabled")}, 400
+
+    invalid = {"msg": _("The recovery link is invalid or has expired")}, 400
+    cipher = body.get("token")
+    password = body.get("password")
+    if not isinstance(cipher, str) or not isinstance(password, str) or not password:
+        return invalid
+    if body.get("confirmPassword") is not None and body["confirmPassword"] != password:
+        return {"msg": _("Passwords do not match")}, 400
+
+    try:
+        token = Fernet(get_settings().fernet_key).decrypt(cipher.encode()).decode()
+    except (InvalidToken, ValueError):
+        return invalid
+    claims = tokens.decode_password_reset_token(token)
+    if not claims:
+        return invalid
+
+    mongo = _mongo()
+    user = mongo.get_record("users", {"username": claims["sub"]}, {"password": 1, "loginType": 1})
+    if not user or user.get("loginType") == "ldap":
+        return invalid
+    if _password_fingerprint(user.get("password")) != claims["pwd"]:
+        return invalid
+
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    mongo.update_record("users", {"username": claims["sub"]}, {"password": hashed})
+    return {"msg": _("Password updated")}, 200
 
 
 def update_user(body: dict, current_user: str) -> tuple[dict, int]:
