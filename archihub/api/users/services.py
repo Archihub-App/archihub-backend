@@ -304,6 +304,30 @@ def sanitize_user_filters(filters) -> dict:
     }
 
 
+#: Most accounts a user picker lists.
+MAX_USER_OPTIONS = 5000
+
+
+def get_user_options() -> tuple[list | dict, int]:
+    """Every account as a picker option: ``{id, username, name}`` and nothing else.
+
+    For the user fields of cataloguing forms and the activity-log filter, which
+    choose among all accounts rather than page through them.
+    """
+    try:
+        users = _mongo().get_all_records(
+            "users", {}, limit=MAX_USER_OPTIONS,
+            fields={"_id": 1, "username": 1, "name": 1}, sort=[("name", 1)],
+        )
+        return [
+            {"id": str(u["_id"]), "username": u.get("username"), "name": u.get("name")}
+            for u in users
+        ], 200
+    except Exception:
+        logger.exception("Could not list user options")
+        return {"msg": _("Error while processing the request")}, 500
+
+
 def get_all(body: dict, current_user: str) -> tuple[list | dict, int]:
     """Paginated user listing, with role/right ids resolved to display terms."""
     try:

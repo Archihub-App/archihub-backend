@@ -402,3 +402,25 @@ def test_a_session_token_is_not_a_recovery_link(recovery):
 
     assert user_services.reset_password({"token": cipher, "password": "new"})[1] == 400
     assert recovery.updated == []
+
+
+def test_user_options_carry_only_identifying_fields(monkeypatch):
+    from bson.objectid import ObjectId
+
+    from archihub.api.users import services as user_services
+
+    seen = {}
+
+    class Mongo:
+        def get_all_records(self, collection, filters, limit=0, fields=None, sort=None, **kw):
+            seen.update(fields=fields, limit=limit)
+            return [{"_id": ObjectId(), "username": "ana@x.org", "name": "Ana"}]
+
+    monkeypatch.setattr(user_services, "_mongo", lambda: Mongo())
+
+    options, status = user_services.get_user_options()
+
+    assert status == 200
+    assert set(options[0]) == {"id", "username", "name"}
+    assert seen["fields"] == {"_id": 1, "username": 1, "name": 1}
+    assert seen["limit"] == user_services.MAX_USER_OPTIONS
