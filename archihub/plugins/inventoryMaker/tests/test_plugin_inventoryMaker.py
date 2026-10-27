@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from bson.objectid import ObjectId
 
 from archihub.plugins import inventoryMaker
@@ -96,3 +97,13 @@ def test_a_spreadsheet_never_carries_a_live_formula(tmp_path):
     assert cell.startswith("'=")
     assert export.neutralise_formula("plain") == "plain"
     assert export.neutralise_formula(-3) == -3
+
+
+
+@pytest.mark.parametrize("body", [{"post_type": 5}, {"post_type": "abc"}, {"parent": 7}])
+def test_a_malformed_selection_is_refused_not_a_500(monkeypatch, body):
+    _stub_roles(monkeypatch, set())
+
+    refusal = inventoryMaker._may_export(body, "alice")
+
+    assert refusal is not None and refusal[1] in (400, 404)

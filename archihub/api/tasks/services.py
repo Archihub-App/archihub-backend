@@ -14,6 +14,7 @@ from celery.result import AsyncResult
 
 from archihub.core.clock import utcnow
 from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +216,9 @@ def get_tasks(user: str, body: dict) -> tuple[list | dict, int]:
     """One user's tasks, newest first, reconciling any that have since finished."""
     try:
         mongo = _mongo()
-        page = int(body.get("page") or 0)
+        page = page_number(body.get("page"))
+        if page is None:
+            return {"msg": _('"{field}" must be a number', field="page")}, 400
 
         tasks = list(
             mongo.get_all_records(

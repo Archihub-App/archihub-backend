@@ -27,6 +27,7 @@ from bson.objectid import ObjectId
 from archihub.api.resources import access, presentation
 from archihub.core.clock import isoformat_utc
 from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
@@ -171,6 +172,8 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
         post_types = body.get("post_type") or []
         if isinstance(post_types, str):
             post_types = [post_types]
+        if not isinstance(post_types, list) or not all(isinstance(p, str) for p in post_types):
+            return {"msg": _('"{field}" must be a list of text values', field="post_type")}, 400
 
         for post_type in post_types:
             if not can_view_type(user, post_type):
@@ -184,7 +187,10 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
 
         base: dict = {"post_type": {"$in": post_types}}
         if body.get("parents"):
-            base["parents.id"] = body["parents"].get("id")
+            parents = body["parents"]
+            if not isinstance(parents, dict) or not isinstance(parents.get("id"), str):
+                return {"msg": _('"{field}" must be a text value', field="parents.id")}, 400
+            base["parents.id"] = parents["id"]
         if body.get("files"):
             base["filesObj"] = {"$exists": True, "$ne": []}
 
@@ -213,7 +219,9 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
         for column in active_columns:
             fields[column] = 1
 
-        page = int(body.get("page") or 0)
+        page = page_number(body.get("page"))
+        if page is None:
+            return {"msg": _('"{field}" must be a number', field="page")}, 400
         sort_by = body.get("sortBy") or "createdAt"
         if not isinstance(sort_by, str) or (
             sort_by not in SORTABLE_BASE_FIELDS and sort_by not in readable_paths

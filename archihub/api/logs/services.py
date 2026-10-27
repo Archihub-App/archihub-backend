@@ -23,6 +23,7 @@ from bson import json_util
 
 from archihub.core.clock import utcnow
 from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 from archihub.core.log_actions import log_actions
 
 logger = logging.getLogger(__name__)
@@ -191,7 +192,9 @@ def filter_logs(body: dict) -> tuple[list | dict, int]:
     """
     try:
         filters = sanitize_log_filters(body.get("filters"))
-        page = int(body.get("page") or 0)
+        page = page_number(body.get("page"))
+        if page is None:
+            return {"msg": _('"{field}" must be a number', field="page")}, 400
 
         mongo = _mongo()
         logs = list(
@@ -224,7 +227,9 @@ def get_log_actions() -> tuple[dict, int]:
 def get_logs_for_resource(body: dict, resource_id: str) -> tuple[list | dict, int]:
     """Change history for one resource, as field-level diffs."""
     try:
-        page = int(body.get("page") or 0)
+        page = page_number(body.get("page"))
+        if page is None:
+            return {"msg": _('"{field}" must be a number', field="page")}, 400
         logs = list(
             _mongo().get_all_records(
                 COLLECTION,

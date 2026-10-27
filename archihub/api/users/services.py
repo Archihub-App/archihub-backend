@@ -28,6 +28,7 @@ import logging
 from archihub.core.clock import as_utc, isoformat_utc, utcnow
 from archihub.core.errors import NotFoundError, RateLimitError
 from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 from archihub.infra.cache import cached
 
 logger = logging.getLogger(__name__)
@@ -309,7 +310,9 @@ def get_all(body: dict, current_user: str) -> tuple[list | dict, int]:
         from archihub.core.roles import get_access_rights, get_roles
 
         mongo = _mongo()
-        page = int(body.get("page") or 0)
+        page = page_number(body.get("page"))
+        if page is None:
+            return {"msg": _('"{field}" must be a number', field="page")}, 400
         filters = sanitize_user_filters(body.get("filters"))
 
         users = list(
@@ -585,7 +588,9 @@ def get_favorites(username: str, body: dict) -> tuple[dict | list, int]:
         return {"msg": str(exc)}, 400
 
     mongo = _mongo()
-    page = int(body.get("page") or 0)
+    page = page_number(body.get("page"))
+    if page is None:
+        return {"msg": _('"{field}" must be a number', field="page")}, 400
 
     user = mongo.get_record("users", {"username": username}, fields={"favorites": 1})
     favorites = [f for f in ((user or {}).get("favorites") or []) if f.get("type") == body["type"]]

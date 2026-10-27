@@ -18,6 +18,7 @@ from bson.objectid import ObjectId
 
 from archihub.core.clock import utcnow
 from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
@@ -212,7 +213,9 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
         else:
             query["user"] = {"$exists": True}
 
-        page = int(filters.get("page") or 0)
+        page = page_number(filters.get("page"))
+        if page is None:
+            return {"error": _('"{field}" must be a number', field="page")}, 400
         mongo = _mongo()
 
         tasks = list(

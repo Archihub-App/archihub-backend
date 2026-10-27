@@ -176,13 +176,21 @@ def _may_export(body: dict, user: str) -> tuple[dict, int] | None:
     from archihub.api.users.services import has_role
     from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
+    post_types = body.get("post_type") or []
+    parent = body.get("parent")
+    parent_id = parent.get("id") if isinstance(parent, dict) else parent
+    if not isinstance(post_types, list) or not all(isinstance(p, str) for p in post_types):
+        return {"msg": _("No content type was specified")}, 400
+    if parent_id is not None and not isinstance(parent_id, str):
+        return {"msg": _("Resource does not exist")}, 404
+
     is_admin = has_role(user, "admin")
 
     # `can_view_type` rather than a fourth copy of "read viewRoles, admin
     # bypasses". It is the same rule the catalogue listing and the resource
     # detail route apply, so an export cannot drift into being more permissive
     # than the screen the operator exported from.
-    for slug in body.get("post_type") or []:
+    for slug in post_types:
         if not can_view_type(user, slug):
             return {"msg": _("You do not have sufficient permissions")}, ROLE_FAILURE_STATUS
 
@@ -190,8 +198,6 @@ def _may_export(body: dict, user: str) -> tuple[dict, int] | None:
     if status == "deleted":
         return {"msg": _("You do not have sufficient permissions")}, ROLE_FAILURE_STATUS
 
-    parent = body.get("parent")
-    parent_id = parent.get("id") if isinstance(parent, dict) else parent
     if parent_id:
         try:
             parent_oid = object_ids([parent_id], "parent")[0]
