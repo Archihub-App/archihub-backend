@@ -29,6 +29,17 @@ def clean_cell(value) -> str:
     return "".join(ch for ch in value if ord(ch) > 31 or ord(ch) in _ALLOWED_CONTROL)
 
 
+#: A text cell starting with one of these is read by a spreadsheet as a formula.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def neutralise_formula(value):
+    """A text cell that a spreadsheet shows as text, never evaluates."""
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return f"'{value}"
+    return value
+
+
 def user_export_directory(user: str):
     """``<user files>/<user>/inventoryMaker``, created if needed.
 
@@ -58,7 +69,10 @@ def write_workbook(directory: Path, sheets: dict[str, list[dict]], *, name: str 
     try:
         with pd.ExcelWriter(scratch) as writer:
             for sheet_name, rows in sheets.items():
-                pd.DataFrame(rows).to_excel(writer, sheet_name=sheet_name, index=False)
+                safe = [
+                    {key: neutralise_formula(value) for key, value in row.items()} for row in rows
+                ]
+                pd.DataFrame(safe).to_excel(writer, sheet_name=sheet_name, index=False)
         scratch.replace(destination)
     finally:
         if scratch.exists():

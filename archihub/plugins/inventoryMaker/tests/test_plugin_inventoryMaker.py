@@ -83,3 +83,16 @@ def test_a_restricted_field_is_not_a_column_of_a_public_export(monkeypatch):
     assert "Secret" not in rows[1]
     assert rows[1]["Title"] == "Visible"
     assert fake.queries[0][2] == inventoryMaker.MAX_EXPORT_ROWS
+
+
+def test_a_spreadsheet_never_carries_a_live_formula(tmp_path):
+    import pandas as pd
+
+    name = export.write_workbook(
+        tmp_path, {"Recursos": [{"title": '=HYPERLINK("https://example.org","x")', "n": 3}]}
+    )
+
+    cell = pd.read_excel(tmp_path / name, sheet_name="Recursos")["title"][0]
+    assert cell.startswith("'=")
+    assert export.neutralise_formula("plain") == "plain"
+    assert export.neutralise_formula(-3) == -3
