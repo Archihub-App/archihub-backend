@@ -77,9 +77,9 @@ def regenerate_index_task(mapping: dict, user: str | None = None) -> str:
 def index_resources_task(body: dict | None = None) -> str:
     """Index resources into the search index.
 
-    With no body, the index is emptied first and the whole collection is
-    rebuilt. With ``{"_id": ...}`` or any other Mongo filter, only the matching
-    resources are reindexed and nothing is emptied.
+    With no body, the whole collection is rebuilt and documents for resources
+    that no longer exist are removed at the end. With ``{"_id": ...}`` or any
+    other Mongo filter, only the matching resources are reindexed.
     """
     from bson.objectid import ObjectId
 
@@ -99,10 +99,10 @@ def index_resources_task(body: dict | None = None) -> str:
     full_rebuild = not filters
 
     client = _client()
-    if full_rebuild:
-        # Only a full run clears the index. A filtered run that emptied it would
-        # delete everything it was not asked to touch.
-        client.delete_all_documents(RESOURCES_INDEX)
+    # Every document records when it was built. A full run replaces documents
+    # in place and, once every resource has been written, removes the ones it
+    # did not renew - so search keeps answering while the run is in progress.
+    run_started = _now_iso()
 
     indexed = 0
     skipped = 0
@@ -117,6 +117,7 @@ def index_resources_task(body: dict | None = None) -> str:
         for resource in page:
             try:
                 document = _document_for(resource, types, record_types, ancestor_rights)
+                document[INDEXED_AT_FIELD] = _now_iso()
             except _Skip:
                 skipped += 1
                 continue
@@ -141,6 +142,14 @@ def index_resources_task(body: dict | None = None) -> str:
         failed += len(failures)
         indexed += len(documents) - len(failures)
 
+    if full_rebuild:
+        if failed:
+            # A resource that could not be rebuilt keeps its previous document
+            # rather than disappearing from search.
+            logger.warning("Full indexing run had failures; stale documents were kept")
+        else:
+            client.delete_all_documents(RESOURCES_INDEX, _stale_since(run_started))
+
     message = _("Indexing finished for %(count)s resources", count=indexed)
     if failed or skipped:
         # Appended rather than replacing the message, so the string an operator
@@ -148,6 +157,29 @@ def index_resources_task(body: dict | None = None) -> str:
         message = f"{message} ({failed} failed, {skipped} skipped)"
         logger.warning("Indexing run finished with %d failures and %d skipped", failed, skipped)
     return message
+
+
+#: The field each document's build time is stored in.
+INDEXED_AT_FIELD = "indexedAt"
+
+
+def _now_iso() -> str:
+    from archihub.core.clock import isoformat_utc, utcnow
+
+    return isoformat_utc(utcnow())
+
+
+def _stale_since(run_started: str) -> dict:
+    """Documents not written since ``run_started``."""
+    return {
+        "bool": {
+            "should": [
+                {"range": {INDEXED_AT_FIELD: {"lt": run_started}}},
+                {"bool": {"must_not": {"exists": {"field": INDEXED_AT_FIELD}}}},
+            ],
+            "minimum_should_match": 1,
+        }
+    }
 
 
 @shared_task(ignore_result=False, name="system.index_resources_delete")

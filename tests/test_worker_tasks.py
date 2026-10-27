@@ -145,13 +145,31 @@ def _resources(count: int, **extra) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def test_a_full_run_empties_the_index_first(stubbed):
+def test_a_full_run_prunes_only_after_writing_everything(stubbed):
+    """Search keeps answering while a full run is in progress."""
     mongo, client = stubbed(FakeMongo(resources=_resources(3)), FakeSearch())
+    order = []
+    original_bulk = client.bulk_index
+    client.bulk_index = lambda suffix, docs: order.append("write") or original_bulk(suffix, docs)
+    original_clear = client.delete_all_documents
+    client.delete_all_documents = (
+        lambda suffix, query=None: order.append(("prune", query)) or original_clear(suffix, query)
+    )
 
     indexing.index_resources_task()
 
-    assert client.cleared == ["resources"]
+    assert order[0] == "write"
+    assert order[-1][0] == "prune" and order[-1][1] is not None
     assert len(client.written) == 3
+    assert all(indexing.INDEXED_AT_FIELD in doc for _id, doc in client.written)
+
+
+def test_a_full_run_with_failures_keeps_the_previous_documents(stubbed):
+    mongo, client = stubbed(FakeMongo(resources=_resources(3)), FakeSearch(reject={"0001"}))
+
+    indexing.index_resources_task()
+
+    assert client.cleared == []
 
 
 def test_a_filtered_run_does_not_empty_the_index(stubbed):

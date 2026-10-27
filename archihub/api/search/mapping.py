@@ -70,6 +70,8 @@ SYSTEM_FIELDS: dict[str, dict] = {
     "ident": _TEXT_WITH_KEYWORD,
     "createdAt": {"type": "date"},
     "files": {"type": "integer"},
+    # When the document was built; a full reindex prunes what it did not renew.
+    "indexedAt": {"type": "date"},
 }
 
 
