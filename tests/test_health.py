@@ -284,3 +284,20 @@ def test_a_queue_no_worker_consumes_is_reported(monkeypatch):
 
     assert state == services.DEGRADED
     assert "high" in error
+
+
+def test_an_unconsumed_queue_makes_the_instance_not_ready(monkeypatch):
+    monkeypatch.setattr(services, "check_mongo", lambda: (True, None))
+    monkeypatch.setattr(services, "check_redis", lambda: (True, None))
+    monkeypatch.setattr(
+        services, "check_celery", lambda: (services.DEGRADED, "No worker consumes: high")
+    )
+    monkeypatch.setattr(services, "load_index_management", lambda: {})
+    monkeypatch.setattr(services, "check_elasticsearch", lambda cfg: (services.DISABLED, None))
+    monkeypatch.setattr(services, "check_qdrant", lambda cfg: (services.DISABLED, None))
+
+    payload, status = services.get_readiness()
+
+    assert status == 503
+    assert payload["ready"] is False
+    assert payload["checks"]["celery"]["status"] == services.DEGRADED

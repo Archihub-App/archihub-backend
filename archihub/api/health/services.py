@@ -219,7 +219,9 @@ def get_readiness(timeout: float = 15.0) -> tuple[dict, int]:
         result[name] = {"status": state if isinstance(state, str) else ("ok" if state else "error")}
         if error:
             result[name]["error"] = error
-        if state is False:
+        # A queue nobody consumes holds every job sent to it, so the instance is
+        # not ready even though each service answers.
+        if state is False or state == DEGRADED:
             all_ready = False
 
     return {"ready": all_ready, "checks": result}, (200 if all_ready else 503)
