@@ -63,16 +63,14 @@ MSG_INVALID_TOKEN = "Invalid token"
 
 def create_access_token(
     identity: str,
-    expires_delta: timedelta | None = DEFAULT_ACCESS_TOKEN_EXPIRES,
+    expires_delta: timedelta = DEFAULT_ACCESS_TOKEN_EXPIRES,
     *,
     fresh: bool = False,
 ) -> str:
-    """Mint an access token.
+    """Mint an access token. Every token expires."""
+    if expires_delta is None:
+        raise ValueError("An access token must expire")
 
-    ``expires_delta=None`` produces a token with no ``exp`` claim. Decoding
-    tolerates tokens without ``exp`` so API keys issued without an expiry keep
-    working until they are rotated.
-    """
     settings = get_settings()
     now = datetime.now(timezone.utc)
 
@@ -84,9 +82,8 @@ def create_access_token(
         # `sub` is always a string.
         "sub": str(identity),
         "nbf": now,
+        "exp": now + expires_delta,
     }
-    if expires_delta is not None:
-        payload["exp"] = now + expires_delta
 
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
 
@@ -105,9 +102,7 @@ def decode_access_token(token: str) -> dict:
             token,
             settings.jwt_secret_key,
             algorithms=[ALGORITHM],
-            # `exp` is verified when present but not required: tokens minted
-            # before the API-key expiry change have no exp claim.
-            options={"require": ["sub"]},
+            options={"require": ["sub", "exp", "type"]},
         )
     except jwt.ExpiredSignatureError:
         raise AuthenticationError(MSG_EXPIRED) from None
@@ -124,8 +119,7 @@ def decode_access_token(token: str) -> dict:
 
     # PyJWT does not know about token types, so a refresh token would otherwise
     # pass - see the module docstring.
-    token_type = claims.get("type")
-    if token_type is not None and token_type != ACCESS_TOKEN_TYPE:
+    if claims.get("type") != ACCESS_TOKEN_TYPE:
         raise InvalidTokenError(MSG_NOT_REFRESH)
 
     return claims

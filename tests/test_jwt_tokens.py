@@ -91,13 +91,16 @@ def test_a_long_lived_api_key_is_accepted():
     assert tokens.get_identity(tokens.decode_access_token(token)) == USERNAME
 
 
-def test_a_token_without_an_expiry_is_accepted():
-    """Keys minted before expiries were introduced carry no `exp` claim.
-
-    They never expire, so `exp` is verified when present and not required.
-    """
+def test_a_token_without_an_expiry_is_refused():
+    """A token that never expires can never be taken back."""
     token = _issued_token(expires_in=None)
-    assert tokens.get_identity(tokens.decode_access_token(token)) == USERNAME
+    with pytest.raises(InvalidTokenError):
+        tokens.decode_access_token(token)
+
+
+def test_a_token_is_never_minted_without_an_expiry():
+    with pytest.raises(ValueError):
+        tokens.create_access_token(USERNAME, expires_delta=None)
 
 
 def test_a_token_this_backend_mints_carries_the_same_claims():
