@@ -32,7 +32,7 @@ import json
 import logging
 from typing import Any, Callable, Iterable, Sequence
 
-from fastapi import APIRouter, Depends, Form
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
 from archihub.core.i18n import gettext as _
@@ -314,6 +314,7 @@ class ArchiPlugin:
         )
         def set_settings(
             data: str = Form(...),
+            files: list[UploadFile] | None = File(None),
             current_user: CurrentUser = Depends(require_roles(*plugin.settings_roles)),
         ) -> JSONResponse:
             """Save this plugin's settings.
@@ -329,6 +330,11 @@ class ArchiPlugin:
 
             if not isinstance(parsed, dict):
                 return json_response({"msg": _("Invalid settings payload")}, 400)
+
+            if files:
+                # Settings are stored as data; no plugin setting holds a file. A
+                # file sent anyway is refused rather than silently dropped.
+                return json_response({"msg": _("These settings do not accept files")}, 400)
 
             payload, status_code = plugin.save_settings(parsed)
             return json_response(payload, status_code)
