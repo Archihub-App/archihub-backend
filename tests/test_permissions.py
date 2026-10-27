@@ -511,3 +511,17 @@ def test_without_the_type_point_the_roles_stay_closed(held, role_mappings, clien
     held.add("user")
 
     assert client.get("/types/roles").status_code == 403
+
+
+def test_any_signed_in_user_reads_a_vocabulary(held, role_mappings, client, monkeypatch):
+    """Every select field of a cataloguing form is filled from one."""
+    from archihub.api.lists import services as lists
+    from archihub.core import roles
+
+    monkeypatch.setattr(lists, "get_by_id", lambda list_id: ({"id": list_id, "options": []}, 200))
+    monkeypatch.setattr(roles, "get_roles_id", lambda: "roles-list")
+    held.add("transcriber")
+
+    assert client.get("/lists/6a70b833497d4440325c94b1").status_code == 200
+    assert client.get("/lists/roles-list").status_code == 403
+    assert client.put("/lists/6a70b833497d4440325c94b1", json={}).status_code == 403
