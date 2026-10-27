@@ -66,8 +66,13 @@ def create_access_token(
     expires_delta: timedelta = DEFAULT_ACCESS_TOKEN_EXPIRES,
     *,
     fresh: bool = False,
+    version: int = 0,
 ) -> str:
-    """Mint an access token. Every token expires."""
+    """Mint an access token. Every token expires.
+
+    ``version`` is the account's session version when the token was issued
+    (claim ``ver``); raising the account's version revokes every earlier token.
+    """
     if expires_delta is None:
         raise ValueError("An access token must expire")
 
@@ -83,6 +88,7 @@ def create_access_token(
         "sub": str(identity),
         "nbf": now,
         "exp": now + expires_delta,
+        "ver": int(version),
     }
 
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)

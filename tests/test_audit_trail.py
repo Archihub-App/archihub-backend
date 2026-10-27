@@ -122,6 +122,10 @@ class FakeMongo:
         self.inserted.append((collection, record))
         return SimpleNamespace(inserted_id=ObjectId(VALID_ID))
 
+    def update_record_operator(self, collection, filters, operator, **kwargs):
+        self.operators = getattr(self, "operators", [])
+        self.operators.append((collection, filters, operator))
+
     def update_record(self, collection, filters, update):
         self.updated.append((collection, filters, update))
         return SimpleNamespace(modified_count=1)

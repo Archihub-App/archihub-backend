@@ -76,6 +76,21 @@ def _is_valid_system_user(username: str) -> bool:
     return any(task.get("task") == task_name for task in scheduled)
 
 
+@cached("users")
+def session_version(username: str) -> int:
+    """The account's session version; a token issued under an older one is revoked."""
+    user = _mongo().get_record("users", {"username": username}, fields={"tokenVersion": 1})
+    value = (user or {}).get("tokenVersion")
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def revoke_sessions(username: str) -> None:
+    """End every session of ``username`` by raising its session version."""
+    _mongo().update_record_operator(
+        "users", {"username": username}, {"$inc": {"tokenVersion": 1}}
+    )
+
+
 def get_user(username: str) -> dict | None:
     """Full user record for authentication, or None.
 
@@ -838,6 +853,7 @@ def reset_password(body: dict) -> tuple[dict, int]:
 
     hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     mongo.update_record("users", {"username": claims["sub"]}, {"password": hashed})
+    revoke_sessions(claims["sub"])
     return {"msg": _("Password updated")}, 200
 
 
@@ -980,6 +996,8 @@ def update_me(body: dict, current_user: str) -> tuple[dict, int]:
         return {"msg": _("No changes were made")}, 400
 
     mongo.update_record("users", {"username": current_user}, update)
+    if "password" in update:
+        revoke_sessions(current_user)
 
     # The field names are recorded, never their values: a password hash has no
     # place in the audit collection, and neither does a phone number.

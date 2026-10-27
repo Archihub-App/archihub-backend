@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from archihub.core.errors import PermissionDeniedError
+from archihub.core.errors import AuthenticationError, PermissionDeniedError
 from archihub.core.i18n import gettext as _
 from archihub.core.security import tokens
 
@@ -73,7 +73,27 @@ def get_current_user(
     """
     token = tokens.extract_bearer_token(request.headers.get("Authorization"))
     claims = tokens.decode_access_token(token)
-    return CurrentUser(username=tokens.get_identity(claims), claims=claims)
+    username = tokens.get_identity(claims)
+    if not _session_is_current(username, claims):
+        raise AuthenticationError(_(MSG_SESSION_REVOKED))
+    return CurrentUser(username=username, claims=claims)
+
+
+#: A token issued before the account's sessions were ended.
+MSG_SESSION_REVOKED = "The session has ended; sign in again"
+
+
+def _session_is_current(username: str, claims: dict) -> bool:
+    """Whether the token was issued under the account's current session version.
+
+    A token without ``ver`` predates the claim and counts as version 0.
+    """
+    from archihub.api.users.services import session_version
+
+    issued = claims.get("ver", 0)
+    if not isinstance(issued, int) or isinstance(issued, bool):
+        return False
+    return issued == session_version(username)
 
 
 # The status a role or right failure produces.

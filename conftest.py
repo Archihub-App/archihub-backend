@@ -191,3 +191,24 @@ def role_mappings(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict]:
     monkeypatch.setattr(permissions, "_mongo", lambda: store)
     monkeypatch.setattr(service, "_mongo", lambda: store)
     yield mappings
+
+
+@pytest.fixture(autouse=True)
+def session_versions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every account at session version 0.
+
+    Every authenticated request compares the token's version with the account's,
+    so without this a test that sends a real token would read the ``users``
+    collection of whatever MongoDB the local settings name. A test of
+    revocation sets its own.
+    """
+    from archihub.api.users import services
+
+    original = services.session_version
+
+    def at_version_zero(username: str) -> int:
+        return 0
+
+    # What the cache tests read off the real function.
+    at_version_zero.cache_collections = getattr(original, "cache_collections", None)
+    monkeypatch.setattr(services, "session_version", at_version_zero)

@@ -108,7 +108,11 @@ def archihub_login(username: str, password: str, client_ip: str | None = None) -
 
 
 def _issue_token(username: str) -> tuple[dict, int]:
-    token = tokens.create_access_token(username, expires_delta=ACCESS_TOKEN_LIFETIME)
+    from archihub.api.users.services import session_version
+
+    token = tokens.create_access_token(
+        username, expires_delta=ACCESS_TOKEN_LIFETIME, version=session_version(username)
+    )
     _register_log(username, "user_login", {})
     logger.info("Login succeeded for %s", username)
     return {"access_token": token}, 200

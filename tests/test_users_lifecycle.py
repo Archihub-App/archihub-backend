@@ -30,6 +30,10 @@ class FakeMongo:
     def insert_record(self, collection, record):
         self.inserted.append((collection, record))
 
+    def update_record_operator(self, collection, filters, operator, **kwargs):
+        self.operators = getattr(self, "operators", [])
+        self.operators.append((collection, filters, operator))
+
     def update_record(self, collection, filters, update):
         self.updated.append((collection, filters, update))
         return type("R", (), {"modified_count": 1})()
@@ -335,6 +339,10 @@ class _RecoveryMongo:
     def __init__(self, user):
         self.user = user
         self.updated = []
+        self.revoked = 0
+
+    def update_record_operator(self, collection, filters, operator, **kwargs):
+        self.revoked += operator.get("$inc", {}).get("tokenVersion", 0)
 
     def get_record(self, collection, filters, fields=None):
         return dict(self.user) if self.user else None
@@ -375,6 +383,8 @@ def test_a_recovery_link_changes_the_password_once(recovery):
     assert user_services.reset_password({"token": link, "password": "new"})[1] == 200
     assert user_services.reset_password({"token": link, "password": "again"})[1] == 400
     assert len(recovery.updated) == 1
+    # The sessions opened with the old password end with it.
+    assert recovery.revoked == 1
 
 
 def test_a_recovery_token_never_opens_a_session(recovery):
