@@ -103,17 +103,28 @@ def add_task(
 def _sync_finished_task(task_id: str, result: AsyncResult) -> None:
     """Write a terminal Celery state back to the task document."""
     if result.successful():
-        value = result.result
+        record_outcome(task_id, succeeded=True, value=result.result)
+    else:
+        logger.warning("Task %s failed", task_id, exc_info=result.result if result.failed() else None)
+        record_outcome(task_id, succeeded=False)
+
+
+def record_outcome(task_id: str, *, succeeded: bool, value: Any = None) -> None:
+    """Store how a task ended on its document.
+
+    Called by the worker as each task finishes, so the outcome outlives the
+    result backend's expiry, and again when a listing finds a task still marked
+    pending.
+    """
+    if succeeded:
         # Mongo cannot store arbitrary objects; keep dict/list/str as-is and
         # stringify anything else rather than raising on insert.
         if not isinstance(value, (str, dict, list, int, float, bool, type(None))):
             value = str(value)
         update = {"status": STATUS_COMPLETED, "result": value}
     else:
-        # Do NOT persist result.result on failure: for an exception it is the
-        # exception object, whose string form can carry connection strings,
+        # Never the exception: its string form can carry connection strings,
         # file paths and other internals into a record the frontend renders.
-        logger.warning("Task %s failed", task_id, exc_info=result.result if result.failed() else None)
         update = {"status": STATUS_FAILED, "result": ""}
 
     _mongo().update_record("tasks", {"taskId": task_id}, update)

@@ -544,3 +544,32 @@ def test_a_child_with_no_right_of_its_own_is_indexed_with_its_ancestor_right(stu
     assert [(doc_id, doc["accessRights"]) for doc_id, doc in client.written] == [
         (str(child), "reserved")
     ]
+
+
+def test_a_finished_task_is_recorded_on_its_document(monkeypatch):
+    """The result backend forgets; the task document must not."""
+    from types import SimpleNamespace
+
+    from archihub.api.tasks import services as task_services
+    from archihub.worker import celery_app as worker_app
+
+    updates = []
+    monkeypatch.setattr(
+        task_services, "_mongo",
+        lambda: SimpleNamespace(update_record=lambda c, f, u: updates.append((c, f, u))),
+    )
+
+    finished = SimpleNamespace(request=SimpleNamespace(id="t1"))
+    worker_app._record_success(sender=finished, result="/a/b.xlsx")
+    worker_app._record_failure(task_id="t2", exception=RuntimeError("secret path"))
+
+    assert updates == [
+        ("tasks", {"taskId": "t1"}, {"status": "completed", "result": "/a/b.xlsx"}),
+        ("tasks", {"taskId": "t2"}, {"status": "failed", "result": ""}),
+    ]
+
+
+def test_results_are_kept_longer_than_a_weekend():
+    from archihub.worker.celery_app import celery_app
+
+    assert celery_app.conf.result_expires >= 3 * 24 * 3600

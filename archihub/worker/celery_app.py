@@ -22,9 +22,11 @@ import logging
 import sys
 
 from celery import Celery
-from celery.signals import celeryd_init, worker_process_init
+from celery.signals import celeryd_init, task_failure, task_success, worker_process_init
 
 from archihub.core.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 
@@ -45,6 +47,9 @@ celery_app.conf.update(
     task_time_limit=43200,
     task_soft_time_limit=43000,
     beat_max_loop_interval=settings.celery_beat_refresh_interval,
+    # The outcome is also written to the task's document as it finishes (see
+    # `_record_success`); this only bounds how long the backend copy is kept.
+    result_expires=7 * 24 * 3600,
 )
 
 # macOS cannot fork the default pool safely.
@@ -193,3 +198,30 @@ class _NoRouterApp:
 
     def include_router(self, *args, **kwargs) -> None:
         return None
+
+
+@task_success.connect
+def _record_success(sender=None, result=None, **_kwargs) -> None:
+    """Store a finished task's result on its document, where it outlives the
+    result backend."""
+    task_id = getattr(getattr(sender, "request", None), "id", None)
+    if not task_id:
+        return
+    try:
+        from archihub.api.tasks.services import record_outcome
+
+        record_outcome(task_id, succeeded=True, value=result)
+    except Exception:
+        logger.exception("Could not record the outcome of task %s", task_id)
+
+
+@task_failure.connect
+def _record_failure(task_id=None, **_kwargs) -> None:
+    if not task_id:
+        return
+    try:
+        from archihub.api.tasks.services import record_outcome
+
+        record_outcome(task_id, succeeded=False)
+    except Exception:
+        logger.exception("Could not record the outcome of task %s", task_id)
