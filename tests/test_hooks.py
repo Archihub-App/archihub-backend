@@ -218,3 +218,51 @@ def test_get_task_ids_returns_oldest_first():
             self.parent = parent
 
     assert HookHandler.get_task_ids(Result("c", Result("b", Result("a")))) == ["a", "b", "c"]
+
+
+def test_a_task_registered_always_also_runs_when_an_earlier_one_fails(hooks, monkeypatch):
+    """It is attached as the chain's error callback as well as its last link."""
+    sent = {}
+
+    class Chain:
+        def __init__(self, *sigs):
+            sent["chain"] = sigs
+
+        def apply_async(self, **options):
+            sent["options"] = options
+
+    monkeypatch.setattr("archihub.core.hooks.chain", Chain)
+    monkeypatch.setattr("archihub.api.tasks.services.add_task", lambda *a, **k: None)
+
+    hooks.register("resource_update", FakeTask("plugin.process", []), queue=0)
+    hooks.register("resource_update", FakeTask("index.resource", []), queue=101, always=True)
+    hooks.call("resource_update", {"_id": "x"})
+
+    assert sent["chain"] == ("signature:plugin.process", "signature:index.resource")
+    assert sent["options"] == {"link_error": ["signature:index.resource"]}
+
+
+def test_without_an_always_task_the_chain_has_no_error_callback(hooks, monkeypatch):
+    sent = {}
+
+    class Chain:
+        def __init__(self, *sigs):
+            pass
+
+        def apply_async(self, **options):
+            sent["options"] = options
+
+    monkeypatch.setattr("archihub.core.hooks.chain", Chain)
+    monkeypatch.setattr("archihub.api.tasks.services.add_task", lambda *a, **k: None)
+
+    hooks.register("evt", FakeTask("plugin.process", []))
+    hooks.call("evt", {})
+
+    assert sent["options"] == {}
+
+
+def test_the_index_tasks_are_registered_always():
+    from archihub.api.search import write_hooks
+
+    source = open(write_hooks.__file__).read()
+    assert source.count("queue=INDEX_QUEUE, always=True") == source.count("hooks.register(")

@@ -74,6 +74,9 @@ class HookHandler:
             self._is_initialized = True
             # hook name -> list of (queue, func, args, kwargs)
             self.hooks: dict[str, list[tuple[int, Callable, list, dict]]] = {}
+            # hook name -> names of the tasks that run even when an earlier
+            # task of the same chain failed
+            self.always: dict[str, set[str]] = {}
 
     # -- registration ---------------------------------------------------
     def register(
@@ -83,11 +86,15 @@ class HookHandler:
         args: Any = None,
         kwargs: dict | None = None,
         queue: int = 0,
+        always: bool = False,
     ) -> None:
         """Register ``func`` to run when ``hook_name`` fires.
 
         Lower ``queue`` runs first. Duplicate registrations are ignored so that
         re-importing or re-instantiating a plugin does not double its effects.
+
+        A Celery task registered ``always`` still runs when a task before it in
+        the chain fails: it is also attached as the chain's error callback.
 
         A failure here raises rather than being swallowed: a hook that fails to
         register produces a feature that silently never runs, which is far
@@ -108,14 +115,18 @@ class HookHandler:
                 return
 
         registrations.append((queue, func, reg_args, reg_kwargs))
+        if always and _is_celery_task(func):
+            self.always.setdefault(hook_name, set()).add(func.name)
         logger.debug("Registered hook %s -> %r (queue=%s)", hook_name, func, queue)
 
     def unregister_all(self, hook_name: str | None = None) -> None:
         """Drop registrations. Used by tests and by settings reloads."""
         if hook_name is None:
             self.hooks.clear()
+            self.always.clear()
         else:
             self.hooks.pop(hook_name, None)
+            self.always.pop(hook_name, None)
 
     # -- dispatch -------------------------------------------------------
     def call(self, hook_name: str, *additional_args: Any, **additional_kwargs: Any) -> Any:
@@ -135,6 +146,8 @@ class HookHandler:
         sync_return_value = additional_args[0] if additional_args else None
         task_signatures = []
         task_names: list[str] = []
+        errbacks = []
+        always = self.always.get(hook_name, set())
 
         for _, func, reg_args, reg_kwargs in sorted(registrations, key=lambda item: item[0]):
             final_args = list(reg_args) + list(additional_args)
@@ -143,6 +156,8 @@ class HookHandler:
             if _is_celery_task(func):
                 task_signatures.append(func.si(*final_args, **final_kwargs))
                 task_names.append(func.name)
+                if func.name in always:
+                    errbacks.append(func.si(*final_args, **final_kwargs))
             else:
                 try:
                     sync_return_value = func(*final_args, **final_kwargs)
@@ -153,14 +168,21 @@ class HookHandler:
                     raise
 
         if task_signatures:
-            self._dispatch_chain(hook_name, task_signatures, task_names)
+            self._dispatch_chain(hook_name, task_signatures, task_names, errbacks)
 
         return sync_return_value
 
-    def _dispatch_chain(self, hook_name: str, signatures: list, names: list[str]) -> None:
-        """Send the collected Celery signatures as a chain and track them."""
+    def _dispatch_chain(
+        self, hook_name: str, signatures: list, names: list[str], errbacks: list | None = None
+    ) -> None:
+        """Send the collected Celery signatures as a chain and track them.
+
+        A failed task stops the chain; ``errbacks`` then run instead of the
+        tasks after it.
+        """
         try:
-            result = chain(*signatures).apply_async()
+            options = {"link_error": errbacks} if errbacks else {}
+            result = chain(*signatures).apply_async(**options)
         except Exception:
             # Broker down: the request itself should not fail because a
             # background side effect could not be queued.
