@@ -47,6 +47,10 @@ ALLOWED_EXTENSIONS = {"xlsx"}
 #: the file is.
 SHEET_ORDER = ("Tipo", "Estandar", "Listado", "Recursos")
 
+#: The permission point each sheet needs. Resource rows are authorised one by
+#: one, by the same route a user edit goes through.
+SHEET_PERMISSIONS = {"Tipo": "types.manage", "Estandar": "forms.manage", "Listado": "lists.manage"}
+
 #: Rows an import may contain. A spreadsheet is an unbounded input that turns
 #: into unbounded database writes.
 MAX_ROWS = 20000
@@ -214,6 +218,13 @@ def _import_workbook(path: str, user: str, overwrite: bool, applied: list, error
     if len(frame) > MAX_ROWS:
         raise ValueError(f"The workbook has {len(frame)} rows; the limit is {MAX_ROWS}")
 
+    point = SHEET_PERMISSIONS.get(sheet)
+    if point is not None:
+        from archihub.api.users.services import has_permission
+
+        if not has_permission(user, point):
+            raise PermissionError(f"You may not import the {sheet} sheet")
+
     if sheet == "Recursos":
         _import_resources(frame, user, overwrite, applied, errors)
     elif sheet == "Tipo":
@@ -269,7 +280,10 @@ def _import_resources(frame, user: str, overwrite: bool, applied: list, errors: 
                 existing = _mongo().get_record(
                     "resources",
                     {"_id": _object_id(resource_id)},
-                    fields={"_id": 1, "post_type": 1, "status": 1},
+                    fields={
+                        "_id": 1, "post_type": 1, "status": 1, "metadata": 1,
+                        "accessRights": 1, "parent": 1, "ident": 1,
+                    },
                 )
                 if not existing:
                     errors.append({"index": index, "id": resource_id, "error": "Resource not found"})
@@ -293,16 +307,22 @@ def _import_resources(frame, user: str, overwrite: bool, applied: list, errors: 
                 errors.append({"index": index, "id": resource_id or "", "error": "Parent not found"})
                 continue
             if parent is not None:
-                update["parent"] = parent
-                update["parents"] = [parent]
+                update["parent"] = [parent]
 
             if resource_id:
-                from archihub.plugins.framework import data as plugin_data
+                from archihub.api.resources.write import update as update_resource
 
-                payload, status = plugin_data.update_resource(str(resource_id), update)
+                # The edit route, over the stored resource with the row's cells
+                # laid on top: the same authorisation as a user edit, and every
+                # field the row does not name keeps its value.
+                payload, status = update_resource(
+                    str(resource_id), _merged_body(existing, update), user
+                )
             else:
                 from archihub.api.resources.write import create
 
+                if parent is not None:
+                    update["parents"] = [parent]
                 update.setdefault("status", "published")
                 update.setdefault("filesIds", [])
                 payload, status = create(update, user)
@@ -315,6 +335,34 @@ def _import_resources(frame, user: str, overwrite: bool, applied: list, errors: 
         except Exception as exc:
             logger.warning("Row %s failed", index, exc_info=True)
             errors.append({"index": index, "id": str(_cell(row, "id") or ""), "error": str(exc)[:300]})
+
+
+def _merged_body(existing: dict, update: dict) -> dict:
+    """An edit body: the stored resource, with ``update`` laid over it.
+
+    Metadata is merged path by path, so a cell the row does not have leaves the
+    stored value alone; a cleared cell is an explicit ``None``.
+    """
+    body = {
+        "post_type": existing.get("post_type"),
+        "status": existing.get("status"),
+        "metadata": _deep_merge(existing.get("metadata") or {}, update.get("metadata") or {}),
+        "accessRights": existing.get("accessRights"),
+        "parent": update.get("parent", existing.get("parent") or []),
+    }
+    if existing.get("ident") is not None:
+        body["ident"] = existing["ident"]
+    return body
+
+
+def _deep_merge(base: dict, overlay: dict) -> dict:
+    merged = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
 
 
 #: Sentinel: a parent was named but could not be resolved.
@@ -505,6 +553,7 @@ def _import_types(frame, user: str, applied: list, errors: list) -> None:
     import json
 
     from archihub.api.types import services as types_services
+    from archihub.api.users.services import has_permission
 
     for index, row in frame.iterrows():
         identifier = _cell(row, "id")
@@ -523,6 +572,9 @@ def _import_types(frame, user: str, applied: list, errors: list) -> None:
             }
 
             existing = types_services.get_by_slug(str(slug)) if slug else None
+            if not existing and not has_permission(user, "types.create"):
+                errors.append({"index": index, "id": identifier or slug, "error": "Not authorised to create types"})
+                continue
             if existing:
                 payload, status = types_services.update_by_slug(
                     str(slug), {k: v for k, v in body.items() if k != "slug"}, user

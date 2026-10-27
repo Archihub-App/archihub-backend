@@ -58,3 +58,73 @@ def test_an_admin_resolves_any_parent(world):
 
 def test_a_row_without_a_parent_names_none(world):
     assert massive._resolve_parent({"title": "x"}, "alice") is None
+
+
+# ---------------------------------------------------------------------------
+# Updating an existing resource
+# ---------------------------------------------------------------------------
+
+
+def test_a_row_keeps_every_field_it_does_not_name():
+    existing = {
+        "post_type": "fondo",
+        "status": "published",
+        "metadata": {"firstLevel": {"title": "R", "description": "keep me"}},
+        "accessRights": "secret",
+        "parent": [{"id": PARENT_ID, "post_type": "fondo"}],
+        "ident": "F-1",
+    }
+
+    body = massive._merged_body(existing, {"metadata": {"firstLevel": {"title": "R2"}}})
+
+    assert body["metadata"] == {"firstLevel": {"title": "R2", "description": "keep me"}}
+    assert body["accessRights"] == "secret"
+    assert body["parent"] == existing["parent"]
+    assert body["ident"] == "F-1"
+
+
+def test_a_resource_row_goes_through_the_edit_route(monkeypatch):
+    """So the importing user needs the same rights a user edit needs."""
+    import pandas as pd
+    from bson.objectid import ObjectId
+
+    import archihub.api.resources.write as write
+    import archihub.api.types.services as types_services
+
+    stored = {"_id": ObjectId(PARENT_ID), "post_type": "fondo", "status": "published",
+              "metadata": {"firstLevel": {"title": "R"}}}
+    monkeypatch.setattr(massive, "_mongo", lambda: _Mongo(stored))
+    monkeypatch.setattr(types_services, "get_metadata", lambda slug: {"fields": [
+        {"destiny": "metadata.firstLevel.title", "type": "text"},
+    ]})
+    calls = []
+
+    def refuse(resource_id, body, user):
+        calls.append((resource_id, user))
+        return {"msg": "denied"}, 403
+
+    monkeypatch.setattr(write, "update", refuse)
+
+    frame = pd.DataFrame([{"id": PARENT_ID, "metadata.firstLevel.title": "R2"}])
+    applied, errors = [], []
+    massive._import_resources(frame, "processor", False, applied, errors)
+
+    assert calls == [(PARENT_ID, "processor")]
+    assert applied == [] and errors[0]["error"] == "denied"
+
+
+@pytest.mark.parametrize("sheet", ["Tipo", "Estandar", "Listado"])
+def test_a_definition_sheet_needs_its_permission(monkeypatch, sheet):
+    import pandas as pd
+
+    import archihub.api.users.services as users
+
+    class Workbook:
+        sheet_names = [sheet]
+
+    monkeypatch.setattr(pd, "ExcelFile", lambda path: Workbook())
+    monkeypatch.setattr(massive, "_rows", lambda *a, **k: pd.DataFrame([{}]))
+    monkeypatch.setattr(users, "has_permission", lambda user, point: False)
+
+    with pytest.raises(PermissionError):
+        massive._import_workbook("x.xlsx", "processor", False, [], [])
