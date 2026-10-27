@@ -261,6 +261,15 @@ def get_tasks_total(user: str) -> int:
     return _mongo().count("tasks", {"user": user})
 
 
+def owns_task(task_id: str, username: str) -> bool:
+    """Whether ``username`` started this task."""
+    task = _mongo().get_record("tasks", {"taskId": task_id}, fields={"user": 1})
+    owner = (task or {}).get("user")
+    if isinstance(owner, list):
+        return username in owner
+    return bool(owner) and owner == username
+
+
 def stop_task(task_id: str, current_user: str) -> tuple[dict, int]:
     """Revoke a running task and mark it failed.
 
