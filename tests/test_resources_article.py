@@ -223,7 +223,7 @@ def test_only_the_article_and_its_audit_fields_are_written(mongo):
     article.update_article_body(
         VALID_ID,
         {
-            "articleBody": [{"id": "b1"}],
+            "articleBody": [{"id": "b1", "type": "paragraph"}],
             "status": "published",
             "accessRights": None,
             "post_type": "otro",
@@ -247,7 +247,7 @@ def test_saving_an_article_fires_the_resource_update_hook(mongo):
     mongo.user = {"accessRights": []}
     mongo.type = {"editRoles": [], "viewRoles": []}
 
-    _payload, status = article.update_article_body(VALID_ID, {"articleBody": [{"id": "b1"}]}, "alice")
+    _payload, status = article.update_article_body(VALID_ID, {"articleBody": [{"id": "b1", "type": "paragraph"}]}, "alice")
 
     assert status == 200
     assert mongo.hooks == [("resource_update", {"_id": VALID_ID, "post_type": "foto"})]
@@ -267,7 +267,7 @@ def test_a_refused_article_save_fires_no_hook(mongo):
     mongo.user = {"accessRights": []}
     mongo.type = {"editRoles": [], "viewRoles": []}
 
-    article.update_article_body(VALID_ID, {"articleBody": [{"id": "b1"}]}, "stranger")
+    article.update_article_body(VALID_ID, {"articleBody": [{"id": "b1", "type": "paragraph"}]}, "stranger")
 
     assert mongo.hooks == []
 
@@ -410,3 +410,27 @@ def test_a_comment_records_who_left_it_and_when(commentable):
 
     assert payload["comment"]["user"] == "alice"
     assert payload["comment"]["createdAt"]
+
+
+@pytest.mark.parametrize(
+    "blocks",
+    [[{"type": "script"}], ["not a block"], [{"id": "b1"}], [{"type": "paragraph"}] * 2001],
+)
+def test_an_article_holds_only_known_blocks_within_limits(mongo, blocks):
+    mongo.resource = resource(createdBy="alice")
+    mongo.user = {"accessRights": []}
+    mongo.type = {"editRoles": [], "viewRoles": []}
+
+    _payload, status = article.update_article_body(VALID_ID, {"articleBody": blocks}, "alice")
+
+    assert status == 400
+
+
+def test_a_binned_resource_has_no_readable_article(mongo):
+    mongo.resource = resource(status="deleted", articleBody=[])
+    mongo.user = {"accessRights": []}
+    mongo.type = {"editRoles": [], "viewRoles": []}
+
+    _payload, status = article.get_article_body(VALID_ID, "alice")
+
+    assert status == 404
