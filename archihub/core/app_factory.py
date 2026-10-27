@@ -336,7 +336,10 @@ def _register_routers(app: FastAPI) -> None:
     # Always mounted. These routes exist on
     # every instance; it is the per-request dependency that 404s them when the
     # instance is not disposable - not their absence from the routing table.
-    include_router(app, test_control_router)
+    # They are documented only where they can answer.
+    include_router(
+        app, test_control_router, include_in_schema=get_settings().archihub_test_mode
+    )
 
     # Plugins LAST, so a plugin can never shadow a core route by declaring a
     # colliding path. Their prefixes are their own slugs, which makes a
