@@ -222,15 +222,14 @@ def test_get_task_ids_returns_oldest_first():
 
 def test_a_task_registered_always_also_runs_when_an_earlier_one_fails(hooks, monkeypatch):
     """It is attached as the chain's error callback as well as its last link."""
-    sent = {"chains": []}
+    sent = {}
 
     class Chain:
         def __init__(self, *sigs):
             sent["chain"] = sigs
-            sent["chains"].append(sigs)
 
         def apply_async(self, **options):
-            sent.setdefault("options", options)
+            sent["options"] = options
 
     monkeypatch.setattr("archihub.core.hooks.chain", Chain)
     monkeypatch.setattr("archihub.api.tasks.services.add_task", lambda *a, **k: None)
@@ -239,10 +238,8 @@ def test_a_task_registered_always_also_runs_when_an_earlier_one_fails(hooks, mon
     hooks.register("resource_update", FakeTask("index.resource", []), queue=101, always=True)
     hooks.call("resource_update", {"_id": "x"})
 
-    assert sent["chains"][0] == ("signature:plugin.process", "signature:index.resource")
+    assert sent["chain"] == ("signature:plugin.process", "signature:index.resource")
     assert sent["options"] == {"link_error": ["signature:index.resource"]}
-    # Also sent on its own, so a plugin queue nobody consumes cannot hold it.
-    assert sent["chains"][1] == ("signature:index.resource",)
 
 
 def test_without_an_always_task_the_chain_has_no_error_callback(hooks, monkeypatch):

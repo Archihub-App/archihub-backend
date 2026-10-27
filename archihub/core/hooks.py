@@ -94,9 +94,7 @@ class HookHandler:
         re-importing or re-instantiating a plugin does not double its effects.
 
         A Celery task registered ``always`` still runs when a task before it in
-        the chain fails: it is also attached as the chain's error callback. When
-        tasks precede it, it is also sent at once on its own, so a queue nobody
-        consumes cannot hold it back.
+        the chain fails: it is also attached as the chain's error callback.
 
         A failure here raises rather than being swallowed: a hook that fails to
         register produces a feature that silently never runs, which is far
@@ -149,7 +147,6 @@ class HookHandler:
         task_signatures = []
         task_names: list[str] = []
         errbacks = []
-        early = []
         always = self.always.get(hook_name, set())
 
         for _, func, reg_args, reg_kwargs in sorted(registrations, key=lambda item: item[0]):
@@ -161,11 +158,6 @@ class HookHandler:
                 task_names.append(func.name)
                 if func.name in always:
                     errbacks.append(func.si(*final_args, **final_kwargs))
-                    if len(task_signatures) > 1:
-                        # Tasks run before it in the chain; if their queue has
-                        # no worker the chain never reaches it, so it also runs
-                        # now, on its own.
-                        early.append((func.si(*final_args, **final_kwargs), func.name))
             else:
                 try:
                     sync_return_value = func(*final_args, **final_kwargs)
@@ -177,8 +169,6 @@ class HookHandler:
 
         if task_signatures:
             self._dispatch_chain(hook_name, task_signatures, task_names, errbacks)
-        for signature, name in early:
-            self._dispatch_chain(hook_name, [signature], [name])
 
         return sync_return_value
 
