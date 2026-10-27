@@ -309,3 +309,18 @@ def test_an_account_without_a_password_cannot_mint_keys(mongo):
     mongo.records["users"] = {"password": ""}
     _payload, status = services.issue_api_key("ldapuser", "anything", "public")
     assert status == 400
+
+
+@pytest.mark.parametrize("username", ["system_scheduler_backup", "System_Scheduler_backup"])
+def test_the_scheduled_task_prefix_cannot_be_registered(username, monkeypatch):
+    from archihub.api.users import services as user_services
+
+    class Untouched:
+        def get_record(self, *a, **k):
+            pytest.fail("must be refused before any lookup")
+
+    monkeypatch.setattr(user_services, "_mongo", lambda: Untouched())
+
+    _payload, status = user_services.register_user({"username": username, "password": "x"})
+
+    assert status == 400

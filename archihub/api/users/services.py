@@ -118,7 +118,12 @@ def register_user(
 
     mongo = _mongo()
 
-    if mongo.get_record("users", {"username": body.get("username")}, {"username": 1}):
+    username = body.get("username")
+    if isinstance(username, str) and username.lower().startswith(SYSTEM_SCHEDULER_PREFIX):
+        # Reserved for the scheduled-task pseudo-users.
+        return {"msg": _("That username is not available")}, 400
+
+    if mongo.get_record("users", {"username": username}, {"username": 1}):
         return {"msg": _("User already exists")}, 400
 
     try:
