@@ -108,6 +108,21 @@ def get_transcription(record_id: str, body: dict = Body(default_factory=dict)) -
     return _respond(public.get_transcription(record_id, slug, body.get("page", 0)))
 
 
+@router.get(
+    "/public/{record_id}/document",
+    responses={200: {"description": "Page count and page aspect ratio"}, **_RESPONSES},
+)
+def get_document(record_id: str) -> JSONResponse:
+    """How many pages a public document has, and the shape of its first page."""
+    record, error = public.load_public(record_id)
+    if error is not None:
+        return _respond(error)
+    try:
+        return JSONResponse(status_code=200, content=viewers.document_detail(record))
+    except viewers.ViewerError as exc:
+        return JSONResponse(status_code=exc.status_code, content={"msg": str(exc)})
+
+
 @router.post(
     "/public/{record_id}/pages",
     responses={
