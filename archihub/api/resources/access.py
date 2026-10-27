@@ -231,6 +231,55 @@ def inherited_access_right(resource: dict, rights_by_id: dict[str, str | None]) 
     return None
 
 
+def may_read_field(field: dict, user: str | None, *, public: bool) -> bool:
+    """Whether this caller may read one form field.
+
+    A field that names access rights is restricted: holding at least one of
+    them is enough, administrators always may, and a public caller never may.
+    """
+    required = field.get("accessRights")
+    if not required:
+        return True
+    if public or not user:
+        return False
+
+    from archihub.api.records.access import holds
+    from archihub.api.users.services import has_role
+
+    return has_role(user, "admin") or holds(user, required)
+
+
+def field_visibility(
+    post_types: list[str], user: str | None, *, public: bool
+) -> tuple[list[dict], set[str]]:
+    """``(readable fields, withheld destinies)`` across the given content types.
+
+    Every field path a caller may name in a listing or a search - a column, a
+    sort key, a filter - must be one of the readable fields. A destiny that is
+    readable in one of the types and withheld in another is withheld.
+    """
+    from archihub.api.types.services import get_metadata
+
+    readable: dict[str, dict] = {}
+    withheld: set[str] = set()
+    for post_type in post_types:
+        try:
+            form = get_metadata(post_type)
+        except Exception:
+            logger.warning("Could not resolve the form for %s", post_type, exc_info=True)
+            continue
+        for field in (form or {}).get("fields") or []:
+            destiny = field.get("destiny")
+            if not isinstance(destiny, str) or not destiny:
+                continue
+            if may_read_field(field, user, public=public):
+                readable.setdefault(destiny, field)
+            else:
+                withheld.add(destiny)
+
+    return [f for d, f in readable.items() if d not in withheld], withheld
+
+
 def may_view_resource(username: str, resource: dict, is_admin: bool) -> bool:
     """Whether this caller may open this resource.
 

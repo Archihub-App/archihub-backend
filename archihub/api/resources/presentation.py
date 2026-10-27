@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime
 import logging
 
+from archihub.api.resources.access import may_read_field
 from archihub.api.resources.validation import get_value_by_path
 from archihub.core.i18n import gettext as _
 
@@ -232,7 +233,7 @@ def build_fields(resource: dict, user: str | None, *, public: bool = False) -> l
         if field.get("type") in SKIPPED_TYPES or not field.get("destiny"):
             continue
 
-        if not _may_read_field(field, user, public=public):
+        if not may_read_field(field, user, public=public):
             rendered.append(
                 {"label": field.get("label"), "value": _(MSG_RESTRICTED), "type": "text"}
             )
@@ -265,23 +266,6 @@ def _render_plugin_field(resource: dict, field: dict, rendered: list[dict]) -> l
         return rendered
 
     return result if isinstance(result, list) else rendered
-
-
-def _may_read_field(field: dict, user: str | None, *, public: bool) -> bool:
-    """Whether this caller may read one restricted field.
-
-    Holding at least one of the field's rights is enough.
-    """
-    required = field.get("accessRights")
-    if not required:
-        return True
-    if public:
-        return False
-
-    from archihub.api.records.access import holds
-    from archihub.api.users.services import has_role
-
-    return has_role(user, "admin") or holds(user, required)
 
 
 #: The kinds ``_render`` draws. Any other kind was contributed by a plugin

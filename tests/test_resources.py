@@ -36,9 +36,20 @@ class FakeMongo:
         return len(self.rows.get(collection, []))
 
 
+#: The fields the stubbed form declares, all readable unless a test says otherwise.
+FORM_FIELDS = (
+    "metadata.firstLevel.date", "metadata.firstLevel.fecha", "metadata.title", "metadata.date",
+)
+
+
 @pytest.fixture
 def mongo(monkeypatch):
     fake = FakeMongo()
+    monkeypatch.setattr(
+        services.access,
+        "field_visibility",
+        lambda post_types, user, public: ([{"destiny": d} for d in FORM_FIELDS], set()),
+    )
     monkeypatch.setattr(services, "_mongo", lambda: fake)
     monkeypatch.setattr(services.access, "_mongo", lambda: fake)
     monkeypatch.setattr(services, "_access_right_term", lambda v: v)
@@ -388,6 +399,72 @@ def test_a_malformed_column_descriptor_is_ignored_not_fatal(mongo, as_admin, mon
 
     assert status == 200
     assert payload["total"] == 0
+
+
+def test_only_readable_form_fields_can_be_columns(mongo, as_admin, monkeypatch):
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    monkeypatch.setattr(
+        services.access,
+        "field_visibility",
+        lambda post_types, user, public: (
+            [{"destiny": "metadata.title"}], {"metadata.secret"}
+        ),
+    )
+    mongo.rows["resources"] = []
+
+    services.get_all(
+        {
+            "post_type": ["x"],
+            "activeColumns": _columns("metadata.title", "metadata.secret", "createdBy"),
+            "sortBy": "metadata.secret",
+        },
+        None,
+    )
+
+    assert mongo.last_fields["metadata.title"] == 1
+    assert "metadata.secret" not in mongo.last_fields
+    assert "createdBy" not in mongo.last_fields
+
+
+def test_a_listing_is_not_sorted_by_a_withheld_field(mongo, as_admin, monkeypatch):
+    monkeypatch.setattr(services, "can_view_type", lambda u, pt: True)
+    monkeypatch.setattr(
+        services.access,
+        "field_visibility",
+        lambda post_types, user, public: ([], {"metadata.secret"}),
+    )
+    seen = {}
+    original = mongo.get_all_records
+
+    def recording(collection, filters=None, sort=None, **kwargs):
+        seen["sort"] = sort
+        return original(collection, filters, sort=sort, **kwargs)
+
+    mongo.get_all_records = recording
+    mongo.rows["resources"] = []
+
+    services.get_all({"post_type": ["x"], "sortBy": "metadata.secret"}, None)
+
+    assert seen["sort"] == [("createdAt", 1)]
+
+
+def test_a_public_caller_never_reads_a_restricted_field(monkeypatch):
+    from archihub.api.resources import access
+    from archihub.api.types import services as types_services
+
+    monkeypatch.setattr(
+        types_services,
+        "get_metadata",
+        lambda slug: {"fields": [
+            {"destiny": "metadata.title", "type": "text"},
+            {"destiny": "metadata.secret", "type": "text", "accessRights": ["reserved"]},
+        ]},
+    )
+
+    readable, withheld = access.field_visibility(["x"], None, public=True)
+
+    assert [f["destiny"] for f in readable] == ["metadata.title"]
+    assert withheld == {"metadata.secret"}
 
 
 # ---------------------------------------------------------------------------

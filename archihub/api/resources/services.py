@@ -38,6 +38,9 @@ PAGE_SIZE = 20
 # structural or rendered separately.
 _NON_METADATA_COLUMNS = {"", "createdAt", "ident", "files", "accessRights"}
 
+#: Fields outside the form a listing may be sorted by.
+SORTABLE_BASE_FIELDS = ("createdAt", "updatedAt", "ident")
+
 
 def _column_names(active_columns) -> list[str]:
     """The metadata field paths a listing request asked to display.
@@ -173,7 +176,11 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
             if not can_view_type(user, post_type):
                 return {"msg": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
 
-        active_columns = _column_names(body.get("activeColumns"))
+        readable, _withheld = access.field_visibility(post_types, user, public=user is None)
+        readable_paths = {field["destiny"] for field in readable}
+        # Only a field the form declares, and this caller may read, can be
+        # displayed or sorted by.
+        active_columns = [c for c in _column_names(body.get("activeColumns")) if c in readable_paths]
 
         base: dict = {"post_type": {"$in": post_types}}
         if body.get("parents"):
@@ -208,6 +215,10 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
 
         page = int(body.get("page") or 0)
         sort_by = body.get("sortBy") or "createdAt"
+        if not isinstance(sort_by, str) or (
+            sort_by not in SORTABLE_BASE_FIELDS and sort_by not in readable_paths
+        ):
+            sort_by = "createdAt"
         direction = 1 if (body.get("sortOrder") or "asc") == "asc" else -1
 
         mongo = _mongo()

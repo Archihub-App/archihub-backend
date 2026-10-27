@@ -87,31 +87,21 @@ def access_rights_for(user: str | None) -> list[str]:
     return [*user_access_rights(user), PUBLIC_RIGHT]
 
 
-def _declared_fields(post_types: list[str]) -> tuple[set[str], set[str]]:
-    """``(every declared field, those that are text)`` across the requested types.
+def _declared_fields(
+    post_types: list[str], user: str | None, public: bool
+) -> tuple[set[str], set[str], set[str]]:
+    """``(readable fields, those that are text, withheld fields)``.
 
-    Drives both the `_source` allowlist and which sort fields need `.keyword`.
+    Across the requested types, for this caller. Drives the `_source`
+    allowlist, the fields a keyword, a filter or a sort may name, and which sort
+    fields need `.keyword`.
     """
-    from archihub.api.types.services import get_metadata
+    from archihub.api.resources.access import field_visibility
 
-    declared: set[str] = set()
-    text: set[str] = set()
-
-    for post_type in post_types:
-        try:
-            form = get_metadata(post_type)
-        except Exception:
-            logger.warning("Could not resolve the form for %s", post_type, exc_info=True)
-            continue
-        for field in (form or {}).get("fields") or []:
-            destiny = field.get("destiny")
-            if not destiny:
-                continue
-            declared.add(destiny)
-            if field.get("type") in ("text", "text-area"):
-                text.add(destiny)
-
-    return declared, text
+    readable, withheld = field_visibility(post_types, user, public=public)
+    declared = {field["destiny"] for field in readable}
+    text = {field["destiny"] for field in readable if field.get("type") in ("text", "text-area")}
+    return declared, text, withheld
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +134,7 @@ def search(body: dict, user: str | None, *, public: bool) -> tuple[dict, int]:
             # these types. 403 rather than a server error.
             return {"msg": error}, ROLE_FAILURE_STATUS
 
-        declared, sortable_text = _declared_fields(allowed)
+        declared, sortable_text, withheld = _declared_fields(allowed, user, public)
         statuses = query_builder.resolve_status(
             body.get("status"),
             public=public,
@@ -157,6 +147,7 @@ def search(body: dict, user: str | None, *, public: bool) -> tuple[dict, int]:
             access_rights=access_rights_for(user),
             declared_fields=declared,
             sortable_text_fields=sortable_text,
+            withheld_fields=withheld,
         )
     except query_builder.InvalidSearch as exc:
         return {"msg": str(exc)}, 400
