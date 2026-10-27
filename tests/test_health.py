@@ -260,3 +260,27 @@ def test_a_readiness_answer_is_reused_briefly(monkeypatch):
 
     services.cached_readiness(max_age=0)
     assert len(calls) == 2
+
+
+def test_a_queue_no_worker_consumes_is_reported(monkeypatch):
+    from types import SimpleNamespace
+
+    from archihub.worker import celery_app as worker
+
+    class Control:
+        def ping(self, timeout):
+            return [{"w1": "pong"}]
+
+        def inspect(self, timeout):
+            return SimpleNamespace(active_queues=lambda: {"w1": [{"name": "celery"}]})
+
+    fake = SimpleNamespace(
+        control=Control(),
+        tasks={"a": SimpleNamespace(queue="high"), "b": SimpleNamespace(queue=None)},
+    )
+    monkeypatch.setattr(worker, "celery_app", fake)
+
+    state, error = services.check_celery()
+
+    assert state == services.DEGRADED
+    assert "high" in error

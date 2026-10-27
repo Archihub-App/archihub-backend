@@ -114,6 +114,24 @@ def check_qdrant(index_management: dict | None = None) -> tuple[bool | str, str 
         return False, UNREACHABLE
 
 
+#: Running, but some declared work has nowhere to run.
+DEGRADED = "degraded"
+
+
+def _queues_without_workers(celery_app) -> list[str]:
+    """Queues a registered task is sent to that no running worker consumes."""
+    declared = {
+        task.queue
+        for task in celery_app.tasks.values()
+        if isinstance(getattr(task, "queue", None), str) and task.queue
+    }
+    if not declared:
+        return []
+    active = celery_app.control.inspect(timeout=1.0).active_queues() or {}
+    consumed = {queue.get("name") for queues in active.values() for queue in queues or []}
+    return sorted(declared - consumed)
+
+
 def check_celery() -> tuple[bool | str, str | None]:
     try:
         from archihub.worker.celery_app import celery_app
@@ -121,6 +139,11 @@ def check_celery() -> tuple[bool | str, str | None]:
         pings = celery_app.control.ping(timeout=1.0)
         if not pings:
             return False, "No Celery worker responded"
+        unconsumed = _queues_without_workers(celery_app)
+        if unconsumed:
+            # A job sent to one of these waits forever - and so does every task
+            # chained after it, the search index included.
+            return DEGRADED, "No worker consumes the queue(s): " + ", ".join(unconsumed)
         return True, None
     except Exception:
         logger.warning("Celery readiness check failed", exc_info=True)
