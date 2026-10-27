@@ -18,6 +18,7 @@ from bson.objectid import ObjectId
 
 from archihub.core.clock import utcnow
 from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
@@ -91,19 +92,82 @@ def process_comments(comments) -> str:
     return "\n---------------\n".join(lines)
 
 
+#: The roles review work can be assigned to; ``get_editors`` lists them.
+ASSIGNABLE_ROLES = ["editor", "transcriber"]
+
+
+def may_open_target(target_field: str, target_value: str, user: str) -> bool:
+    """Whether ``user`` may open the resource or record a task is about.
+
+    The resources and records routes' own rules; a target that does not exist
+    cannot be opened.
+    """
+    if target_field == "recordId":
+        from archihub.api.records.services import load_visible
+
+        _record, error = load_visible(target_value, user)
+        return error is None
+
+    from archihub.api.resources.access import may_view_resource
+    from archihub.api.resources.services import can_view_type
+    from archihub.api.users.services import has_role
+
+    object_id = _to_object_id(target_value)
+    if object_id is None:
+        return False
+    resource = _mongo().get_record(
+        "resources",
+        {"_id": object_id},
+        fields={"post_type": 1, "status": 1, "accessRights": 1, "parents": 1},
+    )
+    if not resource:
+        return False
+    is_admin = has_role(user, "admin")
+    if resource.get("status") == "deleted" and not is_admin:
+        return False
+    return may_view_resource(user, resource, is_admin) and can_view_type(
+        user, resource.get("post_type")
+    )
+
+
+def _is_assignable(username: str) -> bool:
+    if not username:
+        return False
+    return bool(
+        _mongo().get_record(
+            "users", {"username": username, "roles": {"$in": ASSIGNABLE_ROLES}}, fields={"_id": 1}
+        )
+    )
+
+
 # ---------------------------------------------------------------------------
 # Reads
 # ---------------------------------------------------------------------------
 
 
-def get_resource_tasks(resource_id: str) -> tuple[dict, int]:
+def get_resource_tasks(resource_id: str, user: str) -> tuple[dict, int]:
+    return _open_task("resourceId", resource_id, user, _("There are no tasks for this resource"))
+
+
+def get_record_tasks(record_id: str, user: str) -> tuple[dict, int]:
+    return _open_task("recordId", record_id, user, _("There are no tasks for this record"))
+
+
+def _open_task(target_field: str, target_value: str, user: str, missing: str) -> tuple[dict, int]:
+    """The open task on a target, for someone taking part in it or managing tasks.
+
+    Anyone else - and anyone who may not open the target - is told there is no
+    task, as when there is none.
+    """
     task = _mongo().get_record(
         COLLECTION,
-        {"resourceId": resource_id, "status": {"$in": OPEN_STATUSES}},
+        {target_field: target_value, "status": {"$in": OPEN_STATUSES}},
     )
-    if not task:
+    if not task or not _may_read_task(task, user) or not may_open_target(
+        target_field, target_value, user
+    ):
         # `msg`, not `error` - see the module docstring.
-        return {"msg": _("There are no tasks for this resource")}, 404
+        return {"msg": missing}, 404
 
     task["_id"] = str(task["_id"])
     task["createdAt"] = _iso(task.get("createdAt"))
@@ -111,19 +175,21 @@ def get_resource_tasks(resource_id: str) -> tuple[dict, int]:
     return task, 200
 
 
-def get_record_tasks(record_id: str) -> tuple[dict, int]:
-    task = _mongo().get_record(
-        COLLECTION,
-        {"recordId": record_id, "status": {"$in": OPEN_STATUSES}},
-    )
-    if not task:
-        # `msg`, not `error` - see the module docstring.
-        return {"msg": _("There are no tasks for this record")}, 404
+def _may_read_task(task: dict, user: str) -> bool:
+    """The assignee, the creator, a commenter, or a task manager."""
+    from archihub.api.users.services import has_permission, has_role
 
-    task["_id"] = str(task["_id"])
-    task["createdAt"] = _iso(task.get("createdAt"))
-    task["comment"] = process_comments(task.get("comment"))
-    return task, 200
+    participants = {task.get("user"), task.get("createdBy")}
+    participants.update(
+        c.get("user") for c in task.get("comment") or [] if isinstance(c, dict)
+    )
+    if user in participants:
+        return True
+    return (
+        has_role(user, "admin")
+        or has_role(user, "team_lead")
+        or has_permission(user, "usertasks.manage")
+    )
 
 
 def get_all_tasks(filters: dict) -> tuple[dict, int]:
@@ -147,7 +213,9 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
         else:
             query["user"] = {"$exists": True}
 
-        page = int(filters.get("page") or 0)
+        page = page_number(filters.get("page"))
+        if page is None:
+            return {"error": _('"{field}" must be a number', field="page")}, 400
         mongo = _mongo()
 
         tasks = list(
@@ -189,7 +257,7 @@ def get_editors() -> tuple[list | dict, int]:
         editors = list(
             _mongo().get_all_records(
                 "users",
-                {"roles": {"$in": ["editor", "transcriber"]}},
+                {"roles": {"$in": ASSIGNABLE_ROLES}},
                 fields={"name": 1, "username": 1, "_id": 0},
             )
         )
@@ -229,6 +297,11 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         target_field = "resourceId" if resource_id else "recordId"
         target_value = resource_id or record_id
 
+        if not may_open_target(target_field, target_value, user):
+            return {"error": _("Resource does not exist")}, 404
+        if not _is_assignable(body["user"].strip()):
+            return {"error": _("user is required")}, 400
+
         if mongo.get_record(COLLECTION, {target_field: target_value, "status": {"$in": OPEN_STATUSES}}):
             message = (
                 _("There is already a task for this resource")
@@ -240,7 +313,7 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         now = utcnow()
         record = {
             target_field: target_value,
-            "user": body["user"],
+            "user": body["user"].strip(),
             "createdBy": user,
             "status": STATUS_PENDING,
             "createdAt": now,

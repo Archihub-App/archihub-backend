@@ -341,3 +341,40 @@ def test_a_boundary_name_is_stripped_before_it_is_capitalised(tmp_path, monkeypa
     stored = captured[0]
     name = (stored.properties if hasattr(stored, "properties") else stored["properties"])["name"]
     assert name == "Silvania"
+
+
+def test_a_level_split_across_files_keeps_every_file(tmp_path, monkeypatch):
+    pytest.importorskip("geopandas")
+    folder = tmp_path / "admin_0"
+    folder.mkdir()
+    for index, ident in enumerate(("A", "B")):
+        (folder / f"part{index}.json").write_text(json.dumps({
+            "type": "FeatureCollection",
+            "features": [{
+                "type": "Feature",
+                "properties": {"ident": ident, "name": ident},
+                "geometry": {"type": "Polygon",
+                             "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
+            }],
+        }))
+    stored, cleared = [], []
+
+    class _Mongo:
+        def delete_records(self, _collection, filters):
+            cleared.append(filters)
+            stored.clear()
+
+        def insert_records(self, _collection, documents):
+            stored.extend(documents)
+
+        def get_all_records(self, *a, **k):
+            return []
+
+    monkeypatch.setattr(services, "_mongo", lambda: _Mongo())
+    monkeypatch.setattr(services, "geo_data_directory", lambda: tmp_path)
+    monkeypatch.setattr(services, "_register_log", lambda *a, **k: None, raising=False)
+
+    services.upload_shapes()
+
+    assert len(stored) == 2
+    assert cleared == [{"properties.admin_level": 0}]

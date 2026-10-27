@@ -110,6 +110,8 @@ def update_files_order(resource_id: str, body: dict, user: str) -> tuple[dict, i
     )
 
     _audit(user, "resource_files_order_update", {"resource": resource_id, "files_order": body.get("files")})
+    # The search document lists the files in order.
+    _call_hook("resource_update", {"_id": str(resource_id), "post_type": resource.get("post_type")})
 
     return {"msg": _("Files order updated")}, 200
 

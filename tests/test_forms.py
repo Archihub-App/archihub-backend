@@ -474,3 +474,19 @@ def test_an_unexpected_failure_is_still_a_500_with_its_traceback(mongo, monkeypa
     payload, status = services.create({"name": "Test", "fields": []}, "admin")
 
     assert status == 500
+
+
+def test_a_field_may_only_name_an_installed_plugin(monkeypatch):
+    """The browser fetches and runs code from that plugin's route."""
+    from archihub.api.forms import services as form_services
+    from archihub.core.errors import ValidationError
+    from archihub.plugins.framework import discovery
+
+    monkeypatch.setattr(discovery, "list_installed_plugins", lambda: ["canvasPlugin"])
+    title = {"label": "T", "destiny": "metadata.firstLevel.title", "type": "text"}
+    canvas = {"label": "C", "destiny": "metadata.c", "type": "canvas_form_field"}
+
+    with pytest.raises(ValidationError):
+        form_services.validate_form({"fields": [title, {**canvas, "plugin": "records/public/x"}]})
+
+    form_services.validate_form({"fields": [title, {**canvas, "plugin": "canvasPlugin"}]})

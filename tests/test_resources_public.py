@@ -129,6 +129,7 @@ def record(record_id, name, access_rights=None, kind="document"):
         "accessRights": access_rights,
         "filepath": f"2024/{name}",
         "processing": {"fileProcessing": {"type": kind, "path": f"2024/{name}"}},
+        "parent": [{"id": RESOURCE_ID, "post_type": "carpeta"}],
     }
 
 
@@ -294,10 +295,27 @@ def test_an_archive_excludes_files_the_caller_may_not_see(mongo, media_root):
         ]
     )
 
+    mongo.resources[RESOURCE_ID] = subject
+
     response = files.bulk_download(subject, "original", None, public=True)
 
     with zipfile.ZipFile(response.path) as archive:
         assert sorted(archive.namelist()) == ["also-open.pdf", "open.pdf"]
+
+
+def test_a_file_also_filed_under_a_reserved_resource_is_not_public(mongo, media_root):
+    reserved_parent = "6a70b833497d4440325c94d9"
+    _place(media_root, "shared.pdf")
+    shared = record(OPEN_FILE, "shared.pdf")
+    shared["parent"].append({"id": reserved_parent, "post_type": "carpeta"})
+    mongo.records[OPEN_FILE] = shared
+    mongo.resources[reserved_parent] = resource(
+        _id=ObjectId(reserved_parent), accessRights="reserved"
+    )
+    subject = resource()
+    mongo.resources[RESOURCE_ID] = subject
+
+    assert files._may_see(shared, None, public=True) is False
 
 
 def test_an_archive_entry_name_cannot_escape_the_extraction_directory(mongo, media_root):

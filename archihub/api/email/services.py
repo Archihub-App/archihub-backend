@@ -19,14 +19,16 @@ from email.message import EmailMessage
 
 logger = logging.getLogger(__name__)
 
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.example.com")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
+# An empty value counts as unset: a compose file forwards every variable it
+# names, set or not.
+EMAIL_HOST = os.environ.get("EMAIL_HOST") or "smtp.example.com"
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT") or 587)
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER") or None
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD") or None
 EMAIL_USE_TLS = str(os.environ.get("EMAIL_USE_TLS", "")).strip().lower() in {
     "1", "true", "yes", "on",
 }
-EMAIL_TIMEOUT = float(os.environ.get("EMAIL_TIMEOUT", 15))
+EMAIL_TIMEOUT = float(os.environ.get("EMAIL_TIMEOUT") or 15)
 
 EMAIL_FROM = os.environ.get("EMAIL_ADDRESS") or EMAIL_HOST_USER or "no-reply@archihub"
 

@@ -297,23 +297,43 @@ def change_plugin_status(
 )
 def get_actions(
     body: dict = Body(...),
-    current_user: CurrentUser = Depends(
-        require_role_any("admin", "processing", "editor")
-    ),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> JSONResponse:
-    """Which plugin actions to offer at one place in the interface.
+    """Which plugin actions this caller is offered at one place in the interface.
+
+    Each action states the roles that may run it; an action that states none is
+    offered to ``DEFAULT_ACTION_ROLES``. The plugin's own route checks again.
 
     Read from the plugins THIS PROCESS MOUNTED, not by re-importing every active
     plugin package on each request, so a plugin that fails to import cannot turn a
     menu into a 500.
     """
+    from archihub.api.users.services import has_role
     from archihub.plugins.framework.mounting import system_actions
 
     placement = body.get("placement")
     if not isinstance(placement, str) or not placement:
         return json_response({"msg": _("You must specify a {field}", field="placement")}, 400)
 
-    return json_response({"actions": system_actions(placement)}, 200)
+    username = current_user.username
+    is_admin = has_role(username, "admin")
+    offered = [
+        action for action in system_actions(placement)
+        if is_admin
+        or any(has_role(username, role) for role in _action_roles(action))
+    ]
+    return json_response({"actions": offered}, 200)
+
+
+#: Who is offered an action that does not state its own roles.
+DEFAULT_ACTION_ROLES = ("admin", "processing", "editor")
+
+
+def _action_roles(action: dict) -> tuple[str, ...]:
+    roles = action.get("roles")
+    if isinstance(roles, list) and roles and all(isinstance(r, str) for r in roles):
+        return tuple(roles)
+    return DEFAULT_ACTION_ROLES
 
 
 # ---------------------------------------------------------------------------

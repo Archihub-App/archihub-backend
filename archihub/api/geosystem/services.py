@@ -351,6 +351,9 @@ def upload_shapes(user: str | None = None) -> tuple[dict, int]:
     try:
         loaded = 0
         for level, folder in _boundary_levels(directory):
+            # A level may be split across several files; it is cleared once,
+            # before the first, so each file adds to it.
+            _mongo().delete_records(COLLECTION, {"properties.admin_level": level})
             for path in sorted(folder.iterdir()):
                 if path.suffix != ".json":
                     continue
@@ -466,7 +469,7 @@ def _repair_invalid_geometries(features, source_name: str, gpd):
 
 
 def _load_boundary_file(path, level: int) -> int:
-    """Replace one administrative level from one GeoJSON file."""
+    """Add one GeoJSON file's features to an administrative level."""
     import json
 
     import geopandas as gpd
@@ -493,7 +496,6 @@ def _load_boundary_file(path, level: int) -> int:
     features = _repair_invalid_geometries(features, path.name, gpd)
 
     mongo = _mongo()
-    mongo.delete_records(COLLECTION, {"properties.admin_level": level})
 
     if level > 0:
         _attach_parents(features, level, gpd)

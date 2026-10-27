@@ -45,7 +45,7 @@ def live() -> JSONResponse:
 )
 def ready() -> JSONResponse:
     """Checks connectivity with MongoDB, Redis, Elasticsearch, Qdrant and Celery."""
-    payload, status_code = services.get_readiness()
+    payload, status_code = services.cached_readiness()
     return JSONResponse(status_code=status_code, content=payload)
 
 

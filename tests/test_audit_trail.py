@@ -122,6 +122,10 @@ class FakeMongo:
         self.inserted.append((collection, record))
         return SimpleNamespace(inserted_id=ObjectId(VALID_ID))
 
+    def update_record_operator(self, collection, filters, operator, **kwargs):
+        self.operators = getattr(self, "operators", [])
+        self.operators.append((collection, filters, operator))
+
     def update_record(self, collection, filters, update):
         self.updated.append((collection, filters, update))
         return SimpleNamespace(modified_count=1)
@@ -370,6 +374,8 @@ def test_assigning_and_approving_a_review_task_are_recorded(audit_log, monkeypat
 
     fake = FakeMongo()
     monkeypatch.setattr(services, "_mongo", lambda: fake)
+    monkeypatch.setattr(services, "may_open_target", lambda field, value, user: True)
+    monkeypatch.setattr(services, "_is_assignable", lambda username: True)
 
     services.create_task({"resourceId": "r1", "user": "ed", "comment": "check it"}, "lead")
     created = audit_log[-1]

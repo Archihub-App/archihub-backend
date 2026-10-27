@@ -32,7 +32,7 @@ import json
 import logging
 from typing import Any, Callable, Iterable, Sequence
 
-from fastapi import APIRouter, Depends, Form
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
 from archihub.core.i18n import gettext as _
@@ -314,6 +314,7 @@ class ArchiPlugin:
         )
         def set_settings(
             data: str = Form(...),
+            files: list[UploadFile] | None = File(None),
             current_user: CurrentUser = Depends(require_roles(*plugin.settings_roles)),
         ) -> JSONResponse:
             """Save this plugin's settings.
@@ -329,6 +330,11 @@ class ArchiPlugin:
 
             if not isinstance(parsed, dict):
                 return json_response({"msg": _("Invalid settings payload")}, 400)
+
+            if files:
+                # Settings are stored as data; no plugin setting holds a file. A
+                # file sent anyway is refused rather than silently dropped.
+                return json_response({"msg": _("These settings do not accept files")}, 400)
 
             payload, status_code = plugin.save_settings(parsed)
             return json_response(payload, status_code)
@@ -378,14 +384,12 @@ class BrokerUnavailable(RuntimeError):
 def task_result_file(task_id: str, user: str, *, is_admin: bool) -> tuple[Any, int]:
     """Resolve a completed task's downloadable result.
 
-    Shared by ``liquidText``, ``inventoryMaker`` and ``massiveUpdater``, which
-    each had their own near-identical copy of this — and each got a different
-    subset of the checks right. Returns ``(path, 200)`` or ``(payload, status)``.
+    The one implementation every plugin's file download uses. Returns
+    ``(path, 200)`` or ``(payload, status)``.
 
-    THE PATH COMES OUT OF THE DATABASE AND IS RESOLVED, NOT CONCATENATED. The
-    originals did ``USER_FILES_PATH + task['result']``, and `result` is whatever
-    the task stored — so a task whose result began with `../` served a file from
-    outside the user files root.
+    THE STORED PATH IS RESOLVED WITHIN THE USER FILES ROOT, NEVER CONCATENATED
+    onto it: ``result`` is whatever the task stored, and a path that resolves
+    outside the root is refused.
     """
     from pathlib import Path
 
@@ -432,9 +436,8 @@ def as_response(result: tuple[Any, int]) -> JSONResponse:
 def object_ids(values: Iterable[Any], field: str) -> list:
     """Convert client-supplied ids, refusing the malformed rather than raising.
 
-    Every plugin task did ``[ObjectId(x) for x in body['records']]`` inline, so
-    one malformed id raised ``InvalidId`` inside a Celery task and the whole job
-    was recorded as failed with a bson message.
+    A malformed id is refused with a message naming the field, before any work
+    is queued - never an ``InvalidId`` raised inside a task.
     """
     from bson.errors import InvalidId
     from bson.objectid import ObjectId

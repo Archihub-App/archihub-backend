@@ -39,6 +39,10 @@ def include_router(app: FastAPI, router: APIRouter, **kwargs: object) -> None:
     complete. ``kwargs`` is forwarded verbatim.
     """
     app.include_router(router, **kwargs)
+    if kwargs.get("include_in_schema") is False:
+        # Undocumented, and so not part of the inventory either - the two are
+        # compared route for route.
+        return
 
     registry: list[tuple[APIRouter, str]] = getattr(app.state, _REGISTRY_ATTR, None) or []
     registry.append((router, str(kwargs.get("prefix", ""))))

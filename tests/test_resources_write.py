@@ -434,6 +434,22 @@ def test_deleting_retires_the_files_nothing_else_holds(mongo):
     assert mongo.records[RECORD_ID]["parent"] == []
 
 
+def test_a_descendants_files_follow_it_into_the_recycle_bin(mongo):
+    mongo.resources[RESOURCE_ID] = resource()
+    mongo.resources[CHILD_ID] = resource(
+        _id=ObjectId(CHILD_ID), parent=[{"id": RESOURCE_ID, "post_type": "carpeta"}],
+        filesObj=[{"id": RECORD_ID, "tag": "file"}],
+    )
+    mongo.records[RECORD_ID] = {
+        "_id": ObjectId(RECORD_ID), "status": "uploaded",
+        "parent": [{"id": CHILD_ID, "post_type": "carpeta"}],
+    }
+
+    write.delete([RESOURCE_ID], "alice")
+
+    assert mongo.records[RECORD_ID]["status"] == "deleted"
+
+
 def test_a_file_held_by_another_resource_survives(mongo):
     """Deduplication means one record can belong to several resources; only the
     last reference going away retires it."""
@@ -667,3 +683,31 @@ def test_an_update_may_leave_a_resource_where_someone_else_filed_it(mongo):
     _payload, status = write.update(CHILD_ID, body(parent=_under(RESOURCE_ID)), "alice")
 
     assert status == 200
+
+
+def test_an_update_cannot_change_the_content_type(mongo):
+    """Changing type has its own route and its own checks."""
+    mongo.resources[RESOURCE_ID] = resource()
+    stored_type = mongo.resources[RESOURCE_ID]["post_type"]
+
+    _payload, status = write.update(RESOURCE_ID, body(post_type=stored_type + "-other"), "alice")
+
+    assert status == 400
+    assert mongo.resources[RESOURCE_ID]["post_type"] == stored_type
+
+
+def test_a_relation_change_reindexes_the_other_side(related, monkeypatch):
+    fired = []
+    def record(name, payload):
+        fired.append((name, payload))
+        return payload
+
+    monkeypatch.setattr(write, "_call_hook", record)
+    related.resources[RESOURCE_ID] = resource(
+        metadata={"firstLevel": {"title": "A"}, "related": [{"id": CHILD_ID}]}
+    )
+    related.resources[CHILD_ID]["metadata"]["related"] = [{"id": RESOURCE_ID}]
+
+    write.update(RESOURCE_ID, body(metadata={"firstLevel": {"title": "A"}}), "alice")
+
+    assert ("resources_update_by_filter", {"_id": {"$in": [CHILD_ID]}}) in fired

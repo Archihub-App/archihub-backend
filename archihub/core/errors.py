@@ -141,10 +141,13 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
-        # The whole point: full detail to the log, nothing to the client.
-        logger.exception(
-            "Unhandled exception on %s %s", request.method, request.url.path
+    async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
+        # The whole point: full detail to the log, nothing to the client. The
+        # exception is passed explicitly, and the handler is a coroutine: run
+        # in a worker thread, it would see neither the exception being handled
+        # nor the request's log context.
+        logger.error(
+            "Unhandled exception on %s %s", request.method, request.url.path, exc_info=exc
         )
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

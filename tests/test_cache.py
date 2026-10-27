@@ -387,10 +387,12 @@ DECLARED = {
     ("archihub.api.users.services", "has_right"): ("users", "system"),
     # The roles come from `users` through `has_role`, the configured ones from `system`.
     ("archihub.api.users.services", "has_permission"): ("users", "system"),
+    ("archihub.api.users.services", "session_version"): ("users",),
     ("archihub.core.permissions", "get_mappings"): ("system",),
     ("archihub.core.roles", "get_roles"): ("system", "lists"),
     ("archihub.core.roles", "get_access_rights"): ("system", "lists"),
     ("archihub.api.system.storage", "catalogued_files"): ("records",),
+    ("archihub.api.system.storage", "_measured_report"): ("records",),
     ("archihub.api.lists.services", "_resolved_list"): ("lists", "options"),
     # Reads only `resources`; the caller's rights are applied after the cache.
     ("archihub.api.resources.access", "restricted_ancestors"): ("resources",),

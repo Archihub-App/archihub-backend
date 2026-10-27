@@ -164,7 +164,8 @@ def _load_records(ids: list[str], group_images: bool) -> list[dict]:
             filters,
             fields={
                 "name": 1, "size": 1, "accessRights": 1, "displayName": 1,
-                "processing.fileProcessing.type": 1, "hash": 1,
+                "processing.fileProcessing.type": 1, "hash": 1, "parent": 1, "temporary": 1,
+                "createdBy": 1, "updatedBy": 1,
             },
         )
     )
@@ -199,17 +200,16 @@ def _describe(record: dict, entry: dict, user: str | None, *, public: bool) -> d
 
 
 def _may_see(record: dict, user: str | None, *, public: bool) -> bool:
+    """The records domain's rule: the record's own right and every resource it
+    is filed under."""
     from archihub.api.records import access
 
-    required = record.get("accessRights")
-    if not required:
-        return True
     if public:
-        return False
+        return access.is_public(record)
 
     from archihub.api.users.services import has_role
 
-    return has_role(user, "admin") or access.holds(user, required)
+    return access.may_view_record(user, record, has_role(user, "admin"))
 
 
 def _gallery_entry(entries: list[dict]) -> dict | None:
@@ -306,6 +306,7 @@ def _downloadable(entries: list[dict], user: str | None, *, public: bool) -> lis
             fields={
                 "name": 1, "displayName": 1, "accessRights": 1, "filepath": 1,
                 "processing.fileProcessing.type": 1, "processing.fileProcessing.path": 1,
+                "parent": 1, "temporary": 1, "createdBy": 1, "updatedBy": 1,
             },
         )
     )

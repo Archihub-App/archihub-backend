@@ -150,7 +150,10 @@ def test_promote_temporary_record_moves_file_and_updates_status(mongo):
     assert orig_path.is_file()
 
 
-def test_promote_temporary_record_deduplicates_with_existing_permanent(mongo):
+def test_promote_temporary_record_deduplicates_with_existing_permanent(mongo, monkeypatch):
+    # The uploader may see the existing record; see test_records_temporary_promotion
+    # for when they may not.
+    monkeypatch.setattr(storage, "_may_reuse", lambda record, user: True)
     content = b"same duplicate bytes"
     # Existing permanent record
     perm_attached = storage.attach_files(RESOURCE_ID, [upload(content, "original.jpg")], "alice")

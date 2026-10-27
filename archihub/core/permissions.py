@@ -72,7 +72,8 @@ _CATALOGUE = (
     Point(
         "access_rights.read", "system",
         "Read the access-rights vocabulary, as the cataloguing forms do",
-        ("admin", "editor"),
+        # Whoever catalogues: a content type's edit roles may be any of these.
+        ("admin", "editor", "super_editor", "publisher", "processing", "team_lead", "transcriber"),
     ),
     # Resources
     Point(

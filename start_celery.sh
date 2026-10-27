@@ -26,23 +26,39 @@ trap restart_child HUP
 trap stop_child TERM INT
 
 # -------- WAIT FOR ELASTICSEARCH --------
-echo "Waiting for Elasticsearch to be healthy..."
+# Bounded: an instance with indexing switched off, or a cluster that is slow to
+# come up, must still start. The application reports an unreachable cluster on
+# /health/ready rather than refusing to run.
+ELASTIC_WAIT_SECONDS="${ELASTIC_WAIT_SECONDS:-300}"
 
-if [ -n "${ELASTIC_CERT:-}" ]; then
-  echo "Using certificate authentication for Elasticsearch"
-  
-  until curl -s -f -u "${ELASTIC_USER}:${ELASTIC_PASSWORD}" "${ELASTIC_DOMAIN}:${ELASTIC_PORT}/_cluster/health?wait_for_status=yellow&timeout=1s" --cacert "$ELASTIC_CERT"; do
+wait_for_elasticsearch() {
+  if [ -z "${ELASTIC_DOMAIN:-}" ]; then
+    echo "ELASTIC_DOMAIN is not set; not waiting for Elasticsearch"
+    return
+  fi
+
+  local url="${ELASTIC_DOMAIN}:${ELASTIC_PORT:-9200}/_cluster/health?wait_for_status=yellow&timeout=1s"
+  local auth=(-u "${ELASTIC_USER:-}:${ELASTIC_PASSWORD:-}")
+  local cert=()
+  if [ -n "${ELASTIC_CERT:-}" ]; then
+    echo "Using certificate authentication for Elasticsearch"
+    cert=(--cacert "${ELASTIC_CERT}")
+  fi
+
+  echo "Waiting up to ${ELASTIC_WAIT_SECONDS}s for Elasticsearch to be healthy..."
+  local waited=0
+  until curl -s -f "${auth[@]}" "${cert[@]}" "$url" >/dev/null; do
+    if [ "$waited" -ge "$ELASTIC_WAIT_SECONDS" ]; then
+      >&2 echo "Elasticsearch is still unavailable; starting without it"
+      return
+    fi
     >&2 echo "Elasticsearch is unavailable - sleeping"
     sleep 5
+    waited=$((waited + 5))
   done
-else
-  echo "Using standard authentication for Elasticsearch"
-  
-  until curl -s -f -u "${ELASTIC_USER}:${ELASTIC_PASSWORD}" "${ELASTIC_DOMAIN}:${ELASTIC_PORT}/_cluster/health?wait_for_status=yellow&timeout=1s"; do
-    >&2 echo "Elasticsearch is unavailable - sleeping"
-    sleep 5
-  done
-fi
+}
+
+wait_for_elasticsearch
 
 echo "Elasticsearch is up!"
 

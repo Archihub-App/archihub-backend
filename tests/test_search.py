@@ -603,7 +603,7 @@ def test_the_cluster_error_text_is_not_returned_to_the_caller(monkeypatch):
 
     monkeypatch.setattr(services, "indexing_enabled", lambda: True)
     monkeypatch.setattr(services, "visible_types", lambda types, user: (types, None))
-    monkeypatch.setattr(services, "_declared_fields", lambda types: (set(), set()))
+    monkeypatch.setattr(services, "_declared_fields", lambda types, user, public: (set(), set(), set()))
 
     class Client:
         def resolve_index(self, suffix):
@@ -618,3 +618,68 @@ def test_the_cluster_error_text_is_not_returned_to_the_caller(monkeypatch):
 
     assert status == 502
     assert "archihub-prod" not in payload["msg"]
+
+
+def test_a_keyword_never_matches_a_withheld_field():
+    built = _build(
+        {"post_type": ["x"], "keyword": "x", "input_filters": ["metadata.secret^3", "*", "metadata.title"]},
+        declared_fields={"metadata.title"},
+        withheld_fields={"metadata.secret"},
+    )
+
+    matcher = built["query"]["bool"]["must"][0]["simple_query_string"]
+    assert matcher["fields"] == ["metadata.title"]
+
+
+def test_with_withheld_fields_an_unscoped_keyword_names_its_fields():
+    """Left unset, Elasticsearch would match every indexed field."""
+    built = _build(
+        {"post_type": ["x"], "keyword": "x"},
+        declared_fields={"metadata.title"},
+        withheld_fields={"metadata.secret"},
+    )
+
+    matcher = built["query"]["bool"]["must"][0]["simple_query_string"]
+    assert "metadata.secret" not in matcher["fields"]
+    assert "metadata.title" in matcher["fields"]
+
+
+def test_a_search_cannot_sort_by_a_withheld_field():
+    with pytest.raises(query.InvalidSearch):
+        _build(
+            {"post_type": ["x"], "sortBy": "metadata.secret"},
+            withheld_fields={"metadata.secret"},
+        )
+
+
+def test_a_date_filter_on_a_withheld_field_is_dropped():
+    built = _build(
+        {"post_type": ["x"], "date_filters": [{"destiny": "metadata.secret", "range": [1, 2]}]},
+        withheld_fields={"metadata.secret"},
+    )
+
+    assert "metadata.secret" not in str(built["query"])
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["/x/{id:>99999999}", "/x/{id.__class__}", "/x/{0}", "/x/{id", "/" + "a" * 500],
+)
+def test_a_link_template_is_substituted_not_formatted(template):
+    feed = rss.build(
+        {"resources": [{"id": "abc"}]},
+        base_url="https://example.org", link_template=template,
+        title=None, description=None,
+    )
+
+    assert "https://example.org/resource/abc" in feed
+
+
+def test_every_known_placeholder_is_substituted():
+    feed = rss.build(
+        {"resources": [{"id": "abc", "ident": "F-1", "post_type": "fondo"}]},
+        base_url="https://example.org", link_template="/{post_type}/{ident}/{id}",
+        title=None, description=None,
+    )
+
+    assert "https://example.org/fondo/F-1/abc" in feed

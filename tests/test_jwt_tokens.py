@@ -91,26 +91,30 @@ def test_a_long_lived_api_key_is_accepted():
     assert tokens.get_identity(tokens.decode_access_token(token)) == USERNAME
 
 
-def test_a_token_without_an_expiry_is_accepted():
-    """Keys minted before expiries were introduced carry no `exp` claim.
-
-    They never expire, so `exp` is verified when present and not required.
-    """
+def test_a_token_without_an_expiry_is_refused():
+    """A token that never expires can never be taken back."""
     token = _issued_token(expires_in=None)
-    assert tokens.get_identity(tokens.decode_access_token(token)) == USERNAME
+    with pytest.raises(InvalidTokenError):
+        tokens.decode_access_token(token)
+
+
+def test_a_token_is_never_minted_without_an_expiry():
+    with pytest.raises(ValueError):
+        tokens.create_access_token(USERNAME, expires_delta=None)
 
 
 def test_a_token_this_backend_mints_carries_the_same_claims():
     """What is issued now must be indistinguishable from what came before.
 
     `csrf` is the one exception - it is not minted any more, and nothing has
-    ever validated it for a header-borne token.
+    ever validated it for a header-borne token. `ver`, the session version, is
+    the one claim added; a token without it reads as version 0.
     """
     previous = tokens.decode_access_token(_issued_token())
     current = tokens.decode_access_token(tokens.create_access_token(USERNAME))
 
     assert set(previous) - set(current) == {"csrf"}
-    assert set(current) - set(previous) == set()
+    assert set(current) - set(previous) == {"ver"}
     for claim in ("sub", "type", "fresh"):
         assert current[claim] == previous[claim]
 
@@ -209,3 +213,20 @@ def test_authorization_header_errors(header, expected):
 def test_the_bearer_prefix_is_case_insensitive():
     token = tokens.create_access_token(USERNAME)
     assert tokens.extract_bearer_token(f"bearer {token}") == token
+
+
+def test_a_token_from_an_ended_session_is_refused(monkeypatch):
+    from types import SimpleNamespace
+
+    from archihub.api.users import services as users
+    from archihub.core.security.jwt import get_current_user
+
+    token = tokens.create_access_token(USERNAME, version=0)
+    request = SimpleNamespace(headers={"Authorization": f"Bearer {token}"})
+
+    monkeypatch.setattr(users, "session_version", lambda username: 0)
+    assert get_current_user(request).username == USERNAME
+
+    monkeypatch.setattr(users, "session_version", lambda username: 1)
+    with pytest.raises(AuthenticationError):
+        get_current_user(request)

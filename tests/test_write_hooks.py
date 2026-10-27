@@ -218,6 +218,10 @@ def _resource_hook_bodies() -> list[tuple[str, int, str, set[str]]]:
             name, body = node.args[0], node.args[1]
             if not (isinstance(name, ast.Constant) and str(name.value).startswith("resource")):
                 continue
+            if name.value == "resources_update_by_filter":
+                # Its body is a Mongo filter selecting many resources, not one
+                # resource's fields.
+                continue
             if not isinstance(body, ast.Dict) or None in body.keys:
                 continue
             keys = {key.value for key in body.keys if isinstance(key, ast.Constant)}

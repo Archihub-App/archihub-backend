@@ -49,6 +49,9 @@ TASK_LISTS = "inventoryMaker.create_inventory_lists"
 TASK_FORMS = "inventoryMaker.create_inventory_forms"
 TASK_TYPES = "inventoryMaker.create_inventory_types"
 
+#: Most resources one inventory holds.
+MAX_EXPORT_ROWS = 50000
+
 QUEUED_MESSAGE = (
     "The task was added to the processing queue. You can check your profile when it "
     "has finished and download the inventory."
@@ -168,10 +171,18 @@ def _may_export(body: dict, user: str) -> tuple[dict, int] | None:
     Both are real checks: the content types, and the effective access right of
     the requested ``parent``.
     """
-    from archihub.api.resources.access import effective_access_right
+    from archihub.api.resources.access import may_view_resource
     from archihub.api.resources.services import can_view_type
-    from archihub.api.users.services import has_right, has_role
+    from archihub.api.users.services import has_role
     from archihub.core.security.jwt import ROLE_FAILURE_STATUS
+
+    post_types = body.get("post_type") or []
+    parent = body.get("parent")
+    parent_id = parent.get("id") if isinstance(parent, dict) else parent
+    if not isinstance(post_types, list) or not all(isinstance(p, str) for p in post_types):
+        return {"msg": _("No content type was specified")}, 400
+    if parent_id is not None and not isinstance(parent_id, str):
+        return {"msg": _("Resource does not exist")}, 404
 
     is_admin = has_role(user, "admin")
 
@@ -179,15 +190,25 @@ def _may_export(body: dict, user: str) -> tuple[dict, int] | None:
     # bypasses". It is the same rule the catalogue listing and the resource
     # detail route apply, so an export cannot drift into being more permissive
     # than the screen the operator exported from.
-    for slug in body.get("post_type") or []:
+    for slug in post_types:
         if not can_view_type(user, slug):
             return {"msg": _("You do not have sufficient permissions")}, ROLE_FAILURE_STATUS
 
-    parent = body.get("parent")
-    parent_id = parent.get("id") if isinstance(parent, dict) else parent
+    status = body.get("status", "published")
+    if status == "deleted":
+        return {"msg": _("You do not have sufficient permissions")}, ROLE_FAILURE_STATUS
+
     if parent_id:
-        right = effective_access_right(str(parent_id))
-        if right and not is_admin and not has_right(user, right):
+        try:
+            parent_oid = object_ids([parent_id], "parent")[0]
+        except Exception:
+            return {"msg": _("Resource does not exist")}, 404
+        resource = _mongo().get_record(
+            "resources", {"_id": parent_oid}, fields={"accessRights": 1, "parents": 1}
+        )
+        if not resource:
+            return {"msg": _("Resource does not exist")}, 404
+        if not may_view_resource(user, resource, is_admin):
             return {"msg": _("You do not have sufficient permissions")}, ROLE_FAILURE_STATUS
 
     return None
@@ -240,17 +261,22 @@ def _public_inventory(body: dict):
     if not post_types:
         return json_response({"msg": _("No content type was specified")}, 400)
 
-    filters: dict = {
-        "post_type": {"$in": post_types},
-        "status": "published",
-        # THE PUBLIC RULE: the caller holds no rights, so only resources that
-        # require none are exported.
-        "$or": [{"accessRights": {"$exists": False}}, {"accessRights": None}, {"accessRights": "public"}],
-    }
-    if view.get("root") and view.get("parent"):
-        filters["parents.id"] = str(view["parent"])
+    from archihub.api.resources import access
+    from archihub.api.resources.services import can_view_type
 
-    rows, records = _resource_rows(filters)
+    # THE PUBLIC RULE: the authenticated rule with the caller holding nothing -
+    # no content type behind viewRoles, no effective access right.
+    if not all(can_view_type(None, post_type) for post_type in post_types):
+        return json_response({"msg": _("The content type is required")}, 400)
+
+    base: dict = {"post_type": {"$in": post_types}}
+    if view.get("root") and view.get("parent"):
+        base["parents.id"] = str(view["parent"])
+    filters, _error = access.build_listing_filters(
+        base, username=None, is_admin=False, is_publisher=False, status="published"
+    )
+
+    rows, records = _resource_rows(filters, None)
     if not rows:
         return json_response({"msg": _("No resources matched the filters")}, 404)
 
@@ -274,14 +300,25 @@ def _public_inventory(body: dict):
     return file_response(target, download_name=f"{view_slug}.xlsx", as_attachment=True)
 
 
-def _resource_rows(filters: dict) -> tuple[list[dict], list[dict]]:
-    """Resource rows for a filter, plus the file rows for the same resources."""
-    resources = list(_mongo().get_all_records("resources", filters))
+def _resource_rows(filters: dict, user: str | None) -> tuple[list[dict], list[dict]]:
+    """Resource rows for a filter, plus the file rows for the same resources.
+
+    ``user`` is who the export is for; ``None`` is a public export. A field the
+    form restricts to rights the caller does not hold is not a column.
+    """
+    from archihub.api.resources.access import may_read_field
+
+    resources = list(_mongo().get_all_records("resources", filters, limit=MAX_EXPORT_ROWS))
     if not resources:
         return [], []
+    if len(resources) == MAX_EXPORT_ROWS:
+        logger.warning("Inventory export stopped at %d resources", MAX_EXPORT_ROWS)
 
     post_types = sorted({r.get("post_type") for r in resources if r.get("post_type")})
-    fields = export.metadata_fields(post_types)
+    fields = [
+        field for field in export.metadata_fields(post_types)
+        if may_read_field(field, user, public=user is None)
+    ]
     terms = export.option_term_lookup()
 
     rows = [export.header_row(fields)]
@@ -309,7 +346,7 @@ def _resource_rows(filters: dict) -> tuple[list[dict], list[dict]]:
 def resources_task(body: dict, user: str) -> str:
     """Export the resources a selection matches, with their files."""
     filters = _selection_filters(body, user)
-    rows, records = _resource_rows(filters)
+    rows, records = _resource_rows(filters, user)
     if not rows:
         raise ValueError("No resources matched the filters")
 
@@ -347,6 +384,8 @@ def lists_task(body: dict, user: str) -> str:
 @shared_task(ignore_result=False, name=TASK_FORMS)
 def forms_task(body: dict, user: str) -> str:
     """Export one metadata standard and its fields."""
+    import json
+
     forms = list(_mongo().get_all_records("forms", {"slug": str(body.get("parent"))}))
 
     form_rows = [{"id": "id", "name": "name", "slug": "slug", "description": "description"}]
@@ -369,6 +408,8 @@ def forms_task(body: dict, user: str) -> str:
                     "destiny": field.get("destiny"),
                     "required": field.get("required"),
                     "instructions": field.get("instructions", ""),
+                    # The whole field, so a re-import loses nothing.
+                    "definition": json.dumps(field, default=str, ensure_ascii=False),
                 }
             )
 
@@ -409,36 +450,36 @@ def types_task(body: dict, user: str) -> str:
 def _selection_filters(body: dict, user: str) -> dict:
     """The resource filter for an authenticated export.
 
-    Draft visibility follows the same rule as the rest of the application:
-    someone without `publisher` or `admin` sees only their own drafts. The
-    original wrote ``if not has_role(user, 'publisher') or not has_role(user,
-    'admin')``, which is true unless the caller holds BOTH — so an administrator
-    who was not also a publisher was restricted to their own drafts.
+    The catalogue listing's own rule (``access.build_listing_filters``): the
+    effective access rights the caller holds, and whose drafts they may see.
     """
+    from archihub.api.resources import access
     from archihub.api.users.services import has_role
 
     post_types = body.get("post_type") or []
-    filters: dict = {"post_type": {"$in": post_types}}
+    base: dict = {"post_type": {"$in": post_types}}
 
     parent = body.get("parent")
     parent_id = parent.get("id") if isinstance(parent, dict) else parent
 
     if parent_id:
-        filters = {
+        base = {
             "$or": [
                 {"parents.id": str(parent_id), "post_type": {"$in": post_types}},
                 {"_id": object_ids([parent_id], "parent")[0]},
             ]
         }
 
-    status = body.get("status", "published")
-    clauses = filters["$or"] if "$or" in filters else [filters]
-
-    for clause in clauses:
-        clause["status"] = "draft" if status == "draft" else "published"
-        if status == "draft" and not (has_role(user, "publisher") or has_role(user, "admin")):
-            clause["createdBy"] = user
-
+    status = "draft" if body.get("status", "published") == "draft" else "published"
+    filters, error = access.build_listing_filters(
+        base,
+        username=user,
+        is_admin=has_role(user, "admin"),
+        is_publisher=has_role(user, "publisher"),
+        status=status,
+    )
+    if error:
+        raise PermissionError(error)
     return filters
 
 

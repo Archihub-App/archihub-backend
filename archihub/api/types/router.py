@@ -67,6 +67,20 @@ def get_all(current_user: CurrentUser = Depends(get_current_user)) -> JSONRespon
     return _respond(services.get_all())
 
 
+@router.get(
+    "/roles",
+    responses={200: {"description": "The roles vocabulary"}, 403: {"description": "Not permitted"}},
+)
+def get_roles(current_user: CurrentUser = Depends(require_type_manager)) -> JSONResponse:
+    """The roles a content type's edit and view roles are chosen from.
+
+    Declared before ``/{slug}`` so the literal segment wins.
+    """
+    from archihub.core.roles import get_roles as _get
+
+    return json_response(_get(), 200)
+
+
 @router.post(
     "",
     status_code=201,

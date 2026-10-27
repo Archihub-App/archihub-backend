@@ -66,6 +66,13 @@ def parse_result(result):
 # ---------------------------------------------------------------------------
 
 
+def _is_installed_plugin(slug) -> bool:
+    """Whether ``slug`` names a plugin installed on this instance."""
+    from archihub.plugins.framework.discovery import list_installed_plugins
+
+    return isinstance(slug, str) and slug in list_installed_plugins()
+
+
 def _base_field_types() -> list[dict]:
     """The built-in field-type catalogue, plus any a plugin contributes.
 
@@ -250,6 +257,10 @@ def validate_form(form: dict) -> None:
             field["setCondition"] = False
             for key in ("conditionField", "conditionType", "conditionValueText"):
                 field.pop(key, None)
+
+        if "plugin" in field and not _is_installed_plugin(field.get("plugin")):
+            # The browser fetches and runs code from the named plugin's route.
+            raise ValidationError(_("Invalid plugin"))
 
         if field.get("accessRights"):
             valid = {option.get("id") for option in _get_access_rights().get("options", [])}

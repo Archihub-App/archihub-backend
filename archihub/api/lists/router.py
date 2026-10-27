@@ -20,6 +20,7 @@ from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
+    get_current_user,
     require_permission,
 )
 from archihub.core.responses import json_response
@@ -97,12 +98,26 @@ def create(
 )
 def get_by_id(
     list_id: str,
-    current_user: CurrentUser = Depends(require_list_manager),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> JSONResponse:
     """Get one vocabulary by id, with its options resolved to ``{id, term}``.
 
-    Lists are addressed by id; `lists` documents carry no slug field.
+    Lists are addressed by id; `lists` documents carry no slug field. Reading a
+    vocabulary is part of cataloguing - every select field is filled from one -
+    so any signed-in user may; changing one needs ``lists.manage``. The roles
+    vocabulary is the exception: it is read where roles are administered.
     """
+    from archihub.api.users.services import has_permission
+    from archihub.core.roles import get_roles_id
+
+    roles_id = get_roles_id()
+    if roles_id and list_id == str(roles_id) and not (
+        has_permission(current_user.username, "lists.manage")
+        or has_permission(current_user.username, "types.manage")
+    ):
+        return json_response(
+            {"msg": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+        )
     return _respond(services.get_by_id(list_id))
 
 

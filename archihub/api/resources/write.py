@@ -324,7 +324,11 @@ def update(resource_id: str, body: dict, user: str, incoming_files=None) -> tupl
         logger.info("Denied %s an update of resource %s", user, resource_id)
         return _denied()
 
-    post_type = body.get("post_type") or existing.get("post_type")
+    post_type = existing.get("post_type")
+    if body.get("post_type") and body.get("post_type") != post_type:
+        # Changing type has its own route, which checks both types and the
+        # metadata against the target form.
+        return {"msg": _("Use change-post-type to change a resource's type")}, 400
     status = body.get("status") or existing.get("status") or STATUS_DRAFT
     if status == STATUS_PUBLISHED and not may_publish(user, is_admin):
         return _denied()
@@ -389,6 +393,18 @@ def update(resource_id: str, body: dict, user: str, incoming_files=None) -> tupl
 
     _audit(user, "resource_update", {"resource": {**payload, "_id": resource_id}})
     _call_hook("resource_update", {**payload, "_id": resource_id})
+
+    rights_changed = "accessRights" in payload and (
+        (payload["accessRights"] or None) != (existing.get("accessRights") or None)
+    )
+    if moved or rights_changed:
+        # Everything filed below inherits this resource's access right, and its
+        # search documents carry that inherited value. The recycle bin stays out
+        # of the index.
+        _call_hook(
+            "resources_update_by_filter",
+            {"parents.id": resource_id, "status": {"$ne": "deleted"}},
+        )
 
     return {"msg": _("Resource updated successfully")}, 200
 
@@ -461,6 +477,7 @@ def _sync_reciprocal_relations(
     When a resource names another of its own content type as related, the other
     one should list it back. Runs after the write, so the id exists.
     """
+    touched: set[str] = set()
     for destiny in _self_relation_fields(metadata, payload.get("post_type")):
         now = _ids_at(payload, destiny)
         was = before.get(destiny, set())
@@ -469,6 +486,11 @@ def _sync_reciprocal_relations(
             _unlink(removed, destiny, resource_id)
         for added in now - was:
             _link(added, destiny, resource_id, payload.get("post_type"))
+        touched |= now ^ was
+
+    if touched:
+        # Their search documents carry the relation field just rewritten.
+        _call_hook("resources_update_by_filter", {"_id": {"$in": sorted(touched)}})
 
 
 def _ids_at(document, path: str) -> set[str]:
@@ -628,6 +650,10 @@ def _cascade_delete(resource_id: str, user: str) -> None:
             seen.add(child_id)
 
             _mark_deleted(child_id, user)
+            # Its files follow it into the recycle bin, as the top resource's do.
+            stored = _load(child_id)
+            if stored:
+                _detach_records(stored, child_id, user)
             _call_hook("resource_delete", {"_id": child_id, "post_type": child.get("post_type")})
             queue.append(child_id)
 

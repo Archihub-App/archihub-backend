@@ -129,7 +129,15 @@ def _failure(provider_id: str, message: str, reason: str) -> Catalogue:
 
 def build_adapter(provider: dict):
     """Construct the dialect adapter for a provider record."""
-    from archihub.api.aiservices.providers import decrypt_key
+    from archihub.api.aiservices.providers import decrypt_key, reaches_refused_address
+
+    if reaches_refused_address(provider):
+        # Checked on every use, not only when the provider was saved: a name
+        # can be pointed somewhere else afterwards.
+        raise errors.ProviderError(
+            errors.Reason.INVALID_REQUEST,
+            _("Only an administrator can connect a provider on an internal address"),
+        )
 
     dialect = get_dialect(provider.get("dialect") or "")
     return dialect(

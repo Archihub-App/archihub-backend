@@ -108,3 +108,27 @@ def test_a_built_in_kind_is_never_handed_to_a_plugin(monkeypatch):
     _plugin_kind_setup(monkeypatch, spy)
 
     assert seen == ["plugin_kind"]
+
+
+# ---------------------------------------------------------------------------
+# Empty values
+# ---------------------------------------------------------------------------
+
+
+def test_a_number_of_zero_is_rendered():
+    from archihub.api.resources import presentation
+
+    field = {"type": "number", "label": "Folios", "destiny": "metadata.firstLevel.count"}
+    resource = {"metadata": {"firstLevel": {"count": 0}}}
+
+    assert presentation._render(field, resource) == {"label": "Folios", "value": 0, "type": "number"}
+
+
+def test_an_absent_or_blank_value_is_not_rendered():
+    from archihub.api.resources import presentation
+
+    field = {"type": "text", "label": "Notas", "destiny": "metadata.firstLevel.notes"}
+    for value in (None, "", [], {}):
+        resource = {"metadata": {"firstLevel": {"notes": value}}}
+        assert presentation._render(field, resource) is None
+    assert presentation._render(field, {"metadata": {"firstLevel": {}}}) is None

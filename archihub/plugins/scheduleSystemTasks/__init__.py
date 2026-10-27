@@ -87,6 +87,10 @@ class ScheduleSystemTasks(ArchiPlugin):
                 return {"msg": _("Unknown task {task}", task=task)}, 400
 
             row = dict(row)
+            if row.get("args") is not None and not isinstance(row["args"], list):
+                return {"msg": _("Missing required fields")}, 400
+            if row.get("kwargs") is not None and not isinstance(row["kwargs"], dict):
+                return {"msg": _("Missing required fields")}, 400
 
             if periodicity in INTERVAL_PERIODICITIES:
                 try:

@@ -19,16 +19,13 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 def _client_ip(request: Request) -> str | None:
-    """Best-effort client address for per-address throttling.
+    """The client address used for per-address throttling.
 
-    ``X-Forwarded-For`` is only consulted because this runs behind the bundled
-    nginx reverse proxy. The header is client-controlled and trivially spoofed,
-    so it is used ONLY to widen throttling, never to grant anything - and the
-    per-username budget applies regardless of what it says.
+    The address of the connection, never a request header: a header is
+    whatever the client wrote. Behind a reverse proxy, uvicorn rewrites the
+    connection address from ``X-Forwarded-For`` only when the proxy is one of
+    ``FORWARDED_ALLOW_IPS`` (127.0.0.1 unless configured).
     """
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
     return request.client.host if request.client else None
 
 

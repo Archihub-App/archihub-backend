@@ -145,13 +145,31 @@ def _resources(count: int, **extra) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def test_a_full_run_empties_the_index_first(stubbed):
+def test_a_full_run_prunes_only_after_writing_everything(stubbed):
+    """Search keeps answering while a full run is in progress."""
     mongo, client = stubbed(FakeMongo(resources=_resources(3)), FakeSearch())
+    order = []
+    original_bulk = client.bulk_index
+    client.bulk_index = lambda suffix, docs: order.append("write") or original_bulk(suffix, docs)
+    original_clear = client.delete_all_documents
+    client.delete_all_documents = (
+        lambda suffix, query=None: order.append(("prune", query)) or original_clear(suffix, query)
+    )
 
     indexing.index_resources_task()
 
-    assert client.cleared == ["resources"]
+    assert order[0] == "write"
+    assert order[-1][0] == "prune" and order[-1][1] is not None
     assert len(client.written) == 3
+    assert all(indexing.INDEXED_AT_FIELD in doc for _id, doc in client.written)
+
+
+def test_a_full_run_with_failures_keeps_the_previous_documents(stubbed):
+    mongo, client = stubbed(FakeMongo(resources=_resources(3)), FakeSearch(reject={"0001"}))
+
+    indexing.index_resources_task()
+
+    assert client.cleared == []
 
 
 def test_a_filtered_run_does_not_empty_the_index(stubbed):
@@ -524,3 +542,68 @@ def test_the_registered_task_names_are_stable():
         "testcontrol.reset",
         "records.cleanup_temporary_records",
     }
+
+
+def test_a_child_with_no_right_of_its_own_is_indexed_with_its_ancestor_right(stubbed):
+    from bson.objectid import ObjectId
+
+    fonds, child = ObjectId(), ObjectId()
+    mongo = FakeMongo(
+        resources=[
+            {"_id": fonds, "post_type": "fondo", "status": "published", "accessRights": "reserved"},
+            {"_id": child, "post_type": "fondo", "status": "published",
+             "parents": [{"id": str(fonds), "post_type": "fondo"}]},
+        ]
+    )
+    _, client = stubbed(mongo, FakeSearch())
+
+    indexing.index_resources_task({"_id": str(child)})
+
+    assert [(doc_id, doc["accessRights"]) for doc_id, doc in client.written] == [
+        (str(child), "reserved")
+    ]
+
+
+def test_a_finished_task_is_recorded_on_its_document(monkeypatch):
+    """The result backend forgets; the task document must not."""
+    from types import SimpleNamespace
+
+    from archihub.api.tasks import services as task_services
+    from archihub.worker import celery_app as worker_app
+
+    updates = []
+    monkeypatch.setattr(
+        task_services, "_mongo",
+        lambda: SimpleNamespace(update_record=lambda c, f, u: updates.append((c, f, u))),
+    )
+
+    finished = SimpleNamespace(request=SimpleNamespace(id="t1"))
+    worker_app._record_success(sender=finished, result="/a/b.xlsx")
+    worker_app._record_failure(task_id="t2", exception=RuntimeError("secret path"))
+
+    assert updates == [
+        ("tasks", {"taskId": "t1"}, {"status": "completed", "result": "/a/b.xlsx"}),
+        ("tasks", {"taskId": "t2"}, {"status": "failed", "result": ""}),
+    ]
+
+
+def test_results_are_kept_longer_than_a_weekend():
+    from archihub.worker.celery_app import celery_app
+
+    assert celery_app.conf.result_expires >= 3 * 24 * 3600
+
+
+def test_a_queued_id_list_is_read_as_object_ids(stubbed, monkeypatch):
+    """A message carries ids as strings; the collection stores ObjectIds."""
+    from bson.objectid import ObjectId
+
+    wanted = [ObjectId(), ObjectId()]
+    mongo, client = stubbed(FakeMongo(resources=[]), FakeSearch())
+    seen = []
+    monkeypatch.setattr(
+        mongo, "get_all_records", lambda collection, query, **kw: seen.append(query) or []
+    )
+
+    indexing.index_resources_task({"_id": {"$in": [str(oid) for oid in wanted]}})
+
+    assert seen[0] == {"_id": {"$in": wanted}}

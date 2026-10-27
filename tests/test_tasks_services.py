@@ -281,3 +281,31 @@ def test_the_listing_still_presents_automatic_as_the_system(monkeypatch):
     rows, _status = services.get_tasks("alice", {"page": 0})
 
     assert rows[0]["user"] == "system"
+
+
+@pytest.mark.parametrize(
+    ("owner", "expected"),
+    [("ana", True), (["ana"], True), ("bob", False), (["automatic"], False), (None, False)],
+)
+def test_only_the_user_who_started_a_task_owns_it(mongo, owner, expected):
+    mongo.records["tasks"] = {"taskId": "t1", "user": owner} if owner is not None else None
+
+    assert services.owns_task("t1", "ana") is expected
+
+
+def test_a_user_cannot_stop_someone_elses_task(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from archihub.core.security.jwt import CurrentUser, get_current_user
+    from main import app
+
+    monkeypatch.setattr("archihub.api.users.services.has_role", lambda user, role: False)
+    monkeypatch.setattr(services, "owns_task", lambda task_id, user: False)
+    monkeypatch.setattr(services, "stop_task", lambda *a: pytest.fail("must not stop"))
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="ana", claims={})
+    try:
+        response = TestClient(app).delete("/tasks/t1")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403

@@ -98,6 +98,31 @@ def may_edit(user: str, resource: dict, is_admin: bool) -> bool:
     return access.owns_or_supervises(user, resource, is_admin)
 
 
+#: The block kinds the article editor writes.
+BLOCK_TYPES = frozenset({
+    "paragraph", "heading2", "heading3", "quote", "image",
+    "favorite", "snap", "location", "uploadedRecords",
+})
+
+#: Most blocks one article holds.
+MAX_BLOCKS = 2000
+
+#: Largest article, encoded; well under MongoDB's 16 MB document limit, which
+#: also has to hold the resource's metadata.
+MAX_ARTICLE_BYTES = 8 * 1024 * 1024
+
+
+def _valid_blocks(blocks: list) -> bool:
+    """Whether every block is an object of a known kind, within the size limits."""
+    import json
+
+    if len(blocks) > MAX_BLOCKS:
+        return False
+    if not all(isinstance(b, dict) and b.get("type") in BLOCK_TYPES for b in blocks):
+        return False
+    return len(json.dumps(blocks, default=str)) <= MAX_ARTICLE_BYTES
+
+
 def _load(resource_id: str, fields: dict | None = None):
     object_id = _to_object_id(resource_id)
     if object_id is None:
@@ -118,8 +143,14 @@ def get_article_body(resource_id: str, user: str) -> tuple[dict, int]:
     if not resource:
         return {"msg": _(MSG_NOT_FOUND)}, 404
 
+    from archihub.api.resources.services import can_view_type
+
     is_admin = has_role(user, "admin")
-    if not access.may_view_resource(user, resource, is_admin):
+    if resource.get("status") == "deleted" and not is_admin:
+        return {"msg": _(MSG_NOT_FOUND)}, 404
+    if not access.may_view_resource(user, resource, is_admin) or not can_view_type(
+        user, resource.get("post_type")
+    ):
         logger.info("Denied %s the article of resource %s", user, resource_id)
         return {"msg": _(MSG_UNAUTHORIZED)}, ROLE_FAILURE_STATUS
 
@@ -149,7 +180,7 @@ def update_article_body(resource_id: str, body: dict, user: str) -> tuple[dict, 
     article_body = body.get("articleBody")
     if article_body is None:
         return {"msg": _("Article body is required")}, 400
-    if not isinstance(article_body, list):
+    if not isinstance(article_body, list) or not _valid_blocks(article_body):
         return {"msg": _("Article body has an invalid format")}, 400
 
     if not may_edit(user, resource, has_role(user, "admin")):

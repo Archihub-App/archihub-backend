@@ -655,3 +655,84 @@ def test_an_unknown_template_is_refused(seeded):
     from archihub.api.system import services
 
     assert services.seed_starter_catalogue("nonsense", "admin") is not None
+
+
+def test_only_one_concurrent_onboarding_creates_an_administrator(mongo, monkeypatch):
+    """Two requests that both saw no users race; the claim decides."""
+    from pymongo.errors import DuplicateKeyError
+
+    import archihub.api.users.services as users_services
+
+    created = []
+    mongo.counts["users"] = 0
+    monkeypatch.setattr(services, "set_system_setting", lambda: None)
+    monkeypatch.setattr(services, "seed_starter_catalogue", lambda template, user: None)
+    monkeypatch.setattr(
+        users_services, "register_user", lambda payload: created.append(payload) or ({}, 201)
+    )
+    claimed = set()
+
+    def insert_record(collection, record):
+        if record.get("_id") in claimed:
+            raise DuplicateKeyError("taken")
+        claimed.add(record.get("_id"))
+
+    class Unchanged:
+        modified_count = 0
+
+    monkeypatch.setattr(mongo, "insert_record", insert_record)
+    monkeypatch.setattr(mongo, "update_record", lambda *a: Unchanged())
+    body = {"username": "a", "password": "p", "confirmPassword": "p", "typeTemplate": "basic"}
+
+    assert services.set_first_time(dict(body))[1] == 201
+    assert services.set_first_time(dict(body))[1] == 400
+    assert len(created) == 1
+
+
+def test_node_cache_clear_reads_the_authorization_header(monkeypatch):
+    """The node key comes from the request's header, never a query parameter."""
+    from fastapi.testclient import TestClient
+
+    from archihub.core.errors import AuthenticationError
+    from archihub.core.security import api_auth
+    from main import app
+
+    seen = []
+
+    def refuse(header):
+        seen.append(header)
+        raise AuthenticationError("no")
+
+    monkeypatch.setattr(api_auth, "authenticate_node_api", refuse)
+
+    response = TestClient(app).get(
+        "/system/node-clear-cache", headers={"Authorization": "Bearer k"}
+    )
+
+    assert response.status_code == 401
+    assert seen == ["Bearer k"]
+
+
+def test_plugin_actions_are_offered_by_their_own_roles(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from archihub.core.security.jwt import CurrentUser, get_current_user
+    from archihub.plugins.framework import mounting
+    from main import app
+
+    monkeypatch.setattr(mounting, "system_actions", lambda placement: [
+        {"id": "a", "roles": ["user"]},
+        {"id": "b", "roles": ["editor"]},
+        {"id": "c"},
+    ])
+    monkeypatch.setattr(
+        "archihub.api.users.services.has_role", lambda user, role: role == "user"
+    )
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="u", claims={})
+    try:
+        response = TestClient(app).post("/system/get-actions", json={"placement": "resource"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert [a["id"] for a in response.json()["actions"]] == ["a"]

@@ -21,6 +21,7 @@ import logging
 
 from archihub.api.resources import access, article, files, hierarchy, presentation, services
 from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ def get_tree(body: dict) -> tuple[list | dict, int]:
         allowed,
         None,
         post_type=body.get("postType"),
-        page=int(body.get("page") or 0),
+        page=page_number(body.get("page")) or 0,
         status="published",
     )
 

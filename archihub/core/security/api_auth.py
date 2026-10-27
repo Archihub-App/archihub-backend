@@ -32,6 +32,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from fastapi import Request
+
 from archihub.core.errors import AuthenticationError, RateLimitError
 from archihub.core.i18n import gettext as _
 
@@ -159,17 +161,17 @@ def authenticate_node_api(authorization: str | None = None) -> ApiIdentity:
 # `identity: ApiIdentity = Depends(admin_api_dependency)`.
 
 
-def _header(request) -> str | None:  # noqa: ANN001 - starlette Request
+def _header(request: Request) -> str | None:
     return request.headers.get("Authorization")
 
 
-def admin_api_dependency(request) -> ApiIdentity:  # noqa: ANN001
+def admin_api_dependency(request: Request) -> ApiIdentity:
     return authenticate_admin_api(_header(request))
 
 
-def public_api_dependency(request) -> ApiIdentity:  # noqa: ANN001
+def public_api_dependency(request: Request) -> ApiIdentity:
     return authenticate_public_api(_header(request))
 
 
-def node_api_dependency(request) -> ApiIdentity:  # noqa: ANN001
+def node_api_dependency(request: Request) -> ApiIdentity:
     return authenticate_node_api(_header(request))

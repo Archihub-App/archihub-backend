@@ -33,6 +33,14 @@ logger = logging.getLogger(__name__)
 #: request exactly these two.
 PAGE_DIRECTORIES = {"small": "small", "big": "big"}
 
+#: Most pages one request may ask for.
+MAX_PAGES_PER_REQUEST = 100
+
+
+def pages_in_bounds(pages) -> bool:
+    """Whether a request's page list is a list no longer than the ceiling."""
+    return isinstance(pages, list) and len(pages) <= MAX_PAGES_PER_REQUEST
+
 #: Image derivative suffixes for gallery images. ``big`` is the frontend's name
 #: for what processing writes as ``large``; the alias is kept so the viewers
 #: keep working, but it resolves through this map rather than being pasted into
