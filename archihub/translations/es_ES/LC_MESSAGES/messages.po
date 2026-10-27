@@ -2398,3 +2398,9 @@ msgstr "Seleccione exactamente un registro para exportar"
 
 msgid "This link works for one hour. To reset your password, click on the following link:"
 msgstr "Este enlace funciona durante una hora. Para restablecer su contraseña, haga clic en el siguiente enlace:"
+
+msgid "These settings do not accept files"
+msgstr "Estos ajustes no admiten archivos"
+
+msgid "The session has ended; sign in again"
+msgstr "La sesión terminó; vuelva a iniciar sesión"
