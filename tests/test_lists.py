@@ -336,6 +336,8 @@ def test_create_stores_options_separately(mongo):
     list_insert = next(r for c, r in mongo.inserted if c == "lists")
     assert len(list_insert["options"]) == 2
     assert "_id" not in list_insert  # MongoDB assigns it
+    # The caller learns the id it assigned.
+    assert payload["id"]
 
 
 def test_delete_missing_list_is_404_and_translated(mongo):

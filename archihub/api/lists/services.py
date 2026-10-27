@@ -160,7 +160,7 @@ def create(body: dict, user: str) -> tuple[dict, int]:
         _register_log(
             user, "list_create", {"list": {"name": payload["name"], "id": str(new_list.inserted_id)}}
         )
-        return {"msg": _("List created successfully")}, 201
+        return {"msg": _("List created successfully"), "id": str(new_list.inserted_id)}, 201
     except Exception:
         logger.exception("Could not create list")
         return {"msg": _("Error while processing the request")}, 500
