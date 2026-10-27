@@ -650,6 +650,10 @@ def _cascade_delete(resource_id: str, user: str) -> None:
             seen.add(child_id)
 
             _mark_deleted(child_id, user)
+            # Its files follow it into the recycle bin, as the top resource's do.
+            stored = _load(child_id)
+            if stored:
+                _detach_records(stored, child_id, user)
             _call_hook("resource_delete", {"_id": child_id, "post_type": child.get("post_type")})
             queue.append(child_id)
 

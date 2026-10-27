@@ -434,6 +434,22 @@ def test_deleting_retires_the_files_nothing_else_holds(mongo):
     assert mongo.records[RECORD_ID]["parent"] == []
 
 
+def test_a_descendants_files_follow_it_into_the_recycle_bin(mongo):
+    mongo.resources[RESOURCE_ID] = resource()
+    mongo.resources[CHILD_ID] = resource(
+        _id=ObjectId(CHILD_ID), parent=[{"id": RESOURCE_ID, "post_type": "carpeta"}],
+        filesObj=[{"id": RECORD_ID, "tag": "file"}],
+    )
+    mongo.records[RECORD_ID] = {
+        "_id": ObjectId(RECORD_ID), "status": "uploaded",
+        "parent": [{"id": CHILD_ID, "post_type": "carpeta"}],
+    }
+
+    write.delete([RESOURCE_ID], "alice")
+
+    assert mongo.records[RECORD_ID]["status"] == "deleted"
+
+
 def test_a_file_held_by_another_resource_survives(mongo):
     """Deduplication means one record can belong to several resources; only the
     last reference going away retires it."""
