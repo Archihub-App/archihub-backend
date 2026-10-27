@@ -323,3 +323,24 @@ def test_only_resources_with_descendants_are_candidates(archive):
     ids = {node["id"] for node in _REAL_RESTRICTED_ANCESTORS()}
     assert ids == {"fondo_a", "serie_a2", "item_a2_x"}
 
+
+
+@pytest.mark.parametrize("status", [{"$in": ["deleted"]}, {"$ne": "published"}, ["deleted"], 7])
+def test_a_listing_status_is_a_value_never_a_clause(status):
+    filters, error = access.build_listing_filters(
+        {}, username="alice", is_admin=True, is_publisher=False, status=status
+    )
+
+    assert error is None
+    assert filters["status"] == "published"
+
+
+@pytest.mark.parametrize("status", ["created", "updated"])
+def test_the_other_pre_publication_states_list_as_drafts(monkeypatch, status):
+    monkeypatch.setattr(access, "may_see_all_drafts", lambda *a: False)
+
+    filters, _error = access.build_listing_filters(
+        {}, username="alice", is_admin=True, is_publisher=False, status=status
+    )
+
+    assert all(branch["createdBy"] == "alice" for branch in filters["$or"])

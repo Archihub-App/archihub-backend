@@ -391,6 +391,10 @@ def may_see_all_drafts(username: str | None, is_publisher: bool, is_admin: bool)
     return bool(username) and has_permission(username, "resources.see_all_drafts")
 
 
+#: The states a listing may ask for.
+LISTING_STATES = ("published", "draft", "deleted")
+
+
 def build_listing_filters(
     base: dict,
     *,
@@ -405,6 +409,13 @@ def build_listing_filters(
     the case only for an unprivileged caller asking for deleted resources.
     """
     filters = dict(base)
+
+    # The status is a value the caller picks from a closed set, never a query
+    # clause. The two other pre-publication states are listed as drafts.
+    if status in ("created", "updated"):
+        status = "draft"
+    if not isinstance(status, str) or status not in LISTING_STATES:
+        status = "published"
 
     if status == "deleted" and not may_see_deleted(username, is_admin):
         return filters, "unauthorized"
