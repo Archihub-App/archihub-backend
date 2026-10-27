@@ -293,7 +293,9 @@ def _render(field: dict, resource: dict) -> dict | None:
     label = field.get("label")
     value = get_value_by_path(resource, field["destiny"])
 
-    if not value:
+    # Empty means absent or blank. A count of 0 is a value the cataloguer
+    # entered, so it is shown like any other number.
+    if value is None or value in ("", [], {}):
         return None
 
     if kind in ("text", "text-area"):
