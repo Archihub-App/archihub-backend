@@ -32,7 +32,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 #: Above every plugin's automatic processing, so a document is built from the
-#: metadata those plugins have already finished writing.
+#: metadata those plugins have already finished writing. Registered ``always``:
+#: a plugin task that fails does not leave the index unchanged.
 INDEX_QUEUE = 101
 
 
@@ -58,15 +59,22 @@ def register_index_hooks() -> None:
         logger.exception("Could not read the indexing setting; leaving the write hooks unregistered")
         return
 
-    from archihub.worker.tasks.indexing import index_resources_delete_task, index_resources_task
+    from archihub.worker.tasks.indexing import (
+        index_resources_delete_by_type_task,
+        index_resources_delete_task,
+        index_resources_task,
+    )
 
     hooks = get_hook_handler()
-    hooks.register("resource_create", index_resources_task, queue=INDEX_QUEUE)
-    hooks.register("resource_update", index_resources_task, queue=INDEX_QUEUE)
-    hooks.register("resource_delete", index_resources_delete_task, queue=INDEX_QUEUE)
-    # Currently never fired: the only caller (`types.services`) spells the name
-    # in the plural, and the body it sends (`{"slug": ...}`) would match no
-    # resource anyway.
-    hooks.register("resources_update_by_filter", index_resources_task, queue=INDEX_QUEUE)
+    hooks.register("resource_create", index_resources_task, queue=INDEX_QUEUE, always=True)
+    hooks.register("resource_update", index_resources_task, queue=INDEX_QUEUE, always=True)
+    # A restored resource left the index when it was deleted; it goes back in.
+    hooks.register("resource_restore", index_resources_task, queue=INDEX_QUEUE, always=True)
+    hooks.register("resource_delete", index_resources_delete_task, queue=INDEX_QUEUE, always=True)
+    hooks.register("type_delete", index_resources_delete_by_type_task, queue=INDEX_QUEUE, always=True)
+    # Nothing in the core fires this one. It is the entry point for a plugin
+    # that changes many resources at once: fired with a Mongo filter as its
+    # body, it reindexes every resource the filter matches.
+    hooks.register("resources_update_by_filter", index_resources_task, queue=INDEX_QUEUE, always=True)
 
     logger.info("Search indexing is active; registered the resource write hooks")

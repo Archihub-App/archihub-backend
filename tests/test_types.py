@@ -240,6 +240,18 @@ def test_delete_missing_type_is_404(mongo):
     assert status == 404
 
 
+def test_delete_fires_type_delete_with_the_content_type(mongo, monkeypatch):
+    """The resources go to the recycle bin in one write, so no per-resource
+    hook fires; this one is what takes them out of the search index."""
+    fired: list = []
+    monkeypatch.setattr(services, "_call_hook", lambda name, payload: fired.append((name, payload)))
+    mongo.records["post_types"] = {"slug": "report", "name": "Report"}
+
+    services.delete_by_slug("report", "admin")
+
+    assert ("type_delete", {"post_type": "report", "slug": "report"}) in fired
+
+
 def test_update_strips_self_from_parent_types(mongo):
     """A type must not become its own parent - the parent walk would loop."""
     mongo.records["post_types"] = {"slug": "folder"}
@@ -395,3 +407,33 @@ def test_a_failing_aggregation_is_reported_not_returned_as_data(mongo, monkeypat
 
     assert status == 500
     assert "msg" in payload
+
+
+# ---------------------------------------------------------------------------
+# Reindexing when the fields a search document is built from change
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fired(mongo, monkeypatch):
+    calls: list = []
+    monkeypatch.setattr(services, "_call_hook", lambda name, payload: calls.append((name, payload)))
+    mongo.records["post_types"] = {"slug": "report", "name": "Report", "metadata": "form-a", "isArticle": False}
+    return calls
+
+
+@pytest.mark.parametrize("change", [{"metadata": "form-b"}, {"isArticle": True}])
+def test_changing_what_documents_are_built_from_reindexes_the_type(fired, change):
+    services.update_by_slug("report", {"name": "Report", **change}, "admin")
+
+    assert fired == [
+        ("resources_update_by_filter", {"post_type": "report", "status": {"$ne": "deleted"}})
+    ]
+
+
+@pytest.mark.parametrize("change", [{"icon": "folder"}, {"metadata": "form-a"}, {"description": "x"}])
+def test_any_other_edit_does_not_reindex(fired, change):
+    """A reindex rebuilds every resource of the type; renaming an icon must not cost that."""
+    services.update_by_slug("report", {"name": "Report", **change}, "admin")
+
+    assert fired == []

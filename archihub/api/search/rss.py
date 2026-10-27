@@ -14,6 +14,7 @@ feed structure.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from email.utils import format_datetime
 from xml.sax.saxutils import escape
@@ -22,6 +23,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TITLE = "ArchiHUB"
 DEFAULT_LINK_TEMPLATE = "/resource/{id}"
+
+#: Longest link template a request may send.
+MAX_TEMPLATE_LENGTH = 200
 SUMMARY_LENGTH = 250
 
 
@@ -84,17 +88,33 @@ def _title_of(resource: dict) -> str:
 
 
 def _link(base: str, template: str, resource: dict) -> str:
-    try:
-        path = template.format(
-            id=resource.get("id") or "",
-            ident=resource.get("ident") or "",
-            post_type=resource.get("post_type") or "",
-        )
-    except (KeyError, IndexError, ValueError):
+    """A resource's link from the feed's path template.
+
+    The template comes from the request, so it is substituted, never formatted:
+    only the three placeholders below are recognised, and a template naming
+    anything else, or longer than ``MAX_TEMPLATE_LENGTH``, falls back to the
+    default.
+    """
+    values = {
+        "{id}": str(resource.get("id") or ""),
+        "{ident}": str(resource.get("ident") or ""),
+        "{post_type}": str(resource.get("post_type") or ""),
+    }
+    placeholders = re.findall(r"\{[^{}]*\}", template)
+    if (
+        len(template) > MAX_TEMPLATE_LENGTH
+        or any(p not in values for p in placeholders)
+        or template.count("{") != len(placeholders)
+        or template.count("}") != len(placeholders)
+    ):
         # A template naming something a resource does not have is a
         # configuration mistake, not a reason to fail the whole feed.
         logger.info("Unusable RSS link template; falling back to the default")
-        path = DEFAULT_LINK_TEMPLATE.format(id=resource.get("id") or "")
+        template = DEFAULT_LINK_TEMPLATE
+
+    path = template
+    for placeholder, value in values.items():
+        path = path.replace(placeholder, value)
     return f"{base}{path if path.startswith('/') else '/' + path}"
 
 

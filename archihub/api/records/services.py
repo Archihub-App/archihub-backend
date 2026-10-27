@@ -17,6 +17,7 @@ from bson.objectid import ObjectId
 
 from archihub.api.records import access
 from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
@@ -162,6 +163,11 @@ def get_by_id(record_id: str, user: str | None, full_fields: bool = False) -> tu
 
     record["parent"] = _describe_parents(record.get("parent") or [])
     record.pop("parents", None)
+
+    # Opening a file is audited for a signed-in caller only; the public route
+    # does not come through here.
+    if user:
+        _audit(user, "record_get", {"record": record_id})
 
     return parse_result(record), 200
 
@@ -320,7 +326,9 @@ def get_by_filters(body: dict, user: str) -> tuple[list | dict, int]:
     except ValueError as exc:
         return {"msg": str(exc)}, 400
 
-    page = int(body.get("page") or 0)
+    page = page_number(body.get("page"))
+    if page is None:
+        return {"msg": _('"{field}" must be a number', field="page")}, 400
     mongo = _mongo()
     records = list(
         mongo.get_all_records(COLLECTION, filters, limit=PAGE_SIZE, skip=page * PAGE_SIZE)

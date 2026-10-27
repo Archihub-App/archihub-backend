@@ -15,9 +15,10 @@ proven otherwise:
   raises on malformed syntax, so a stray bracket typed into a search box is a
   500. `simple_query_string` never throws and its features are selectable.
 * **`_source` is an allowlist**, derived from the fields the requested content
-  types declare. Appending the request's `activeColumns` verbatim lets the
-  caller name any stored field — including ones the content type marks as
-  restricted, which the detail route is careful to withhold.
+  types declare and this caller may read.
+* **A withheld field is never named**, by a keyword, a filter or a sort: each of
+  them answers questions about the field's values. A field is withheld when the
+  form restricts it to access rights the caller does not hold.
 """
 
 from __future__ import annotations
@@ -30,6 +31,9 @@ logger = logging.getLogger(__name__)
 
 #: Fields every result carries, regardless of what was asked for.
 BASE_SOURCE = ("post_type", "accessRights", "ident", "files", "createdAt", "status")
+
+#: Indexed fields outside the form a keyword is matched against.
+KEYWORD_BASE_FIELDS = ("article", "ident")
 
 #: Publication states that exist. A public caller gets exactly one of them.
 PUBLIC_STATUS = "published"
@@ -98,13 +102,18 @@ def _bounded_int(value, *, default: int, minimum: int, maximum: int, field: str)
     return min(number, maximum)
 
 
-def resolve_status(requested, *, public: bool, may_see_drafts: bool, may_see_deleted: bool) -> list[str]:
+def resolve_status(requested, *, public: bool, may_see_deleted: bool) -> list[str]:
     """Which publication states this caller may search.
 
     A public caller gets ``published`` and nothing else, whatever they asked
     for — not an error, because a request naming a state they cannot see is
     answered with what they can, and telling them otherwise confirms the state
     exists.
+
+    DRAFTS ARE NEVER SEARCHABLE, by anyone. Unpublished work is reached only
+    through the catalogue listing, which decides whose drafts each caller sees.
+    Search answers for published resources and, for those allowed the recycle
+    bin, deleted ones.
     """
     if public:
         return [PUBLIC_STATUS]
@@ -120,11 +129,7 @@ def resolve_status(requested, *, public: bool, may_see_drafts: bool, may_see_del
         return ["deleted"]
 
     if requested in DRAFT_STATES:
-        if not may_see_drafts:
-            raise InvalidSearch(_("You don't have the required authorization"))
-        # "draft" covers the three pre-publication states, exactly as the
-        # resources listing treats it.
-        return list(DRAFT_STATES)
+        raise InvalidSearch(_("Drafts cannot be searched"))
 
     return [PUBLIC_STATUS]
 
@@ -156,8 +161,13 @@ def build(
     access_rights: list[str],
     declared_fields: set[str],
     sortable_text_fields: set[str],
+    withheld_fields: set[str] = frozenset(),
 ) -> dict:
-    """The Elasticsearch query for one search request."""
+    """The Elasticsearch query for one search request.
+
+    ``declared_fields`` are the fields this caller may read; ``withheld_fields``
+    the declared ones they may not.
+    """
     post_types = _strings(body.get("post_type"), "post_type")
     if not post_types:
         raise InvalidSearch(_("You must specify a post type"))
@@ -201,24 +211,46 @@ def build(
             # failed request.
             "lenient": True,
         }
-        fields = _strings(body.get("input_filters"), "input_filters")
+        fields = [
+            name for name in _strings(body.get("input_filters"), "input_filters")
+            if not _names_withheld(name, withheld_fields)
+        ]
+        if not fields and withheld_fields:
+            # Left unset, Elasticsearch matches against every indexed field.
+            fields = sorted({*declared_fields, *KEYWORD_BASE_FIELDS})
         if fields:
             matcher["fields"] = fields
         query["query"]["bool"]["must"] = [{"simple_query_string": matcher}]
 
-    _apply_sort(query, body, sortable_text_fields)
-    _apply_filters(query, body)
+    _apply_sort(query, body, sortable_text_fields, withheld_fields)
+    _apply_filters(query, body, withheld_fields)
     _apply_view(query, body, view, size, offset)
 
     return query
 
 
-def _apply_sort(query: dict, body: dict, sortable_text_fields: set[str]) -> None:
+def _names_withheld(name: str, withheld_fields: set[str]) -> bool:
+    """Whether a field name a request sent may reach a withheld field.
+
+    A pattern may match one, and so may a boost (``field^2``) or a subfield
+    (``field.keyword``) of one.
+    """
+    if "*" in name or "?" in name:
+        return True
+    base = name.split("^", 1)[0]
+    return any(base == field or base.startswith(f"{field}.") for field in withheld_fields)
+
+
+def _apply_sort(
+    query: dict, body: dict, sortable_text_fields: set[str], withheld_fields: set[str]
+) -> None:
     sort_by = body.get("sortBy") or "createdAt"
     if not isinstance(sort_by, str):
         raise InvalidSearch(_('"{field}" must be a text value', field="sortBy"))
     if sort_by.lower() == "relevance":
         return
+    if _names_withheld(sort_by, withheld_fields):
+        raise InvalidSearch(_("You don't have the required authorization"))
 
     # A text field is not sortable in Elasticsearch; its `.keyword` subfield is.
     field = f"{sort_by}.keyword" if sort_by in sortable_text_fields else sort_by
@@ -226,7 +258,7 @@ def _apply_sort(query: dict, body: dict, sortable_text_fields: set[str]) -> None
     query["sort"] = [{field: {"order": direction}}]
 
 
-def _apply_filters(query: dict, body: dict) -> None:
+def _apply_filters(query: dict, body: dict, withheld_fields: set[str]) -> None:
     filters = query["query"]["bool"]["filter"]
 
     if body.get("files"):
@@ -245,6 +277,8 @@ def _apply_filters(query: dict, body: dict) -> None:
             continue
         destiny, span = entry.get("destiny"), entry.get("range")
         if not isinstance(destiny, str) or not isinstance(span, list) or len(span) != 2:
+            continue
+        if _names_withheld(destiny, withheld_fields):
             continue
         filters.append({"range": {destiny: {"gte": span[0], "lte": span[1]}}})
 

@@ -22,6 +22,14 @@ from archihub.api.aiservices.dialects.ollama import OllamaDialect
 from archihub.api.aiservices.dialects.openai_compat import OpenAICompatibleDialect
 
 
+@pytest.fixture(autouse=True)
+def local_providers_are_allowed(monkeypatch):
+    """The providers here are a local test server, which is an internal address."""
+    from archihub.api.aiservices import providers
+
+    monkeypatch.setattr(providers, "reaches_refused_address", lambda provider: False)
+
+
 # ---------------------------------------------------------------------------
 # A stub provider, speaking whatever we tell it to
 # ---------------------------------------------------------------------------
@@ -787,3 +795,18 @@ def test_recording_an_override_returns_something_json_serialisable(monkeypatch):
     json.dumps(result)
     assert result["capabilities"] == ["chat"]
     assert isinstance(result["updatedAt"], str)
+
+
+def test_a_model_setting_change_records_which_fields_it_set(monkeypatch, audit_log):
+    monkeypatch.setattr(
+        catalogue, "_mongo",
+        lambda: type("M", (), {"upsert_record": lambda self, c, f, d: None})(),
+    )
+    monkeypatch.setattr(catalogue, "clear_cache", lambda provider_id=None: None)
+
+    catalogue.set_override("p", "m", {"context_length": 8000, "ignored": 1}, "alice")
+
+    entry = audit_log[-1]
+    assert entry["action"] == "LLM_MODEL_UPDATE"
+    assert entry["metadata"] == {"provider": "p", "model": "m", "fields": ["context_length"]}
+

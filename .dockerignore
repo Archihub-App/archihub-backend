@@ -28,6 +28,8 @@
 /userfiles
 /temporal
 /uploads
+# the assistant skills a running instance writes (LLM_SKILLS_PATH)
+/skills
 
 # ---- build and test artefacts ----
 **/__pycache__

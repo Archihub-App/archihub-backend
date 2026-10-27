@@ -24,7 +24,7 @@ from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
-    require_role_any,
+    require_permission,
 )
 from archihub.core.responses import json_response
 
@@ -32,10 +32,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/views", tags=["Views"])
 
-require_editor = require_role_any("admin", "editor")
+require_view_manager = require_permission("views.manage")
 
 _RESPONSES = {
-    401: {"description": "Missing/invalid token, or not an editor"},
+    401: {"description": "Missing or invalid token"},
+    403: {"description": "Lacks the views.manage permission"},
     404: {"description": "No such view"},
 }
 
@@ -89,7 +90,7 @@ def _write(call) -> JSONResponse:
 def create(
     data: str = Form(..., description="JSON document describing the view"),
     files: list[UploadFile] = File(default_factory=list),
-    current_user: CurrentUser = Depends(require_editor),
+    current_user: CurrentUser = Depends(require_view_manager),
 ) -> JSONResponse:
     """Create a view, optionally with its thumbnail.
 
@@ -117,7 +118,7 @@ def update(
     view_id: str,
     data: str = Form(..., description="JSON document with the fields to change"),
     files: list[UploadFile] = File(default_factory=list),
-    current_user: CurrentUser = Depends(require_editor),
+    current_user: CurrentUser = Depends(require_view_manager),
 ) -> JSONResponse:
     """Edit a view, optionally replacing its thumbnail.
 
@@ -140,7 +141,7 @@ def update(
 )
 def delete(
     view_id: str,
-    current_user: CurrentUser = Depends(require_editor),
+    current_user: CurrentUser = Depends(require_view_manager),
 ) -> JSONResponse:
     """Delete a view and retire the thumbnail it owned.
 
@@ -155,7 +156,7 @@ def delete(
 )
 def get_by_id(
     view_id: str,
-    current_user: CurrentUser = Depends(require_editor),
+    current_user: CurrentUser = Depends(require_view_manager),
 ) -> JSONResponse:
     """One view, for the editor that maintains it."""
     return _respond(services.get(view_id))

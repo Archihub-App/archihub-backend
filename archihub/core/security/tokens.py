@@ -63,16 +63,19 @@ MSG_INVALID_TOKEN = "Invalid token"
 
 def create_access_token(
     identity: str,
-    expires_delta: timedelta | None = DEFAULT_ACCESS_TOKEN_EXPIRES,
+    expires_delta: timedelta = DEFAULT_ACCESS_TOKEN_EXPIRES,
     *,
     fresh: bool = False,
+    version: int = 0,
 ) -> str:
-    """Mint an access token.
+    """Mint an access token. Every token expires.
 
-    ``expires_delta=None`` produces a token with no ``exp`` claim. Decoding
-    tolerates tokens without ``exp`` so API keys issued without an expiry keep
-    working until they are rotated.
+    ``version`` is the account's session version when the token was issued
+    (claim ``ver``); raising the account's version revokes every earlier token.
     """
+    if expires_delta is None:
+        raise ValueError("An access token must expire")
+
     settings = get_settings()
     now = datetime.now(timezone.utc)
 
@@ -84,9 +87,9 @@ def create_access_token(
         # `sub` is always a string.
         "sub": str(identity),
         "nbf": now,
+        "exp": now + expires_delta,
+        "ver": int(version),
     }
-    if expires_delta is not None:
-        payload["exp"] = now + expires_delta
 
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
 
@@ -105,9 +108,7 @@ def decode_access_token(token: str) -> dict:
             token,
             settings.jwt_secret_key,
             algorithms=[ALGORITHM],
-            # `exp` is verified when present but not required: tokens minted
-            # before the API-key expiry change have no exp claim.
-            options={"require": ["sub"]},
+            options={"require": ["sub", "exp", "type"]},
         )
     except jwt.ExpiredSignatureError:
         raise AuthenticationError(MSG_EXPIRED) from None
@@ -124,8 +125,7 @@ def decode_access_token(token: str) -> dict:
 
     # PyJWT does not know about token types, so a refresh token would otherwise
     # pass - see the module docstring.
-    token_type = claims.get("type")
-    if token_type is not None and token_type != ACCESS_TOKEN_TYPE:
+    if claims.get("type") != ACCESS_TOKEN_TYPE:
         raise InvalidTokenError(MSG_NOT_REFRESH)
 
     return claims
@@ -152,3 +152,46 @@ def get_identity(claims: dict) -> str:
     if not subject:
         raise InvalidTokenError(_("Invalid or expired token"))
     return str(subject)
+
+
+#: The ``type`` of a password-reset token. Never an access token: the decoder
+#: above refuses it, so a reset link cannot open a session.
+PASSWORD_RESET_TOKEN_TYPE = "password_reset"
+
+#: How long a reset link works.
+PASSWORD_RESET_LIFETIME = timedelta(hours=1)
+
+
+def create_password_reset_token(identity: str, password_fingerprint: str) -> str:
+    """A token that permits one password change for ``identity``.
+
+    ``password_fingerprint`` is derived from the stored password, so the token
+    stops working as soon as the password changes - which makes it single-use.
+    """
+    settings = get_settings()
+    now = datetime.now(timezone.utc)
+    payload = {
+        "type": PASSWORD_RESET_TOKEN_TYPE,
+        "sub": str(identity),
+        "pwd": password_fingerprint,
+        "iat": now,
+        "exp": now + PASSWORD_RESET_LIFETIME,
+    }
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=ALGORITHM)
+
+
+def decode_password_reset_token(token: str) -> dict | None:
+    """The claims of a valid reset token, or ``None``."""
+    settings = get_settings()
+    try:
+        claims = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[ALGORITHM],
+            options={"require": ["sub", "exp", "type", "pwd"]},
+        )
+    except jwt.InvalidTokenError:
+        return None
+    if claims.get("type") != PASSWORD_RESET_TOKEN_TYPE:
+        return None
+    return claims

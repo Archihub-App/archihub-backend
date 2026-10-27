@@ -13,6 +13,8 @@ from typing import Any
 from celery.result import AsyncResult
 
 from archihub.core.clock import utcnow
+from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 
 logger = logging.getLogger(__name__)
 
@@ -102,17 +104,28 @@ def add_task(
 def _sync_finished_task(task_id: str, result: AsyncResult) -> None:
     """Write a terminal Celery state back to the task document."""
     if result.successful():
-        value = result.result
+        record_outcome(task_id, succeeded=True, value=result.result)
+    else:
+        logger.warning("Task %s failed", task_id, exc_info=result.result if result.failed() else None)
+        record_outcome(task_id, succeeded=False)
+
+
+def record_outcome(task_id: str, *, succeeded: bool, value: Any = None) -> None:
+    """Store how a task ended on its document.
+
+    Called by the worker as each task finishes, so the outcome outlives the
+    result backend's expiry, and again when a listing finds a task still marked
+    pending.
+    """
+    if succeeded:
         # Mongo cannot store arbitrary objects; keep dict/list/str as-is and
         # stringify anything else rather than raising on insert.
         if not isinstance(value, (str, dict, list, int, float, bool, type(None))):
             value = str(value)
         update = {"status": STATUS_COMPLETED, "result": value}
     else:
-        # Do NOT persist result.result on failure: for an exception it is the
-        # exception object, whose string form can carry connection strings,
+        # Never the exception: its string form can carry connection strings,
         # file paths and other internals into a record the frontend renders.
-        logger.warning("Task %s failed", task_id, exc_info=result.result if result.failed() else None)
         update = {"status": STATUS_FAILED, "result": ""}
 
     _mongo().update_record("tasks", {"taskId": task_id}, update)
@@ -203,7 +216,9 @@ def get_tasks(user: str, body: dict) -> tuple[list | dict, int]:
     """One user's tasks, newest first, reconciling any that have since finished."""
     try:
         mongo = _mongo()
-        page = int(body.get("page") or 0)
+        page = page_number(body.get("page"))
+        if page is None:
+            return {"msg": _('"{field}" must be a number', field="page")}, 400
 
         tasks = list(
             mongo.get_all_records(
@@ -237,13 +252,22 @@ def get_tasks(user: str, body: dict) -> tuple[list | dict, int]:
             resolved.append(entry)
 
         return resolved, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list tasks for %s", user)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def get_tasks_total(user: str) -> int:
     return _mongo().count("tasks", {"user": user})
+
+
+def owns_task(task_id: str, username: str) -> bool:
+    """Whether ``username`` started this task."""
+    task = _mongo().get_record("tasks", {"taskId": task_id}, fields={"user": 1})
+    owner = (task or {}).get("user")
+    if isinstance(owner, list):
+        return username in owner
+    return bool(owner) and owner == username
 
 
 def stop_task(task_id: str, current_user: str) -> tuple[dict, int]:
@@ -261,12 +285,19 @@ def stop_task(task_id: str, current_user: str) -> tuple[dict, int]:
         from archihub.worker.celery_app import celery_app
 
         celery_app.control.revoke(task_id, terminate=True)
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not revoke task %s", task_id)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
     _mongo().update_record(
         "tasks", {"taskId": task_id}, {"status": STATUS_FAILED, "result": ""}
     )
     logger.info("Task %s revoked by %s", task_id, current_user)
+    _audit(current_user, "task_cancel", {"taskId": task_id})
     return {"msg": _("Task stopped successfully")}, 200
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

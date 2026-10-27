@@ -333,3 +333,35 @@ def test_directory_is_skipped_when_not_configured(monkeypatch):
     monkeypatch.setattr(ldap_auth, "LDAP_HOST", None)
     assert ldap_auth.is_enabled() is False
     assert ldap_auth.authenticate("alice", "password") is None
+
+
+def test_a_directory_identity_never_maps_onto_a_local_account(monkeypatch):
+    import archihub.api.users.services as users
+
+    monkeypatch.setattr(
+        users, "get_user", lambda username: {"username": username, "loginType": "local"}
+    )
+    monkeypatch.setattr(users, "register_user", lambda body: pytest.fail("must not register"))
+
+    assert services._sync_ldap_user({"mail": "admin@example.org"}) is None
+
+
+def test_a_directory_identity_maps_onto_its_directory_account(monkeypatch):
+    import archihub.api.users.services as users
+
+    account = {"username": "ana@example.org", "loginType": "ldap"}
+    monkeypatch.setattr(users, "get_user", lambda username: account)
+
+    assert services._sync_ldap_user({"mail": "ana@example.org"}) is account
+
+
+def test_the_throttled_address_is_the_connection_not_a_header():
+    from types import SimpleNamespace
+
+    from archihub.api.auth.router import _client_ip
+
+    request = SimpleNamespace(
+        headers={"X-Forwarded-For": "203.0.113.9"}, client=SimpleNamespace(host="198.51.100.4")
+    )
+
+    assert _client_ip(request) == "198.51.100.4"

@@ -154,10 +154,14 @@ def navigation_clause(
 
     ``for_filing`` applies the rule regardless of the setting: the tree is then
     a parent picker, and a parent the caller may not see is one they cannot use.
+
+    Opening metadata to all users opens it to signed-in users: an anonymous
+    caller always gets the rule, so the public tree never names a resource that
+    is not public.
     """
     if is_admin:
         return None
-    if not for_filing and metadata_open_to_all():
+    if not for_filing and username and metadata_open_to_all():
         return None
     return access_rights_clause(username)
 
@@ -180,20 +184,7 @@ def effective_access_right(resource: dict) -> str | None:
     if own:
         return own
 
-    parents = resource.get("parents") or []
-    parent_ids = [p.get("id") for p in parents if isinstance(p, dict) and p.get("id")]
-    if not parent_ids:
-        return None
-
-    from bson.objectid import ObjectId
-
-    object_ids = []
-    for parent_id in parent_ids:
-        try:
-            object_ids.append(ObjectId(parent_id))
-        except Exception:
-            logger.warning("Resource lists an unusable ancestor id %r", parent_id)
-
+    object_ids = ancestor_object_ids([resource])
     if not object_ids:
         return None
 
@@ -201,12 +192,96 @@ def effective_access_right(resource: dict) -> str | None:
         "resources", {"_id": {"$in": object_ids}}, fields={"accessRights": 1}
     )
     rights = {str(row["_id"]): row.get("accessRights") for row in rows}
+    return inherited_access_right(resource, rights)
 
-    for parent_id in parent_ids:
-        if rights.get(parent_id):
-            return rights[parent_id]
+
+def ancestor_object_ids(resources: list[dict]) -> list:
+    """The distinct ancestor ids of ``resources``, as ``ObjectId``.
+
+    An id that is not a valid ``ObjectId`` is logged and left out.
+    """
+    from bson.objectid import ObjectId
+
+    seen: set[str] = set()
+    object_ids = []
+    for resource in resources:
+        for parent in resource.get("parents") or []:
+            parent_id = parent.get("id") if isinstance(parent, dict) else None
+            if not parent_id or parent_id in seen:
+                continue
+            seen.add(parent_id)
+            try:
+                object_ids.append(ObjectId(parent_id))
+            except Exception:
+                logger.warning("Resource lists an unusable ancestor id %r", parent_id)
+    return object_ids
+
+
+def inherited_access_right(resource: dict, rights_by_id: dict[str, str | None]) -> str | None:
+    """:func:`effective_access_right` over ancestor rights already loaded.
+
+    ``rights_by_id`` maps an ancestor id to its own ``accessRights``. It lets a
+    caller that handles many resources at once read every ancestor in one query.
+    """
+    own = resource.get("accessRights")
+    if own:
+        return own
+
+    for parent in resource.get("parents") or []:
+        parent_id = parent.get("id") if isinstance(parent, dict) else None
+        if parent_id and rights_by_id.get(parent_id):
+            return rights_by_id[parent_id]
 
     return None
+
+
+def may_read_field(field: dict, user: str | None, *, public: bool) -> bool:
+    """Whether this caller may read one form field.
+
+    A field that names access rights is restricted: holding at least one of
+    them is enough, administrators always may, and a public caller never may.
+    """
+    required = field.get("accessRights")
+    if not required:
+        return True
+    if public or not user:
+        return False
+
+    from archihub.api.records.access import holds
+    from archihub.api.users.services import has_role
+
+    return has_role(user, "admin") or holds(user, required)
+
+
+def field_visibility(
+    post_types: list[str], user: str | None, *, public: bool
+) -> tuple[list[dict], set[str]]:
+    """``(readable fields, withheld destinies)`` across the given content types.
+
+    Every field path a caller may name in a listing or a search - a column, a
+    sort key, a filter - must be one of the readable fields. A destiny that is
+    readable in one of the types and withheld in another is withheld.
+    """
+    from archihub.api.types.services import get_metadata
+
+    readable: dict[str, dict] = {}
+    withheld: set[str] = set()
+    for post_type in post_types:
+        try:
+            form = get_metadata(post_type)
+        except Exception:
+            logger.warning("Could not resolve the form for %s", post_type, exc_info=True)
+            continue
+        for field in (form or {}).get("fields") or []:
+            destiny = field.get("destiny")
+            if not isinstance(destiny, str) or not destiny:
+                continue
+            if may_read_field(field, user, public=public):
+                readable.setdefault(destiny, field)
+            else:
+                withheld.add(destiny)
+
+    return [f for d, f in readable.items() if d not in withheld], withheld
 
 
 def may_view_resource(username: str, resource: dict, is_admin: bool) -> bool:
@@ -249,17 +324,18 @@ def holds_edit_role(username: str, post_type: str | None, is_admin: bool) -> boo
 
 
 def owns_or_supervises(username: str, resource: dict, is_admin: bool) -> bool:
-    """The ownership half of the write rule: creator, ``super_editor``, or admin.
+    """The ownership half of the write rule: the creator, the
+    ``resources.super_edit`` permission, or an administrator.
 
     ``createdBy`` is read with ``.get``: documents predating the field exist.
     """
-    from archihub.api.users.services import has_role
+    from archihub.api.users.services import has_permission
 
     if is_admin:
         return True
     if resource.get("createdBy") == username:
         return True
-    return has_role(username, "super_editor")
+    return has_permission(username, "resources.super_edit")
 
 
 def is_public(resource: dict) -> bool:
@@ -294,19 +370,33 @@ def is_public(resource: dict) -> bool:
 
 
 def may_see_deleted(username: str | None, is_admin: bool) -> bool:
-    """Only administrators may browse the recycle bin."""
-    return is_admin
+    """Administrators, and the ``resources.see_deleted`` permission, may browse
+    the recycle bin."""
+    from archihub.api.users.services import has_permission
+
+    if is_admin:
+        return True
+    return bool(username) and has_permission(username, "resources.see_deleted")
 
 
-def may_see_all_drafts(is_publisher: bool, is_admin: bool) -> bool:
+def may_see_all_drafts(username: str | None, is_publisher: bool, is_admin: bool) -> bool:
     """Whether the caller may see drafts other than their own.
 
-    ONLY SOMEONE WHO IS BOTH publisher AND admin sees everyone's drafts; anyone
-    else sees their own. This is stricter than "either role", deliberately: it
-    fails closed, and widening who can read other people's unpublished work is a
-    decision for whoever hands out these roles.
+    BUILT IN, ONLY SOMEONE WHO IS BOTH publisher AND admin sees everyone's
+    drafts; anyone else sees their own. This is stricter than "either role",
+    deliberately: it fails closed, and widening who can read other people's
+    unpublished work is a decision for whoever hands out these roles - which is
+    what the ``resources.see_all_drafts`` permission is for.
     """
-    return is_publisher and is_admin
+    from archihub.api.users.services import has_permission
+
+    if is_publisher and is_admin:
+        return True
+    return bool(username) and has_permission(username, "resources.see_all_drafts")
+
+
+#: The states a listing may ask for.
+LISTING_STATES = ("published", "draft", "deleted")
 
 
 def build_listing_filters(
@@ -324,6 +414,13 @@ def build_listing_filters(
     """
     filters = dict(base)
 
+    # The status is a value the caller picks from a closed set, never a query
+    # clause. The two other pre-publication states are listed as drafts.
+    if status in ("created", "updated"):
+        status = "draft"
+    if not isinstance(status, str) or status not in LISTING_STATES:
+        status = "published"
+
     if status == "deleted" and not may_see_deleted(username, is_admin):
         return filters, "unauthorized"
 
@@ -340,7 +437,7 @@ def build_listing_filters(
         branches = [
             {"status": state, **filters} for state in ("draft", "created", "updated")
         ]
-        if not may_see_all_drafts(is_publisher, is_admin):
+        if not may_see_all_drafts(username, is_publisher, is_admin):
             for branch in branches:
                 branch["createdBy"] = username
         filters = {"$or": branches}

@@ -66,6 +66,13 @@ def parse_result(result):
 # ---------------------------------------------------------------------------
 
 
+def _is_installed_plugin(slug) -> bool:
+    """Whether ``slug`` names a plugin installed on this instance."""
+    from archihub.plugins.framework.discovery import list_installed_plugins
+
+    return isinstance(slug, str) and slug in list_installed_plugins()
+
+
 def _base_field_types() -> list[dict]:
     """The built-in field-type catalogue, plus any a plugin contributes.
 
@@ -95,9 +102,9 @@ def get_all_fields_types() -> tuple[list | dict, int]:
             if field.get("label"):
                 field["label"] = _(field["label"])
         return fields, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list field types")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 # ---------------------------------------------------------------------------
@@ -117,9 +124,9 @@ def get_all() -> tuple[list | dict, int]:
             for record in records
         ]
         return forms, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list forms")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def exists(slug: str) -> bool:
@@ -148,9 +155,9 @@ def get_by_slug(slug: str) -> tuple[dict, int]:
 
         form.pop("_id", None)
         return parse_result(form), 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not load form %s", slug)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +257,10 @@ def validate_form(form: dict) -> None:
             field["setCondition"] = False
             for key in ("conditionField", "conditionType", "conditionValueText"):
                 field.pop(key, None)
+
+        if "plugin" in field and not _is_installed_plugin(field.get("plugin")):
+            # The browser fetches and runs code from the named plugin's route.
+            raise ValidationError(_("Invalid plugin"))
 
         if field.get("accessRights"):
             valid = {option.get("id") for option in _get_access_rights().get("options", [])}
@@ -367,9 +378,9 @@ def create(body: dict, user: str) -> tuple[dict, int]:
         # A rejected form definition is the user's answer, not a server fault.
         # Re-raised so the registered handler renders its own status and message.
         raise
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not create form")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def update_by_slug(slug: str, body: dict, user: str) -> tuple[dict, int]:
@@ -400,9 +411,9 @@ def update_by_slug(slug: str, body: dict, user: str) -> tuple[dict, int]:
         }, 200
     except BusinessError:
         raise
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not update form %s", slug)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def delete_by_slug(slug: str, user: str) -> tuple[dict, int]:
@@ -426,9 +437,9 @@ def delete_by_slug(slug: str, user: str) -> tuple[dict, int]:
         # router sends it without a body: HTTP forbids content on a 204, and the
         # client never reads one.
         return {"msg": _("Form deleted successfully")}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not delete form %s", slug)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def duplicate_by_slug(slug: str, user: str) -> tuple[dict, int]:
@@ -447,9 +458,9 @@ def duplicate_by_slug(slug: str, user: str) -> tuple[dict, int]:
         # `create` validates, so a copy of a form that is no longer valid under
         # the current combined schema is refused with its own reason.
         raise
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not duplicate form %s", slug)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 # ---------------------------------------------------------------------------

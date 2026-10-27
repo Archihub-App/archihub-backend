@@ -22,7 +22,7 @@ from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
-    require_role_any,
+    require_permission,
 )
 from archihub.core.responses import json_response
 
@@ -34,10 +34,8 @@ MSG_UNAUTHORIZED = "You don't have the required authorization"
 
 # `ROLE_FAILURE_STATUS` is passed explicitly to mark the routes whose refusal
 # status is chosen here; see its comment in core/security/jwt.py.
-require_admin = require_role_any("admin")
-require_admin_or_editor = require_role_any(
-    "admin", "editor"
-)
+require_type_creator = require_permission("types.create")
+require_type_manager = require_permission("types.manage")
 
 
 def _respond(result) -> JSONResponse:
@@ -69,6 +67,20 @@ def get_all(current_user: CurrentUser = Depends(get_current_user)) -> JSONRespon
     return _respond(services.get_all())
 
 
+@router.get(
+    "/roles",
+    responses={200: {"description": "The roles vocabulary"}, 403: {"description": "Not permitted"}},
+)
+def get_roles(current_user: CurrentUser = Depends(require_type_manager)) -> JSONResponse:
+    """The roles a content type's edit and view roles are chosen from.
+
+    Declared before ``/{slug}`` so the literal segment wins.
+    """
+    from archihub.core.roles import get_roles as _get
+
+    return json_response(_get(), 200)
+
+
 @router.post(
     "",
     status_code=201,
@@ -82,7 +94,7 @@ def get_all(current_user: CurrentUser = Depends(get_current_user)) -> JSONRespon
 )
 def create(
     body: PostTypeCreate = Body(...),
-    current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_type_creator),
 ) -> JSONResponse:
     """Create a content type.
 
@@ -111,7 +123,7 @@ def create(
 )
 def get_type_viz(
     body: dict = Body(default_factory=dict),
-    current_user: CurrentUser = Depends(require_admin_or_editor),
+    current_user: CurrentUser = Depends(require_type_manager),
 ) -> JSONResponse:
     """Counts for the charts on a content type's info panel.
 
@@ -146,7 +158,7 @@ def get_type_viz(
 )
 def get_by_slug(
     slug: str,
-    current_user: CurrentUser = Depends(require_admin_or_editor),
+    current_user: CurrentUser = Depends(require_type_manager),
 ) -> JSONResponse:
     """Get one content type by slug.
 
@@ -185,7 +197,7 @@ def get_by_slug(
 def update_by_slug(
     slug: str,
     body: PostTypeUpdate = Body(...),
-    current_user: CurrentUser = Depends(require_admin_or_editor),
+    current_user: CurrentUser = Depends(require_type_manager),
 ) -> JSONResponse:
     """Update a content type."""
     return _respond(
@@ -204,7 +216,7 @@ def update_by_slug(
 )
 def delete_by_slug(
     slug: str,
-    current_user: CurrentUser = Depends(require_admin_or_editor),
+    current_user: CurrentUser = Depends(require_type_manager),
 ) -> JSONResponse:
     """Delete a content type and soft-delete every resource that used it.
 

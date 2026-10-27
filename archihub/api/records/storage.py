@@ -467,7 +467,10 @@ def promote_temporary_records(
         except Exception:
             continue
 
-        record = mongo.get_record(COLLECTION, {"_id": object_id, "temporary": True})
+        # Only the uploader's own staged files can be attached.
+        record = mongo.get_record(
+            COLLECTION, {"_id": object_id, "temporary": True, "createdBy": user or "system"}
+        )
         if not record:
             continue
 
@@ -479,6 +482,11 @@ def promote_temporary_records(
             COLLECTION,
             {"hash": content_hash, "temporary": {"$ne": True}, "status": {"$ne": STATUS_DELETED}},
         )
+
+        if existing and not _may_reuse(existing, user):
+            # The identical content is filed somewhere this user cannot see; the
+            # upload stays a record of its own.
+            existing = None
 
         if existing:
             # Deduplicated: permanent copy exists. Discard temp file and temp document.
@@ -524,6 +532,14 @@ def promote_temporary_records(
         attached.append(AttachedFile(id=str(object_id), tag=tag, order=order))
 
     return [entry.as_dict() for entry in attached]
+
+
+def _may_reuse(record: dict, user: str | None) -> bool:
+    """Whether an uploader may be given an existing record with the same content."""
+    from archihub.api.records.services import load_visible
+
+    _visible, error = load_visible(str(record["_id"]), user)
+    return error is None
 
 
 def delete_temporary_record(record_id: str, user: str, is_admin: bool = False) -> tuple[dict, int]:

@@ -335,7 +335,7 @@ def _boundary_levels(directory) -> list[tuple[int, object]]:
     return sorted(levels, key=lambda pair: pair[0])
 
 
-def upload_shapes() -> tuple[dict, int]:
+def upload_shapes(user: str | None = None) -> tuple[dict, int]:
     """Load the bundled administrative boundaries into MongoDB.
 
     Each level replaces itself: the existing shapes at that level are deleted
@@ -351,12 +351,16 @@ def upload_shapes() -> tuple[dict, int]:
     try:
         loaded = 0
         for level, folder in _boundary_levels(directory):
+            # A level may be split across several files; it is cleared once,
+            # before the first, so each file adds to it.
+            _mongo().delete_records(COLLECTION, {"properties.admin_level": level})
             for path in sorted(folder.iterdir()):
                 if path.suffix != ".json":
                     continue
                 loaded += _load_boundary_file(path, level)
 
         logger.info("Loaded %d boundary shapes", loaded)
+        _audit(user, "geo_load", {"shapes": loaded})
         return {"msg": _("Shapes uploaded successfully")}, 200
     except Exception:
         # The real reason names a file path on the server's disk.
@@ -465,7 +469,7 @@ def _repair_invalid_geometries(features, source_name: str, gpd):
 
 
 def _load_boundary_file(path, level: int) -> int:
-    """Replace one administrative level from one GeoJSON file."""
+    """Add one GeoJSON file's features to an administrative level."""
     import json
 
     import geopandas as gpd
@@ -492,7 +496,6 @@ def _load_boundary_file(path, level: int) -> int:
     features = _repair_invalid_geometries(features, path.name, gpd)
 
     mongo = _mongo()
-    mongo.delete_records(COLLECTION, {"properties.admin_level": level})
 
     if level > 0:
         _attach_parents(features, level, gpd)
@@ -693,3 +696,9 @@ def ensure_polygon(feature: dict) -> dict:
 
     feature["geometry"] = mapping(polygons[0] if len(polygons) == 1 else MultiPolygon(polygons))
     return feature
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

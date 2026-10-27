@@ -202,3 +202,54 @@ def test_hook_order_is_stored_as_a_number(mongo):
     _, operator = mongo.operations[0]
     stored = operator["$set"]["plugins_settings.filesProcessing"]
     assert stored["types_activation"][0]["order"] == 3
+
+
+def test_ffmpeg_runs_bounded_by_a_timeout(monkeypatch):
+    import subprocess
+    from types import SimpleNamespace
+
+    from archihub.plugins.filesProcessing import media
+
+    seen = {}
+
+    def fake_run(command, **kwargs):
+        seen.update(kwargs, command=command)
+        return SimpleNamespace(returncode=0, stderr=b"")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    class Stream:
+        def overwrite_output(self):
+            return self
+
+        def compile(self):
+            return ["ffmpeg", "-i", "in", "out"]
+
+    media._run_ffmpeg(Stream())
+
+    assert seen["timeout"] == media.FFMPEG_TIMEOUT
+    assert seen["command"][0] == "ffmpeg"
+
+
+def test_a_failed_ffmpeg_does_not_carry_its_output_in_the_error(monkeypatch):
+    import subprocess
+    from types import SimpleNamespace
+
+
+    from archihub.plugins.filesProcessing import media
+
+    monkeypatch.setattr(
+        subprocess, "run",
+        lambda command, **kw: SimpleNamespace(returncode=1, stderr=b"/srv/secret/path"),
+    )
+
+    class Stream:
+        def overwrite_output(self):
+            return self
+
+        def compile(self):
+            return ["ffmpeg"]
+
+    with pytest.raises(RuntimeError) as exc:
+        media._run_ffmpeg(Stream())
+    assert "/srv/secret" not in str(exc.value)

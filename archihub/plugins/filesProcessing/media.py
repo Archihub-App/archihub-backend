@@ -30,6 +30,10 @@ class ProcessingFailed(RuntimeError):
 #: LibreOffice conversions are minutes on a large document and never hours.
 LIBREOFFICE_TIMEOUT = 900
 
+#: One ffmpeg transcode of an archival master. Long recordings take a while at
+#: the derivative sizes below, but not this long.
+FFMPEG_TIMEOUT = 4 * 3600
+
 #: Beyond this dimension an image gets deep-zoom tiles as well as flat versions.
 DZI_THRESHOLD = 4096
 
@@ -52,13 +56,16 @@ def audio(source: Path, output_stem: Path) -> bool:
     import ffmpeg
 
     try:
-        ffmpeg.input(str(source)).output(
-            f"{output_stem}.mp3", acodec="libmp3lame", ab="128k"
-        ).overwrite_output().run(quiet=True)
-
-        ffmpeg.input(str(source)).output(
-            f"{output_stem}.ogg", acodec="libvorbis", **{"q:a": 4}
-        ).overwrite_output().run(quiet=True)
+        _run_ffmpeg(
+            ffmpeg.input(str(source)).output(
+                f"{output_stem}.mp3", acodec="libmp3lame", ab="128k"
+            )
+        )
+        _run_ffmpeg(
+            ffmpeg.input(str(source)).output(
+                f"{output_stem}.ogg", acodec="libvorbis", **{"q:a": 4}
+            )
+        )
     except Exception as exc:
         raise ProcessingFailed(f"Could not derive audio from {source.name}") from exc
 
@@ -80,12 +87,14 @@ def video(source: Path, output_stem: Path) -> tuple[bool, bool]:
                 ("mp4", "libx264", "aac"),
                 ("webm", "libvpx", "libvorbis"),
             ):
-                ffmpeg.input(str(source)).output(
-                    f"{output_stem}.{extension}",
-                    vcodec=video_codec,
-                    acodec=audio_codec,
-                    vf="scale=480:trunc(ow/a/2)*2",
-                ).overwrite_output().run(quiet=True)
+                _run_ffmpeg(
+                    ffmpeg.input(str(source)).output(
+                        f"{output_stem}.{extension}",
+                        vcodec=video_codec,
+                        acodec=audio_codec,
+                        vf="scale=480:trunc(ow/a/2)*2",
+                    )
+                )
         elif has_audio:
             audio(source, output_stem)
     except ProcessingFailed:
@@ -94,6 +103,25 @@ def video(source: Path, output_stem: Path) -> tuple[bool, bool]:
         raise ProcessingFailed(f"Could not derive video from {source.name}") from exc
 
     return has_audio, has_video
+
+
+def _run_ffmpeg(stream) -> None:
+    """Run one ffmpeg command line, bounded by ``FFMPEG_TIMEOUT``.
+
+    Raises on a non-zero exit or a timeout; stderr goes to the log, never into
+    the exception.
+    """
+    command = stream.overwrite_output().compile()
+    try:
+        completed = subprocess.run(
+            command, capture_output=True, timeout=FFMPEG_TIMEOUT, check=False
+        )
+    except subprocess.TimeoutExpired:
+        logger.error("ffmpeg timed out after %ss", FFMPEG_TIMEOUT)
+        raise
+    if completed.returncode != 0:
+        logger.error("ffmpeg failed: %s", completed.stderr.decode(errors="replace")[-2000:])
+        raise RuntimeError("ffmpeg exited with an error")
 
 
 def _streams(source: Path) -> tuple[bool, bool]:

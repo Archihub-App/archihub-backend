@@ -30,6 +30,10 @@ class FakeMongo:
     def insert_record(self, collection, record):
         self.inserted.append((collection, record))
 
+    def update_record_operator(self, collection, filters, operator, **kwargs):
+        self.operators = getattr(self, "operators", [])
+        self.operators.append((collection, filters, operator))
+
     def update_record(self, collection, filters, update):
         self.updated.append((collection, filters, update))
         return type("R", (), {"modified_count": 1})()
@@ -309,3 +313,144 @@ def test_an_account_without_a_password_cannot_mint_keys(mongo):
     mongo.records["users"] = {"password": ""}
     _payload, status = services.issue_api_key("ldapuser", "anything", "public")
     assert status == 400
+
+
+@pytest.mark.parametrize("username", ["system_scheduler_backup", "System_Scheduler_backup"])
+def test_the_scheduled_task_prefix_cannot_be_registered(username, monkeypatch):
+    from archihub.api.users import services as user_services
+
+    class Untouched:
+        def get_record(self, *a, **k):
+            pytest.fail("must be refused before any lookup")
+
+    monkeypatch.setattr(user_services, "_mongo", lambda: Untouched())
+
+    _payload, status = user_services.register_user({"username": username, "password": "x"})
+
+    assert status == 400
+
+
+# ---------------------------------------------------------------------------
+# Password recovery
+# ---------------------------------------------------------------------------
+
+
+class _RecoveryMongo:
+    def __init__(self, user):
+        self.user = user
+        self.updated = []
+        self.revoked = 0
+
+    def update_record_operator(self, collection, filters, operator, **kwargs):
+        self.revoked += operator.get("$inc", {}).get("tokenVersion", 0)
+
+    def get_record(self, collection, filters, fields=None):
+        return dict(self.user) if self.user else None
+
+    def update_record(self, collection, filters, update):
+        from types import SimpleNamespace
+
+        if any(self.user.get(k) != v for k, v in filters.items()):
+            return SimpleNamespace(modified_count=0)
+        self.updated.append(update)
+        self.user.update(update)
+        return SimpleNamespace(modified_count=1)
+
+
+def _recovery_link(username, stored_hash):
+    from cryptography.fernet import Fernet
+
+    from archihub.api.users import services as user_services
+    from archihub.core.security import tokens
+    from archihub.core.settings import get_settings
+
+    token = tokens.create_password_reset_token(
+        username, user_services._password_fingerprint(stored_hash)
+    )
+    return Fernet(get_settings().fernet_key).encrypt(token.encode()).decode()
+
+
+@pytest.fixture
+def recovery(monkeypatch):
+    from archihub.api.users import services as user_services
+
+    fake = _RecoveryMongo({"username": "ana", "password": "old-hash"})
+    monkeypatch.setattr(user_services, "_mongo", lambda: fake)
+    monkeypatch.setattr(user_services, "password_recovery_enabled", lambda: True)
+    return fake
+
+
+def test_a_recovery_link_changes_the_password_once(recovery):
+    from archihub.api.users import services as user_services
+
+    link = _recovery_link("ana", "old-hash")
+
+    assert user_services.reset_password({"token": link, "password": "new"})[1] == 200
+    assert user_services.reset_password({"token": link, "password": "again"})[1] == 400
+    assert len(recovery.updated) == 1
+    # The sessions opened with the old password end with it.
+    assert recovery.revoked == 1
+
+
+def test_a_recovery_token_never_opens_a_session(recovery):
+    from cryptography.fernet import Fernet
+
+    from archihub.core.errors import InvalidTokenError
+    from archihub.core.security import tokens
+    from archihub.core.settings import get_settings
+
+    token = Fernet(get_settings().fernet_key).decrypt(_recovery_link("ana", "old-hash").encode())
+
+    with pytest.raises(InvalidTokenError):
+        tokens.decode_access_token(token.decode())
+
+
+def test_a_session_token_is_not_a_recovery_link(recovery):
+    from cryptography.fernet import Fernet
+
+    from archihub.api.users import services as user_services
+    from archihub.core.security import tokens
+    from archihub.core.settings import get_settings
+
+    session = tokens.create_access_token("ana")
+    cipher = Fernet(get_settings().fernet_key).encrypt(session.encode()).decode()
+
+    assert user_services.reset_password({"token": cipher, "password": "new"})[1] == 400
+    assert recovery.updated == []
+
+
+def test_user_options_carry_only_identifying_fields(monkeypatch):
+    from bson.objectid import ObjectId
+
+    from archihub.api.users import services as user_services
+
+    seen = {}
+
+    class Mongo:
+        def get_all_records(self, collection, filters, limit=0, fields=None, sort=None, **kw):
+            seen.update(fields=fields, limit=limit)
+            return [{"_id": ObjectId(), "username": "ana@x.org", "name": "Ana"}]
+
+    monkeypatch.setattr(user_services, "_mongo", lambda: Mongo())
+
+    options, status = user_services.get_user_options()
+
+    assert status == 200
+    assert set(options[0]) == {"id", "username", "name"}
+    assert seen["fields"] == {"_id": 1, "username": 1, "name": 1}
+    assert seen["limit"] == user_services.MAX_USER_OPTIONS
+
+
+def test_a_recovery_link_raced_by_two_requests_changes_the_password_once(recovery):
+    """Both read the old password; only the conditioned write of the first lands."""
+    from archihub.api.users import services as user_services
+
+    link = _recovery_link("ana", "old-hash")
+    stale = dict(recovery.user)
+    recovery.get_record = lambda collection, filters, fields=None: dict(stale)
+
+    first = user_services.reset_password({"token": link, "password": "one"})[1]
+    second = user_services.reset_password({"token": link, "password": "two"})[1]
+
+    assert (first, second) == (200, 400)
+    assert recovery.revoked == 1

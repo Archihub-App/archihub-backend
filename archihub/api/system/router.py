@@ -26,6 +26,7 @@ from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
+    require_permission,
     require_role_any,
 )
 from archihub.core.responses import json_response
@@ -35,9 +36,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/system", tags=["System settings"])
 
 require_admin = require_role_any("admin")
-require_admin_or_editor = require_role_any(
-    "admin", "editor"
-)
 #: The plugins listing is what the processing screens read to build themselves,
 #: so it admits `processing` as well as `admin` - narrowing it to admin alone
 #: leaves an operator holding only `processing` with an empty page.
@@ -157,7 +155,7 @@ def get_default_cataloging_type(
     responses={200: {"description": "Configured access rights"}, **_ROLE_RESPONSES},
 )
 def get_access_rights(
-    current_user: CurrentUser = Depends(require_admin_or_editor),
+    current_user: CurrentUser = Depends(require_permission("access_rights.read")),
 ) -> JSONResponse:
     """The access-rights vocabulary, as the stored list document.
 
@@ -176,6 +174,59 @@ def get_roles(current_user: CurrentUser = Depends(require_admin)) -> JSONRespons
     from archihub.core.roles import get_roles as _get
 
     return json_response(_get(), 200)
+
+
+# ---------------------------------------------------------------------------
+# Permission points
+#
+# Administrators only, all three: choosing who passes a check is the same
+# authority as assigning roles.
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/permission-points",
+    responses={200: {"description": "Every permission point"}, **_ROLE_RESPONSES},
+)
+def get_permission_points(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """The catalogue of role checks an administrator may add roles to."""
+    from archihub.api.system import role_mappings
+
+    return _respond(role_mappings.list_points())
+
+
+@router.get(
+    "/role-mappings",
+    responses={200: {"description": "The roles added to each point"}, **_ROLE_RESPONSES},
+)
+def get_role_mappings(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
+    """The roles added to each permission point, beyond its built-in ones."""
+    from archihub.api.system import role_mappings
+
+    return _respond(role_mappings.get_role_mappings())
+
+
+@router.put(
+    "/role-mappings",
+    responses={
+        200: {"description": "Role mappings updated"},
+        400: {"description": "An unknown point or role, or a malformed body"},
+        **_ROLE_RESPONSES,
+    },
+)
+def update_role_mappings(
+    body: dict = Body(...),
+    current_user: CurrentUser = Depends(require_admin),
+) -> JSONResponse:
+    """Set the roles added to one or more permission points.
+
+    ``{"mappings": {"resources.see_deleted": ["curator"]}}``. Points not named
+    keep their roles; an empty list removes a point's added roles. Built-in
+    roles always pass and cannot be removed.
+    """
+    from archihub.api.system import role_mappings
+
+    return _respond(role_mappings.update_role_mappings(body, current_user.username))
 
 
 # ---------------------------------------------------------------------------
@@ -246,23 +297,43 @@ def change_plugin_status(
 )
 def get_actions(
     body: dict = Body(...),
-    current_user: CurrentUser = Depends(
-        require_role_any("admin", "processing", "editor")
-    ),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> JSONResponse:
-    """Which plugin actions to offer at one place in the interface.
+    """Which plugin actions this caller is offered at one place in the interface.
+
+    Each action states the roles that may run it; an action that states none is
+    offered to ``DEFAULT_ACTION_ROLES``. The plugin's own route checks again.
 
     Read from the plugins THIS PROCESS MOUNTED, not by re-importing every active
     plugin package on each request, so a plugin that fails to import cannot turn a
     menu into a 500.
     """
+    from archihub.api.users.services import has_role
     from archihub.plugins.framework.mounting import system_actions
 
     placement = body.get("placement")
     if not isinstance(placement, str) or not placement:
         return json_response({"msg": _("You must specify a {field}", field="placement")}, 400)
 
-    return json_response({"actions": system_actions(placement)}, 200)
+    username = current_user.username
+    is_admin = has_role(username, "admin")
+    offered = [
+        action for action in system_actions(placement)
+        if is_admin
+        or any(has_role(username, role) for role in _action_roles(action))
+    ]
+    return json_response({"actions": offered}, 200)
+
+
+#: Who is offered an action that does not state its own roles.
+DEFAULT_ACTION_ROLES = ("admin", "processing", "editor")
+
+
+def _action_roles(action: dict) -> tuple[str, ...]:
+    roles = action.get("roles")
+    if isinstance(roles, list) and roles and all(isinstance(r, str) for r in roles):
+        return tuple(roles)
+    return DEFAULT_ACTION_ROLES
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +344,7 @@ def get_actions(
 @router.get("/clear-cache", responses={200: {"description": "Cache cleared"}, **_ROLE_RESPONSES})
 def clear_cache(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
     """Flush the shared cache."""
-    return _respond(services.clear_cache())
+    return _respond(services.clear_cache(current_user.username))
 
 
 @router.get(
@@ -291,7 +362,7 @@ def restart(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse:
     system-action helper, which sends one for every button it renders. The path
     and method are the contract with that screen.
     """
-    return _respond(services.restart_system())
+    return _respond(services.restart_system(current_user.username))
 
 
 # ---------------------------------------------------------------------------
@@ -372,7 +443,7 @@ def geo_load(current_user: CurrentUser = Depends(require_admin)) -> JSONResponse
     """
     from archihub.api.geosystem import services as geo_services
 
-    return _respond(geo_services.upload_shapes())
+    return _respond(geo_services.upload_shapes(current_user.username))
 
 
 @router.get("/zip-files-delete", responses={200: {"description": "Removed"}, **_ROLE_RESPONSES})
@@ -380,7 +451,7 @@ def zip_files_delete(current_user: CurrentUser = Depends(require_admin)) -> JSON
     """Delete the cached bulk-download archives."""
     from archihub.api.resources import files as resource_files
 
-    return _respond(resource_files.delete_generated("zipfiles"))
+    return _respond(resource_files.delete_generated("zipfiles", current_user.username))
 
 
 @router.get(
@@ -393,7 +464,7 @@ def inventory_files_delete(current_user: CurrentUser = Depends(require_admin)) -
     """
     from archihub.api.resources import files as resource_files
 
-    return _respond(resource_files.delete_generated("inventoryMaker"))
+    return _respond(resource_files.delete_generated("inventoryMaker", current_user.username))
 
 
 @router.get(
@@ -406,4 +477,4 @@ def node_clear_cache(identity: ApiIdentity = Depends(node_api_dependency)) -> JS
     Authenticated with a node API key rather than a session, because the caller
     is another ArchiHUB node propagating an invalidation - not a person.
     """
-    return _respond(services.clear_cache())
+    return _respond(services.clear_cache(identity.username, via="node"))

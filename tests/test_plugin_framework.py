@@ -448,3 +448,30 @@ def test_the_plugin_tasks_reach_celerys_registry():
         "massiveUpdater.update_inventory",
     ):
         assert name in registered
+
+
+def test_plugin_settings_refuse_files_instead_of_dropping_them():
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from archihub.core.security.jwt import CurrentUser, get_current_user
+    from archihub.plugins.framework.base import ArchiPlugin
+
+    plugin = ArchiPlugin("demoSettings", {"name": "Demo", "settings": {"settings": []}})
+    app = FastAPI()
+    app.include_router(plugin.build())
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="admin", claims={})
+    import archihub.api.users.services as users
+
+    original = users.has_role
+    users.has_role = lambda user, role: True
+    try:
+        response = TestClient(app).post(
+            "/demoSettings/settings",
+            data={"data": "{}"},
+            files={"files": ("a.txt", b"x", "text/plain")},
+        )
+    finally:
+        users.has_role = original
+
+    assert response.status_code == 400

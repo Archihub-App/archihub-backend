@@ -28,6 +28,7 @@ import logging
 from archihub.core.clock import as_utc, isoformat_utc, utcnow
 from archihub.core.errors import NotFoundError, RateLimitError
 from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 from archihub.infra.cache import cached
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,21 @@ def _is_valid_system_user(username: str) -> bool:
     return any(task.get("task") == task_name for task in scheduled)
 
 
+@cached("users")
+def session_version(username: str) -> int:
+    """The account's session version; a token issued under an older one is revoked."""
+    user = _mongo().get_record("users", {"username": username}, fields={"tokenVersion": 1})
+    value = (user or {}).get("tokenVersion")
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def revoke_sessions(username: str) -> None:
+    """End every session of ``username`` by raising its session version."""
+    _mongo().update_record_operator(
+        "users", {"username": username}, {"$inc": {"tokenVersion": 1}}
+    )
+
+
 def get_user(username: str) -> dict | None:
     """Full user record for authentication, or None.
 
@@ -100,19 +116,30 @@ def get_user(username: str) -> dict | None:
     return user
 
 
-def register_user(body: dict) -> tuple[dict, int]:
+def register_user(
+    body: dict, actor: str | None = None, action: str = "user_create"
+) -> tuple[dict, int]:
     """Create a user account.
 
     Roles and access rights are validated against the configured vocabularies:
     an unrecognised value is rejected rather than stored, because a role that
     does not exist would silently grant nothing and look like a configuration
     that had been applied.
+
+    ``actor`` is who created it, for the audit entry: an administrator, the new
+    user themselves (``action="user_register"``), or ``None`` when the system
+    provisioned it - a directory login or the initial setup.
     """
     from archihub.core.roles import verify_access_rights_exist, verify_roles_exist
 
     mongo = _mongo()
 
-    if mongo.get_record("users", {"username": body.get("username")}, {"username": 1}):
+    username = body.get("username")
+    if isinstance(username, str) and username.lower().startswith(SYSTEM_SCHEDULER_PREFIX):
+        # Reserved for the scheduled-task pseudo-users.
+        return {"msg": _("That username is not available")}, 400
+
+    if mongo.get_record("users", {"username": username}, {"username": 1}):
         return {"msg": _("User already exists")}, 400
 
     try:
@@ -140,6 +167,16 @@ def register_user(body: dict) -> tuple[dict, int]:
     }
     mongo.insert_record("users", record)
     logger.info("Created account %s", record["username"])
+    _register_log(
+        actor,
+        action,
+        {
+            "user": record["username"],
+            "roles": roles,
+            "accessRights": rights,
+            "loginType": record["loginType"],
+        },
+    )
     return {"msg": _("User created successfully")}, 201
 
 
@@ -174,6 +211,36 @@ def has_right(username: str, right: str) -> bool:
     if not user:
         return False
     return right in (user.get("accessRights") or [])
+
+
+@cached("users", "system")
+def has_permission(username: str, point: str) -> bool:
+    """Whether ``username`` passes the permission point ``point``. Always a real bool.
+
+    True when they hold any of the point's built-in roles or any role an
+    administrator has added to it (``archihub.core.permissions``). Same two
+    collections as `has_role`; the configured roles live in `system` too.
+    Raises ``KeyError`` for a point the catalogue does not define, so a typo
+    fails loudly instead of denying everyone.
+    """
+    from archihub.core.permissions import allowed_roles
+
+    if not username:
+        return False
+    return any(has_role(username, role) for role in allowed_roles(point))
+
+
+def has_builtin_permission(username: str, point: str) -> bool:
+    """Whether ``username`` holds one of ``point``'s built-in roles. Always a real bool.
+
+    For the parts of a point that reach role administration: a role an
+    administrator added to the point passes the point, but not those parts.
+    """
+    from archihub.core.permissions import get_point
+
+    if not username:
+        return False
+    return any(has_role(username, role) for role in get_point(point).default_roles)
 
 
 def _is_date_in_current_week(value: datetime.datetime) -> bool:
@@ -252,13 +319,39 @@ def sanitize_user_filters(filters) -> dict:
     }
 
 
+#: Most accounts a user picker lists.
+MAX_USER_OPTIONS = 5000
+
+
+def get_user_options() -> tuple[list | dict, int]:
+    """Every account as a picker option: ``{id, username, name}`` and nothing else.
+
+    For the user fields of cataloguing forms and the activity-log filter, which
+    choose among all accounts rather than page through them.
+    """
+    try:
+        users = _mongo().get_all_records(
+            "users", {}, limit=MAX_USER_OPTIONS,
+            fields={"_id": 1, "username": 1, "name": 1}, sort=[("name", 1)],
+        )
+        return [
+            {"id": str(u["_id"]), "username": u.get("username"), "name": u.get("name")}
+            for u in users
+        ], 200
+    except Exception:
+        logger.exception("Could not list user options")
+        return {"msg": _("Error while processing the request")}, 500
+
+
 def get_all(body: dict, current_user: str) -> tuple[list | dict, int]:
     """Paginated user listing, with role/right ids resolved to display terms."""
     try:
         from archihub.core.roles import get_access_rights, get_roles
 
         mongo = _mongo()
-        page = int(body.get("page") or 0)
+        page = page_number(body.get("page"))
+        if page is None:
+            return {"msg": _('"{field}" must be a number', field="page")}, 400
         filters = sanitize_user_filters(body.get("filters"))
 
         users = list(
@@ -281,9 +374,9 @@ def get_all(body: dict, current_user: str) -> tuple[list | dict, int]:
             user["roles"] = [roles[r] for r in (user.get("roles") or []) if r in roles]
 
         return users, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list users")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 # ---------------------------------------------------------------------------
@@ -454,6 +547,27 @@ def _favorite_collection(type_name: str) -> str:
     return type_name
 
 
+def _may_see_favorite(collection: str, target: dict, username: str) -> bool:
+    """Whether ``username`` may open what a favourite points at.
+
+    A resource or record by its own domain's rule; a snap only by its owner.
+    """
+    if collection == "snaps":
+        return target.get("user") == username
+    if collection == "records":
+        from archihub.api.records.services import load_visible
+
+        _record, error = load_visible(str(target["_id"]), username)
+        return error is None
+
+    from archihub.api.resources.access import may_view_resource
+    from archihub.api.resources.services import can_view_type
+
+    return may_view_resource(username, target, has_role(username, "admin")) and can_view_type(
+        username, target.get("post_type")
+    )
+
+
 def set_favorite(username: str, body: dict) -> tuple[dict, int]:
     from bson.objectid import ObjectId
 
@@ -468,8 +582,12 @@ def set_favorite(username: str, body: dict) -> tuple[dict, int]:
         return {"msg": _("Resource not found")}, 404
 
     mongo = _mongo()
-    target = mongo.get_record(collection, {"_id": object_id}, {"_id": 1, "status": 1})
-    if not target:
+    target = mongo.get_record(
+        collection,
+        {"_id": object_id},
+        {"_id": 1, "status": 1, "post_type": 1, "accessRights": 1, "parents": 1, "user": 1},
+    )
+    if not target or not _may_see_favorite(collection, target, username):
         return {"msg": _("Resource not found")}, 404
 
     # Only published resources may be favourited. `.get` rather than `[...]`:
@@ -509,7 +627,9 @@ def get_favorites(username: str, body: dict) -> tuple[dict | list, int]:
         return {"msg": str(exc)}, 400
 
     mongo = _mongo()
-    page = int(body.get("page") or 0)
+    page = page_number(body.get("page"))
+    if page is None:
+        return {"msg": _('"{field}" must be a number', field="page")}, 400
 
     user = mongo.get_record("users", {"username": username}, fields={"favorites": 1})
     favorites = [f for f in ((user or {}).get("favorites") or []) if f.get("type") == body["type"]]
@@ -523,9 +643,16 @@ def get_favorites(username: str, body: dict) -> tuple[dict | list, int]:
             continue
 
     if collection == "resources":
-        fields = {"metadata.firstLevel.title": 1}
+        fields = {
+            "metadata.firstLevel.title": 1, "post_type": 1, "status": 1,
+            "accessRights": 1, "parents": 1,
+        }
         sort = [("metadata.firstLevel.title", 1)]
         filters = {"_id": {"$in": object_ids}, "status": "published"}
+    elif collection == "snaps":
+        fields = {"name": 1, "displayName": 1, "user": 1}
+        sort = [("name", 1)]
+        filters = {"_id": {"$in": object_ids}, "user": username}
     else:
         fields = {"name": 1, "displayName": 1}
         sort = [("name", 1)]
@@ -540,7 +667,12 @@ def get_favorites(username: str, body: dict) -> tuple[dict | list, int]:
     by_id = {str(f.get("id")): f for f in favorites}
     resolved = []
     for record in records:
+        if not _may_see_favorite(collection, record, username):
+            continue
         record_id = str(record.pop("_id"))
+        # Read for the check above, not part of the answer.
+        for key in ("post_type", "status", "accessRights", "parents", "user"):
+            record.pop(key, None)
         record["id"] = record_id
         record["view"] = (by_id.get(record_id) or {}).get("view")
         resolved.append(record)
@@ -624,7 +756,7 @@ def register_me(body: dict) -> tuple[dict, int]:
         "accessRights": [],
         "verified": False,
     }
-    return register_user(payload)
+    return register_user(payload, actor=payload["username"], action="user_register")
 
 
 def forgot_password(body: dict) -> tuple[dict, int]:
@@ -656,9 +788,14 @@ def forgot_password(body: dict) -> tuple[dict, int]:
     }, 200
 
 
+def _password_fingerprint(stored_hash: str | None) -> str:
+    import hashlib
+
+    return hashlib.sha256((stored_hash or "").encode("utf-8")).hexdigest()[:32]
+
+
 def _send_recovery_email(username: str) -> None:
     import os
-    from datetime import timedelta
 
     from cryptography.fernet import Fernet
 
@@ -667,11 +804,63 @@ def _send_recovery_email(username: str) -> None:
     from archihub.core.security import tokens
     from archihub.core.settings import get_settings
 
-    token = tokens.create_access_token(username, expires_delta=timedelta(days=1))
+    user = _mongo().get_record("users", {"username": username}, {"password": 1})
+    token = tokens.create_password_reset_token(
+        username, _password_fingerprint((user or {}).get("password"))
+    )
     cipher = Fernet(get_settings().fernet_key).encrypt(token.encode()).decode()
 
     link = f"{os.environ.get('REDIRECT_URL', '')}/reset-password?token={cipher}"
     send_email(username, _("Password recovery"), forgot_password_template(link))
+
+
+def reset_password(body: dict) -> tuple[dict, int]:
+    """Set a new password from a recovery link.
+
+    Every unusable link - malformed, expired, already used, for an account that
+    no longer exists - gets the same answer.
+    """
+    from cryptography.fernet import Fernet, InvalidToken
+
+    from archihub.core.security import tokens
+    from archihub.core.settings import get_settings
+
+    if not password_recovery_enabled():
+        return {"msg": _("Password recovery disabled")}, 400
+
+    invalid = {"msg": _("The recovery link is invalid or has expired")}, 400
+    cipher = body.get("token")
+    password = body.get("password")
+    if not isinstance(cipher, str) or not isinstance(password, str) or not password:
+        return invalid
+    if body.get("confirmPassword") is not None and body["confirmPassword"] != password:
+        return {"msg": _("Passwords do not match")}, 400
+
+    try:
+        token = Fernet(get_settings().fernet_key).decrypt(cipher.encode()).decode()
+    except (InvalidToken, ValueError):
+        return invalid
+    claims = tokens.decode_password_reset_token(token)
+    if not claims:
+        return invalid
+
+    mongo = _mongo()
+    user = mongo.get_record("users", {"username": claims["sub"]}, {"password": 1, "loginType": 1})
+    if not user or user.get("loginType") == "ldap":
+        return invalid
+    if _password_fingerprint(user.get("password")) != claims["pwd"]:
+        return invalid
+
+    hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    # Conditioned on the password the link was issued for: of two requests
+    # racing with the same link, only the first finds it still in place.
+    result = mongo.update_record(
+        "users", {"username": claims["sub"], "password": user.get("password")}, {"password": hashed}
+    )
+    if not getattr(result, "modified_count", 0):
+        return invalid
+    revoke_sessions(claims["sub"])
+    return {"msg": _("Password updated")}, 200
 
 
 def update_user(body: dict, current_user: str) -> tuple[dict, int]:
@@ -707,7 +896,11 @@ def update_user(body: dict, current_user: str) -> tuple[dict, int]:
         update["name"] = body["name"]
 
     mongo.update_record("users", {"_id": object_id}, update)
-    _register_log(current_user, "user_update", {"user": user.get("username")})
+    _register_log(
+        current_user,
+        "user_update",
+        {"user": user.get("username"), "roles": roles, "accessRights": rights},
+    )
     return {"msg": _("User updated successfully")}, 200
 
 
@@ -809,6 +1002,16 @@ def update_me(body: dict, current_user: str) -> tuple[dict, int]:
         return {"msg": _("No changes were made")}, 400
 
     mongo.update_record("users", {"username": current_user}, update)
+    if "password" in update:
+        revoke_sessions(current_user)
+
+    # The field names are recorded, never their values: a password hash has no
+    # place in the audit collection, and neither does a phone number.
+    _register_log(
+        current_user,
+        "user_password_change" if "password" in update else "user_profile_update",
+        {"user": current_user, "fields": sorted(field for field in update if field != "password")},
+    )
 
     if "password" in update:
         # A password change must not leave previously issued keys usable - that
@@ -888,6 +1091,7 @@ def clear_avatar(username: str) -> tuple[dict, int]:
 
 def accept_compromise(username: str) -> tuple[dict, int]:
     _mongo().update_record("users", {"username": username}, {"compromise": True})
+    _register_log(username, "user_accept_terms", {"user": username})
     return {"msg": _("Compromise accepted successfully")}, 200
 
 
@@ -964,7 +1168,11 @@ def issue_api_key(
     except ValueError as exc:
         return {"msg": str(exc)}, 400
 
-    _register_log(username, "user_update", {"api_key": {"scope": scope}})
+    _register_log(
+        username,
+        "api_key_create",
+        {"user": username, "api_key": {"scope": scope, "name": name or api_keys.default_name(scope)}},
+    )
     return {
         "access_token": key,
         # Stated in the payload as well as the docs: this response is the only
@@ -1038,4 +1246,5 @@ def revoke_api_key(username: str, key_id: str) -> tuple[dict, int]:
 
     if not api_keys.revoke_key(key_id, username):
         return {"msg": _("API key not found")}, 404
+    _register_log(username, "api_key_revoke", {"user": username, "api_key": {"id": key_id}})
     return {"msg": _("API key revoked")}, 200

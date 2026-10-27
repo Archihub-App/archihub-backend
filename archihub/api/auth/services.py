@@ -90,9 +90,9 @@ def archihub_login(username: str, password: str, client_ip: str | None = None) -
             if user:
                 rate_limit.clear_attempts(username, client_ip)
                 return _issue_token(user["username"])
-            return _reject()
-        # Fall through to the local check: a directory rejection does not mean
-        # the account has no local credentials.
+        # Fall through to the local check: a directory rejection, or a
+        # directory identity with no directory account here, does not mean the
+        # account has no local credentials.
 
     # -- local credentials ----------------------------------------------
     from archihub.api.users.services import get_user
@@ -108,7 +108,11 @@ def archihub_login(username: str, password: str, client_ip: str | None = None) -
 
 
 def _issue_token(username: str) -> tuple[dict, int]:
-    token = tokens.create_access_token(username, expires_delta=ACCESS_TOKEN_LIFETIME)
+    from archihub.api.users.services import session_version
+
+    token = tokens.create_access_token(
+        username, expires_delta=ACCESS_TOKEN_LIFETIME, version=session_version(username)
+    )
     _register_log(username, "user_login", {})
     logger.info("Login succeeded for %s", username)
     return {"access_token": token}, 200
@@ -129,6 +133,11 @@ def _sync_ldap_user(attributes: dict) -> dict | None:
 
     existing = get_user(username)
     if existing:
+        if existing.get("loginType") != "ldap":
+            # A directory identity maps only onto an account created for one;
+            # a local account with the same address keeps its own password.
+            logger.warning("Directory login matched a local account; refusing to use it")
+            return None
         return existing
 
     created, status = register_user(

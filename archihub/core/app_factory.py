@@ -114,9 +114,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "url": "https://archihub-app.github.io/archihub.github.io/en/licencia/",
         },
         lifespan=lifespan,
-        # Flasgger served the UI at /apidocs/ and the spec at /apispec_1.json.
-        # Both paths are kept as aliases in main.py so existing operator
-        # bookmarks and tooling do not break; these are the canonical ones.
+        # The canonical documentation paths. main.py also answers /apidocs/ and
+        # /apispec_1.json, which existing operator bookmarks and tooling use.
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
@@ -336,7 +335,10 @@ def _register_routers(app: FastAPI) -> None:
     # Always mounted. These routes exist on
     # every instance; it is the per-request dependency that 404s them when the
     # instance is not disposable - not their absence from the routing table.
-    include_router(app, test_control_router)
+    # They are documented only where they can answer.
+    include_router(
+        app, test_control_router, include_in_schema=get_settings().archihub_test_mode
+    )
 
     # Plugins LAST, so a plugin can never shadow a core route by declaring a
     # colliding path. Their prefixes are their own slugs, which makes a

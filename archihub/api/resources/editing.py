@@ -110,6 +110,8 @@ def update_files_order(resource_id: str, body: dict, user: str) -> tuple[dict, i
     )
 
     _audit(user, "resource_files_order_update", {"resource": resource_id, "files_order": body.get("files")})
+    # The search document lists the files in order.
+    _call_hook("resource_update", {"_id": str(resource_id), "post_type": resource.get("post_type")})
 
     return {"msg": _("Files order updated")}, 200
 
@@ -322,7 +324,7 @@ def update_resource_granular(
 
 def _refuse_granular_edit(user: str, resource: dict, is_admin: bool) -> tuple[dict, int] | None:
     """All four gates, in one place. ``None`` means allowed."""
-    from archihub.api.users.services import has_role
+    from archihub.api.users.services import has_permission
 
     if is_admin:
         return None
@@ -333,7 +335,7 @@ def _refuse_granular_edit(user: str, resource: dict, is_admin: bool) -> tuple[di
         return _denied()
     if not access.holds_edit_role(user, resource.get("post_type"), is_admin):
         return _denied()
-    if resource.get("status") == "published" and not has_role(user, "publisher"):
+    if resource.get("status") == "published" and not has_permission(user, "resources.publish"):
         return _denied()
 
     return None

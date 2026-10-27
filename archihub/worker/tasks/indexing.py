@@ -27,6 +27,10 @@ reindex of a real archive spends its time on. ``bulk_index`` sends a page at a
 time and reports which ids the cluster refused.
 
 **Types are resolved once per run**, not once per resource.
+
+**The indexed access right is the effective one.** A resource with no access
+right of its own is governed by its nearest restricted ancestor, and search
+filters on this field. Ancestors are read once per page.
 """
 
 from __future__ import annotations
@@ -73,9 +77,9 @@ def regenerate_index_task(mapping: dict, user: str | None = None) -> str:
 def index_resources_task(body: dict | None = None) -> str:
     """Index resources into the search index.
 
-    With no body, the index is emptied first and the whole collection is
-    rebuilt. With ``{"_id": ...}`` or any other Mongo filter, only the matching
-    resources are reindexed and nothing is emptied.
+    With no body, the whole collection is rebuilt and documents for resources
+    that no longer exist are removed at the end. With ``{"_id": ...}`` or any
+    other Mongo filter, only the matching resources are reindexed.
     """
     from bson.objectid import ObjectId
 
@@ -83,15 +87,22 @@ def index_resources_task(body: dict | None = None) -> str:
 
     body = body or {}
     # A string `_id` names one resource; anything else under `_id` is already a
-    # filter clause (an `$in` over several) and is passed through as one.
+    # filter clause (an `$in` over several) and is passed through as one, with
+    # string ids - the form a queued message can carry - read as ObjectIds.
     filters = {"_id": ObjectId(body["_id"])} if isinstance(body.get("_id"), str) else dict(body)
+    wanted = filters.get("_id")
+    if isinstance(wanted, dict) and isinstance(wanted.get("$in"), list):
+        filters["_id"] = {
+            "$in": [ObjectId(v) if isinstance(v, str) and ObjectId.is_valid(v) else v
+                    for v in wanted["$in"]]
+        }
     full_rebuild = not filters
 
     client = _client()
-    if full_rebuild:
-        # Only a full run clears the index. A filtered run that emptied it would
-        # delete everything it was not asked to touch.
-        client.delete_all_documents(RESOURCES_INDEX)
+    # Every document records when it was built. A full run replaces documents
+    # in place and, once every resource has been written, removes the ones it
+    # did not renew - so search keeps answering while the run is in progress.
+    run_started = _now_iso()
 
     indexed = 0
     skipped = 0
@@ -101,10 +112,12 @@ def index_resources_task(body: dict | None = None) -> str:
     for page in _pages(filters):
         documents = []
         record_types = _record_types(page)
+        ancestor_rights = _ancestor_rights(page)
 
         for resource in page:
             try:
-                document = _document_for(resource, types, record_types)
+                document = _document_for(resource, types, record_types, ancestor_rights)
+                document[INDEXED_AT_FIELD] = _now_iso()
             except _Skip:
                 skipped += 1
                 continue
@@ -129,6 +142,14 @@ def index_resources_task(body: dict | None = None) -> str:
         failed += len(failures)
         indexed += len(documents) - len(failures)
 
+    if full_rebuild:
+        if failed:
+            # A resource that could not be rebuilt keeps its previous document
+            # rather than disappearing from search.
+            logger.warning("Full indexing run had failures; stale documents were kept")
+        else:
+            client.delete_all_documents(RESOURCES_INDEX, _stale_since(run_started))
+
     message = _("Indexing finished for %(count)s resources", count=indexed)
     if failed or skipped:
         # Appended rather than replacing the message, so the string an operator
@@ -136,6 +157,29 @@ def index_resources_task(body: dict | None = None) -> str:
         message = f"{message} ({failed} failed, {skipped} skipped)"
         logger.warning("Indexing run finished with %d failures and %d skipped", failed, skipped)
     return message
+
+
+#: The field each document's build time is stored in.
+INDEXED_AT_FIELD = "indexedAt"
+
+
+def _now_iso() -> str:
+    from archihub.core.clock import isoformat_utc, utcnow
+
+    return isoformat_utc(utcnow())
+
+
+def _stale_since(run_started: str) -> dict:
+    """Documents not written since ``run_started``."""
+    return {
+        "bool": {
+            "should": [
+                {"range": {INDEXED_AT_FIELD: {"lt": run_started}}},
+                {"bool": {"must_not": {"exists": {"field": INDEXED_AT_FIELD}}}},
+            ],
+            "minimum_should_match": 1,
+        }
+    }
 
 
 @shared_task(ignore_result=False, name="system.index_resources_delete")
@@ -152,6 +196,31 @@ def index_resources_delete_task(body: dict | None = None) -> str:
         raise RuntimeError(f"Unexpected delete result for {resource_id}: {result.get('result')!r}")
 
     return _("Resource %(id)s deleted from index", id=str(resource_id))
+
+
+@shared_task(ignore_result=False, name="system.index_resources_delete_by_type")
+def index_resources_delete_by_type_task(body: dict | None = None) -> str:
+    """Remove every resource of one content type from the search index.
+
+    Fired when a content type is deleted. Its resources go to the recycle bin
+    in one ``update_records`` call, so there is no per-resource delete to hang
+    the index removal on - and the index would otherwise go on returning them
+    under the status they had before.
+    """
+    from archihub.core.i18n import gettext as _
+
+    post_type = (body or {}).get("post_type")
+    if not isinstance(post_type, str) or not post_type:
+        raise ValueError("index_resources_delete_by_type requires a post_type")
+
+    result = _client().delete_all_documents(
+        RESOURCES_INDEX, {"term": {"post_type.keyword": post_type}}
+    )
+    return _(
+        "%(count)s resources of type %(type)s deleted from index",
+        count=result.get("deleted", 0),
+        type=post_type,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +250,13 @@ class _TypeCache:
         return self._fields[slug], self._is_article[slug]
 
 
-def _document_for(resource: dict, types: _TypeCache, record_types: dict[str, str]) -> dict:
+def _document_for(
+    resource: dict,
+    types: _TypeCache,
+    record_types: dict[str, str],
+    ancestor_rights: dict[str, str | None],
+) -> dict:
+    from archihub.api.resources.access import inherited_access_right
     from archihub.api.search.documents import (
         NotIndexable,
         build_resource_document,
@@ -202,6 +277,7 @@ def _document_for(resource: dict, types: _TypeCache, record_types: dict[str, str
             is_article=is_article,
             records=resolve_records(resource, record_types),
             centroid_lookup=_centroid,
+            access_right=inherited_access_right(resource, ancestor_rights),
             hook_call=get_hook_handler().call,
         )
     except NotIndexable as exc:
@@ -250,6 +326,23 @@ def _pages(filters: dict):
         if len(page) < PAGE_SIZE:
             return
         last_id = page[-1]["_id"]
+
+
+def _ancestor_rights(resources: list[dict]) -> dict[str, str | None]:
+    """``{ancestor id: its own accessRights}`` for every ancestor on this page.
+
+    One query per page instead of one per resource.
+    """
+    from archihub.api.resources.access import ancestor_object_ids
+
+    object_ids = ancestor_object_ids(resources)
+    if not object_ids:
+        return {}
+
+    rows = _mongo().get_all_records(
+        "resources", {"_id": {"$in": object_ids}}, fields={"_id": 1, "accessRights": 1}
+    )
+    return {str(row["_id"]): row.get("accessRights") for row in rows}
 
 
 def _record_types(resources: list[dict]) -> dict[str, str]:

@@ -12,6 +12,14 @@ from fastapi.testclient import TestClient
 from archihub.api.health import services
 
 
+@pytest.fixture(autouse=True)
+def fresh_readiness():
+    """Each test sees its own readiness answer, not one reused from another."""
+    services._readiness_cache.clear()
+    yield
+    services._readiness_cache.clear()
+
+
 @pytest.fixture
 def client() -> TestClient:
     from main import app
@@ -200,3 +208,96 @@ def test_a_reset_still_starts_when_its_bookkeeping_row_cannot_be_written(monkeyp
     payload, status_code = testcontrol_services.start_reset()
 
     assert (status_code, payload["task_id"]) == (202, "task-2")
+
+
+SECRET = "mongodb://admin:hunter2@db-internal:27017"
+
+
+def test_a_failing_driver_never_reaches_the_anonymous_response(client: TestClient, monkeypatch):
+    """The driver's message names hosts, ports and sometimes credentials; this
+    route answers anyone, so it reports only that the dependency is unreachable."""
+
+    class Broken:
+        def ping(self):
+            raise ConnectionError(SECRET)
+
+    monkeypatch.setattr("archihub.infra.mongo.get_mongo", lambda: Broken())
+    monkeypatch.setattr(services, "check_redis", lambda: (True, None))
+    monkeypatch.setattr(services, "check_celery", lambda: (True, None))
+    monkeypatch.setattr(services, "check_elasticsearch", lambda *a: (services.DISABLED, None))
+    monkeypatch.setattr(services, "check_qdrant", lambda *a: (services.DISABLED, None))
+
+    response = client.get("/health/ready")
+
+    assert response.json()["checks"]["mongo"] == {"status": "error", "error": "unreachable"}
+    assert "hunter2" not in response.text and "db-internal" not in response.text
+
+
+def test_a_check_that_crashes_is_reported_without_its_message(client: TestClient, monkeypatch):
+    def crash():
+        raise RuntimeError(SECRET)
+
+    monkeypatch.setattr(services, "check_mongo", lambda: (True, None))
+    monkeypatch.setattr(services, "load_index_management", lambda: None)
+    monkeypatch.setattr(services, "check_redis", crash)
+    monkeypatch.setattr(services, "check_celery", lambda: (True, None))
+    monkeypatch.setattr(services, "check_elasticsearch", lambda *a: (services.DISABLED, None))
+    monkeypatch.setattr(services, "check_qdrant", lambda *a: (services.DISABLED, None))
+
+    response = client.get("/health/ready")
+
+    assert response.json()["checks"]["redis"] == {"status": "error", "error": "unreachable"}
+    assert "hunter2" not in response.text
+
+
+def test_a_readiness_answer_is_reused_briefly(monkeypatch):
+    calls = []
+    monkeypatch.setattr(services, "get_readiness", lambda: calls.append(1) or ({"ready": True}, 200))
+
+    services.cached_readiness()
+    services.cached_readiness()
+    assert len(calls) == 1
+
+    services.cached_readiness(max_age=0)
+    assert len(calls) == 2
+
+
+def test_a_queue_no_worker_consumes_is_reported(monkeypatch):
+    from types import SimpleNamespace
+
+    from archihub.worker import celery_app as worker
+
+    class Control:
+        def ping(self, timeout):
+            return [{"w1": "pong"}]
+
+        def inspect(self, timeout):
+            return SimpleNamespace(active_queues=lambda: {"w1": [{"name": "celery"}]})
+
+    fake = SimpleNamespace(
+        control=Control(),
+        tasks={"a": SimpleNamespace(queue="high"), "b": SimpleNamespace(queue=None)},
+    )
+    monkeypatch.setattr(worker, "celery_app", fake)
+
+    state, error = services.check_celery()
+
+    assert state == services.DEGRADED
+    assert "high" in error
+
+
+def test_an_unconsumed_queue_makes_the_instance_not_ready(monkeypatch):
+    monkeypatch.setattr(services, "check_mongo", lambda: (True, None))
+    monkeypatch.setattr(services, "check_redis", lambda: (True, None))
+    monkeypatch.setattr(
+        services, "check_celery", lambda: (services.DEGRADED, "No worker consumes: high")
+    )
+    monkeypatch.setattr(services, "load_index_management", lambda: {})
+    monkeypatch.setattr(services, "check_elasticsearch", lambda cfg: (services.DISABLED, None))
+    monkeypatch.setattr(services, "check_qdrant", lambda cfg: (services.DISABLED, None))
+
+    payload, status = services.get_readiness()
+
+    assert status == 503
+    assert payload["ready"] is False
+    assert payload["checks"]["celery"]["status"] == services.DEGRADED

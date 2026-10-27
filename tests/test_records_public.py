@@ -277,3 +277,30 @@ def test_the_public_routes_are_not_shadowed_by_the_parameterised_ones():
     assert _would_capture("/records/{record_id}/pages", "/records/public/x/pages") is False
     assert _would_capture("/records/{record_id}/stream", "/records/public/stream") is True
     assert _would_capture("/records/{record_id}", "/records/a/b") is False
+
+
+def test_a_public_document_has_a_public_detail_route(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from archihub.api.records import public as records_public
+    from archihub.api.records import viewers
+    from main import app
+
+    monkeypatch.setattr(records_public, "load_public", lambda rid: ({"_id": rid}, None))
+    monkeypatch.setattr(viewers, "document_detail", lambda record: {"pages": 3, "aspect_ratio": 1.4})
+
+    response = TestClient(app).get("/records/public/6a70b833497d4440325c94b1/document")
+
+    assert response.status_code == 200
+    assert response.json()["pages"] == 3
+
+
+def test_a_non_public_document_detail_is_not_found(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from archihub.api.records import public as records_public
+    from main import app
+
+    monkeypatch.setattr(records_public, "load_public", lambda rid: (None, ({"msg": "no"}, 404)))
+
+    assert TestClient(app).get("/records/public/abc/document").status_code == 404

@@ -210,6 +210,7 @@ def build_resource_document(
     is_article: bool,
     records: list[dict],
     centroid_lookup,
+    access_right: str | None,
     hook_call=None,
 ) -> dict:
     """The Elasticsearch document for one resource.
@@ -217,6 +218,10 @@ def build_resource_document(
     ``records`` is the already-resolved file list (see ``resolve_records``);
     it is passed in rather than looked up here so a full run can batch those
     queries instead of issuing one per resource.
+
+    ``access_right`` is the resource's *effective* access right - its own, or
+    the nearest ancestor's (``access.inherited_access_right``) - and is the
+    value search filters on.
     """
     document: dict = {}
 
@@ -260,8 +265,8 @@ def build_resource_document(
     document["files"] = len(resource.get("filesObj") or [])
     document["records"] = records
 
-    # Default before the hook so a plugin can see and change it; the resource's
-    # own value is applied after, so it always wins.
+    # Default before the hook so a plugin can see and change it; the effective
+    # right is applied after, so it always wins.
     document["accessRights"] = "public"
 
     if hook_call is not None:
@@ -269,8 +274,8 @@ def build_resource_document(
         if extended:
             document = extended
 
-    if resource.get("accessRights"):
-        document["accessRights"] = resource["accessRights"]
+    if access_right:
+        document["accessRights"] = access_right
 
     return document
 
@@ -299,8 +304,7 @@ def resolve_records(resource: dict, record_types: dict[str, str]) -> list[dict]:
     """The resource's files, in display order, with their processing type.
 
     ``record_types`` maps a record id to its ``fileProcessing.type``; a record
-    missing from it has not been processed yet and is left out, as in the
-    original.
+    missing from it has not been processed yet and is left out.
     """
     files = sorted(
         (f for f in (resource.get("filesObj") or []) if isinstance(f, dict) and "id" in f),

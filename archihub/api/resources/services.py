@@ -27,6 +27,7 @@ from bson.objectid import ObjectId
 from archihub.api.resources import access, presentation
 from archihub.core.clock import isoformat_utc
 from archihub.core.i18n import gettext as _
+from archihub.core.pagination import page_number
 from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,9 @@ PAGE_SIZE = 20
 # Columns the listing never treats as displayable metadata: they are either
 # structural or rendered separately.
 _NON_METADATA_COLUMNS = {"", "createdAt", "ident", "files", "accessRights"}
+
+#: Fields outside the form a listing may be sorted by.
+SORTABLE_BASE_FIELDS = ("createdAt", "updatedAt", "ident")
 
 
 def _column_names(active_columns) -> list[str]:
@@ -168,16 +172,25 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
         post_types = body.get("post_type") or []
         if isinstance(post_types, str):
             post_types = [post_types]
+        if not isinstance(post_types, list) or not all(isinstance(p, str) for p in post_types):
+            return {"msg": _('"{field}" must be a list of text values', field="post_type")}, 400
 
         for post_type in post_types:
             if not can_view_type(user, post_type):
                 return {"msg": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
 
-        active_columns = _column_names(body.get("activeColumns"))
+        readable, _withheld = access.field_visibility(post_types, user, public=user is None)
+        readable_paths = {field["destiny"] for field in readable}
+        # Only a field the form declares, and this caller may read, can be
+        # displayed or sorted by.
+        active_columns = [c for c in _column_names(body.get("activeColumns")) if c in readable_paths]
 
         base: dict = {"post_type": {"$in": post_types}}
         if body.get("parents"):
-            base["parents.id"] = body["parents"].get("id")
+            parents = body["parents"]
+            if not isinstance(parents, dict) or not isinstance(parents.get("id"), str):
+                return {"msg": _('"{field}" must be a text value', field="parents.id")}, 400
+            base["parents.id"] = parents["id"]
         if body.get("files"):
             base["filesObj"] = {"$exists": True, "$ne": []}
 
@@ -206,8 +219,14 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
         for column in active_columns:
             fields[column] = 1
 
-        page = int(body.get("page") or 0)
+        page = page_number(body.get("page"))
+        if page is None:
+            return {"msg": _('"{field}" must be a number', field="page")}, 400
         sort_by = body.get("sortBy") or "createdAt"
+        if not isinstance(sort_by, str) or (
+            sort_by not in SORTABLE_BASE_FIELDS and sort_by not in readable_paths
+        ):
+            sort_by = "createdAt"
         direction = 1 if (body.get("sortOrder") or "asc") == "asc" else -1
 
         mongo = _mongo()
@@ -232,9 +251,9 @@ def get_all(body: dict, user: str) -> tuple[dict, int]:
                 _isoformat_in_place(resource, field_path)
 
         return {"total": total, "resources": parse_result(resources)}, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not list resources")
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def _access_right_term(access_right):
@@ -307,9 +326,9 @@ def get_by_id(resource_id: str, user: str) -> tuple[dict, int]:
         # renders datetimes as HTTP dates.
         resource["_id"] = str(resource["_id"])
         return resource, 200
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not load resource %s", resource_id)
-        return {"msg": str(exc)}, 500
+        return {"msg": _("Error while processing the request")}, 500
 
 
 def load_visible(

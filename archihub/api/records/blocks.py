@@ -60,16 +60,17 @@ def _now() -> datetime.datetime:
 def may_edit(user: str, record: dict, is_admin: bool) -> bool:
     """Whether this caller may rewrite this record's block layout.
 
-    Administrators may. An editor may, but only for a record they could open in
-    the first place - nobody edits what they cannot read.
+    Administrators may. The ``records.edit_blocks`` permission may, but only
+    for a record they could open in the first place - nobody edits what they
+    cannot read.
     """
-    from archihub.api.users.services import has_role
+    from archihub.api.users.services import has_permission
 
     if is_admin:
         return True
     if not access.may_view_record(user, record, is_admin):
         return False
-    return has_role(user, "editor")
+    return has_permission(user, "records.edit_blocks")
 
 
 # ---------------------------------------------------------------------------
@@ -157,6 +158,7 @@ def _write(record_id: str, path: str, blocks: list, user: str | None) -> None:
         {"_id": ObjectId(record_id)},
         {path: blocks, "updatedBy": user or "system", "updatedAt": _now()},
     )
+    _audit(user, "record_update", {"record": record_id, "edit": "blocks", "field": path})
     _call_hook("record_update", {"_id": record_id, "updatedBy": user or "system"})
 
 
@@ -266,3 +268,9 @@ def _call_hook(name: str, payload: dict) -> None:
         get_hook_handler().call(name, payload)
     except Exception:
         logger.exception("%s hook failed", name)
+
+
+def _audit(user: str | None, action: str, details: dict) -> None:
+    from archihub.api.logs.services import register_log
+
+    register_log(user, action, details)

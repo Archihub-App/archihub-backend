@@ -1,12 +1,14 @@
 """Editorial review task routes.
 
-TWO DISTINCT PERMISSION LEVELS, and the difference matters:
+Permission levels enforced:
 
-* Reading and assigning work requires ``admin`` or ``team_lead``.
-* Updating a task additionally admits ``editor`` - the person doing the work
-  needs to comment on it - but **only a team lead may approve**. An editor
-  signing off their own review would defeat the review step, so that check lives
-  in the service, which is the only place that sees the requested status.
+* Assigning/creating work admits ``admin``, ``team_lead``, and ``editor``.
+* Listing tasks:
+  - Admins and team leads can inspect all tasks or filter by user.
+  - Editors and transcribers can view tasks they created or that are assigned to them.
+* Reading tasks for a resource/record admits editors, team leads, admins (and transcribers for records).
+* Updating a task admits ``editor``, ``team_lead``, and ``admin``; only a
+  team lead or admin may approve or reject a review task.
 
 A role failure answers 403; 401 is reserved for "I do not know who you are".
 """
@@ -24,6 +26,7 @@ from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
+    require_permission,
     require_role_any,
 )
 from archihub.core.responses import json_response
@@ -32,9 +35,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/usertasks", tags=["Review tasks"])
 
-require_lead = require_role_any("admin", "team_lead")
-require_editor_or_lead = require_role_any(
-    "admin", "team_lead", "editor"
+require_lead = require_permission("usertasks.manage")
+require_editor_or_lead = require_permission("usertasks.comment")
+require_task_reader = require_role_any(
+    "admin", "team_lead", "editor", "transcriber"
 )
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
@@ -57,24 +61,43 @@ def _respond(result) -> JSONResponse:
 )
 def get_tasks(
     body: dict = Body(default_factory=dict),
-    current_user: CurrentUser = Depends(require_lead),
+    current_user: CurrentUser = Depends(require_task_reader),
 ) -> JSONResponse:
     """List review tasks by status.
 
-    A caller may always list their own; requesting someone else's requires
-    admin or team_lead - which the dependency has already established, so the
-    only extra check needed is the self case.
+    Admins and team leads may view all tasks or filter by user.
+    Editors and transcribers can view tasks they created or that are assigned to them.
     """
+    from archihub.api.users.services import has_permission, has_role
+
     if "status" not in body:
         return JSONResponse(
             status_code=400, content={"error": _("You must specify the status of the tasks")}
         )
 
+    is_lead = (
+        has_role(current_user.username, "admin")
+        or has_role(current_user.username, "team_lead")
+        or has_permission(current_user.username, "usertasks.manage")
+    )
+    requested_user = body.get("user")
+    include_created = False
+
+    if not is_lead:
+        if requested_user and requested_user != current_user.username:
+            return JSONResponse(
+                status_code=403,
+                content={"error": _("You do not have sufficient permissions")},
+            )
+        requested_user = current_user.username
+        include_created = True
+
     return _respond(
         services.get_all_tasks(
             {
                 "status": body["status"],
-                "user": body.get("user"),
+                "user": requested_user,
+                "include_created": include_created,
                 "page": body.get("page", 0),
             }
         )
@@ -85,7 +108,7 @@ def get_tasks(
     "/editors",
     responses={200: {"description": "Users who can be assigned review work"}, **_ROLE_RESPONSES},
 )
-def get_editors(current_user: CurrentUser = Depends(require_lead)) -> JSONResponse:
+def get_editors(current_user: CurrentUser = Depends(require_editor_or_lead)) -> JSONResponse:
     """List assignable editors."""
     return _respond(services.get_editors())
 
@@ -96,10 +119,10 @@ def get_editors(current_user: CurrentUser = Depends(require_lead)) -> JSONRespon
 )
 def get_record_tasks(
     record_id: str,
-    current_user: CurrentUser = Depends(require_lead),
+    current_user: CurrentUser = Depends(require_task_reader),
 ) -> JSONResponse:
     """The open review task for one record."""
-    return _respond(services.get_record_tasks(record_id))
+    return _respond(services.get_record_tasks(record_id, current_user.username))
 
 
 @router.post(
@@ -109,7 +132,7 @@ def get_record_tasks(
 )
 def create_task(
     body: dict = Body(...),
-    current_user: CurrentUser = Depends(require_lead),
+    current_user: CurrentUser = Depends(require_editor_or_lead),
 ) -> JSONResponse:
     """Assign review work on a resource or record."""
     return _respond(services.create_task(body, current_user.username))
@@ -129,14 +152,16 @@ def update_task(
     body: dict = Body(...),
     current_user: CurrentUser = Depends(require_editor_or_lead),
 ) -> JSONResponse:
-    """Comment on a task, or approve it.
+    """Comment on a task, or update its status.
 
-    Approval is restricted to team leads - see the service.
+    Approval and rejection are restricted to team leads - see the service.
     """
-    from archihub.api.users.services import has_role
+    from archihub.api.users.services import has_permission, has_role
 
-    is_team_lead = has_role(current_user.username, "team_lead") or has_role(
-        current_user.username, "admin"
+    is_team_lead = (
+        has_role(current_user.username, "admin")
+        or has_role(current_user.username, "team_lead")
+        or has_permission(current_user.username, "usertasks.manage")
     )
     return _respond(services.update_task(task_id, body, current_user.username, is_team_lead))
 
@@ -148,7 +173,8 @@ def update_task(
 )
 def get_resource_tasks(
     resource_id: str,
-    current_user: CurrentUser = Depends(require_lead),
+    current_user: CurrentUser = Depends(require_editor_or_lead),
 ) -> JSONResponse:
     """The open review task for one resource."""
-    return _respond(services.get_resource_tasks(resource_id))
+    return _respond(services.get_resource_tasks(resource_id, current_user.username))
+

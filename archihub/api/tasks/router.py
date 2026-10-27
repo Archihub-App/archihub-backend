@@ -79,9 +79,9 @@ def get_active(current_user: CurrentUser = Depends(require_admin)) -> JSONRespon
 
         active = celery_app.control.inspect().active()
         return JSONResponse(status_code=200, content=active or {})
-    except Exception as exc:
+    except Exception:
         logger.exception("Could not inspect active tasks")
-        return JSONResponse(status_code=500, content={"msg": str(exc)})
+        return JSONResponse(status_code=500, content={"msg": _("Error while processing the request")})
 
 
 @router.post(
@@ -121,11 +121,18 @@ def get_tasks_total(
 )
 def delete_task(
     task_id: str,
-    current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> JSONResponse:
-    """Stop a running task.
+    """Stop a running task: the caller's own, or any for an administrator.
 
     Terminates the worker process handling it - the only thing that reliably
     stops the long-running media and AI jobs this exists for.
     """
-    return _respond(services.stop_task(task_id, current_user.username))
+    from archihub.api.users.services import has_role
+
+    username = current_user.username
+    if not has_role(username, "admin") and not services.owns_task(task_id, username):
+        return _respond(
+            ({"msg": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS)
+        )
+    return _respond(services.stop_task(task_id, username))

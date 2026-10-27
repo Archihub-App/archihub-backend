@@ -85,6 +85,27 @@ def get_all(
     return _respond(services.get_all(body.model_dump(exclude_unset=True), current_user.username))
 
 
+#: The built-in roles that fill in cataloguing forms, whose user fields pick
+#: among every account.
+CATALOGUING_ROLES = (
+    "admin", "editor", "super_editor", "publisher", "processing", "team_lead", "transcriber",
+)
+
+
+@router.get(
+    "/options",
+    responses={200: {"description": "Every account, as id, username and name"}, **_ROLE_RESPONSES},
+)
+def get_user_options(
+    current_user: CurrentUser = Depends(require_role_any(*CATALOGUING_ROLES)),
+) -> JSONResponse:
+    """Every account as a picker option, for whoever catalogues.
+
+    Only identifying fields: no roles, rights or other profile data.
+    """
+    return _respond(services.get_user_options())
+
+
 @router.get(
     "/requests",
     responses={200: {"description": "The caller's weekly quota usage"}, **_ROLE_RESPONSES},
@@ -290,7 +311,9 @@ def register(
     current_user: CurrentUser = Depends(require_admin),
 ) -> JSONResponse:
     """Create an account (administrative)."""
-    return _respond(services.register_user(body.model_dump(exclude_unset=True)))
+    return _respond(
+        services.register_user(body.model_dump(exclude_unset=True), actor=current_user.username)
+    )
 
 
 @router.post(
@@ -325,6 +348,18 @@ def forgot_password(body: ForgotPasswordRequest = Body(...)) -> JSONResponse:
     usernames are registered.
     """
     return _respond(services.forgot_password(body.model_dump(exclude_unset=True)))
+
+
+@router.post(
+    "/reset-password",
+    responses={
+        200: {"description": "Password changed"},
+        400: {"description": "The link is invalid, expired or already used"},
+    },
+)
+def reset_password(body: dict = Body(...)) -> JSONResponse:
+    """Set a new password from a recovery link. **Unauthenticated.**"""
+    return _respond(services.reset_password(body))
 
 
 @router.put(
