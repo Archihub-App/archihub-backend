@@ -659,3 +659,27 @@ def test_a_date_filter_on_a_withheld_field_is_dropped():
     )
 
     assert "metadata.secret" not in str(built["query"])
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["/x/{id:>99999999}", "/x/{id.__class__}", "/x/{0}", "/x/{id", "/" + "a" * 500],
+)
+def test_a_link_template_is_substituted_not_formatted(template):
+    feed = rss.build(
+        {"resources": [{"id": "abc"}]},
+        base_url="https://example.org", link_template=template,
+        title=None, description=None,
+    )
+
+    assert "https://example.org/resource/abc" in feed
+
+
+def test_every_known_placeholder_is_substituted():
+    feed = rss.build(
+        {"resources": [{"id": "abc", "ident": "F-1", "post_type": "fondo"}]},
+        base_url="https://example.org", link_template="/{post_type}/{ident}/{id}",
+        title=None, description=None,
+    )
+
+    assert "https://example.org/fondo/F-1/abc" in feed
