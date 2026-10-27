@@ -353,3 +353,15 @@ def test_a_directory_identity_maps_onto_its_directory_account(monkeypatch):
     monkeypatch.setattr(users, "get_user", lambda username: account)
 
     assert services._sync_ldap_user({"mail": "ana@example.org"}) is account
+
+
+def test_the_throttled_address_is_the_connection_not_a_header():
+    from types import SimpleNamespace
+
+    from archihub.api.auth.router import _client_ip
+
+    request = SimpleNamespace(
+        headers={"X-Forwarded-For": "203.0.113.9"}, client=SimpleNamespace(host="198.51.100.4")
+    )
+
+    assert _client_ip(request) == "198.51.100.4"
