@@ -62,6 +62,15 @@ celery_app.conf.worker_concurrency = 1 if _worker_pool == "solo" else settings.c
 # settings change takes effect without restarting beat. See worker/scheduler.py.
 celery_app.conf.beat_scheduler = "archihub.worker.scheduler:MongoPluginScheduler"
 
+# Housekeeping that runs on every instance with a scheduler, whatever plugins
+# are active: staged uploads nobody attached are removed after a day.
+celery_app.conf.beat_schedule = {
+    "core:cleanup_temporary_records": {
+        "task": "records.cleanup_temporary_records",
+        "schedule": 3600.0,
+    },
+}
+
 # Claim Celery's process-global default app slot. Our own code always passes the
 # app explicitly (see api/tasks/services._result), but plugin and third-party
 # code commonly constructs a bare `AsyncResult(task_id)`, which resolves against

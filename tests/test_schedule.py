@@ -236,3 +236,12 @@ def test_the_scheduler_time_zone_is_configurable(monkeypatch):
 
     monkeypatch.setenv("CELERY_TIMEZONE", "Europe/Madrid")
     assert Settings().celery_timezone == "Europe/Madrid"
+
+
+def test_staged_uploads_are_cleaned_up_on_a_schedule():
+    from archihub.worker.celery_app import celery_app
+    from archihub.worker.schedule import DYNAMIC_SCHEDULE_PREFIX
+
+    entries = celery_app.conf.beat_schedule
+    names = [e["task"] for n, e in entries.items() if not n.startswith(DYNAMIC_SCHEDULE_PREFIX)]
+    assert "records.cleanup_temporary_records" in names
