@@ -91,6 +91,54 @@ def process_comments(comments) -> str:
     return "\n---------------\n".join(lines)
 
 
+#: The roles review work can be assigned to; ``get_editors`` lists them.
+ASSIGNABLE_ROLES = ["editor", "transcriber"]
+
+
+def may_open_target(target_field: str, target_value: str, user: str) -> bool:
+    """Whether ``user`` may open the resource or record a task is about.
+
+    The resources and records routes' own rules; a target that does not exist
+    cannot be opened.
+    """
+    if target_field == "recordId":
+        from archihub.api.records.services import load_visible
+
+        _record, error = load_visible(target_value, user)
+        return error is None
+
+    from archihub.api.resources.access import may_view_resource
+    from archihub.api.resources.services import can_view_type
+    from archihub.api.users.services import has_role
+
+    object_id = _to_object_id(target_value)
+    if object_id is None:
+        return False
+    resource = _mongo().get_record(
+        "resources",
+        {"_id": object_id},
+        fields={"post_type": 1, "status": 1, "accessRights": 1, "parents": 1},
+    )
+    if not resource:
+        return False
+    is_admin = has_role(user, "admin")
+    if resource.get("status") == "deleted" and not is_admin:
+        return False
+    return may_view_resource(user, resource, is_admin) and can_view_type(
+        user, resource.get("post_type")
+    )
+
+
+def _is_assignable(username: str) -> bool:
+    if not username:
+        return False
+    return bool(
+        _mongo().get_record(
+            "users", {"username": username, "roles": {"$in": ASSIGNABLE_ROLES}}, fields={"_id": 1}
+        )
+    )
+
+
 # ---------------------------------------------------------------------------
 # Reads
 # ---------------------------------------------------------------------------
@@ -189,7 +237,7 @@ def get_editors() -> tuple[list | dict, int]:
         editors = list(
             _mongo().get_all_records(
                 "users",
-                {"roles": {"$in": ["editor", "transcriber"]}},
+                {"roles": {"$in": ASSIGNABLE_ROLES}},
                 fields={"name": 1, "username": 1, "_id": 0},
             )
         )
@@ -229,6 +277,11 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         target_field = "resourceId" if resource_id else "recordId"
         target_value = resource_id or record_id
 
+        if not may_open_target(target_field, target_value, user):
+            return {"error": _("Resource does not exist")}, 404
+        if not _is_assignable(body["user"].strip()):
+            return {"error": _("user is required")}, 400
+
         if mongo.get_record(COLLECTION, {target_field: target_value, "status": {"$in": OPEN_STATUSES}}):
             message = (
                 _("There is already a task for this resource")
@@ -240,7 +293,7 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         now = utcnow()
         record = {
             target_field: target_value,
-            "user": body["user"],
+            "user": body["user"].strip(),
             "createdBy": user,
             "status": STATUS_PENDING,
             "createdAt": now,

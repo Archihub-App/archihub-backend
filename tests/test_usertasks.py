@@ -50,6 +50,9 @@ class FakeMongo:
 def mongo(monkeypatch):
     fake = FakeMongo()
     monkeypatch.setattr(services, "_mongo", lambda: fake)
+    # Targets and assignees are valid unless a test says otherwise.
+    monkeypatch.setattr(services, "may_open_target", lambda field, value, user: True)
+    monkeypatch.setattr(services, "_is_assignable", lambda username: True)
     return fake
 
 
@@ -456,3 +459,52 @@ def test_create_task_records_created_by_field(mongo):
     assert record["createdBy"] == "creator@x.test"
 
 
+
+
+def test_a_task_on_a_target_the_creator_cannot_open_is_refused(mongo, monkeypatch):
+    monkeypatch.setattr(services, "may_open_target", lambda field, value, user: False)
+
+    _payload, status = services.create_task(
+        {"resourceId": "res1", "user": "ed", "comment": "check"}, "lead"
+    )
+
+    assert status == 404
+    assert mongo.inserted == []
+
+
+def test_a_task_is_assigned_only_to_someone_who_can_take_it(mongo, monkeypatch):
+    monkeypatch.setattr(services, "_is_assignable", lambda username: False)
+
+    _payload, status = services.create_task(
+        {"resourceId": "res1", "user": "nobody", "comment": "check"}, "lead"
+    )
+
+    assert status == 400
+    assert mongo.inserted == []
+
+
+def test_an_assignee_needs_an_assignable_role(mongo, monkeypatch):
+    monkeypatch.undo()
+    monkeypatch.setattr(services, "_mongo", lambda: mongo)
+    seen = {}
+
+    def users(filters):
+        seen.update(filters)
+        return None
+
+    mongo.records["users"] = users
+
+    assert services._is_assignable("ed") is False
+    assert seen == {"username": "ed", "roles": {"$in": services.ASSIGNABLE_ROLES}}
+
+
+def test_a_missing_or_binned_resource_cannot_be_a_task_target(monkeypatch):
+    fake = FakeMongo()
+    monkeypatch.setattr(services, "_mongo", lambda: fake)
+    monkeypatch.setattr("archihub.api.users.services.has_role", lambda u, r: False)
+
+    assert services.may_open_target("resourceId", VALID_ID, "ed") is False
+    assert services.may_open_target("resourceId", "not-an-id", "ed") is False
+
+    fake.records["resources"] = {"_id": ObjectId(VALID_ID), "status": "deleted"}
+    assert services.may_open_target("resourceId", VALID_ID, "ed") is False
