@@ -49,6 +49,8 @@ def mongo(monkeypatch):
     monkeypatch.setattr("archihub.core.roles._mongo", lambda: fake)
     monkeypatch.setattr("archihub.core.roles.get_roles", lambda: {"options": []})
     monkeypatch.setattr("archihub.core.roles.get_access_rights", lambda: {"options": []})
+    # Every target is visible unless a test says otherwise.
+    monkeypatch.setattr(services, "_may_see_favorite", lambda collection, target, user: True)
     return fake
 
 
@@ -238,3 +240,38 @@ def test_an_empty_list_is_still_a_list(mongo):
 
     assert payload["results"] == []
     assert payload["total"] == 0
+
+
+def test_a_target_the_caller_may_not_open_cannot_be_favorited(mongo, monkeypatch):
+    monkeypatch.setattr(services, "_may_see_favorite", lambda collection, target, user: False)
+    mongo.records["resources"] = {"_id": ObjectId(VALID_ID), "status": "published"}
+
+    _payload, status = services.set_favorite("alice", {"type": "resources", "id": VALID_ID})
+
+    assert status == 404
+    assert mongo.operators == []
+
+
+def test_a_favorite_the_caller_may_no_longer_open_is_not_resolved(mongo, monkeypatch):
+    monkeypatch.setattr(
+        services, "_may_see_favorite",
+        lambda collection, target, user: target.get("accessRights") is None,
+    )
+    mongo.records["users"] = {"favorites": [
+        {"type": "resources", "id": VALID_ID}, {"type": "resources", "id": "6a70b8c3497d4440325c94c4"},
+    ]}
+    mongo.collections["resources"] = [
+        {"_id": ObjectId(VALID_ID), "metadata": {"firstLevel": {"title": "open"}}},
+        {"_id": ObjectId("6a70b8c3497d4440325c94c4"), "accessRights": "reserved",
+         "metadata": {"firstLevel": {"title": "secret"}}},
+    ]
+
+    payload, _status = services.get_favorites("alice", {"type": "resources", "page": 0})
+
+    assert [r["metadata"]["firstLevel"]["title"] for r in payload["results"]] == ["open"]
+    assert "accessRights" not in str(payload["results"])
+
+
+def test_a_snap_favorite_belongs_to_its_owner():
+    assert services._may_see_favorite("snaps", {"user": "alice"}, "alice") is True
+    assert services._may_see_favorite("snaps", {"user": "bob"}, "alice") is False

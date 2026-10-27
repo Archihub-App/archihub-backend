@@ -500,6 +500,27 @@ def _favorite_collection(type_name: str) -> str:
     return type_name
 
 
+def _may_see_favorite(collection: str, target: dict, username: str) -> bool:
+    """Whether ``username`` may open what a favourite points at.
+
+    A resource or record by its own domain's rule; a snap only by its owner.
+    """
+    if collection == "snaps":
+        return target.get("user") == username
+    if collection == "records":
+        from archihub.api.records.services import load_visible
+
+        _record, error = load_visible(str(target["_id"]), username)
+        return error is None
+
+    from archihub.api.resources.access import may_view_resource
+    from archihub.api.resources.services import can_view_type
+
+    return may_view_resource(username, target, has_role(username, "admin")) and can_view_type(
+        username, target.get("post_type")
+    )
+
+
 def set_favorite(username: str, body: dict) -> tuple[dict, int]:
     from bson.objectid import ObjectId
 
@@ -514,8 +535,12 @@ def set_favorite(username: str, body: dict) -> tuple[dict, int]:
         return {"msg": _("Resource not found")}, 404
 
     mongo = _mongo()
-    target = mongo.get_record(collection, {"_id": object_id}, {"_id": 1, "status": 1})
-    if not target:
+    target = mongo.get_record(
+        collection,
+        {"_id": object_id},
+        {"_id": 1, "status": 1, "post_type": 1, "accessRights": 1, "parents": 1, "user": 1},
+    )
+    if not target or not _may_see_favorite(collection, target, username):
         return {"msg": _("Resource not found")}, 404
 
     # Only published resources may be favourited. `.get` rather than `[...]`:
@@ -569,9 +594,16 @@ def get_favorites(username: str, body: dict) -> tuple[dict | list, int]:
             continue
 
     if collection == "resources":
-        fields = {"metadata.firstLevel.title": 1}
+        fields = {
+            "metadata.firstLevel.title": 1, "post_type": 1, "status": 1,
+            "accessRights": 1, "parents": 1,
+        }
         sort = [("metadata.firstLevel.title", 1)]
         filters = {"_id": {"$in": object_ids}, "status": "published"}
+    elif collection == "snaps":
+        fields = {"name": 1, "displayName": 1, "user": 1}
+        sort = [("name", 1)]
+        filters = {"_id": {"$in": object_ids}, "user": username}
     else:
         fields = {"name": 1, "displayName": 1}
         sort = [("name", 1)]
@@ -586,7 +618,12 @@ def get_favorites(username: str, body: dict) -> tuple[dict | list, int]:
     by_id = {str(f.get("id")): f for f in favorites}
     resolved = []
     for record in records:
+        if not _may_see_favorite(collection, record, username):
+            continue
         record_id = str(record.pop("_id"))
+        # Read for the check above, not part of the answer.
+        for key in ("post_type", "status", "accessRights", "parents", "user"):
+            record.pop(key, None)
         record["id"] = record_id
         record["view"] = (by_id.get(record_id) or {}).get("view")
         resolved.append(record)
