@@ -317,7 +317,7 @@ class FilesProcessing(ArchiPlugin):
             try:
                 order = int(row.get("order", 0) or 0)
             except (TypeError, ValueError):
-                return {"msg": _("Interval value must be a positive integer")}, 400
+                return {"msg": _('"{field}" must be a number', field="order")}, 400
             normalised.append({**row, "order": order})
 
         self.set_plugin_settings({**data, "types_activation": normalised})
