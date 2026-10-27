@@ -144,14 +144,29 @@ def _is_assignable(username: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def get_resource_tasks(resource_id: str) -> tuple[dict, int]:
+def get_resource_tasks(resource_id: str, user: str) -> tuple[dict, int]:
+    return _open_task("resourceId", resource_id, user, _("There are no tasks for this resource"))
+
+
+def get_record_tasks(record_id: str, user: str) -> tuple[dict, int]:
+    return _open_task("recordId", record_id, user, _("There are no tasks for this record"))
+
+
+def _open_task(target_field: str, target_value: str, user: str, missing: str) -> tuple[dict, int]:
+    """The open task on a target, for someone taking part in it or managing tasks.
+
+    Anyone else - and anyone who may not open the target - is told there is no
+    task, as when there is none.
+    """
     task = _mongo().get_record(
         COLLECTION,
-        {"resourceId": resource_id, "status": {"$in": OPEN_STATUSES}},
+        {target_field: target_value, "status": {"$in": OPEN_STATUSES}},
     )
-    if not task:
+    if not task or not _may_read_task(task, user) or not may_open_target(
+        target_field, target_value, user
+    ):
         # `msg`, not `error` - see the module docstring.
-        return {"msg": _("There are no tasks for this resource")}, 404
+        return {"msg": missing}, 404
 
     task["_id"] = str(task["_id"])
     task["createdAt"] = _iso(task.get("createdAt"))
@@ -159,19 +174,21 @@ def get_resource_tasks(resource_id: str) -> tuple[dict, int]:
     return task, 200
 
 
-def get_record_tasks(record_id: str) -> tuple[dict, int]:
-    task = _mongo().get_record(
-        COLLECTION,
-        {"recordId": record_id, "status": {"$in": OPEN_STATUSES}},
-    )
-    if not task:
-        # `msg`, not `error` - see the module docstring.
-        return {"msg": _("There are no tasks for this record")}, 404
+def _may_read_task(task: dict, user: str) -> bool:
+    """The assignee, the creator, a commenter, or a task manager."""
+    from archihub.api.users.services import has_permission, has_role
 
-    task["_id"] = str(task["_id"])
-    task["createdAt"] = _iso(task.get("createdAt"))
-    task["comment"] = process_comments(task.get("comment"))
-    return task, 200
+    participants = {task.get("user"), task.get("createdBy")}
+    participants.update(
+        c.get("user") for c in task.get("comment") or [] if isinstance(c, dict)
+    )
+    if user in participants:
+        return True
+    return (
+        has_role(user, "admin")
+        or has_role(user, "team_lead")
+        or has_permission(user, "usertasks.manage")
+    )
 
 
 def get_all_tasks(filters: dict) -> tuple[dict, int]:

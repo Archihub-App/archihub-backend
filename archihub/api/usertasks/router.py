@@ -122,7 +122,7 @@ def get_record_tasks(
     current_user: CurrentUser = Depends(require_task_reader),
 ) -> JSONResponse:
     """The open review task for one record."""
-    return _respond(services.get_record_tasks(record_id))
+    return _respond(services.get_record_tasks(record_id, current_user.username))
 
 
 @router.post(
@@ -176,5 +176,5 @@ def get_resource_tasks(
     current_user: CurrentUser = Depends(require_editor_or_lead),
 ) -> JSONResponse:
     """The open review task for one resource."""
-    return _respond(services.get_resource_tasks(resource_id))
+    return _respond(services.get_resource_tasks(resource_id, current_user.username))
 

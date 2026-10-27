@@ -280,7 +280,7 @@ def test_open_task_can_be_retrieved_in_review_or_rejected_state(mongo):
         "status": "review",
         "comment": [{"user": "ed", "comment": "done"}],
     }
-    payload, status = services.get_resource_tasks("res123")
+    payload, status = services.get_resource_tasks("res123", "ed")
     assert status == 200
     assert payload["status"] == "review"
     assert "ed: done" in payload["comment"]
@@ -291,7 +291,7 @@ def test_open_task_can_be_retrieved_in_review_or_rejected_state(mongo):
         "status": "rejected",
         "comment": [{"user": "lead", "comment": "redo"}],
     }
-    payload, status = services.get_record_tasks("rec123")
+    payload, status = services.get_record_tasks("rec123", "lead")
     assert status == 200
     assert payload["status"] == "rejected"
     assert "lead: redo" in payload["comment"]
@@ -508,3 +508,24 @@ def test_a_missing_or_binned_resource_cannot_be_a_task_target(monkeypatch):
 
     fake.records["resources"] = {"_id": ObjectId(VALID_ID), "status": "deleted"}
     assert services.may_open_target("resourceId", VALID_ID, "ed") is False
+
+
+def test_a_task_is_not_shown_to_someone_outside_it(mongo, monkeypatch):
+    monkeypatch.setattr("archihub.api.users.services.has_role", lambda u, r: False)
+    monkeypatch.setattr("archihub.api.users.services.has_permission", lambda u, p: False)
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID), "resourceId": "res1", "status": "pending",
+        "user": "ed", "createdBy": "lead", "comment": [{"user": "lead", "comment": "x"}],
+    }
+
+    assert services.get_resource_tasks("res1", "stranger")[1] == 404
+    assert services.get_resource_tasks("res1", "ed")[1] == 200
+
+
+def test_a_task_is_not_shown_when_its_target_cannot_be_opened(mongo, monkeypatch):
+    monkeypatch.setattr(services, "may_open_target", lambda field, value, user: False)
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID), "recordId": "rec1", "status": "pending", "user": "ed",
+    }
+
+    assert services.get_record_tasks("rec1", "ed")[1] == 404
