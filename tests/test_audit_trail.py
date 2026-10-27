@@ -370,6 +370,8 @@ def test_assigning_and_approving_a_review_task_are_recorded(audit_log, monkeypat
 
     fake = FakeMongo()
     monkeypatch.setattr(services, "_mongo", lambda: fake)
+    monkeypatch.setattr(services, "may_open_target", lambda field, value, user: True)
+    monkeypatch.setattr(services, "_is_assignable", lambda username: True)
 
     services.create_task({"resourceId": "r1", "user": "ed", "comment": "check it"}, "lead")
     created = audit_log[-1]
