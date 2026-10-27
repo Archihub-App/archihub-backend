@@ -477,6 +477,7 @@ def _sync_reciprocal_relations(
     When a resource names another of its own content type as related, the other
     one should list it back. Runs after the write, so the id exists.
     """
+    touched: set[str] = set()
     for destiny in _self_relation_fields(metadata, payload.get("post_type")):
         now = _ids_at(payload, destiny)
         was = before.get(destiny, set())
@@ -485,6 +486,11 @@ def _sync_reciprocal_relations(
             _unlink(removed, destiny, resource_id)
         for added in now - was:
             _link(added, destiny, resource_id, payload.get("post_type"))
+        touched |= now ^ was
+
+    if touched:
+        # Their search documents carry the relation field just rewritten.
+        _call_hook("resources_update_by_filter", {"_id": {"$in": sorted(touched)}})
 
 
 def _ids_at(document, path: str) -> set[str]:

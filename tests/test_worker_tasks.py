@@ -573,3 +573,19 @@ def test_results_are_kept_longer_than_a_weekend():
     from archihub.worker.celery_app import celery_app
 
     assert celery_app.conf.result_expires >= 3 * 24 * 3600
+
+
+def test_a_queued_id_list_is_read_as_object_ids(stubbed, monkeypatch):
+    """A message carries ids as strings; the collection stores ObjectIds."""
+    from bson.objectid import ObjectId
+
+    wanted = [ObjectId(), ObjectId()]
+    mongo, client = stubbed(FakeMongo(resources=[]), FakeSearch())
+    seen = []
+    monkeypatch.setattr(
+        mongo, "get_all_records", lambda collection, query, **kw: seen.append(query) or []
+    )
+
+    indexing.index_resources_task({"_id": {"$in": [str(oid) for oid in wanted]}})
+
+    assert seen[0] == {"_id": {"$in": wanted}}

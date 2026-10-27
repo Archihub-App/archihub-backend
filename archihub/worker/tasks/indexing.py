@@ -87,8 +87,15 @@ def index_resources_task(body: dict | None = None) -> str:
 
     body = body or {}
     # A string `_id` names one resource; anything else under `_id` is already a
-    # filter clause (an `$in` over several) and is passed through as one.
+    # filter clause (an `$in` over several) and is passed through as one, with
+    # string ids - the form a queued message can carry - read as ObjectIds.
     filters = {"_id": ObjectId(body["_id"])} if isinstance(body.get("_id"), str) else dict(body)
+    wanted = filters.get("_id")
+    if isinstance(wanted, dict) and isinstance(wanted.get("$in"), list):
+        filters["_id"] = {
+            "$in": [ObjectId(v) if isinstance(v, str) and ObjectId.is_valid(v) else v
+                    for v in wanted["$in"]]
+        }
     full_rebuild = not filters
 
     client = _client()

@@ -678,3 +678,20 @@ def test_an_update_cannot_change_the_content_type(mongo):
 
     assert status == 400
     assert mongo.resources[RESOURCE_ID]["post_type"] == stored_type
+
+
+def test_a_relation_change_reindexes_the_other_side(related, monkeypatch):
+    fired = []
+    def record(name, payload):
+        fired.append((name, payload))
+        return payload
+
+    monkeypatch.setattr(write, "_call_hook", record)
+    related.resources[RESOURCE_ID] = resource(
+        metadata={"firstLevel": {"title": "A"}, "related": [{"id": CHILD_ID}]}
+    )
+    related.resources[CHILD_ID]["metadata"]["related"] = [{"id": RESOURCE_ID}]
+
+    write.update(RESOURCE_ID, body(metadata={"firstLevel": {"title": "A"}}), "alice")
+
+    assert ("resources_update_by_filter", {"_id": {"$in": [CHILD_ID]}}) in fired
