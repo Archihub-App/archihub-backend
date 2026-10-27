@@ -799,12 +799,10 @@ def clear_system_cache() -> None:
 
 
 def clear_cache(user: str | None = None, *, via: str = "admin") -> tuple[dict, int]:
-    """Flush the shared cache.
+    """Flush the application cache.
 
-    NOTE: this is a Redis ``FLUSHDB``, so it clears the entire database - which
-    is also the Celery broker, meaning queued jobs go with it. Narrowing it needs
-    namespaced keys or a separate database number to exist first; until then the
-    breadth is a known property of the operation rather than an oversight.
+    Only this application's cached entries go (``infra.cache.KEY_PREFIX``); the
+    Celery broker shares the Redis database and its queued jobs are untouched.
     """
     from archihub.infra.cache import get_cache
 

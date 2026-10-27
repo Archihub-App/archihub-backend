@@ -254,7 +254,7 @@ def _render_plugin_field(resource: dict, field: dict, rendered: list[dict]) -> l
 
     The ``resource_field`` hook receives the resource, the field definition and
     the list built so far, appends its entry and returns the list. A kind no
-    plugin handles is left out, as before. A failing plugin costs its own field,
+    plugin handles is left out. A failing plugin costs its own field,
     never the detail screen.
     """
     from archihub.core.hooks import get_hook_handler

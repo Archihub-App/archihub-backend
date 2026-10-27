@@ -304,8 +304,7 @@ def resolve_records(resource: dict, record_types: dict[str, str]) -> list[dict]:
     """The resource's files, in display order, with their processing type.
 
     ``record_types`` maps a record id to its ``fileProcessing.type``; a record
-    missing from it has not been processed yet and is left out, as in the
-    original.
+    missing from it has not been processed yet and is left out.
     """
     files = sorted(
         (f for f in (resource.get("filesObj") or []) if isinstance(f, dict) and "id" in f),

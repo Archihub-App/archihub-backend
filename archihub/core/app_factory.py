@@ -114,9 +114,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "url": "https://archihub-app.github.io/archihub.github.io/en/licencia/",
         },
         lifespan=lifespan,
-        # Flasgger served the UI at /apidocs/ and the spec at /apispec_1.json.
-        # Both paths are kept as aliases in main.py so existing operator
-        # bookmarks and tooling do not break; these are the canonical ones.
+        # The canonical documentation paths. main.py also answers /apidocs/ and
+        # /apispec_1.json, which existing operator bookmarks and tooling use.
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
