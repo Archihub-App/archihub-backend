@@ -102,6 +102,10 @@ class LiquidText(ArchiPlugin):
             if body.get("format") not in FORMATS:
                 return json_response({"msg": _("Unsupported format")}, 400)
 
+            refusal = _refuse_unseen_records(body.get("records"), current_user.username)
+            if refusal is not None:
+                return json_response(*refusal)
+
             try:
                 queue(
                     download_task,
@@ -247,6 +251,20 @@ def generate_task(body: dict, user: str) -> str:
 
     logger.info("liquidText: wrote %d of %d candidate records", written, len(records))
     return _("Liquid text generated for {count} records", count=written)
+
+
+def _refuse_unseen_records(records, user: str) -> tuple[dict, int] | None:
+    """The refusal for a record this caller may not open, or ``None``.
+
+    The records route's own rule, ``records.services.load_visible``.
+    """
+    from archihub.api.records.services import load_visible
+
+    if not isinstance(records, list) or len(records) != 1 or not isinstance(records[0], str):
+        return {"msg": _("Select exactly one record to export")}, 400
+
+    _record, error = load_visible(records[0], user)
+    return error
 
 
 @shared_task(ignore_result=False, name=TASK_DOWNLOAD)
