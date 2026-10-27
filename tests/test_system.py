@@ -711,3 +711,28 @@ def test_node_cache_clear_reads_the_authorization_header(monkeypatch):
 
     assert response.status_code == 401
     assert seen == ["Bearer k"]
+
+
+def test_plugin_actions_are_offered_by_their_own_roles(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from archihub.core.security.jwt import CurrentUser, get_current_user
+    from archihub.plugins.framework import mounting
+    from main import app
+
+    monkeypatch.setattr(mounting, "system_actions", lambda placement: [
+        {"id": "a", "roles": ["user"]},
+        {"id": "b", "roles": ["editor"]},
+        {"id": "c"},
+    ])
+    monkeypatch.setattr(
+        "archihub.api.users.services.has_role", lambda user, role: role == "user"
+    )
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="u", claims={})
+    try:
+        response = TestClient(app).post("/system/get-actions", json={"placement": "resource"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert [a["id"] for a in response.json()["actions"]] == ["a"]
