@@ -687,3 +687,27 @@ def test_only_one_concurrent_onboarding_creates_an_administrator(mongo, monkeypa
     assert services.set_first_time(dict(body))[1] == 201
     assert services.set_first_time(dict(body))[1] == 400
     assert len(created) == 1
+
+
+def test_node_cache_clear_reads_the_authorization_header(monkeypatch):
+    """The node key comes from the request's header, never a query parameter."""
+    from fastapi.testclient import TestClient
+
+    from archihub.core.errors import AuthenticationError
+    from archihub.core.security import api_auth
+    from main import app
+
+    seen = []
+
+    def refuse(header):
+        seen.append(header)
+        raise AuthenticationError("no")
+
+    monkeypatch.setattr(api_auth, "authenticate_node_api", refuse)
+
+    response = TestClient(app).get(
+        "/system/node-clear-cache", headers={"Authorization": "Bearer k"}
+    )
+
+    assert response.status_code == 401
+    assert seen == ["Bearer k"]
