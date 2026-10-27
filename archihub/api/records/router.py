@@ -360,6 +360,9 @@ def get_pages(
     """
     pages = body.get("pages") or []
     size = body.get("size") or "small"
+    if not viewers.pages_in_bounds(pages):
+        message = _("At most {count} pages per request", count=viewers.MAX_PAGES_PER_REQUEST)
+        return JSONResponse(status_code=400, content={"msg": message})
 
     try:
         if body.get("gallery") is True:

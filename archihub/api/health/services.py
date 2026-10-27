@@ -19,6 +19,8 @@ cluster-health read.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from concurrent.futures import TimeoutError as FuturesTimeout
 
@@ -198,3 +200,26 @@ def get_readiness(timeout: float = 15.0) -> tuple[dict, int]:
             all_ready = False
 
     return {"ready": all_ready, "checks": result}, (200 if all_ready else 503)
+
+
+#: Seconds a readiness answer is reused. The route is unauthenticated and each
+#: answer opens a connection to every service.
+READINESS_MAX_AGE = 5.0
+
+_readiness_lock = threading.Lock()
+_readiness_cache: dict = {}
+
+
+def cached_readiness(max_age: float = READINESS_MAX_AGE) -> tuple[dict, int]:
+    """:func:`get_readiness`, reused for ``max_age`` seconds within this process.
+
+    Concurrent callers wait for the one check in progress instead of each
+    starting their own.
+    """
+    with _readiness_lock:
+        stored = _readiness_cache.get("value")
+        if stored is not None and time.monotonic() - _readiness_cache["at"] < max_age:
+            return stored
+        value = get_readiness()
+        _readiness_cache.update(value=value, at=time.monotonic())
+        return value

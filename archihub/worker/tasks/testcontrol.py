@@ -149,6 +149,8 @@ def _seed_baseline(run_id: str) -> dict:
     from archihub.api.system import services as system_services
 
     system_services.set_system_setting()
+    # The reset kept `system` but dropped every user.
+    system_services.release_onboarding_claim()
 
     password = secrets.token_urlsafe(18)
     result, status = system_services.set_first_time(

@@ -12,6 +12,14 @@ from fastapi.testclient import TestClient
 from archihub.api.health import services
 
 
+@pytest.fixture(autouse=True)
+def fresh_readiness():
+    """Each test sees its own readiness answer, not one reused from another."""
+    services._readiness_cache.clear()
+    yield
+    services._readiness_cache.clear()
+
+
 @pytest.fixture
 def client() -> TestClient:
     from main import app
@@ -240,3 +248,15 @@ def test_a_check_that_crashes_is_reported_without_its_message(client: TestClient
 
     assert response.json()["checks"]["redis"] == {"status": "error", "error": "unreachable"}
     assert "hunter2" not in response.text
+
+
+def test_a_readiness_answer_is_reused_briefly(monkeypatch):
+    calls = []
+    monkeypatch.setattr(services, "get_readiness", lambda: calls.append(1) or ({"ready": True}, 200))
+
+    services.cached_readiness()
+    services.cached_readiness()
+    assert len(calls) == 1
+
+    services.cached_readiness(max_age=0)
+    assert len(calls) == 2

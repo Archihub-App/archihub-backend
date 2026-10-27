@@ -655,3 +655,35 @@ def test_an_unknown_template_is_refused(seeded):
     from archihub.api.system import services
 
     assert services.seed_starter_catalogue("nonsense", "admin") is not None
+
+
+def test_only_one_concurrent_onboarding_creates_an_administrator(mongo, monkeypatch):
+    """Two requests that both saw no users race; the claim decides."""
+    from pymongo.errors import DuplicateKeyError
+
+    import archihub.api.users.services as users_services
+
+    created = []
+    mongo.counts["users"] = 0
+    monkeypatch.setattr(services, "set_system_setting", lambda: None)
+    monkeypatch.setattr(services, "seed_starter_catalogue", lambda template, user: None)
+    monkeypatch.setattr(
+        users_services, "register_user", lambda payload: created.append(payload) or ({}, 201)
+    )
+    claimed = set()
+
+    def insert_record(collection, record):
+        if record.get("_id") in claimed:
+            raise DuplicateKeyError("taken")
+        claimed.add(record.get("_id"))
+
+    class Unchanged:
+        modified_count = 0
+
+    monkeypatch.setattr(mongo, "insert_record", insert_record)
+    monkeypatch.setattr(mongo, "update_record", lambda *a: Unchanged())
+    body = {"username": "a", "password": "p", "confirmPassword": "p", "typeTemplate": "basic"}
+
+    assert services.set_first_time(dict(body))[1] == 201
+    assert services.set_first_time(dict(body))[1] == 400
+    assert len(created) == 1

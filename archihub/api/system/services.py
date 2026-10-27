@@ -32,7 +32,11 @@ COLLECTION = "system"
 #: saving an unrelated preference.
 #: `role_mappings` widens permission points, and is changed through its own
 #: routes, which check every point and role it names.
-_HIDDEN_SETTINGS = {"active_plugins", "runtime_control", "role_mappings"}
+_HIDDEN_SETTINGS = {"active_plugins", "runtime_control", "role_mappings", "onboarding_claim"}
+
+#: The ``_id`` of the document whose insertion claims onboarding. ``_id`` is
+#: unique, so exactly one concurrent request can insert it.
+ONBOARDING_CLAIM_ID = "onboarding_claim"
 
 
 def _mongo():
@@ -353,6 +357,46 @@ def get_system_settings() -> tuple[dict, int]:
     }, 200
 
 
+#: Seconds after which an unfinished onboarding claim no longer holds.
+ONBOARDING_CLAIM_TTL = 600
+
+
+def _claim_onboarding() -> bool:
+    """Whether this request is the one that configures the instance.
+
+    A claim left by a request that died before creating the administrator
+    expires after ``ONBOARDING_CLAIM_TTL``; taking it over is itself atomic,
+    conditioned on the stale claim's timestamp.
+    """
+    from datetime import timedelta
+
+    from pymongo.errors import DuplicateKeyError
+
+    from archihub.core.clock import utcnow
+
+    mongo = _mongo()
+    now = utcnow()
+    try:
+        claim = {"_id": ONBOARDING_CLAIM_ID, "name": ONBOARDING_CLAIM_ID, "data": {"at": now}}
+        mongo.insert_record(COLLECTION, claim)
+        return True
+    except DuplicateKeyError:
+        pass
+
+    stale_before = now - timedelta(seconds=ONBOARDING_CLAIM_TTL)
+    result = mongo.update_record(
+        COLLECTION,
+        {"_id": ONBOARDING_CLAIM_ID, "data.at": {"$lt": stale_before}},
+        {"data": {"at": now}},
+    )
+    return bool(getattr(result, "modified_count", 0))
+
+
+def release_onboarding_claim() -> None:
+    """Forget the onboarding claim, so an instance with no users can be set up."""
+    _mongo().delete_record(COLLECTION, {"_id": ONBOARDING_CLAIM_ID})
+
+
 def set_first_time(body: dict) -> tuple[dict, int]:
     """Create the initial administrator and seed a starter catalogue.
 
@@ -373,6 +417,9 @@ def set_first_time(body: dict) -> tuple[dict, int]:
         # the administrator account with a password nobody knows.
         return {"msg": _("Passwords do not match")}, 400
 
+    if not _claim_onboarding():
+        return {"msg": _("The system is already configured")}, 400
+
     set_system_setting()
 
     from archihub.api.users.services import register_user
@@ -391,6 +438,8 @@ def set_first_time(body: dict) -> tuple[dict, int]:
         }
     )
     if status != 201:
+        # Nobody was created, so onboarding may be tried again.
+        release_onboarding_claim()
         return {"msg": result.get("msg", _("Could not create the administrator"))}, status
 
     error = seed_starter_catalogue(body["typeTemplate"], body["username"])
