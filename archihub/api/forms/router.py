@@ -29,6 +29,7 @@ from archihub.api.forms.schemas import FormCreate, FormUpdate
 from archihub.core.security.jwt import (
     ROLE_FAILURE_STATUS,
     CurrentUser,
+    require_any_permission,
     require_permission,
 )
 from archihub.core.responses import json_response
@@ -66,8 +67,13 @@ def get_all_fields(current_user: CurrentUser = Depends(require_form_manager)) ->
     "",
     responses={200: {"description": "All forms, as name + description + slug"}, **_ROLE_RESPONSES},
 )
-def get_all(current_user: CurrentUser = Depends(require_form_manager)) -> JSONResponse:
-    """Get every metadata form."""
+def get_all(
+    current_user: CurrentUser = Depends(require_any_permission("forms.manage", "types.manage")),
+) -> JSONResponse:
+    """Get every metadata form: name, description and slug only.
+
+    Also read by the content-type editor, which links a type to its form.
+    """
     return _respond(services.get_all())
 
 

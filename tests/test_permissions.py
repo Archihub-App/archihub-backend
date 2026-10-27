@@ -492,3 +492,22 @@ def test_a_built_in_role_stored_by_hand_is_ignored(held, role_mappings):
     assert users.has_permission("someone", "forms.manage") is False
     held.add(CUSTOM)
     assert users.has_permission("someone", "forms.manage") is True
+
+
+def test_the_content_type_editor_can_read_what_it_needs(held, role_mappings, client, monkeypatch):
+    """An editor edits types: the roles and the forms a type is linked to."""
+    from archihub.api.forms import services as forms
+
+    monkeypatch.setattr(forms, "get_all", lambda: ([], 200))
+    held.add("editor")
+
+    assert client.get("/types/roles").status_code == 200
+    assert client.get("/forms").status_code == 200
+    # Managing forms is still for administrators.
+    assert client.post("/forms", json={}).status_code == 403
+
+
+def test_without_the_type_point_the_roles_stay_closed(held, role_mappings, client):
+    held.add("user")
+
+    assert client.get("/types/roles").status_code == 403

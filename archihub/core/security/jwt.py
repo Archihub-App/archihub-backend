@@ -141,6 +141,28 @@ def require_permission(point: str, status_code: int | None = None) -> Callable[.
     return _dependency
 
 
+def require_any_permission(*points: str) -> Callable[..., CurrentUser]:
+    """Dependency factory: require at least one of the permission ``points``.
+
+    For a read that serves more than one screen, each guarded by its own point.
+    """
+    from archihub.core.permissions import get_point
+
+    for point in points:
+        get_point(point)
+
+    def _dependency(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        from archihub.api.users.services import has_permission
+
+        if not any(has_permission(current_user.username, point) for point in points):
+            logger.info("Denied %s access requiring one of %s", current_user.username, list(points))
+            raise PermissionDeniedError(_(MSG_INSUFFICIENT_PERMISSIONS))
+        return current_user
+
+    _dependency.permission_points = points
+    return _dependency
+
+
 def require_right(right: str) -> Callable[..., CurrentUser]:
     """Dependency factory: require a specific access right."""
 
