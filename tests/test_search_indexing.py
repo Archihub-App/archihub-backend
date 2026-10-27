@@ -29,6 +29,7 @@ def build(resource: dict, fields: list[dict], **kwargs) -> dict:
     kwargs.setdefault("is_article", False)
     kwargs.setdefault("records", [])
     kwargs.setdefault("centroid_lookup", _no_centroid)
+    kwargs.setdefault("access_right", resource.get("accessRights"))
     return documents.build_resource_document(resource, fields, **kwargs)
 
 
@@ -230,6 +231,12 @@ def test_access_rights_default_to_public_but_the_resource_always_wins():
         build({"status": "published", "accessRights": "reserved"}, [])["accessRights"]
         == "reserved"
     )
+
+
+def test_the_effective_access_right_is_indexed_not_only_the_resource_own():
+    document = build({"status": "published"}, [], access_right="reserved")
+
+    assert document["accessRights"] == "reserved"
 
 
 def test_a_plugin_may_extend_the_document_but_not_widen_its_access():

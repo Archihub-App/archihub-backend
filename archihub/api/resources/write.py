@@ -390,6 +390,18 @@ def update(resource_id: str, body: dict, user: str, incoming_files=None) -> tupl
     _audit(user, "resource_update", {"resource": {**payload, "_id": resource_id}})
     _call_hook("resource_update", {**payload, "_id": resource_id})
 
+    rights_changed = "accessRights" in payload and (
+        (payload["accessRights"] or None) != (existing.get("accessRights") or None)
+    )
+    if moved or rights_changed:
+        # Everything filed below inherits this resource's access right, and its
+        # search documents carry that inherited value. The recycle bin stays out
+        # of the index.
+        _call_hook(
+            "resources_update_by_filter",
+            {"parents.id": resource_id, "status": {"$ne": "deleted"}},
+        )
+
     return {"msg": _("Resource updated successfully")}, 200
 
 

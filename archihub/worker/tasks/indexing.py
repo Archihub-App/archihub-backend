@@ -27,6 +27,10 @@ reindex of a real archive spends its time on. ``bulk_index`` sends a page at a
 time and reports which ids the cluster refused.
 
 **Types are resolved once per run**, not once per resource.
+
+**The indexed access right is the effective one.** A resource with no access
+right of its own is governed by its nearest restricted ancestor, and search
+filters on this field. Ancestors are read once per page.
 """
 
 from __future__ import annotations
@@ -101,10 +105,11 @@ def index_resources_task(body: dict | None = None) -> str:
     for page in _pages(filters):
         documents = []
         record_types = _record_types(page)
+        ancestor_rights = _ancestor_rights(page)
 
         for resource in page:
             try:
-                document = _document_for(resource, types, record_types)
+                document = _document_for(resource, types, record_types, ancestor_rights)
             except _Skip:
                 skipped += 1
                 continue
@@ -206,7 +211,13 @@ class _TypeCache:
         return self._fields[slug], self._is_article[slug]
 
 
-def _document_for(resource: dict, types: _TypeCache, record_types: dict[str, str]) -> dict:
+def _document_for(
+    resource: dict,
+    types: _TypeCache,
+    record_types: dict[str, str],
+    ancestor_rights: dict[str, str | None],
+) -> dict:
+    from archihub.api.resources.access import inherited_access_right
     from archihub.api.search.documents import (
         NotIndexable,
         build_resource_document,
@@ -227,6 +238,7 @@ def _document_for(resource: dict, types: _TypeCache, record_types: dict[str, str
             is_article=is_article,
             records=resolve_records(resource, record_types),
             centroid_lookup=_centroid,
+            access_right=inherited_access_right(resource, ancestor_rights),
             hook_call=get_hook_handler().call,
         )
     except NotIndexable as exc:
@@ -275,6 +287,23 @@ def _pages(filters: dict):
         if len(page) < PAGE_SIZE:
             return
         last_id = page[-1]["_id"]
+
+
+def _ancestor_rights(resources: list[dict]) -> dict[str, str | None]:
+    """``{ancestor id: its own accessRights}`` for every ancestor on this page.
+
+    One query per page instead of one per resource.
+    """
+    from archihub.api.resources.access import ancestor_object_ids
+
+    object_ids = ancestor_object_ids(resources)
+    if not object_ids:
+        return {}
+
+    rows = _mongo().get_all_records(
+        "resources", {"_id": {"$in": object_ids}}, fields={"_id": 1, "accessRights": 1}
+    )
+    return {str(row["_id"]): row.get("accessRights") for row in rows}
 
 
 def _record_types(resources: list[dict]) -> dict[str, str]:

@@ -180,20 +180,7 @@ def effective_access_right(resource: dict) -> str | None:
     if own:
         return own
 
-    parents = resource.get("parents") or []
-    parent_ids = [p.get("id") for p in parents if isinstance(p, dict) and p.get("id")]
-    if not parent_ids:
-        return None
-
-    from bson.objectid import ObjectId
-
-    object_ids = []
-    for parent_id in parent_ids:
-        try:
-            object_ids.append(ObjectId(parent_id))
-        except Exception:
-            logger.warning("Resource lists an unusable ancestor id %r", parent_id)
-
+    object_ids = ancestor_object_ids([resource])
     if not object_ids:
         return None
 
@@ -201,10 +188,45 @@ def effective_access_right(resource: dict) -> str | None:
         "resources", {"_id": {"$in": object_ids}}, fields={"accessRights": 1}
     )
     rights = {str(row["_id"]): row.get("accessRights") for row in rows}
+    return inherited_access_right(resource, rights)
 
-    for parent_id in parent_ids:
-        if rights.get(parent_id):
-            return rights[parent_id]
+
+def ancestor_object_ids(resources: list[dict]) -> list:
+    """The distinct ancestor ids of ``resources``, as ``ObjectId``.
+
+    An id that is not a valid ``ObjectId`` is logged and left out.
+    """
+    from bson.objectid import ObjectId
+
+    seen: set[str] = set()
+    object_ids = []
+    for resource in resources:
+        for parent in resource.get("parents") or []:
+            parent_id = parent.get("id") if isinstance(parent, dict) else None
+            if not parent_id or parent_id in seen:
+                continue
+            seen.add(parent_id)
+            try:
+                object_ids.append(ObjectId(parent_id))
+            except Exception:
+                logger.warning("Resource lists an unusable ancestor id %r", parent_id)
+    return object_ids
+
+
+def inherited_access_right(resource: dict, rights_by_id: dict[str, str | None]) -> str | None:
+    """:func:`effective_access_right` over ancestor rights already loaded.
+
+    ``rights_by_id`` maps an ancestor id to its own ``accessRights``. It lets a
+    caller that handles many resources at once read every ancestor in one query.
+    """
+    own = resource.get("accessRights")
+    if own:
+        return own
+
+    for parent in resource.get("parents") or []:
+        parent_id = parent.get("id") if isinstance(parent, dict) else None
+        if parent_id and rights_by_id.get(parent_id):
+            return rights_by_id[parent_id]
 
     return None
 

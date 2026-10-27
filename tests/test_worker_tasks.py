@@ -524,3 +524,23 @@ def test_the_registered_task_names_are_stable():
         "testcontrol.reset",
         "records.cleanup_temporary_records",
     }
+
+
+def test_a_child_with_no_right_of_its_own_is_indexed_with_its_ancestor_right(stubbed):
+    from bson.objectid import ObjectId
+
+    fonds, child = ObjectId(), ObjectId()
+    mongo = FakeMongo(
+        resources=[
+            {"_id": fonds, "post_type": "fondo", "status": "published", "accessRights": "reserved"},
+            {"_id": child, "post_type": "fondo", "status": "published",
+             "parents": [{"id": str(fonds), "post_type": "fondo"}]},
+        ]
+    )
+    _, client = stubbed(mongo, FakeSearch())
+
+    indexing.index_resources_task({"_id": str(child)})
+
+    assert [(doc_id, doc["accessRights"]) for doc_id, doc in client.written] == [
+        (str(child), "reserved")
+    ]
