@@ -191,6 +191,31 @@ def _is_internal_host(host: str) -> bool:
     return False
 
 
+def reaches_refused_address(provider: dict) -> bool:
+    """Whether calling this provider now would reach an internal address it was
+    not allowed to.
+
+    Only a provider whose base URL an administrator saved may be internal. A
+    provider saved before that was recorded is judged by whoever saved it last.
+    """
+    allowed = provider.get("internalAllowed")
+    if allowed is None:
+        from archihub.api.users.services import has_role
+
+        saver = provider.get("updatedBy") or provider.get("createdBy")
+        allowed = bool(saver) and has_role(saver, "admin")
+    if allowed:
+        return False
+    base_url = provider.get("base_url")
+    if not base_url:
+        return False
+    try:
+        host = urlsplit(base_url).hostname
+    except ValueError:
+        return True
+    return not host or _is_internal_host(host)
+
+
 def _validate_base_url(base_url, *, allow_internal: bool) -> str | None:
     if not isinstance(base_url, str) or not base_url.startswith(("http://", "https://")):
         return _("The base URL must be an http or https address")
@@ -285,6 +310,7 @@ def create(body: dict, user: str, *, is_admin: bool = False) -> tuple[dict, int]
         return {"msg": _("A provider with that name already exists")}, 409
 
     payload["key"] = encrypt_key(body.get("key"))
+    payload["internalAllowed"] = is_admin
     payload.setdefault("enabled", True)
     payload["createdBy"] = user
     payload["createdAt"] = _now()
@@ -338,6 +364,10 @@ def update(provider_id: str, body: dict, user: str, *, is_admin: bool = False) -
 
     if not payload:
         return {"msg": _("Nothing to update")}, 400
+
+    if "base_url" in payload:
+        # The permission goes with the address: whoever saves a new one decides it.
+        payload["internalAllowed"] = is_admin
 
     payload["updatedBy"] = user
     payload["updatedAt"] = _now()

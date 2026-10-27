@@ -22,6 +22,14 @@ from archihub.api.aiservices.dialects.ollama import OllamaDialect
 from archihub.api.aiservices.dialects.openai_compat import OpenAICompatibleDialect
 
 
+@pytest.fixture(autouse=True)
+def local_providers_are_allowed(monkeypatch):
+    """The providers here are a local test server, which is an internal address."""
+    from archihub.api.aiservices import providers
+
+    monkeypatch.setattr(providers, "reaches_refused_address", lambda provider: False)
+
+
 # ---------------------------------------------------------------------------
 # A stub provider, speaking whatever we tell it to
 # ---------------------------------------------------------------------------
@@ -801,3 +809,4 @@ def test_a_model_setting_change_records_which_fields_it_set(monkeypatch, audit_l
     entry = audit_log[-1]
     assert entry["action"] == "LLM_MODEL_UPDATE"
     assert entry["metadata"] == {"provider": "p", "model": "m", "fields": ["context_length"]}
+
