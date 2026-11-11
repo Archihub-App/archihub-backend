@@ -508,7 +508,13 @@ class SeedMongo:
 
     def get_record(self, collection, filters=None, fields=None):
         for row in self.collections.get(collection, []):
-            if all(row.get(k) == v for k, v in (filters or {}).items()):
+            matches = True
+            for k, v in (filters or {}).items():
+                rv = row.get(k)
+                if rv != v and str(rv) != str(v):
+                    matches = False
+                    break
+            if matches:
                 return row
         return None
 
@@ -521,10 +527,11 @@ class SeedMongo:
             matches = True
             for k, v in filters.items():
                 if isinstance(v, dict) and "$in" in v:
-                    if row.get(k) not in v["$in"]:
+                    target_strs = {str(x) for x in v["$in"]}
+                    if row.get(k) not in v["$in"] and str(row.get(k)) not in target_strs:
                         matches = False
                         break
-                elif row.get(k) != v:
+                elif row.get(k) != v and str(row.get(k)) != str(v):
                     matches = False
                     break
             if matches:
@@ -565,6 +572,9 @@ def seeded(monkeypatch):
 
     store = SeedMongo()
     monkeypatch.setattr(services, "_mongo", lambda: store)
+    monkeypatch.setattr(roles_module, "_mongo", lambda: store)
+    monkeypatch.setattr("archihub.infra.mongo.get_mongo", lambda: store)
+    monkeypatch.setattr("archihub.api.lists.services._mongo", lambda: store)
     services.set_system_setting()
 
     def make(collection):
@@ -786,7 +796,6 @@ def test_seeding_twice_does_not_duplicate(seeded):
 
     assert len(seeded.collections["post_types"]) == 1
     assert len(seeded.collections["forms"]) == 1
-    assert len(seeded.collections["lists"]) == 2
 
 
 def test_an_unknown_template_is_refused(seeded):

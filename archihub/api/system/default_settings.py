@@ -157,9 +157,9 @@ settings = [
             },
             {
                 'type': 'select',
-                'label': 'Idioma por defecto de los usuarios',
+                'label': 'Idioma del sistema',
                 'id': 'user_languages',
-                'instructions': 'Seleccionar el idioma por defecto para los usuarios de la aplicación.',
+                'instructions': 'Seleccionar el idioma de la aplicación (español o inglés).',
                 'options': [
                     {
                         'label': 'Español',

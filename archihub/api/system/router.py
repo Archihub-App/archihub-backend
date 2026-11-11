@@ -309,7 +309,7 @@ def activate_plugin(
     """
     slug = body.get("slug") or body.get("plugin")
     if not slug:
-        return JSONResponse(status_code=400, content={"msg": "Missing plugin slug"})
+        return JSONResponse(status_code=400, content={"msg": _("Missing plugin slug")})
 
     return _respond(services.set_plugin_active(slug, bool(body.get("active")), current_user.username))
 

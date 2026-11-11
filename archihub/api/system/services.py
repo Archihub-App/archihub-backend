@@ -104,14 +104,16 @@ def set_system_setting() -> None:
 def migrate_authorisation_vocabularies() -> dict:
     """Migrate access rights and roles from the `lists` collection into `system`.
 
-    When updating ArchiHUB from a version where access levels and roles were stored
+    When updating ArchiHUB where access levels and roles were stored
     as lists in the `lists` collection referenced by `access_rights_list` and
-    `user_roles_list`, this automatically moves their options into the `access_rights`
-    document in the `system` collection, removes legacy list references from `data`,
+    `user_roles_list`, this moves their options into the `access_rights`
+    document in the `system` collection, removes external list references from `data`,
     and cleans up the old list entries from the `lists` collection.
     """
     mongo = _mongo()
     system_record = mongo.get_record(COLLECTION, {"name": "access_rights"})
+    if system_record and system_record.get("name") != "access_rights":
+        return {"migrated_rights": 0, "migrated_roles": 0}
     if not system_record:
         from archihub.api.system import default_settings
 
@@ -134,7 +136,7 @@ def migrate_authorisation_vocabularies() -> dict:
     # 1. Migrate Access Rights
     existing_options = system_record.get("options")
     if not existing_options:
-        rights_entry = next((item for item in data if item.get("id") == "access_rights_list"), None)
+        rights_entry = next((item for item in data if isinstance(item, dict) and item.get("id") == "access_rights_list"), None)
         rights_list_id = (rights_entry or {}).get("value")
 
         list_record = None
@@ -174,7 +176,7 @@ def migrate_authorisation_vocabularies() -> dict:
     # 2. Migrate Custom Roles
     existing_roles = system_record.get("roles")
     if not existing_roles:
-        roles_entry = next((item for item in data if item.get("id") == "user_roles_list"), None)
+        roles_entry = next((item for item in data if isinstance(item, dict) and item.get("id") == "user_roles_list"), None)
         roles_list_id = (roles_entry or {}).get("value")
 
         roles_list_record = None
@@ -211,8 +213,8 @@ def migrate_authorisation_vocabularies() -> dict:
         else:
             updated_fields.setdefault("roles", [])
 
-    # 3. Clean legacy entries from `data`
-    cleaned_data = [item for item in data if item.get("id") not in ("access_rights_list", "user_roles_list")]
+    # 3. Clean list references from `data`
+    cleaned_data = [item for item in data if not isinstance(item, dict) or item.get("id") not in ("access_rights_list", "user_roles_list")]
     if len(cleaned_data) != len(data):
         updated_fields["data"] = cleaned_data
 
@@ -246,10 +248,40 @@ def migrate_authorisation_vocabularies() -> dict:
 
 def get_all_settings() -> tuple[dict, int]:
     try:
+        from archihub.api.system.i18n import translate_system_settings
+        from archihub.core.i18n import get_locale
+
         records = _mongo().get_all_records(
             COLLECTION, {"name": {"$nin": list(_HIDDEN_SETTINGS)}}
         )
-        return {"settings": parse_result(list(records))}, 200
+        settings = parse_result(list(records))
+
+        # Ensure user_management contains the language option even on older un-migrated databases
+        user_mgmt = next(
+            (s for s in settings if isinstance(s, dict) and s.get("name") == "user_management"),
+            None,
+        )
+        if user_mgmt and isinstance(user_mgmt.get("data"), list):
+            data_list = user_mgmt["data"]
+            has_lang = any(
+                isinstance(item, dict) and item.get("id") in ("user_languages", "system_language")
+                for item in data_list
+            )
+            if not has_lang:
+                data_list.append({
+                    "type": "select",
+                    "label": "Idioma del sistema",
+                    "id": "user_languages",
+                    "instructions": "Seleccionar el idioma de la aplicación (español o inglés).",
+                    "options": [
+                        {"label": "Español", "value": "es"},
+                        {"label": "Inglés", "value": "en"},
+                    ],
+                    "value": get_locale(),
+                })
+
+        translated = translate_system_settings(settings, get_locale())
+        return {"settings": translated}, 200
     except Exception:
         logger.exception("Could not read settings")
         return {"msg": _("Error while processing the request")}, 500
@@ -343,7 +375,11 @@ def update_settings(body: dict, current_user: str) -> tuple[dict, int]:
         pending: dict[str, dict] = {}
         unknown: list[str] = []
 
-        for key, value in (body or {}).items():
+        effective_body = dict(body or {})
+        if "system_language" in effective_body and "system_language" not in owner and "user_languages" in owner:
+            effective_body["user_languages"] = effective_body.pop("system_language")
+
+        for key, value in effective_body.items():
             if key in _HIDDEN_SETTINGS:
                 logger.warning("Refusing to update protected settings group %s", key)
                 continue
@@ -384,9 +420,18 @@ def get_access_rights_id():
 def get_access_rights() -> tuple[dict, int]:
     """The access-rights vocabulary, stored in the system collection."""
     try:
+        import copy
+        from archihub.api.system.i18n import translate_text
+        from archihub.core.i18n import get_locale
         from archihub.core.roles import access_rights_document
 
-        return access_rights_document(), 200
+        doc = copy.deepcopy(access_rights_document())
+        loc = get_locale()
+        if "label" in doc:
+            doc["label"] = translate_text(doc["label"], loc)
+        if "description" in doc:
+            doc["description"] = translate_text(doc["description"], loc)
+        return doc, 200
     except Exception:
         logger.exception("Could not get access rights")
         return {"msg": _("Error while processing the request")}, 500
@@ -650,7 +695,11 @@ def get_system_settings() -> tuple[dict, int]:
     # restate what `capabilities` already carries.
     return {
         "version": __version__,
-        "language": get_setting_value("user_management", "user_languages", 2) or "en",
+        "language": (
+            get_setting_value("user_management", "user_languages", 2)
+            or get_setting_value("user_management", "system_language")
+            or "en"
+        ),
         "capabilities": sorted(set(capabilities)),
     }, 200
 

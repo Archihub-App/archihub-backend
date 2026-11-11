@@ -2404,3 +2404,28 @@ msgstr "Estos ajustes no admiten archivos"
 
 msgid "The session has ended; sign in again"
 msgstr "La sesión terminó; vuelva a iniciar sesión"
+
+msgid "Access rights updated successfully"
+msgstr "Niveles de acceso actualizados con éxito"
+
+msgid "Roles updated successfully"
+msgstr "Roles actualizados con éxito"
+
+msgid "Every access level must have a non-empty name or term"
+msgstr "Cada nivel de acceso debe tener un nombre o término no vacío"
+
+msgid "Every role must have a non-empty name or term"
+msgstr "Cada rol debe tener un nombre o término no vacío"
+
+msgid "Invalid payload"
+msgstr "Carga útil no válida"
+
+msgid "Missing plugin slug"
+msgstr "Falta el identificador del plugin"
+
+msgid "%(user)s updated access rights"
+msgstr "%(user)s actualizó los niveles de acceso"
+
+msgid "%(user)s updated roles"
+msgstr "%(user)s actualizó los roles"
+

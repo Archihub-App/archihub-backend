@@ -33,6 +33,8 @@ log_actions = {
     'record_get_all': 'RECORD_GET_ALL',
     'record_get': 'RECORD_GET',
     'system_update': 'SYSTEM_UPDATE',
+    'access_rights_update': 'ACCESS_RIGHTS_UPDATE',
+    'roles_update': 'ROLES_UPDATE',
     'system_setup': 'SYSTEM_SETUP',
     'system_restart': 'SYSTEM_RESTART',
     'cache_clear': 'CACHE_CLEAR',
