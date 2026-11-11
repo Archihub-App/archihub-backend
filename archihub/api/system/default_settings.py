@@ -20,19 +20,10 @@ settings = [
     {
         'name': 'access_rights',
         'label': 'Roles y acceso a la información',
+        'description': 'Niveles de acceso y configuración de roles',
+        'options': [],
+        'roles': [],
         'data': [
-            {
-                'type': 'select',
-                'label': 'Listado para los niveles de acceso',
-                'id': 'access_rights_list',
-                'instructions': 'Los niveles de acceso definen la publicidad de la información. Por defecto, todo el contenido creado en la herramienta es Público. Se pueden crear nuevos niveles desde el apartado de lista en el módulo de catalogación y asignarlos a los usuarios para que estos puedan acceder a dicha información.'
-            },
-            {
-                'type': 'select',
-                'label': 'Listado para los roles de usuario',
-                'id': 'user_roles_list',
-                'instructions': 'Los roles de usuario definen la capacidad de los usuarios para manejar información. Por defecto existen admin y editor. Se pueden implementar nuevos roles para cada tipo de contenido.'
-            },
             {
                 'type':  'checkbox_single',
                 'label': 'Activar la visualización de metadatos para todos los usuarios',
@@ -566,15 +557,4 @@ detailed_post_type = [
     }
 ]
 
-roles_rights_settings = [
-    {
-        'name': 'Niveles de acceso',
-        'description': '',
-        'options': []
-    },
-    {
-        'name': 'Roles',
-        'description': '',
-        'options': []
-    }
-]
+roles_rights_settings = []

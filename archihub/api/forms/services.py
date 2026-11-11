@@ -150,7 +150,10 @@ def get_by_slug(slug: str) -> tuple[dict, int]:
             return {"msg": _("Form not found")}, 404
 
         field = dict(ACCESS_RIGHTS_FIELD)
-        field["list"] = _get_access_rights_id()
+        list_id = _get_access_rights_id()
+        if list_id:
+            field["list"] = list_id
+        field["options"] = _get_access_rights().get("options", [])
         form.setdefault("fields", []).insert(0, field)
 
         form.pop("_id", None)
