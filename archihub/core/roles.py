@@ -97,10 +97,35 @@ def get_access_rights_id():
     return (_settings_entry(ACCESS_RIGHTS_LIST_ENTRY, ACCESS_RIGHTS_LIST_INDEX) or {}).get("value")
 
 
-@cached("system", "lists")
+@cached("system")
 def get_roles() -> dict:
-    """Every assignable role: the configured vocabulary plus the built-ins."""
-    options = list(_list_options(get_roles_id()))
+    """Every assignable role: the configured vocabulary in system plus the built-ins."""
+    record = _mongo().get_record("system", {"name": ACCESS_RIGHTS_SETTING})
+    if record and "roles" not in record and (_settings_entry(ROLES_LIST_ENTRY, ROLES_LIST_INDEX) or _mongo().get_record("lists", {"name": "Roles"})):
+        try:
+            from archihub.api.system.services import migrate_authorisation_vocabularies
+
+            migrate_authorisation_vocabularies()
+            record = _mongo().get_record("system", {"name": ACCESS_RIGHTS_SETTING})
+        except Exception:
+            logger.debug("Auto-migration of roles deferred", exc_info=True)
+
+    custom = (record or {}).get("roles")
+    if custom is None:
+        roles_doc = _mongo().get_record("system", {"name": "roles"})
+        if roles_doc and "options" in roles_doc:
+            custom = roles_doc.get("options")
+        elif get_roles_id():
+            custom = _list_options(get_roles_id())
+        else:
+            custom = []
+
+    options = []
+    for opt in custom or []:
+        if isinstance(opt, dict):
+            options.append({"id": str(opt.get("id", "")), "term": str(opt.get("term", ""))})
+        elif isinstance(opt, str):
+            options.append({"id": opt, "term": opt})
 
     known = {option.get("id") for option in options}
     for role in BUILTIN_ROLES:
@@ -110,36 +135,85 @@ def get_roles() -> dict:
     return {"options": options}
 
 
-@cached("system", "lists")
+@cached("system")
 def get_access_rights() -> dict:
-    """The configured access-rights vocabulary.
+    """The configured access-rights vocabulary, stored in the system collection."""
+    record = _mongo().get_record("system", {"name": ACCESS_RIGHTS_SETTING})
+    if not record:
+        return {"options": []}
 
-    Unlike roles there are no built-ins: access rights are entirely
-    administrator-defined, so an instance without a configured list simply has
-    none.
-    """
-    return {"options": _list_options(get_access_rights_id())}
+    options = record.get("options")
+    if not options and (_settings_entry(ACCESS_RIGHTS_LIST_ENTRY, ACCESS_RIGHTS_LIST_INDEX) or _mongo().get_record("lists", {"name": "Niveles de acceso"})):
+        try:
+            from archihub.api.system.services import migrate_authorisation_vocabularies
+
+            migrate_authorisation_vocabularies()
+            record = _mongo().get_record("system", {"name": ACCESS_RIGHTS_SETTING})
+            options = (record or {}).get("options")
+        except Exception:
+            logger.debug("Auto-migration of access rights deferred", exc_info=True)
+
+    if options is not None:
+        formatted = []
+        for opt in options:
+            if isinstance(opt, dict):
+                formatted.append({"id": str(opt.get("id", "")), "term": str(opt.get("term", ""))})
+            elif isinstance(opt, str):
+                formatted.append({"id": opt, "term": opt})
+        return {"options": formatted}
+
+    list_id = get_access_rights_id()
+    if list_id:
+        return {"options": _list_options(list_id)}
+
+    return {"options": []}
 
 
 def access_rights_document() -> dict:
-    """The stored list document, ``name`` and ``description`` included.
+    """The stored access-rights document from the system collection."""
+    record = _mongo().get_record("system", {"name": ACCESS_RIGHTS_SETTING})
+    if not record:
+        return {"name": "access_rights", "options": []}
 
-    ``get_access_rights`` above is the internal view - callers inside the
-    backend want the options and nothing else. The HTTP route returns the whole
-    document; the two are kept apart so widening one does not quietly widen the
-    other.
-    """
+    options = record.get("options")
+    if not options and (_settings_entry(ACCESS_RIGHTS_LIST_ENTRY, ACCESS_RIGHTS_LIST_INDEX) or _mongo().get_record("lists", {"name": "Niveles de acceso"})):
+        try:
+            from archihub.api.system.services import migrate_authorisation_vocabularies
+
+            migrate_authorisation_vocabularies()
+            record = _mongo().get_record("system", {"name": ACCESS_RIGHTS_SETTING})
+            options = (record or {}).get("options")
+        except Exception:
+            logger.debug("Auto-migration of access rights deferred", exc_info=True)
+
+    if options is not None:
+        formatted = []
+        for opt in options:
+            if isinstance(opt, dict):
+                formatted.append({"id": str(opt.get("id", "")), "term": str(opt.get("term", ""))})
+            elif isinstance(opt, str):
+                formatted.append({"id": opt, "term": opt})
+        return {
+            "name": record.get("name", "access_rights"),
+            "label": record.get("label", "Niveles de acceso"),
+            "description": record.get("description", ""),
+            "options": formatted,
+        }
+
     list_id = get_access_rights_id()
-    if not list_id:
-        return {"options": []}
+    if list_id:
+        from archihub.api.lists.services import get_by_id
 
-    from archihub.api.lists.services import get_by_id
+        payload, status = get_by_id(str(list_id))
+        if status == 200:
+            return payload
 
-    payload, status = get_by_id(str(list_id))
-    if status != 200:
-        logger.warning("Could not resolve the access-rights vocabulary %s", list_id)
-        return {"options": []}
-    return payload
+    return {
+        "name": record.get("name", "access_rights"),
+        "label": record.get("label", "Niveles de acceso"),
+        "description": record.get("description", ""),
+        "options": [],
+    }
 
 
 def verify_roles_exist(compare: list) -> list[str]:

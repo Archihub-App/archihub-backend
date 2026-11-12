@@ -274,6 +274,8 @@ _DESCRIPTIONS = {
     "search": "%(user)s searched the archive",
     "user_login": "%(user)s signed in",
     "system_update": "%(user)s changed the system settings",
+    "access_rights_update": "%(user)s updated access rights",
+    "roles_update": "%(user)s updated roles",
     "role_mappings_update": "%(user)s changed which roles pass the permission points",
     "av_transcribe": "%(user)s ran a transcription over %(count)s file(s)",
     "img_analyze": "%(user)s ran an image analysis over %(count)s file(s)",

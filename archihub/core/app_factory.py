@@ -63,6 +63,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.auto_create_indexes:
         _ensure_indexes_safely()
 
+    _ensure_system_settings_safely()
+    _migrate_authorisation_vocabularies_safely()
+
     yield
 
     from archihub.infra.mongo import reset_mongo
@@ -200,6 +203,40 @@ def _ensure_indexes_safely() -> None:
             )
     except Exception:
         logger.exception("Index check failed; continuing without it")
+
+
+def _ensure_system_settings_safely() -> None:
+    """Ensure newly-introduced system settings exist in MongoDB on startup.
+
+    Idempotent and additive: missing groups or newly introduced entries are seeded
+    without resetting existing operator configurations.
+    """
+    try:
+        from archihub.api.system.services import set_system_setting
+
+        set_system_setting()
+    except Exception:
+        logger.warning(
+            "System settings initialisation deferred; continuing startup",
+            exc_info=True,
+        )
+
+
+def _migrate_authorisation_vocabularies_safely() -> None:
+    """Migrate authorisation vocabularies to the system collection on startup.
+
+    Idempotent and non-fatal: if MongoDB is unseeded or temporarily unreachable,
+    it logs and continues. The lazy check on first read will complete the migration.
+    """
+    try:
+        from archihub.api.system.services import migrate_authorisation_vocabularies
+
+        migrate_authorisation_vocabularies()
+    except Exception:
+        logger.warning(
+            "Authorisation vocabularies migration check deferred; continuing startup",
+            exc_info=True,
+        )
 
 
 def _check_plugin_readiness() -> None:

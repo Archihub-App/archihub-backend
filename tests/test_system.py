@@ -508,12 +508,35 @@ class SeedMongo:
 
     def get_record(self, collection, filters=None, fields=None):
         for row in self.collections.get(collection, []):
-            if all(row.get(k) == v for k, v in (filters or {}).items()):
+            matches = True
+            for k, v in (filters or {}).items():
+                rv = row.get(k)
+                if rv != v and str(rv) != str(v):
+                    matches = False
+                    break
+            if matches:
                 return row
         return None
 
     def get_all_records(self, collection, filters=None, **kwargs):
-        return list(self.collections.get(collection, []))
+        rows = list(self.collections.get(collection, []))
+        if not filters:
+            return rows
+        result = []
+        for row in rows:
+            matches = True
+            for k, v in filters.items():
+                if isinstance(v, dict) and "$in" in v:
+                    target_strs = {str(x) for x in v["$in"]}
+                    if row.get(k) not in v["$in"] and str(row.get(k)) not in target_strs:
+                        matches = False
+                        break
+                elif row.get(k) != v and str(row.get(k)) != str(v):
+                    matches = False
+                    break
+            if matches:
+                result.append(row)
+        return result
 
     def insert_record(self, collection, record):
         self._next += 1
@@ -530,6 +553,12 @@ class SeedMongo:
     def count(self, collection, filters=None):
         return len(self.collections.get(collection, []))
 
+    def delete_record(self, collection, filters):
+        rows = self.collections.get(collection, [])
+        self.collections[collection] = [
+            r for r in rows if not all(r.get(k) == v for k, v in (filters or {}).items())
+        ]
+
 
 @pytest.fixture
 def seeded(monkeypatch):
@@ -543,6 +572,9 @@ def seeded(monkeypatch):
 
     store = SeedMongo()
     monkeypatch.setattr(services, "_mongo", lambda: store)
+    monkeypatch.setattr(roles_module, "_mongo", lambda: store)
+    monkeypatch.setattr("archihub.infra.mongo.get_mongo", lambda: store)
+    monkeypatch.setattr("archihub.api.lists.services._mongo", lambda: store)
     services.set_system_setting()
 
     def make(collection):
@@ -559,15 +591,15 @@ def seeded(monkeypatch):
 
 
 def test_onboarding_provisions_a_form_a_type_and_the_vocabularies(seeded):
-    """An instance with settings and an administrator but none of this cannot
-    be used: nothing to catalogue into, and no roles to grant."""
+    """An instance with settings and an administrator provisions forms and types,
+    while access rights are managed directly in the system collection."""
     from archihub.api.system import services
 
     assert services.seed_starter_catalogue("basic", "admin") is None
 
     assert [t["slug"] for t in seeded.collections["post_types"]] == ["carpeta"]
     assert [f["slug"] for f in seeded.collections["forms"]] == ["formulario"]
-    assert {l["name"] for l in seeded.collections["lists"]} == {"Roles", "Niveles de acceso"}
+    assert seeded.collections.get("lists", []) == []
 
 
 def test_the_detailed_template_provisions_its_own_set(seeded):
@@ -581,27 +613,143 @@ def test_the_detailed_template_provisions_its_own_set(seeded):
     assert [f["slug"] for f in seeded.collections["forms"]] == ["isadg", "dublin-core"]
 
 
-def test_the_access_rights_setting_is_pointed_at_the_vocabulary_LISTS(seeded):
-    """THE STEP WHOSE ABSENCE IS HARDEST TO DIAGNOSE.
-
-    Roles and access levels are resolved by looking up a list id stored in the
-    `access_rights` setting. Creating the lists is not enough - without this
-    wiring both vocabularies come back empty while the lists themselves sit in
-    the database looking perfectly correct.
-    """
+def test_the_access_rights_setting_is_stored_in_system(seeded):
+    """Access levels are managed directly in the system collection, not in lists."""
     from archihub.api.system import services
 
     services.seed_starter_catalogue("basic", "admin")
 
-    ids = {l["name"]: str(l["_id"]) for l in seeded.collections["lists"]}
-    wiring = {
-        entry["id"]: entry.get("value")
-        for entry in seeded.get_record("system", {"name": "access_rights"})["data"]
-        if entry.get("id") in ("user_roles_list", "access_rights_list")
-    }
+    record = seeded.get_record("system", {"name": "access_rights"})
+    assert record is not None
+    assert "options" in record
+    assert seeded.collections.get("lists", []) == []
 
-    assert wiring["user_roles_list"] == ids["Roles"]
-    assert wiring["access_rights_list"] == ids["Niveles de acceso"]
+
+def test_save_and_get_access_rights_in_system(seeded):
+    from archihub.api.system import services
+
+    payload = {
+        "options": [
+            {"id": "public", "term": "Público"},
+            {"id": "confidential", "term": "Confidencial"},
+        ]
+    }
+    res, status = services.save_access_rights(payload, "admin")
+    assert status == 200
+    assert len(res["options"]) == 2
+
+    # Check that system collection holds them
+    record = seeded.get_record("system", {"name": "access_rights"})
+    assert len(record["options"]) == 2
+    assert record["options"][0]["id"] == "public"
+
+    # Reading via get_access_rights
+    doc, status = services.get_access_rights()
+    assert status == 200
+    assert len(doc["options"]) == 2
+
+
+def test_save_access_rights_generates_missing_ids(seeded):
+    from archihub.api.system import services
+
+    payload = [{"term": "Restringido"}]
+    res, status = services.save_access_rights(payload, "admin")
+    assert status == 200
+    assert len(res["options"]) == 1
+    assert res["options"][0]["id"] != ""
+    assert res["options"][0]["term"] == "Restringido"
+
+
+def test_save_access_rights_validates_duplicates_and_empty(seeded):
+    from archihub.api.system import services
+
+    # Duplicate id
+    res, status = services.save_access_rights(
+        {"options": [{"id": "a", "term": "A"}, {"id": "a", "term": "B"}]}, "admin"
+    )
+    assert status == 400
+
+    # Empty term
+    res, status = services.save_access_rights(
+        {"options": [{"id": "a", "term": ""}]}, "admin"
+    )
+    assert status == 400
+
+
+def test_roles_and_access_rights_do_not_call_lists(monkeypatch):
+    from archihub.core import roles
+
+    class FakeMongo:
+        def get_record(self, coll, query):
+            if coll == "system" and query.get("name") == "access_rights":
+                return {"name": "access_rights", "options": [{"id": "level1", "term": "Nivel 1"}]}
+            return None
+
+    monkeypatch.setattr(roles, "_mongo", lambda: FakeMongo())
+    rights = roles.get_access_rights()
+    assert rights["options"] == [{"id": "level1", "term": "Nivel 1"}]
+
+    all_roles = roles.get_roles()
+    assert "admin" in {r["id"] for r in all_roles["options"]}
+
+
+def test_migrate_authorisation_vocabularies_from_legacy_lists(seeded):
+    from archihub.api.system import services
+    from bson.objectid import ObjectId
+
+    opt1_id = ObjectId()
+    opt2_id = ObjectId()
+    rights_list_id = ObjectId()
+    roles_list_id = ObjectId()
+
+    seeded.insert_record("options", {"_id": opt1_id, "term": "Público"})
+    seeded.insert_record("options", {"_id": opt2_id, "term": "Confidencial"})
+
+    seeded.insert_record("lists", {
+        "_id": rights_list_id,
+        "name": "Niveles de acceso",
+        "options": [str(opt1_id), str(opt2_id)],
+    })
+
+    role_opt_id = ObjectId()
+    seeded.insert_record("options", {"_id": role_opt_id, "term": "custom_role"})
+    seeded.insert_record("lists", {
+        "_id": roles_list_id,
+        "name": "Roles",
+        "options": [str(role_opt_id)],
+    })
+
+    seeded.update_record("system", {"name": "access_rights"}, {
+        "data": [
+            {"id": "access_rights_list", "value": str(rights_list_id)},
+            {"id": "user_roles_list", "value": str(roles_list_id)},
+            {"id": "metadata_access", "value": False},
+        ],
+        "options": [],
+        "roles": [],
+    })
+
+    res = services.migrate_authorisation_vocabularies()
+    assert res["migrated_rights"] == 2
+    assert res["migrated_roles"] == 1
+
+    updated = seeded.get_record("system", {"name": "access_rights"})
+    assert len(updated["options"]) == 2
+    assert updated["options"][0] == {"id": str(opt1_id), "term": "Público"}
+    assert updated["options"][1] == {"id": str(opt2_id), "term": "Confidencial"}
+    assert updated["roles"] == [{"id": str(role_opt_id), "term": "custom_role"}]
+
+    data_ids = {item["id"] for item in updated.get("data") or []}
+    assert "access_rights_list" not in data_ids
+    assert "user_roles_list" not in data_ids
+    assert "metadata_access" in data_ids
+
+    assert seeded.get_record("lists", {"_id": rights_list_id}) is None
+    assert seeded.get_record("lists", {"_id": roles_list_id}) is None
+
+    res2 = services.migrate_authorisation_vocabularies()
+    assert res2["migrated_rights"] == 0
+    assert res2["migrated_roles"] == 0
 
 
 def test_the_default_cataloguing_type_is_set(seeded):
@@ -648,7 +796,6 @@ def test_seeding_twice_does_not_duplicate(seeded):
 
     assert len(seeded.collections["post_types"]) == 1
     assert len(seeded.collections["forms"]) == 1
-    assert len(seeded.collections["lists"]) == 2
 
 
 def test_an_unknown_template_is_refused(seeded):

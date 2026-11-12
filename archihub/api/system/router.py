@@ -15,6 +15,7 @@ A role failure answers 403; 401 is reserved for "I do not know who you are".
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
@@ -157,15 +158,34 @@ def get_default_cataloging_type(
 def get_access_rights(
     current_user: CurrentUser = Depends(require_permission("access_rights.read")),
 ) -> JSONResponse:
-    """The access-rights vocabulary, as the stored list document.
-
-    Returns the whole list - ``name`` and ``description`` alongside
-    ``options``. The frontend reads only ``options``, but this is also the shape
-    an operator's own tooling sees.
-    """
+    """The access-rights vocabulary, stored in the system collection."""
     from archihub.core.roles import access_rights_document
 
     return json_response(access_rights_document(), 200)
+
+
+@router.post(
+    "/access-rights",
+    responses={
+        200: {"description": "Access rights updated"},
+        400: {"description": "Invalid options payload"},
+        **_ROLE_RESPONSES,
+    },
+)
+@router.put(
+    "/access-rights",
+    responses={
+        200: {"description": "Access rights updated"},
+        400: {"description": "Invalid options payload"},
+        **_ROLE_RESPONSES,
+    },
+)
+def update_access_rights(
+    body: Any = Body(...),
+    current_user: CurrentUser = Depends(require_admin),
+) -> JSONResponse:
+    """Save or update access rights in the system collection."""
+    return _respond(services.save_access_rights(body, current_user.username))
 
 
 @router.get("/roles", responses={200: {"description": "Configured roles"}, **_ROLE_RESPONSES})
@@ -174,6 +194,30 @@ def get_roles(current_user: CurrentUser = Depends(require_admin)) -> JSONRespons
     from archihub.core.roles import get_roles as _get
 
     return json_response(_get(), 200)
+
+
+@router.post(
+    "/roles",
+    responses={
+        200: {"description": "Roles updated"},
+        400: {"description": "Invalid options payload"},
+        **_ROLE_RESPONSES,
+    },
+)
+@router.put(
+    "/roles",
+    responses={
+        200: {"description": "Roles updated"},
+        400: {"description": "Invalid options payload"},
+        **_ROLE_RESPONSES,
+    },
+)
+def update_roles(
+    body: Any = Body(...),
+    current_user: CurrentUser = Depends(require_admin),
+) -> JSONResponse:
+    """Save or update custom roles in the system collection."""
+    return _respond(services.save_roles(body, current_user.username))
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +309,7 @@ def activate_plugin(
     """
     slug = body.get("slug") or body.get("plugin")
     if not slug:
-        return JSONResponse(status_code=400, content={"msg": "Missing plugin slug"})
+        return JSONResponse(status_code=400, content={"msg": _("Missing plugin slug")})
 
     return _respond(services.set_plugin_active(slug, bool(body.get("active")), current_user.username))
 

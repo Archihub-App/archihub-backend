@@ -93,9 +93,12 @@ def get_locale() -> str:
         record = get_mongo().get_record("system", {"name": "user_management"})
         data = (record or {}).get("data") or []
 
-        # Looked up by id; the positional read is only a last-resort fallback for
-        # a document whose entries carry no ids.
-        entry = next((item for item in data if item.get("id") == LOCALE_SETTING_ID), None)
+        # Looked up by id (supporting both user_languages and system_language aliases);
+        # the positional read is only a last-resort fallback for a document whose entries carry no ids.
+        entry = next(
+            (item for item in data if item.get("id") in (LOCALE_SETTING_ID, "system_language")),
+            None,
+        )
         if entry is None and len(data) > 2:
             entry = data[2]
 

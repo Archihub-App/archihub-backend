@@ -98,6 +98,148 @@ def set_system_setting() -> None:
                 setting["name"],
             )
 
+    migrate_authorisation_vocabularies()
+
+
+def migrate_authorisation_vocabularies() -> dict:
+    """Migrate access rights and roles from the `lists` collection into `system`.
+
+    When updating ArchiHUB where access levels and roles were stored
+    as lists in the `lists` collection referenced by `access_rights_list` and
+    `user_roles_list`, this moves their options into the `access_rights`
+    document in the `system` collection, removes external list references from `data`,
+    and cleans up the old list entries from the `lists` collection.
+    """
+    mongo = _mongo()
+    system_record = mongo.get_record(COLLECTION, {"name": "access_rights"})
+    if system_record and system_record.get("name") != "access_rights":
+        return {"migrated_rights": 0, "migrated_roles": 0}
+    if not system_record:
+        from archihub.api.system import default_settings
+
+        defaults = getattr(default_settings, "access_rights_settings", None)
+        system_record = dict(defaults) if isinstance(defaults, dict) else {
+            "name": "access_rights",
+            "label": "Roles y acceso a la información",
+            "options": [],
+            "roles": [],
+            "data": [],
+        }
+        mongo.insert_record(COLLECTION, system_record)
+
+    migrated_rights = 0
+    migrated_roles = 0
+    data = system_record.get("data") or []
+    updated_fields: dict = {}
+    lists_to_remove: list = []
+
+    # 1. Migrate Access Rights
+    existing_options = system_record.get("options")
+    if not existing_options:
+        rights_entry = next((item for item in data if isinstance(item, dict) and item.get("id") == "access_rights_list"), None)
+        rights_list_id = (rights_entry or {}).get("value")
+
+        list_record = None
+        if rights_list_id:
+            from bson.objectid import ObjectId
+
+            try:
+                list_record = mongo.get_record("lists", {"_id": ObjectId(str(rights_list_id))})
+            except Exception:
+                list_record = mongo.get_record("lists", {"_id": str(rights_list_id)})
+
+        if not list_record:
+            list_record = mongo.get_record("lists", {"name": "Niveles de acceso"})
+
+        if list_record:
+            from archihub.api.lists.services import _load_options
+
+            raw_opts = list_record.get("options") or []
+            if raw_opts and all(isinstance(o, dict) and (o.get("term") or o.get("name")) for o in raw_opts):
+                resolved_options = [
+                    {"id": str(o.get("id") or o.get("_id") or ""), "term": str(o.get("term") or o.get("name") or "")}
+                    for o in raw_opts
+                ]
+            else:
+                resolved_options = _load_options(raw_opts)
+
+            if resolved_options:
+                updated_fields["options"] = resolved_options
+                migrated_rights = len(resolved_options)
+            else:
+                updated_fields.setdefault("options", [])
+            if "_id" in list_record:
+                lists_to_remove.append(list_record["_id"])
+        else:
+            updated_fields.setdefault("options", [])
+
+    # 2. Migrate Custom Roles
+    existing_roles = system_record.get("roles")
+    if not existing_roles:
+        roles_entry = next((item for item in data if isinstance(item, dict) and item.get("id") == "user_roles_list"), None)
+        roles_list_id = (roles_entry or {}).get("value")
+
+        roles_list_record = None
+        if roles_list_id:
+            from bson.objectid import ObjectId
+
+            try:
+                roles_list_record = mongo.get_record("lists", {"_id": ObjectId(str(roles_list_id))})
+            except Exception:
+                roles_list_record = mongo.get_record("lists", {"_id": str(roles_list_id)})
+
+        if not roles_list_record:
+            roles_list_record = mongo.get_record("lists", {"name": "Roles"})
+
+        if roles_list_record:
+            from archihub.api.lists.services import _load_options
+
+            raw_roles = roles_list_record.get("options") or []
+            if raw_roles and all(isinstance(o, dict) and (o.get("term") or o.get("name")) for o in raw_roles):
+                resolved_roles = [
+                    {"id": str(o.get("id") or o.get("_id") or ""), "term": str(o.get("term") or o.get("name") or "")}
+                    for o in raw_roles
+                ]
+            else:
+                resolved_roles = _load_options(raw_roles)
+
+            if resolved_roles:
+                updated_fields["roles"] = resolved_roles
+                migrated_roles = len(resolved_roles)
+            else:
+                updated_fields.setdefault("roles", [])
+            if "_id" in roles_list_record:
+                lists_to_remove.append(roles_list_record["_id"])
+        else:
+            updated_fields.setdefault("roles", [])
+
+    # 3. Clean list references from `data`
+    cleaned_data = [item for item in data if not isinstance(item, dict) or item.get("id") not in ("access_rights_list", "user_roles_list")]
+    if len(cleaned_data) != len(data):
+        updated_fields["data"] = cleaned_data
+
+    if updated_fields:
+        mongo.update_record(COLLECTION, {"name": "access_rights"}, updated_fields)
+        clear_system_cache()
+
+    for list_id in lists_to_remove:
+        try:
+            mongo.delete_record("lists", {"_id": list_id})
+        except Exception:
+            logger.debug("Could not delete legacy list %s", list_id, exc_info=True)
+
+    if migrated_rights or migrated_roles:
+        logger.info(
+            "Migrated authorisation vocabularies to system: %d access rights, %d roles",
+            migrated_rights,
+            migrated_roles,
+        )
+
+    return {
+        "migrated_rights": migrated_rights,
+        "migrated_roles": migrated_roles,
+    }
+
 
 # ---------------------------------------------------------------------------
 # Reading and writing settings
@@ -106,10 +248,40 @@ def set_system_setting() -> None:
 
 def get_all_settings() -> tuple[dict, int]:
     try:
+        from archihub.api.system.i18n import translate_system_settings
+        from archihub.core.i18n import get_locale
+
         records = _mongo().get_all_records(
             COLLECTION, {"name": {"$nin": list(_HIDDEN_SETTINGS)}}
         )
-        return {"settings": parse_result(list(records))}, 200
+        settings = parse_result(list(records))
+
+        # Ensure user_management contains the language option even on older un-migrated databases
+        user_mgmt = next(
+            (s for s in settings if isinstance(s, dict) and s.get("name") == "user_management"),
+            None,
+        )
+        if user_mgmt and isinstance(user_mgmt.get("data"), list):
+            data_list = user_mgmt["data"]
+            has_lang = any(
+                isinstance(item, dict) and item.get("id") in ("user_languages", "system_language")
+                for item in data_list
+            )
+            if not has_lang:
+                data_list.append({
+                    "type": "select",
+                    "label": "Idioma del sistema",
+                    "id": "user_languages",
+                    "instructions": "Seleccionar el idioma de la aplicación (español o inglés).",
+                    "options": [
+                        {"label": "Español", "value": "es"},
+                        {"label": "Inglés", "value": "en"},
+                    ],
+                    "value": get_locale(),
+                })
+
+        translated = translate_system_settings(settings, get_locale())
+        return {"settings": translated}, 200
     except Exception:
         logger.exception("Could not read settings")
         return {"msg": _("Error while processing the request")}, 500
@@ -203,7 +375,11 @@ def update_settings(body: dict, current_user: str) -> tuple[dict, int]:
         pending: dict[str, dict] = {}
         unknown: list[str] = []
 
-        for key, value in (body or {}).items():
+        effective_body = dict(body or {})
+        if "system_language" in effective_body and "system_language" not in owner and "user_languages" in owner:
+            effective_body["user_languages"] = effective_body.pop("system_language")
+
+        for key, value in effective_body.items():
             if key in _HIDDEN_SETTINGS:
                 logger.warning("Refusing to update protected settings group %s", key)
                 continue
@@ -239,6 +415,173 @@ def get_access_rights_id():
     from archihub.core.roles import get_access_rights_id as _get
 
     return _get()
+
+
+def get_access_rights() -> tuple[dict, int]:
+    """The access-rights vocabulary, stored in the system collection."""
+    try:
+        import copy
+        from archihub.api.system.i18n import translate_text
+        from archihub.core.i18n import get_locale
+        from archihub.core.roles import access_rights_document
+
+        doc = copy.deepcopy(access_rights_document())
+        loc = get_locale()
+        if "label" in doc:
+            doc["label"] = translate_text(doc["label"], loc)
+        if "description" in doc:
+            doc["description"] = translate_text(doc["description"], loc)
+        return doc, 200
+    except Exception:
+        logger.exception("Could not get access rights")
+        return {"msg": _("Error while processing the request")}, 500
+
+
+def save_access_rights(body: dict | list, current_user: str) -> tuple[dict, int]:
+    """Save access rights directly to the `system` collection.
+
+    Accepts:
+    - `{"options": [{"id": "...", "term": "..."}, ...]}`
+    - `[{"id": "...", "term": "..."}, ...]`
+    - optionally `{"name": "...", "label": "...", "description": "...", "options": [...]}`
+
+    Generates unique `id`s for new options missing an id.
+    """
+    try:
+        from bson.objectid import ObjectId
+
+        if isinstance(body, list):
+            options_raw = body
+            description = None
+            label = None
+        elif isinstance(body, dict):
+            options_raw = body.get("options")
+            description = body.get("description")
+            label = body.get("label")
+        else:
+            return {"msg": _("Invalid payload")}, 400
+
+        if options_raw is None:
+            return {"msg": _('"{field}" is required', field="options")}, 400
+
+        if not isinstance(options_raw, list):
+            return {"msg": _('"{field}" must be a list', field="options")}, 400
+
+        clean_options: list[dict[str, str]] = []
+        seen_ids: set[str] = set()
+
+        for idx, item in enumerate(options_raw):
+            if isinstance(item, str):
+                term = item.strip()
+                item_id = str(ObjectId())
+            elif isinstance(item, dict):
+                term = str(item.get("term") or item.get("name") or "").strip()
+                item_id = str(item.get("id") or ObjectId())
+            else:
+                return {"msg": _("Invalid option item at index {idx}", idx=idx)}, 400
+
+            if not term:
+                return {"msg": _("Every access level must have a non-empty name or term")}, 400
+
+            if item_id in seen_ids:
+                return {"msg": _("An option may appear only once in a list")}, 400
+
+            seen_ids.add(item_id)
+            clean_options.append({"id": item_id, "term": term})
+
+        mongo = _mongo()
+        record = mongo.get_record(COLLECTION, {"name": "access_rights"})
+        if not record:
+            from archihub.api.system import default_settings
+
+            defaults = getattr(default_settings, "access_rights_settings", None)
+            new_doc = dict(defaults) if isinstance(defaults, dict) else {
+                "name": "access_rights",
+                "label": "Roles y acceso a la información",
+                "data": [],
+            }
+            new_doc["options"] = clean_options
+            if description is not None:
+                new_doc["description"] = description
+            if label is not None:
+                new_doc["label"] = label
+            mongo.insert_record(COLLECTION, new_doc)
+        else:
+            update_fields: dict = {"options": clean_options}
+            if description is not None:
+                update_fields["description"] = description
+            if label is not None:
+                update_fields["label"] = label
+            mongo.update_record(COLLECTION, {"name": "access_rights"}, update_fields)
+
+        clear_system_cache()
+        _register_log(current_user, "access_rights_update", {"options_count": len(clean_options)})
+        return {
+            "msg": _("Access rights updated successfully"),
+            "options": clean_options,
+        }, 200
+    except Exception:
+        logger.exception("Could not save access rights")
+        return {"msg": _("Error while processing the request")}, 500
+
+
+def save_roles(body: dict | list, current_user: str) -> tuple[dict, int]:
+    """Save custom roles directly to the `system` collection."""
+    try:
+        from bson.objectid import ObjectId
+
+        if isinstance(body, list):
+            options_raw = body
+        elif isinstance(body, dict):
+            options_raw = body.get("options")
+        else:
+            return {"msg": _("Invalid payload")}, 400
+
+        if options_raw is None:
+            return {"msg": _('"{field}" is required', field="options")}, 400
+
+        if not isinstance(options_raw, list):
+            return {"msg": _('"{field}" must be a list', field="options")}, 400
+
+        clean_roles: list[dict[str, str]] = []
+        seen_ids: set[str] = set()
+
+        for idx, item in enumerate(options_raw):
+            if isinstance(item, str):
+                term = item.strip()
+                item_id = term.lower()
+            elif isinstance(item, dict):
+                term = str(item.get("term") or item.get("name") or "").strip()
+                item_id = str(item.get("id") or term.lower() or ObjectId())
+            else:
+                return {"msg": _("Invalid role item at index {idx}", idx=idx)}, 400
+
+            if not term:
+                return {"msg": _("Every role must have a non-empty name or term")}, 400
+
+            if item_id in seen_ids:
+                return {"msg": _("An option may appear only once in a list")}, 400
+
+            seen_ids.add(item_id)
+            clean_roles.append({"id": item_id, "term": term})
+
+        mongo = _mongo()
+        record = mongo.get_record(COLLECTION, {"name": "access_rights"})
+        if record:
+            mongo.update_record(COLLECTION, {"name": "access_rights"}, {"roles": clean_roles})
+        else:
+            mongo.insert_record(COLLECTION, {"name": "access_rights", "roles": clean_roles})
+
+        clear_system_cache()
+        _register_log(current_user, "roles_update", {"roles_count": len(clean_roles)})
+        from archihub.core.roles import get_roles
+        return {
+            "msg": _("Roles updated successfully"),
+            "options": get_roles()["options"],
+        }, 200
+    except Exception:
+        logger.exception("Could not save roles")
+        return {"msg": _("Error while processing the request")}, 500
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +695,11 @@ def get_system_settings() -> tuple[dict, int]:
     # restate what `capabilities` already carries.
     return {
         "version": __version__,
-        "language": get_setting_value("user_management", "user_languages", 2) or "en",
+        "language": (
+            get_setting_value("user_management", "user_languages", 2)
+            or get_setting_value("user_management", "system_language")
+            or "en"
+        ),
         "capabilities": sorted(set(capabilities)),
     }, 200
 
@@ -516,7 +863,7 @@ def seed_starter_catalogue(template: str, user: str) -> str | None:
         if status != 201:
             return payload.get("msg", _("Could not create the content type"))
 
-    for vocabulary in default_settings.roles_rights_settings:
+    for vocabulary in (getattr(default_settings, "roles_rights_settings", []) or []):
         if mongo.get_record("lists", {"name": vocabulary["name"]}):
             continue
         payload, status = create_list(dict(vocabulary), user)
@@ -524,7 +871,7 @@ def seed_starter_catalogue(template: str, user: str) -> str | None:
             return payload.get("msg", _("Could not create the list"))
 
     _set_default_cataloguing_type(plan["default_type"])
-    return _link_authorisation_vocabularies()
+    return _ensure_access_rights_document()
 
 
 def _set_default_cataloguing_type(slug: str) -> None:
@@ -547,37 +894,29 @@ def _set_default_cataloguing_type(slug: str) -> None:
             return
 
 
-def _link_authorisation_vocabularies() -> str | None:
-    """Point the `access_rights` setting at the two vocabulary lists.
-
-    This is the step whose absence is hardest to diagnose: roles and access
-    levels are read by resolving the list id stored here, so without it both
-    come back empty while the lists themselves sit in the database looking
-    correct.
-    """
+def _ensure_access_rights_document() -> str | None:
+    """Ensure the `access_rights` settings document exists in the system collection."""
     mongo = _mongo()
-
-    roles = mongo.get_record("lists", {"name": ROLES_LIST_NAME})
-    rights = mongo.get_record("lists", {"name": ACCESS_RIGHTS_LIST_NAME})
-    if not roles or not rights:
-        return _("Could not create the list")
-
     record = mongo.get_record(COLLECTION, {"name": "access_rights"})
     if not record:
-        return _("The access_rights settings document does not exist")
+        from archihub.api.system import default_settings
 
-    wanted = {"user_roles_list": str(roles["_id"]), "access_rights_list": str(rights["_id"])}
-    data = record.get("data") or []
-    changed = False
-    for entry in data:
-        target = wanted.get(entry.get("id"))
-        if target and not entry.get("value"):
-            entry["value"] = target
-            changed = True
-
-    if changed:
-        mongo.update_record(COLLECTION, {"name": "access_rights"}, {"data": data})
+        defaults = getattr(default_settings, "access_rights_settings", None)
+        new_doc = dict(defaults) if isinstance(defaults, dict) else {
+            "name": "access_rights",
+            "label": "Roles y acceso a la información",
+            "data": [],
+        }
+        new_doc.setdefault("options", [])
+        mongo.insert_record(COLLECTION, new_doc)
+    elif "options" not in record:
+        mongo.update_record(COLLECTION, {"name": "access_rights"}, {"options": []})
     return None
+
+
+def _link_authorisation_vocabularies() -> str | None:
+    """Backwards-compatible helper to ensure access rights exist in system."""
+    return _ensure_access_rights_document()
 
 
 # ---------------------------------------------------------------------------
