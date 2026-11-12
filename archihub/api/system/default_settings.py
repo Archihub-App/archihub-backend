@@ -30,6 +30,15 @@ settings = [
                 'id': 'metadata_access',
                 'instructions': 'Activar esta opción habilita los metadatos para todos los usuarios, de lo contrario los metadatos solo serán visibles para los usuarios con permisos',
                 'value': False
+            },
+            {
+                'type': 'button_single',
+                'label': 'Roles de usuario',
+                'id': 'user_roles',
+                'instructions': 'Configuración de los roles de usuario y sus permisos de acceso a las diferentes secciones del sistema.',
+                'btn_label': 'Gestionar permisos',
+                'value': '/admin/permissions',
+                'href': '/admin/permissions'
             }
         ]
     },
@@ -558,3 +567,5 @@ detailed_post_type = [
 ]
 
 roles_rights_settings = []
+access_rights_settings = next((s for s in settings if s.get('name') == 'access_rights'), None)
+

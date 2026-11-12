@@ -209,3 +209,31 @@ def test_access_rights_metadata_translation(system_mongo, monkeypatch):
     assert status == 200
     assert doc["label"] == "Roles and information access"
     assert doc["description"] == "Access levels and role configuration"
+
+
+def test_access_rights_roles_button_translation(system_mongo):
+    user_mgmt = next(s for s in system_mongo.collections["system"] if s["name"] == "user_management")
+    lang_entry = next(item for item in user_mgmt["data"] if item.get("id") == "user_languages")
+
+    # Spanish
+    lang_entry["value"] = "es"
+    i18n.reset_locale_cache()
+    payload, status = services.get_all_settings()
+    assert status == 200
+    ar = next(s for s in payload["settings"] if s["name"] == "access_rights")
+    roles_btn = next(item for item in ar["data"] if item.get("id") == "user_roles")
+    assert roles_btn["label"] == "Roles de usuario"
+    assert roles_btn["btn_label"] == "Gestionar permisos"
+    assert roles_btn["value"] == "/admin/permissions"
+
+    # English
+    lang_entry["value"] = "en"
+    i18n.reset_locale_cache()
+    payload, status = services.get_all_settings()
+    assert status == 200
+    ar = next(s for s in payload["settings"] if s["name"] == "access_rights")
+    roles_btn = next(item for item in ar["data"] if item.get("id") == "user_roles")
+    assert roles_btn["label"] == "User roles"
+    assert roles_btn["btn_label"] == "Manage permissions"
+    assert roles_btn["value"] == "/admin/permissions"
+

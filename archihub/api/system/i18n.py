@@ -40,6 +40,11 @@ SETTINGS_ES_TO_EN: dict[str, str] = {
     "Activar esta opción habilita los metadatos para todos los usuarios, de lo contrario los metadatos solo serán visibles para los usuarios con permisos": (
         "Enabling this option makes metadata visible to all users; otherwise metadata will only be visible to users with permissions"
     ),
+    "Roles de usuario": "User roles",
+    "Configuración de los roles de usuario y sus permisos de acceso a las diferentes secciones del sistema.": (
+        "Configure user roles and their access permissions to different sections of the system."
+    ),
+    "Gestionar permisos": "Manage permissions",
 
     # API settings
     "Activar la API de administración": "Enable administration API",
