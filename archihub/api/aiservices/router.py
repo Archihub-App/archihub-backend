@@ -21,6 +21,7 @@ from archihub.api.aiservices import (
     catalogue,
     chat,
     conversations,
+    images,
     providers,
     skills,
     streaming,
@@ -307,6 +308,56 @@ def send_chat(
         return JSONResponse(status_code=400, content={"msg": str(exc)})
     except ai_errors.ProviderError as exc:
         return _provider_error(exc)
+
+
+@router.post(
+    "/providers/{provider_id}/images",
+    status_code=201,
+    responses={
+        201: {"description": "Image generated and stored as an independent record"},
+        502: {"description": "The provider refused or is unreachable"},
+        **_RESPONSES,
+    },
+)
+def generate_image(
+    provider_id: str,
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(require_reader),
+) -> JSONResponse:
+    """Generate an image and store it as an independent archived record."""
+    provider = providers.load(provider_id)
+    if provider is None:
+        return json_response({"msg": _("Provider not found")}, 404)
+    if not provider.get("enabled", True):
+        return json_response({"msg": _("This provider has been disabled")}, 403)
+
+    prompt = body.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        return json_response({"msg": _("Prompt is required")}, 400)
+    if not body.get("model") and not provider.get("default_model"):
+        return json_response({"msg": _("You must specify a model")}, 400)
+
+    options = {
+        key: body[key]
+        for key in (
+            "model", "size", "quality", "style", "aspect_ratio",
+            "output_format", "background", "filename",
+        )
+        if key in body
+    }
+
+    try:
+        result = images.generate(provider, prompt, user=current_user.username, **options)
+    except chat.CapabilityError as exc:
+        return json_response({"msg": str(exc)}, 400)
+    except ValueError as exc:
+        return json_response({"msg": str(exc)}, 400)
+    except ai_errors.ProviderError as exc:
+        return _provider_error(exc)
+
+    record = dict(result.get("record") or {})
+    record.pop("filepath", None)
+    return json_response({**result, "record": record}, 201)
 
 
 # ---------------------------------------------------------------------------

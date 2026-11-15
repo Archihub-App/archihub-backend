@@ -15,14 +15,16 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 
-from archihub.api.aiservices import transport
+from archihub.api.aiservices import errors, transport
 from archihub.api.aiservices.dialects.base import (
     ChatChunk,
     ChatResult,
+    ImageResult,
     ModelInfo,
     first_int,
     normalise_capabilities,
 )
+from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +147,12 @@ class AnthropicDialect:
         if tools:
             body["tools"] = tools
         return body
+
+    def generate_image(self, prompt: str, **options) -> ImageResult:
+        raise errors.ProviderError(
+            errors.Reason.INVALID_REQUEST,
+            _("This provider dialect does not support image generation"),
+        )
 
     def chat(self, messages: list[dict], **options) -> ChatResult:
         payload = transport.request_json(

@@ -55,6 +55,7 @@ SLUG = "filesProcessing"
 
 TASK_BULK = "filesProcessing.create_webfile"
 TASK_AUTOMATIC = "filesProcessingCreate.auto"
+TASK_RECORD = "filesProcessing.process_record"
 
 PROCESSING_KEY = "fileProcessing"
 
@@ -347,6 +348,7 @@ class FilesProcessing(ArchiPlugin):
         # is only that the caller wants it done before it answers, because a view
         # whose image has not been derived shows no image at all.
         interop.provide(interop.IMAGE_DERIVATIVES, SLUG, process_record)
+        interop.provide(interop.RECORD_DERIVATIVES_TASK, SLUG, queue_record_processing)
         return super().build()
 
 
@@ -367,6 +369,34 @@ def _mongo():
     from archihub.infra.mongo import get_mongo
 
     return get_mongo()
+
+
+@shared_task(ignore_result=False, name=TASK_RECORD)
+def process_record_task(record_id: str) -> bool:
+    """Derive web versions for a single record in a Celery worker."""
+    from bson.objectid import ObjectId
+
+    if not record_id or not ObjectId.is_valid(str(record_id)):
+        return False
+
+    record = _mongo().get_record(
+        "records",
+        {"_id": ObjectId(str(record_id))},
+        fields={"_id": 1, "mime": 1, "filepath": 1, "parent": 1},
+    )
+    if not record:
+        return False
+
+    processed = _process_all([record])
+    if processed:
+        plugin_data.broadcast_cache_clear()
+    return processed > 0
+
+
+def queue_record_processing(record_id: str) -> str | None:
+    """Queue Celery derivative processing for ``record_id``."""
+    async_result = process_record_task.delay(str(record_id))
+    return getattr(async_result, "id", None)
 
 
 @shared_task(ignore_result=False, name=TASK_AUTOMATIC)

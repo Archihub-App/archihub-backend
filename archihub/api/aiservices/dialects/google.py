@@ -17,19 +17,24 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 
-from archihub.api.aiservices import transport
+from archihub.api.aiservices import errors, transport
 from archihub.api.aiservices.dialects.base import (
     ChatChunk,
     ChatResult,
+    ImageResult,
     ModelInfo,
+    decode_image_payload,
     first_int,
     normalise_capabilities,
 )
+from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
 
 #: Generation methods that mean "this model can hold a conversation".
 CHAT_METHODS = ("generateContent", "streamGenerateContent")
+#: Generation methods that mean "this model can generate images via :predict".
+IMAGE_METHODS = ("predict", "generateImages")
 
 
 class GoogleDialect:
@@ -94,17 +99,19 @@ class GoogleDialect:
             return None
 
         methods = entry.get("supportedGenerationMethods") or []
-        if not any(method in methods for method in CHAT_METHODS):
-            # Embedding-only and other non-chat models are still listed, tagged
-            # by what they actually do.
-            if not any("embed" in str(m).lower() for m in methods):
-                return None
+        has_chat = any(method in methods for method in CHAT_METHODS)
+        has_embed = any("embed" in str(m).lower() for m in methods)
+        has_image_gen = any(method in methods for method in IMAGE_METHODS)
+        if not (has_chat or has_embed or has_image_gen):
+            return None
 
-        capabilities = list(normalise_capabilities(entry.get("supportedGenerationMethods")))
-        if any(method in methods for method in CHAT_METHODS):
+        capabilities = list(normalise_capabilities(methods))
+        if has_chat:
             capabilities.append("chat")
-        if any("embed" in str(m).lower() for m in methods):
+        if has_embed:
             capabilities.append("embedding")
+        if has_image_gen:
+            capabilities.append("image_generation")
 
         return ModelInfo(
             id=identifier,
@@ -199,6 +206,86 @@ class GoogleDialect:
                 finish_reason=candidate.get("finishReason"),
                 usage=_usage(payload.get("usageMetadata")),
             )
+
+    def generate_image(self, prompt: str, **options) -> ImageResult:
+        """Generate an image via ``:predict`` or ``:generateContent``."""
+        model = options["model"]
+        methods = options.get("generation_methods") or ()
+        if any(method in methods for method in IMAGE_METHODS) or options.get("use_predict"):
+            return self._generate_via_predict(model, prompt, options)
+        return self._generate_via_content(model, prompt, options)
+
+    def _generate_via_predict(self, model: str, prompt: str, options: dict) -> ImageResult:
+        parameters: dict = {"sampleCount": 1}
+        if options.get("aspect_ratio"):
+            parameters["aspectRatio"] = options["aspect_ratio"]
+
+        payload = transport.request_json(
+            "POST",
+            self._url(f"models/{model}:predict"),
+            headers=self._headers(),
+            json_body={
+                "instances": [{"prompt": prompt}],
+                "parameters": parameters,
+            },
+        )
+        predictions = payload.get("predictions") or []
+        first = predictions[0] if predictions and isinstance(predictions[0], dict) else {}
+        encoded = first.get("bytesBase64Encoded")
+        if not encoded:
+            raise errors.ProviderError(
+                errors.Reason.INVALID_REQUEST,
+                _("The provider did not return image bytes"),
+            )
+        image_bytes, mime_type = decode_image_payload(
+            encoded, default_mime=first.get("mimeType") or "image/png"
+        )
+        return ImageResult(
+            data=image_bytes,
+            mime_type=mime_type,
+            revised_prompt=first.get("prompt"),
+            model=model,
+            raw=payload,
+        )
+
+    def _generate_via_content(self, model: str, prompt: str, options: dict) -> ImageResult:
+        generation_config: dict = {"responseModalities": ["TEXT", "IMAGE"]}
+        if options.get("aspect_ratio"):
+            generation_config["imageConfig"] = {"aspectRatio": options["aspect_ratio"]}
+
+        payload = transport.request_json(
+            "POST",
+            self._url(f"models/{model}:generateContent"),
+            headers=self._headers(),
+            json_body={
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "generationConfig": generation_config,
+            },
+        )
+        candidate = (payload.get("candidates") or [{}])[0]
+        parts = ((candidate.get("content") or {}).get("parts")) or []
+        text_parts: list[str] = []
+        for part in parts:
+            if not isinstance(part, dict):
+                continue
+            if part.get("text") and not part.get("thought"):
+                text_parts.append(str(part["text"]))
+            inline = part.get("inlineData") or part.get("inline_data")
+            if isinstance(inline, dict) and inline.get("data"):
+                mime_hint = inline.get("mimeType") or inline.get("mime_type") or "image/png"
+                image_bytes, mime_type = decode_image_payload(inline["data"], default_mime=mime_hint)
+                return ImageResult(
+                    data=image_bytes,
+                    mime_type=mime_type,
+                    revised_prompt="\n".join(text_parts) or None,
+                    model=model,
+                    raw=payload,
+                )
+
+        raise errors.ProviderError(
+            errors.Reason.INVALID_REQUEST,
+            _("The provider did not return an image"),
+        )
 
 
 def _thought_text(candidate: dict) -> str:

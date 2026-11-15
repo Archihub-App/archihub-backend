@@ -23,7 +23,16 @@ logger = logging.getLogger(__name__)
 
 #: Things a model may be able to do. A closed vocabulary so callers can branch
 #: on it; providers' own vocabularies are mapped onto this by each adapter.
-CAPABILITIES = ("chat", "image", "audio", "video", "tools", "embedding", "reasoning")
+CAPABILITIES = (
+    "chat",
+    "image",
+    "image_generation",
+    "audio",
+    "video",
+    "tools",
+    "embedding",
+    "reasoning",
+)
 
 
 @dataclass(frozen=True)
@@ -114,6 +123,17 @@ class ChatChunk:
     usage: dict[str, int] = field(default_factory=dict)
 
 
+@dataclass
+class ImageResult:
+    """A generated image returned by a dialect."""
+
+    data: bytes
+    mime_type: str = "image/png"
+    revised_prompt: str | None = None
+    model: str | None = None
+    raw: dict = field(default_factory=dict)
+
+
 class Dialect(Protocol):
     """What every adapter provides.
 
@@ -137,6 +157,9 @@ class Dialect(Protocol):
 
     def stream(self, messages: list[dict], **options) -> Iterator[ChatChunk]:
         """The answer as it arrives."""
+
+    def generate_image(self, prompt: str, **options) -> ImageResult:
+        """Generate an image from a text prompt."""
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +190,12 @@ def normalise_capabilities(values) -> tuple[str, ...]:
         "thinking": "reasoning",
         "audio_input": "audio",
         "speech": "audio",
+        "image_output": "image_generation",
+        "text-to-image": "image_generation",
+        "text_to_image": "image_generation",
+        "generate_images": "image_generation",
+        "generateimages": "image_generation",
+        "image_gen": "image_generation",
     }
 
     resolved = []
@@ -193,3 +222,33 @@ def first_int(*values) -> int | None:
         if number > 0:
             return number
     return None
+
+
+def sniff_image_mime(data: bytes, fallback: str = "image/png") -> str:
+    """Infer an image MIME type from magic bytes when available."""
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    return fallback
+
+
+def decode_image_payload(raw: str, *, default_mime: str = "image/png") -> tuple[bytes, str]:
+    """Decode a base64 string or ``data:`` URI into ``(bytes, mime_type)``."""
+    import base64
+
+    value = (raw or "").strip()
+    mime_hint = default_mime
+    if value.startswith("data:"):
+        header, _, encoded = value.partition(",")
+        declared_mime = header[5:].split(";")[0].strip()
+        if declared_mime:
+            mime_hint = declared_mime
+        value = encoded
+
+    data = base64.b64decode(value)
+    return data, sniff_image_mime(data, fallback=mime_hint)

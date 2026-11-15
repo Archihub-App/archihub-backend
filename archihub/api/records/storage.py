@@ -37,7 +37,7 @@ COLLECTION = "records"
 #: What may be uploaded. Narrowing it would reject files existing deployments
 #: accept.
 ALLOWED_EXTENSIONS = frozenset({
-    "txt", "pdf", "png", "jpg", "jpeg", "jfif", "gif", "oga", "ogg", "ogv", "tif", "tiff", "heic",
+    "txt", "pdf", "png", "jpg", "jpeg", "jfif", "gif", "webp", "oga", "ogg", "ogv", "tif", "tiff", "heic",
     "doc", "docx", "xls", "xlsx", "ppt", "pptx", "csv", "zip", "rar", "7z", "mp4",
     "mp3", "wav", "avi", "mkv", "flv", "mov", "wmv", "m4a", "mxf", "cr2", "arw", "mts",
     "nef", "json", "html", "wma", "aac", "flac", "cr3", "nrw", "srf", "dng",
@@ -248,6 +248,122 @@ def _insert(
     _call_hook("record_create", {**record, "_id": record_id})
 
     return record_id
+
+
+def create_standalone_record(
+    incoming: IncomingFile,
+    user: str | None,
+    *,
+    extra_fields: dict | None = None,
+) -> dict:
+    """Store a file as an independent permanent record without a parent resource."""
+    safe_name = filestore.secure_name(incoming.filename)
+    if not filestore.is_allowed(safe_name, ALLOWED_EXTENSIONS):
+        raise UnsupportedFileType(safe_name)
+
+    stored = _store(item=incoming, safe_name=safe_name)
+    mongo = _mongo()
+
+    existing = mongo.get_record(
+        COLLECTION,
+        {"hash": stored.sha256, "temporary": {"$ne": True}, "status": {"$ne": STATUS_DELETED}},
+    )
+    if existing and _may_reuse(existing, user):
+        filestore.remove_quietly(stored.path)
+        existing_id = str(existing["_id"])
+        return {**existing, "_id": existing_id, "id": existing_id, "deduplicated": True}
+
+    now = _now()
+    record = {
+        **(extra_fields or {}),
+        "name": safe_name,
+        "hash": stored.sha256,
+        "size": stored.size,
+        "filepath": _relative_path(stored),
+        "mime": filestore.sniff_media_type(stored.path) or _media_type_from_name(safe_name),
+        "parent": [],
+        "parents": [],
+        "status": STATUS_UPLOADED,
+        "favCount": 0,
+        "createdBy": user or "system",
+        "createdAt": now,
+        "updatedBy": user or "system",
+        "updatedAt": now,
+    }
+
+    inserted = mongo.insert_record(COLLECTION, record)
+    record_id = str(inserted.inserted_id)
+
+    _audit(user, "record_create", {
+        "record": {
+            "name": record["name"],
+            "hash": record["hash"],
+            "size": record["size"],
+            "filepath": record["filepath"],
+        }
+    })
+    _call_hook("record_create", {**record, "_id": record_id})
+
+    return {**record, "_id": record_id, "id": record_id, "deduplicated": False}
+
+
+def attach_existing_record(
+    record_id: str,
+    resource_id: str,
+    user: str | None,
+    *,
+    tag: str = "file",
+    order: int | None = None,
+) -> dict:
+    """Attach an existing permanent record to a resource and fire file hooks."""
+    mongo = _mongo()
+    try:
+        rec_oid = ObjectId(record_id)
+    except Exception as exc:
+        raise ValueError(_("Record does not exist")) from exc
+    try:
+        res_oid = ObjectId(resource_id)
+    except Exception as exc:
+        raise ValueError(_("Resource does not exist")) from exc
+
+    record = mongo.get_record(COLLECTION, {"_id": rec_oid, "status": {"$ne": STATUS_DELETED}})
+    if not record:
+        raise ValueError(_("Record does not exist"))
+
+    resource = mongo.get_record(
+        "resources",
+        {"_id": res_oid},
+        fields={"parents": 1, "post_type": 1, "filesObj": 1, "metadata": 1},
+    )
+    if not resource:
+        raise ValueError(_("Resource does not exist"))
+
+    _add_parent(record, resource_id, resource, user)
+
+    existing_files = list(resource.get("filesObj") or [])
+    entry = AttachedFile(id=str(record["_id"]), tag=tag or "file", order=order).as_dict()
+    already_linked = any(
+        isinstance(item, dict) and item.get("id") == entry["id"] and item.get("tag") == entry["tag"]
+        for item in existing_files
+    )
+    if not already_linked:
+        existing_files.append(entry)
+        mongo.update_record(
+            "resources",
+            {"_id": res_oid},
+            {"filesObj": existing_files, "updatedAt": _now(), "updatedBy": user or "system"},
+        )
+        _call_hook(
+            "resource_files_create",
+            {
+                "_id": resource_id,
+                "post_type": resource.get("post_type"),
+                "metadata": resource.get("metadata") or {},
+                "filesObj": existing_files,
+            },
+        )
+
+    return {"id": entry["id"], "resource_id": resource_id, "tag": entry["tag"]}
 
 
 def _media_type_from_name(filename: str) -> str:

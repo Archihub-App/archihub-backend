@@ -76,6 +76,15 @@ PDF_CONVERSION = "document.to_pdf"
 #: ``<web_files>/<path>_medium.jpg``.
 IMAGE_DERIVATIVES = "file.derivatives"
 
+#: Queue Celery derivative processing for a single stored record.
+RECORD_DERIVATIVES_TASK = "file.derivatives.queue"
+
+#: Capability id for generating Canvas 2D visualizations within an article.
+ARTICLE_CANVAS_GENERATE = "article_canvas_viz.generate"
+
+#: Capability id for regenerating a single Canvas 2D visualization block.
+ARTICLE_CANVAS_REGENERATE = "article_canvas_viz.regenerate_block"
+
 
 def convert_to_pdf(source, destination) -> None:
     """Convert a document to PDF using whichever plugin provides it."""
@@ -100,3 +109,47 @@ def derive_web_versions(record: dict) -> bool:
         IMAGE_DERIVATIVES, needed_by="the view thumbnail", provider_hint="filesProcessing"
     )
     return bool(processor(record))
+
+
+def queue_record_processing(record_id: str) -> str | None:
+    """Enqueue Celery derivative processing for a standalone record, if active.
+
+    Returns the Celery task id when queued, or ``None`` if ``filesProcessing``
+    is inactive or the task broker is unavailable.
+    """
+    if not has(RECORD_DERIVATIVES_TASK):
+        return None
+    queuer = get(RECORD_DERIVATIVES_TASK)
+    try:
+        return queuer(record_id)
+    except Exception:
+        logger.warning(
+            "Could not enqueue Celery derivative processing for record %s",
+            record_id,
+            exc_info=True,
+        )
+        return None
+
+
+def generate_article_visualizations(
+    resource_id: str, options: dict, user: str
+) -> tuple[dict, int]:
+    """Generate Canvas 2D visualizations for a resource article via the active plugin."""
+    runner = get(
+        ARTICLE_CANVAS_GENERATE,
+        needed_by="article visualization generation",
+        provider_hint="article_canvas_viz",
+    )
+    return runner(resource_id, options, user)
+
+
+def regenerate_article_visualization_block(
+    resource_id: str, block_id: str, options: dict, user: str
+) -> tuple[dict, int]:
+    """Regenerate one ``canvasViz`` block inside a resource article via the active plugin."""
+    runner = get(
+        ARTICLE_CANVAS_REGENERATE,
+        needed_by="article visualization regeneration",
+        provider_hint="article_canvas_viz",
+    )
+    return runner(resource_id, block_id, options, user)
