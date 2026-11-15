@@ -20,14 +20,17 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 
-from archihub.api.aiservices import transport
+from archihub.api.aiservices import errors, transport
 from archihub.api.aiservices.dialects.base import (
     ChatChunk,
     ChatResult,
+    ImageResult,
     ModelInfo,
+    decode_image_payload,
     first_int,
     normalise_capabilities,
 )
+from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +113,15 @@ class OpenAICompatibleDialect:
 
         declared = []
         declared.extend(architecture.get("input_modalities") or [])
-        declared.extend(architecture.get("modality", "").split("+") if isinstance(architecture.get("modality"), str) else [])
+        output_modalities = architecture.get("output_modalities") or []
+        if any(str(m).strip().lower() == "image" for m in output_modalities):
+            declared.append("image_generation")
+        modality = architecture.get("modality") if isinstance(architecture.get("modality"), str) else ""
+        if modality:
+            input_part, _, output_part = modality.partition("->")
+            declared.extend(input_part.split("+"))
+            if "image" in output_part.lower():
+                declared.append("image_generation")
         declared.extend(entry.get("capabilities") or [])
         declared.extend(entry.get("supported_features") or [])
         if entry.get("supports_vision"):
@@ -231,6 +242,67 @@ class OpenAICompatibleDialect:
             tool_calls=list(delta.get("tool_calls") or []),
             finish_reason=first.get("finish_reason"),
             usage=_usage(payload.get("usage")),
+        )
+
+    def generate_image(self, prompt: str, **options) -> ImageResult:
+        """Generate an image via ``POST /images/generations``."""
+        body: dict = {
+            "model": options["model"],
+            "prompt": prompt,
+            "n": 1,
+        }
+        for key in ("size", "quality", "style", "aspect_ratio", "output_format", "background"):
+            if options.get(key):
+                body[key] = options[key]
+
+        use_response_format = not options.get("omit_response_format")
+        if use_response_format:
+            body["response_format"] = "b64_json"
+
+        try:
+            payload = transport.request_json(
+                "POST",
+                self._url("images/generations"),
+                headers=self._headers(),
+                json_body=body,
+            )
+        except errors.ProviderError as exc:
+            if (
+                use_response_format
+                and exc.reason == errors.Reason.INVALID_REQUEST
+                and "response_format" in str(exc).lower()
+            ):
+                body.pop("response_format", None)
+                payload = transport.request_json(
+                    "POST",
+                    self._url("images/generations"),
+                    headers=self._headers(),
+                    json_body=body,
+                )
+            else:
+                raise
+
+        items = payload.get("data") or []
+        first = items[0] if items and isinstance(items[0], dict) else {}
+        encoded = first.get("b64_json")
+        if not encoded and isinstance(first.get("url"), str) and first["url"].startswith("data:"):
+            encoded = first["url"]
+
+        if not encoded:
+            raise errors.ProviderError(
+                errors.Reason.INVALID_REQUEST,
+                _("The provider did not return base64 image data"),
+            )
+
+        output_format = str(options.get("output_format") or payload.get("output_format") or "png").lower()
+        default_mime = f"image/{'jpeg' if output_format == 'jpg' else output_format}"
+        image_bytes, mime_type = decode_image_payload(encoded, default_mime=default_mime)
+        return ImageResult(
+            data=image_bytes,
+            mime_type=mime_type,
+            revised_prompt=first.get("revised_prompt"),
+            model=payload.get("model") or options.get("model"),
+            raw=payload,
         )
 
 
