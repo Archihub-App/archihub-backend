@@ -31,7 +31,7 @@ from archihub.core.i18n import gettext as _
 logger = logging.getLogger(__name__)
 
 #: Field types that carry no value of their own.
-NON_VALUE_TYPES = frozenset({"file", "separator"})
+NON_VALUE_TYPES = frozenset({"file", "separator", "group"})
 
 #: Placed in a field whose condition is not met, per type. Types absent from
 #: this mapping keep whatever they were sent.

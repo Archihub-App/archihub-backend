@@ -134,7 +134,11 @@ def test_every_empty_spelling_counts_as_absent(empty):
 
 
 def test_file_and_separator_fields_carry_no_value():
-    metadata = form(field("f", "file", required=True), field("s", "separator", required=True))
+    metadata = form(
+        field("f", "file", required=True),
+        field("s", "separator", required=True),
+        field("g", "group", required=True),
+    )
     _body, errors = validation.validate_fields(published(), metadata)
     assert errors == {}
 
