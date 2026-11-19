@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 COLLECTION = "resources"
 
 #: Field kinds that never appear in the rendered list: files have their own
-#: panel, separators are layout.
-SKIPPED_TYPES = ("file", "separator")
+#: panel; separators and groups are layout.
+SKIPPED_TYPES = ("file", "separator", "group")
 
 #: Shown in place of a field the caller may not read.
 MSG_RESTRICTED = "You don't have the required authorization"

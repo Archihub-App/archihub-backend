@@ -44,8 +44,8 @@ TITLE_DESTINY = "metadata.firstLevel.title"
 INTERCHANGEABLE_TYPES = {"select", "select-multiple2"}
 
 # Types exempt from the "destiny must start with metadata" rule: they either
-# write nowhere (separator) or to their own area (file).
-DESTINY_EXEMPT_TYPES = {"separator", "file"}
+# write nowhere (separator, group) or to their own area (file).
+DESTINY_EXEMPT_TYPES = {"separator", "group", "file"}
 
 # Upper bound on the -1, -2, ... suffix search when deriving a unique slug.
 MAX_SLUG_ATTEMPTS = 1000

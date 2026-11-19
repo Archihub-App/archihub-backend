@@ -739,6 +739,9 @@ msgstr "Indexación de geometrías iniciada"
 msgid "Geometry regeneration started"
 msgstr "Regeneración de geometrías iniciada"
 
+msgid "Group"
+msgstr "Grupo"
+
 #: plugins/labelsEndpoints/__init__.py:109
 msgid "Group parameter is required"
 msgstr "El parámetro de grupo es obligatorio"

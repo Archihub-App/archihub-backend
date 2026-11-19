@@ -26,12 +26,14 @@ CATALOGUE_IDS = sorted({entry["id"] for entry in CATALOGUE})
 NOT_INDEXED = {
     "file": "a stored attachment descriptor, popped from the mapping on purpose",
     "separator": "presentational; it holds no value",
+    "group": "presentational; it holds no value",
 }
 
 #: Kinds that legitimately have no top-level validator.
 NOT_VALIDATED = {
     "file": "files are validated by validate_files, against the type's file rules",
     "separator": "presentational; it holds no value",
+    "group": "presentational; it holds no value",
     "repeater": "rows are validated per subfield, via REPEATER_VALIDATORS",
 }
 

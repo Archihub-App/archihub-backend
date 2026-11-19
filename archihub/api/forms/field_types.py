@@ -30,6 +30,7 @@ FIELD_TYPES: tuple[dict[str, str], ...] = (
     {"id": "file", "label": "File"},
     {"id": "repeater", "label": "Repeater"},
     {"id": "separator", "label": "Separator"},
+    {"id": "group", "label": "Group"},
     {"id": "author", "label": "Author"},
     {"id": "location", "label": "Location"},
     # sic - see module docstring.
