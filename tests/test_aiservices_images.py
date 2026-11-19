@@ -64,7 +64,11 @@ class FakeMongo:
 def fake_mongo(monkeypatch):
     from archihub.api.records import storage
 
+    from archihub.infra import mongo
+
     fake = FakeMongo()
+    # Every module reads Mongo through this, so one fake serves them all.
+    monkeypatch.setattr(mongo, "get_mongo", lambda: fake)
     monkeypatch.setattr(storage, "_mongo", lambda: fake)
     monkeypatch.setattr(storage, "_audit", lambda *args, **kwargs: None)
     return fake
