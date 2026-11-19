@@ -108,10 +108,13 @@ ADMINISTRATION = (
 
 
 def _changes_a_provider(path: str, methods: set[str]) -> bool:
-    """Using a provider is a point; configuring one, or its credentials, is not."""
+    """Using a provider is a point; configuring one, or its credentials, is not.
+
+    Chatting and generating an image use a configured provider.
+    """
     if not path.startswith("/aiservices/providers"):
         return False
-    if path.endswith("/chat"):
+    if path.endswith(("/chat", "/images")):
         return False
     return bool(methods - {"GET"}) or path.endswith("/check")
 

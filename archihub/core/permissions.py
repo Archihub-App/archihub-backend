@@ -143,7 +143,7 @@ _CATALOGUE = (
     # AI services
     Point(
         "ai.use", "aiservices",
-        "Use the language models: providers and skills listings, chat, the record assistant",
+        "Use the language models: providers and skills listings, chat, image generation, the record assistant",
         ("admin", "processing", "llm"),
     ),
     Point(

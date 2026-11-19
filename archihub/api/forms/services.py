@@ -44,8 +44,8 @@ TITLE_DESTINY = "metadata.firstLevel.title"
 INTERCHANGEABLE_TYPES = {"select", "select-multiple2"}
 
 # Types exempt from the "destiny must start with metadata" rule: they either
-# write nowhere (separator) or to their own area (file).
-DESTINY_EXEMPT_TYPES = {"separator", "file"}
+# write nowhere (separator, group) or to their own area (file).
+DESTINY_EXEMPT_TYPES = {"separator", "group", "file"}
 
 # Upper bound on the -1, -2, ... suffix search when deriving a unique slug.
 MAX_SLUG_ATTEMPTS = 1000
@@ -150,7 +150,10 @@ def get_by_slug(slug: str) -> tuple[dict, int]:
             return {"msg": _("Form not found")}, 404
 
         field = dict(ACCESS_RIGHTS_FIELD)
-        field["list"] = _get_access_rights_id()
+        list_id = _get_access_rights_id()
+        if list_id:
+            field["list"] = list_id
+        field["options"] = _get_access_rights().get("options", [])
         form.setdefault("fields", []).insert(0, field)
 
         form.pop("_id", None)

@@ -482,6 +482,7 @@ def test_files_and_separators_are_never_rendered(mongo, monkeypatch):
         lambda slug: form(
             {"destiny": "metadata.firstLevel.files", "type": "file", "label": "Files"},
             {"destiny": "metadata.firstLevel.sep", "type": "separator", "label": "—"},
+            {"destiny": "metadata.firstLevel.grp", "type": "group", "label": "Group"},
         ),
     )
 

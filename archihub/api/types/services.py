@@ -365,17 +365,18 @@ def get_form_by_slug(slug: str):
                 if field.get("type") == field_type.get("id") and "plugin" in field_type:
                     field["plugin"] = field_type["plugin"]
 
-        form.setdefault("fields", []).insert(
-            0,
-            {
-                "name": "accessRights",
-                "label": "Derechos de acceso",
-                "required": True,
-                "destiny": "accessRights",
-                "list": _get_access_rights_id(),
-                "type": "select",
-            },
-        )
+        access_field = {
+            "name": "accessRights",
+            "label": "Derechos de acceso",
+            "required": True,
+            "destiny": "accessRights",
+            "options": _get_access_rights().get("options", []),
+            "type": "select",
+        }
+        list_id = _get_access_rights_id()
+        if list_id:
+            access_field["list"] = list_id
+        form.setdefault("fields", []).insert(0, access_field)
         form.pop("_id", None)
         return parse_result(form)
     except Exception:
@@ -447,6 +448,16 @@ def _call_hook(name: str, payload: dict) -> None:
         get_hook_handler().call(name, payload)
     except Exception:
         logger.warning("Hook %s failed", name, exc_info=True)
+
+
+def _get_access_rights():
+    try:
+        from archihub.core.roles import get_access_rights
+
+        return get_access_rights()
+    except Exception:
+        logger.debug("Could not read access rights", exc_info=True)
+        return {"options": []}
 
 
 def _get_access_rights_id():

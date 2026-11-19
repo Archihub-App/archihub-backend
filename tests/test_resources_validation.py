@@ -134,7 +134,11 @@ def test_every_empty_spelling_counts_as_absent(empty):
 
 
 def test_file_and_separator_fields_carry_no_value():
-    metadata = form(field("f", "file", required=True), field("s", "separator", required=True))
+    metadata = form(
+        field("f", "file", required=True),
+        field("s", "separator", required=True),
+        field("g", "group", required=True),
+    )
     _body, errors = validation.validate_fields(published(), metadata)
     assert errors == {}
 
@@ -319,7 +323,7 @@ def test_a_malformed_id_is_a_validation_error_not_a_bson_message():
 def test_a_hidden_conditional_field_is_cleared():
     metadata = form(
         field("metadata.toggle", "checkbox"),
-        field("metadata.x", "text", conditionField=0),
+        field("metadata.x", "text", conditionField=1),
     )
     body, _errors = validation.validate_fields(
         published(metadata={"toggle": False, "x": "left over"}), metadata
@@ -329,14 +333,10 @@ def test_a_hidden_conditional_field_is_cleared():
 
 
 def test_a_condition_on_the_first_field_of_the_form_is_honoured():
-    """``conditionField`` is an index, and index 0 is a real condition.
-
-    A field conditioned on the *first* field of the form must not keep a value
-    the user has hidden.
-    """
+    """Positions count from 1: position 1 is the form's first field."""
     metadata = form(
         field("metadata.toggle", "checkbox"),
-        field("metadata.x", "text", conditionField="0"),
+        field("metadata.x", "text", conditionField="1"),
     )
     body, _errors = validation.validate_fields(
         published(metadata={"toggle": False, "x": "should be cleared"}), metadata
@@ -345,10 +345,34 @@ def test_a_condition_on_the_first_field_of_the_form_is_honoured():
     assert body["metadata"]["x"] == ""
 
 
+ACCESS_RIGHTS = {"destiny": "accessRights", "type": "select", "label": "Derechos de acceso"}
+
+
+@pytest.mark.parametrize("read_with_access_rights", [True, False])
+def test_the_same_form_resolves_the_same_source_however_it_was_read(read_with_access_rights):
+    """The form readers put a synthetic access-rights field first. Positions do
+    not count it, as in the builder and the cataloguing form, so the source is
+    the same field either way - never the one after it."""
+    fields = [
+        field("metadata.title", "text"),
+        field("metadata.toggle", "checkbox"),
+        field("metadata.status", "text"),
+        field("metadata.x", "text", conditionField="2"),
+    ]
+    metadata = form(*([ACCESS_RIGHTS] if read_with_access_rights else []), *fields)
+
+    assert validation.resolve_condition_field(fields[3], metadata["fields"])["destiny"] == "metadata.toggle"
+
+    body, _errors = validation.validate_fields(
+        published(metadata={"title": "t", "toggle": False, "status": "on", "x": "left over"}), metadata
+    )
+    assert body["metadata"]["x"] == ""
+
+
 def test_a_visible_conditional_field_keeps_its_value():
     metadata = form(
         field("metadata.toggle", "checkbox"),
-        field("metadata.x", "text", conditionField=0),
+        field("metadata.x", "text", conditionField=1),
     )
     body, _errors = validation.validate_fields(
         published(metadata={"toggle": True, "x": "kept"}), metadata
@@ -357,7 +381,7 @@ def test_a_visible_conditional_field_keeps_its_value():
     assert body["metadata"]["x"] == "kept"
 
 
-@pytest.mark.parametrize("bad", [99, -1, "abc", None])
+@pytest.mark.parametrize("bad", [99, 0, -1, "abc", None])
 def test_an_unusable_condition_index_is_ignored_not_raised(bad):
     metadata = form(
         field("metadata.toggle", "checkbox"),
@@ -371,15 +395,165 @@ def test_an_unusable_condition_index_is_ignored_not_raised(bad):
     assert body["metadata"]["x"] == "kept"
 
 
-def test_a_condition_on_a_non_checkbox_is_ignored():
-    metadata = form(
-        field("metadata.other", "text"),
-        field("metadata.x", "text", conditionField=0),
-    )
-    body, _errors = validation.validate_fields(
-        published(metadata={"other": "", "x": "kept"}), metadata
+# Text and select conditions follow the cataloguing form's rule: compare with
+# ``conditionValueText`` by ``conditionType``, ignoring case and accents.
+
+def text_condition(test, expected, **extra):
+    return form(
+        field("metadata.status", "text"),
+        field(
+            "metadata.x", "text", conditionField=1,
+            conditionType=test, conditionValueText=expected, **extra,
+        ),
     )
 
+
+@pytest.mark.parametrize(
+    "test,expected,status,shown",
+    [
+        ("equals", "Rechazado", "rechazado", True),
+        ("equals", "Rechazado", "  RECHAZADO ", True),
+        ("equals", "Revisión", "revision", True),
+        ("equals", "Rechazado", "Rechazado parcialmente", False),
+        ("equals", "Rechazado", "", False),
+        ("contains", "pend", "Pendiente de firma", True),
+        ("contains", "pend", "Aprobado", False),
+        ("contains", "pend", "", False),
+        ("different", "Aprobado", "Rechazado", True),
+        ("different", "Aprobado", "", True),
+        ("different", "Aprobado", "aprobado", False),
+    ],
+)
+def test_a_text_condition_shows_its_field_as_the_form_does(test, expected, status, shown):
+    body, _errors = validation.validate_fields(
+        published(metadata={"status": status, "x": "kept"}), text_condition(test, expected)
+    )
+
+    assert (body["metadata"]["x"] == "kept") is shown
+
+
+def test_a_text_condition_with_no_test_compares_for_equality():
+    metadata = form(
+        field("metadata.status", "text"),
+        field("metadata.x", "text", conditionField=1, conditionValueText="Rechazado"),
+    )
+    body, _errors = validation.validate_fields(
+        published(metadata={"status": "Aprobado", "x": "left over"}), metadata
+    )
+
+    assert body["metadata"]["x"] == ""
+
+
+def test_a_required_field_hidden_by_a_text_condition_does_not_block_publishing():
+    """The form hides it, so nobody can fill it in."""
+    metadata = text_condition("equals", "Rechazado", required=True)
+
+    _body, hidden = validation.validate_fields(published(metadata={"status": "Aprobado"}), metadata)
+    _body, shown = validation.validate_fields(published(metadata={"status": "Rechazado"}), metadata)
+
+    assert "metadata.x" not in hidden
+    assert "metadata.x" in shown
+
+
+@pytest.fixture
+def categories(monkeypatch):
+    """A list ``categorias`` with three options, read the way validation reads it."""
+    from archihub.api.lists import services as lists
+
+    options = [{"id": "o1", "term": "Mapa"}, {"id": "o2", "term": "Fotografía"}, {"id": "o3", "term": "Otro"}]
+
+    def get_by_id(list_id):
+        if list_id != "categorias":
+            return {"msg": "List not found"}, 404
+        return {"name": "Categorías", "description": "", "options": options}, 200
+
+    monkeypatch.setattr(lists, "get_by_id", get_by_id)
+
+
+def select_condition(type_, test, expected, list_id="categorias", **extra):
+    return form(
+        field("metadata.category", type_, list=list_id),
+        field(
+            "metadata.x", "text", conditionField=1,
+            conditionType=test, conditionValueText=expected, **extra,
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "test,expected,chosen,shown",
+    [
+        ("equals", "otro", "o3", True),
+        ("equals", "Otro", "o1", False),
+        ("equals", "fotografia", "o2", True),
+        ("equals", "Otro", {"id": "o3"}, True),
+        ("equals", "Otro", None, False),
+        ("contains", "foto", "o2", True),
+        ("different", "Otro", "o1", True),
+        ("different", "Otro", None, True),
+        ("different", "Otro", "o3", False),
+    ],
+)
+def test_a_select_condition_compares_the_chosen_term(categories, test, expected, chosen, shown):
+    body, _errors = validation.validate_fields(
+        published(metadata={"category": chosen, "x": "kept"}),
+        select_condition("select", test, expected),
+    )
+
+    assert (body["metadata"]["x"] == "kept") is shown
+
+
+@pytest.mark.parametrize(
+    "test,expected,chosen,shown",
+    [
+        ("equals", "Otro", ["o1", "o3"], True),
+        ("equals", "Otro", ["o1"], False),
+        ("equals", "Otro", [], False),
+        ("contains", "graf", ["o1", "o2"], True),
+        ("different", "Otro", ["o1"], True),
+        ("different", "Otro", ["o3"], False),
+    ],
+)
+def test_a_multiple_select_condition_looks_at_every_chosen_term(categories, test, expected, chosen, shown):
+    body, _errors = validation.validate_fields(
+        published(metadata={"category": chosen, "x": "kept"}),
+        select_condition("select-multiple2", test, expected),
+    )
+
+    assert (body["metadata"]["x"] == "kept") is shown
+
+
+def test_a_required_field_hidden_by_a_select_condition_does_not_block_publishing(categories):
+    metadata = select_condition("select", "equals", "Otro", required=True)
+
+    _body, hidden = validation.validate_fields(published(metadata={"category": "o1"}), metadata)
+    _body, shown = validation.validate_fields(published(metadata={"category": "o3"}), metadata)
+
+    assert "metadata.x" not in hidden
+    assert "metadata.x" in shown
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        # A source kind conditions are not defined on.
+        form(field("metadata.n", "number"), field("metadata.x", "text", conditionField=1, conditionValueText="1")),
+        # A test nobody wrote.
+        form(
+            field("metadata.status", "text"),
+            field("metadata.x", "text", conditionField=1, conditionType="startswith", conditionValueText="a"),
+        ),
+        # A select whose list cannot be read.
+        select_condition("select", "equals", "Otro", list_id="borrada"),
+    ],
+    ids=["number source", "unknown test", "unreadable list"],
+)
+def test_a_condition_that_cannot_be_evaluated_leaves_the_field_shown(categories, metadata):
+    body, errors = validation.validate_fields(
+        published(metadata={"n": 5, "status": "b", "category": "o1", "x": "kept"}), metadata
+    )
+
+    assert errors == {}
     assert body["metadata"]["x"] == "kept"
 
 
@@ -397,7 +571,7 @@ def test_a_condition_on_a_non_checkbox_is_ignored():
 def test_each_type_is_cleared_to_its_own_empty_value(field_type, cleared):
     metadata = form(
         field("metadata.toggle", "checkbox"),
-        field("metadata.x", field_type, conditionField=0),
+        field("metadata.x", field_type, conditionField=1),
     )
     body, _errors = validation.validate_fields(
         published(metadata={"toggle": False, "x": "whatever"}), metadata
@@ -411,7 +585,7 @@ def test_a_hidden_required_field_does_not_block_publishing():
     fill it in; requiring it would make the resource impossible to publish."""
     metadata = form(
         field("metadata.toggle", "checkbox"),
-        field("metadata.x", "text", conditionField=0, required=True),
+        field("metadata.x", "text", conditionField=1, required=True),
     )
 
     _body, hidden_errors = validation.validate_fields(published(metadata={"toggle": False}), metadata)

@@ -119,7 +119,7 @@ def test_destiny_must_start_with_metadata(mongo):
         )
 
 
-@pytest.mark.parametrize("field_type", ["separator", "file"])
+@pytest.mark.parametrize("field_type", ["separator", "group", "file"])
 def test_separator_and_file_are_exempt_from_the_destiny_rule(mongo, field_type):
     extra = {"label": "X", "type": field_type, "destiny": "anything"}
     if field_type == "file":
@@ -372,7 +372,7 @@ def test_field_type_ids_are_a_stable_contract():
     assert "userslit" in ids
     assert ids == [
         "text", "text-area", "number", "simple-date", "select", "select-multiple2",
-        "checkbox", "file", "repeater", "separator", "author", "location", "userslit",
+        "checkbox", "file", "repeater", "separator", "group", "author", "location", "userslit",
     ]
 
 

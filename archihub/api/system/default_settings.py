@@ -20,25 +20,25 @@ settings = [
     {
         'name': 'access_rights',
         'label': 'Roles y acceso a la información',
+        'description': 'Niveles de acceso y configuración de roles',
+        'options': [],
+        'roles': [],
         'data': [
-            {
-                'type': 'select',
-                'label': 'Listado para los niveles de acceso',
-                'id': 'access_rights_list',
-                'instructions': 'Los niveles de acceso definen la publicidad de la información. Por defecto, todo el contenido creado en la herramienta es Público. Se pueden crear nuevos niveles desde el apartado de lista en el módulo de catalogación y asignarlos a los usuarios para que estos puedan acceder a dicha información.'
-            },
-            {
-                'type': 'select',
-                'label': 'Listado para los roles de usuario',
-                'id': 'user_roles_list',
-                'instructions': 'Los roles de usuario definen la capacidad de los usuarios para manejar información. Por defecto existen admin y editor. Se pueden implementar nuevos roles para cada tipo de contenido.'
-            },
             {
                 'type':  'checkbox_single',
                 'label': 'Activar la visualización de metadatos para todos los usuarios',
                 'id': 'metadata_access',
                 'instructions': 'Activar esta opción habilita los metadatos para todos los usuarios, de lo contrario los metadatos solo serán visibles para los usuarios con permisos',
                 'value': False
+            },
+            {
+                'type': 'button_single',
+                'label': 'Roles de usuario',
+                'id': 'user_roles',
+                'instructions': 'Configuración de los roles de usuario y sus permisos de acceso a las diferentes secciones del sistema.',
+                'btn_label': 'Gestionar permisos',
+                'value': '/admin/permissions',
+                'href': '/admin/permissions'
             }
         ]
     },
@@ -166,9 +166,9 @@ settings = [
             },
             {
                 'type': 'select',
-                'label': 'Idioma por defecto de los usuarios',
+                'label': 'Idioma del sistema',
                 'id': 'user_languages',
-                'instructions': 'Seleccionar el idioma por defecto para los usuarios de la aplicación.',
+                'instructions': 'Seleccionar el idioma de la aplicación (español o inglés).',
                 'options': [
                     {
                         'label': 'Español',
@@ -566,15 +566,6 @@ detailed_post_type = [
     }
 ]
 
-roles_rights_settings = [
-    {
-        'name': 'Niveles de acceso',
-        'description': '',
-        'options': []
-    },
-    {
-        'name': 'Roles',
-        'description': '',
-        'options': []
-    }
-]
+roles_rights_settings = []
+access_rights_settings = next((s for s in settings if s.get('name') == 'access_rights'), None)
+
