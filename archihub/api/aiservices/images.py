@@ -12,7 +12,7 @@ import logging
 import uuid
 from typing import Any
 
-from archihub.api.aiservices import catalogue, chat, providers
+from archihub.api.aiservices import catalogue, chat
 from archihub.core.i18n import gettext as _
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ def generate(
         if methods:
             call_options.setdefault("generation_methods", methods)
 
-    adapter = providers.adapter_for(provider)
+    adapter = catalogue.build_adapter(provider)
     image = adapter.generate_image(clean_prompt, **call_options)
 
     target_name = _filename_for(filename, image.mime_type)

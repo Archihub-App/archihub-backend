@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime
 import logging
 import numbers
+import unicodedata
 
 from bson.objectid import ObjectId
 from dateutil import parser as date_parser
@@ -294,19 +295,26 @@ REPEATER_VALIDATORS = {
 # ---------------------------------------------------------------------------
 
 
+#: The synthetic field the form readers put first. Positions do not count it.
+ACCESS_RIGHTS_DESTINIES = ("accessRights", "access_rights")
+
+
 def resolve_condition_field(field: dict, fields: list[dict]) -> dict | None:
-    """The checkbox a conditional field depends on, if any.
+    """The field a conditional field depends on, if any.
 
-    ``conditionField`` is an *index* into the form's field list.
-
-    Index ``0`` is a real condition (the form's first field), not "no
-    condition". An out-of-range or non-numeric index is logged and ignored.
+    ``conditionField`` is the source's position among the form's own fields,
+    counted from 1 - what the forms builder stores and the cataloguing form
+    reads. The form readers put a synthetic access-rights field first; it is
+    not one of the form's fields, so it is skipped when present. The same
+    stored form therefore resolves to the same source whether or not it was
+    read with that field. A position that is not a number, or falls outside
+    the form, is logged and ignored.
     """
     if "conditionField" not in field:
         return None
 
     try:
-        index = int(field["conditionField"])
+        position = int(field["conditionField"])
     except (TypeError, ValueError):
         logger.warning(
             "Field %s declares a non-numeric conditionField %r; ignoring it",
@@ -315,28 +323,118 @@ def resolve_condition_field(field: dict, fields: list[dict]) -> dict | None:
         )
         return None
 
-    if not 0 <= index < len(fields):
+    own_fields = fields
+    if fields and fields[0].get("destiny") in ACCESS_RIGHTS_DESTINIES:
+        own_fields = fields[1:]
+
+    if not 1 <= position <= len(own_fields):
         logger.warning(
             "Field %s declares conditionField %s, out of range for a form of %s fields",
             field.get("destiny"),
-            index,
-            len(fields),
+            position,
+            len(own_fields),
         )
         return None
 
-    return fields[index]
+    return own_fields[position - 1]
 
 
-def _condition_is_met(field: dict, fields: list[dict], body: dict) -> bool:
-    """Whether a conditional field should keep its value.
+#: The tests a condition on a text or select field may apply. Any other test
+#: cannot be evaluated, and leaves the field shown.
+CONDITION_TESTS = ("equals", "contains", "different")
 
-    Only a checkbox can act as the condition; a condition on any other type is
-    ignored rather than guessed at.
+
+def _normalise(value: object) -> str:
+    """Text as conditions compare it: trimmed, lower case, without accents.
+
+    The cataloguing form compares the same way, so a field the form hides is
+    the field validated as hidden here.
     """
-    condition = resolve_condition_field(field, fields)
-    if condition is None or condition.get("type") != "checkbox":
+    if not isinstance(value, str):
+        return ""
+    decomposed = unicodedata.normalize("NFD", value.strip().lower())
+    return "".join(char for char in decomposed if not "̀" <= char <= "ͯ")
+
+
+def _compare(test: str, actual: str, expected: str) -> bool:
+    if test == "equals":
+        return actual == expected
+    if test == "different":
+        return actual != expected
+    return bool(actual) and expected in actual
+
+
+def _selected_terms(source: dict, value: object) -> list[str] | None:
+    """The normalised terms of the options chosen in a select field.
+
+    A choice is stored as an option id (or an object carrying one); it is
+    matched against the list's ids and, failing that, its terms. ``None`` when
+    the field has no list that can be read.
+    """
+    from archihub.api.lists.services import get_by_id
+
+    list_id = source.get("list")
+    if not list_id:
+        return None
+    payload, status = get_by_id(str(list_id))
+    if status != 200:
+        return None
+    options = payload.get("options") or []
+
+    chosen = value if isinstance(value, list) else ([] if value in (None, "") else [value])
+    terms = []
+    for item in chosen:
+        if isinstance(item, dict):
+            item = item.get("id") or item.get("value") or item.get("term")
+        match = next(
+            (o for o in options if str(item) in (str(o.get("id")), str(o.get("term")))),
+            None,
+        )
+        if match is not None:
+            terms.append(_normalise(match.get("term")))
+    return terms
+
+
+def condition_is_met(field: dict, fields: list[dict], body: dict) -> bool:
+    """Whether a conditional field is shown, and so keeps its value.
+
+    The rule is the cataloguing form's:
+
+    - a checkbox shows the field while it is ticked;
+    - a text field compares its value with ``conditionValueText`` using
+      ``conditionType`` (equals, contains, different), ignoring case and accents;
+    - a select field compares the term of the chosen option (any chosen option,
+      for a multiple select) the same way.
+
+    A condition that cannot be evaluated - an unknown source type or test, a
+    select without a readable list - leaves the field shown.
+    """
+    source = resolve_condition_field(field, fields)
+    if source is None:
         return True
-    return bool(get_value_by_path(body, condition.get("destiny") or ""))
+    source_type = source.get("type")
+    value = get_value_by_path(body, source.get("destiny") or "")
+
+    if source_type == "checkbox":
+        return bool(value)
+
+    test = field.get("conditionType") or "equals"
+    if source_type not in ("text", "select", "select-multiple2") or test not in CONDITION_TESTS:
+        return True
+    expected = _normalise(field.get("conditionValueText"))
+
+    if source_type == "text":
+        return _compare(test, _normalise(value), expected)
+
+    terms = _selected_terms(source, value)
+    if terms is None:
+        return True
+    if test == "equals":
+        return expected in terms
+    if test == "different":
+        return expected not in terms
+    return any(expected in term for term in terms)
+
 
 
 # ---------------------------------------------------------------------------
@@ -375,7 +473,7 @@ def validate_fields(body: dict, metadata: dict) -> tuple[dict, dict]:
         value = get_value_by_path(body, destiny)
         # A field hidden by its condition cannot be filled in, so it cannot be
         # required: the form does not show it, and its value is cleared below.
-        visible = _condition_is_met(field, fields, body)
+        visible = condition_is_met(field, fields, body)
 
         if value in (None, "", [], {}):
             if field.get("required") and is_published and visible and destiny != "accessRights":

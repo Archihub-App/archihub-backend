@@ -2333,8 +2333,8 @@ msgstr "Comentar tareas de usuario"
 msgid "See other users' cataloguing and processing activity in the activity feed"
 msgstr "Ver la actividad de catalogación y procesamiento de otros usuarios en el registro de actividad"
 
-msgid "Use the language models: providers and skills listings, chat, the record assistant"
-msgstr "Usar los modelos de lenguaje: listados de proveedores y habilidades, chat y asistente de registros"
+msgid "Use the language models: providers and skills listings, chat, image generation, the record assistant"
+msgstr "Usar los modelos de lenguaje: listados de proveedores y habilidades, chat, generación de imágenes y asistente de registros"
 
 msgid "Create, edit, delete and synchronise AI skills"
 msgstr "Crear, editar, eliminar y sincronizar habilidades del asistente"

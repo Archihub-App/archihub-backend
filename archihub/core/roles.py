@@ -97,7 +97,7 @@ def get_access_rights_id():
     return (_settings_entry(ACCESS_RIGHTS_LIST_ENTRY, ACCESS_RIGHTS_LIST_INDEX) or {}).get("value")
 
 
-@cached("system")
+@cached("system", "lists")
 def get_roles() -> dict:
     """Every assignable role: the configured vocabulary in system plus the built-ins."""
     record = _mongo().get_record("system", {"name": ACCESS_RIGHTS_SETTING})
@@ -135,7 +135,7 @@ def get_roles() -> dict:
     return {"options": options}
 
 
-@cached("system")
+@cached("system", "lists")
 def get_access_rights() -> dict:
     """The configured access-rights vocabulary, stored in the system collection."""
     record = _mongo().get_record("system", {"name": ACCESS_RIGHTS_SETTING})

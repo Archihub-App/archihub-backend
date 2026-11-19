@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from bson.objectid import ObjectId
 
-from archihub.api.aiservices import chat, errors, images, providers, transport
+from archihub.api.aiservices import catalogue, chat, errors, images, providers, transport
 from archihub.api.aiservices.dialects.anthropic import AnthropicDialect
 from archihub.api.aiservices.dialects.google import GoogleDialect
 from archihub.api.aiservices.dialects.ollama import OllamaDialect
@@ -22,6 +22,66 @@ PNG_1X1 = (
     b"\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82"
 )
 PNG_B64 = base64.b64encode(PNG_1X1).decode("ascii")
+
+
+class _Inserted:
+    def __init__(self, inserted_id):
+        self.inserted_id = inserted_id
+
+
+class FakeMongo:
+    """The few collection operations the image path uses, in memory."""
+
+    def __init__(self):
+        self.collections: dict[str, list[dict]] = {}
+
+    @staticmethod
+    def _matches(document: dict, filters: dict) -> bool:
+        for key, expected in (filters or {}).items():
+            if isinstance(expected, dict) and "$ne" in expected:
+                if document.get(key) == expected["$ne"]:
+                    return False
+            elif document.get(key) != expected:
+                return False
+        return True
+
+    def get_record(self, collection, filters=None, fields=None):
+        rows = self.collections.get(collection, [])
+        return next((r for r in rows if self._matches(r, filters)), None)
+
+    def insert_record(self, collection, record):
+        document = {**record, "_id": record.get("_id") or ObjectId()}
+        self.collections.setdefault(collection, []).append(document)
+        return _Inserted(document["_id"])
+
+    def update_record(self, collection, filters, update):
+        for document in self.collections.get(collection, []):
+            if self._matches(document, filters):
+                document.update(update)
+
+
+@pytest.fixture
+def fake_mongo(monkeypatch):
+    from archihub.api.records import storage
+
+    fake = FakeMongo()
+    monkeypatch.setattr(storage, "_mongo", lambda: fake)
+    monkeypatch.setattr(storage, "_audit", lambda *args, **kwargs: None)
+    return fake
+
+
+@pytest.fixture
+def tmp_settings(monkeypatch, tmp_path):
+    """Settings whose original files live in a temporary folder."""
+    from archihub.api.records import storage
+    from archihub.core import files as filestore
+
+    settings = storage.get_settings()
+    monkeypatch.setattr(settings, "original_files_path", str(tmp_path), raising=False)
+    monkeypatch.setattr(storage, "get_settings", lambda: settings)
+    # The real sniffer needs libmagic; these tests are about the record.
+    monkeypatch.setattr(filestore, "sniff_media_type", lambda path: "image/png")
+    return settings
 
 
 def test_openai_compat_discovers_image_generation_from_output_modalities():
@@ -141,7 +201,7 @@ def test_images_generate_creates_independent_record_and_queues_celery(
 
             return ImageResult(data=PNG_1X1, mime_type="image/png", revised_prompt="Enhanced", model=options["model"])
 
-    monkeypatch.setattr(providers, "adapter_for", lambda p: StubAdapter())
+    monkeypatch.setattr(catalogue, "build_adapter", lambda p: StubAdapter())
 
     provider = {"_id": ObjectId(), "name": "TestProvider", "dialect": "openai-compatible", "default_model": "artist"}
     res = images.generate(provider, "Draw a forest", user="alice", model="artist")
@@ -160,17 +220,12 @@ def test_images_generate_creates_independent_record_and_queues_celery(
     assert (Path(tmp_settings.original_files_path) / stored_doc["filepath"]).is_file()
 
 
-def test_router_generate_image_returns_201_without_filepath(
-    client, fake_mongo, admin_token, monkeypatch
-):
-    created, status = providers.create(
-        {"name": "ImgEndpoint", "dialect": "openai-compatible", "base_url": "https://example.test/v1"},
-        "admin",
-        is_admin=True,
-    )
-    assert status == 201
-    provider_id = created["id"]
+def test_router_generate_image_returns_201_without_filepath(monkeypatch):
+    from archihub.api.aiservices import router
+    from archihub.core.security.jwt import CurrentUser
 
+    provider = {"_id": ObjectId(), "name": "ImgEndpoint", "dialect": "openai-compatible", "enabled": True}
+    monkeypatch.setattr(providers, "load", lambda provider_id: provider)
     monkeypatch.setattr(
         images,
         "generate",
@@ -192,20 +247,49 @@ def test_router_generate_image_returns_201_without_filepath(
         },
     )
 
-    resp = client.post(
-        f"/aiservices/providers/{provider_id}/images",
-        json={"prompt": "A bridge", "model": "artist"},
-        headers={"Authorization": f"Bearer {admin_token}"},
+    resp = router.generate_image(
+        str(provider["_id"]),
+        {"prompt": "A bridge", "model": "artist"},
+        CurrentUser(username="admin", claims={}),
     )
+
     assert resp.status_code == 201
-    data = resp.json()
+    import json
+
+    data = json.loads(resp.body)
     assert data["record_id"] == "rec-1"
     assert "filepath" not in data["record"]
 
 
+@pytest.mark.parametrize(
+    "provider,body,status",
+    [
+        (None, {"prompt": "x", "model": "m"}, 404),
+        ({"_id": ObjectId(), "enabled": False}, {"prompt": "x", "model": "m"}, 403),
+        ({"_id": ObjectId(), "enabled": True}, {"prompt": "  ", "model": "m"}, 400),
+        ({"_id": ObjectId(), "enabled": True}, {"prompt": "x"}, 400),
+    ],
+    ids=["missing provider", "disabled provider", "blank prompt", "no model"],
+)
+def test_router_generate_image_refuses_before_calling_the_provider(monkeypatch, provider, body, status):
+    from archihub.api.aiservices import router
+    from archihub.core.security.jwt import CurrentUser
+
+    monkeypatch.setattr(providers, "load", lambda provider_id: provider)
+    monkeypatch.setattr(images, "generate", lambda *a, **k: pytest.fail("the provider was called"))
+
+    resp = router.generate_image("p", body, CurrentUser(username="admin", claims={}))
+
+    assert resp.status_code == status
+
+
 def test_flow_image_generation_node_save_modes(fake_mongo, tmp_settings, monkeypatch):
+    # The node ships with flowsManager, its own repository; without it there is
+    # nothing to test.
+    node_module = pytest.importorskip("archihub.plugins.flowsManager.utils.nodes.image_generation")
     from archihub.plugins.flowsManager import ai as flows_ai
-    from archihub.plugins.flowsManager.utils.nodes.image_generation import ImageGenerationNode
+
+    ImageGenerationNode = node_module.ImageGenerationNode
 
     interop.reset()
     interop.provide(interop.RECORD_DERIVATIVES_TASK, "filesProcessing", lambda rid: "celery-task-99")
@@ -252,7 +336,7 @@ def test_flow_image_generation_node_save_modes(fake_mongo, tmp_settings, monkeyp
         "enabled": True,
     }
     monkeypatch.setattr(flows_ai, "resolve_provider", lambda name: provider_doc)
-    monkeypatch.setattr(providers, "adapter_for", lambda p: StubAdapter())
+    monkeypatch.setattr(catalogue, "build_adapter", lambda p: StubAdapter())
 
     # 1) record_only
     node_only = ImageGenerationNode(
