@@ -64,10 +64,17 @@ def _respond(result) -> JSONResponse:
 
 @router.get(
     "",
-    responses={200: {"description": "All lists, as name + id"}, **_ROLE_RESPONSES},
+    responses={
+        200: {
+            "description": (
+                "All lists, with their first 3 options, total options count, and forms where used"
+            )
+        },
+        **_ROLE_RESPONSES,
+    },
 )
 def get_all(current_user: CurrentUser = Depends(require_list_manager)) -> JSONResponse:
-    """Get every controlled vocabulary, alphabetically, as ``{name, id}``."""
+    """Get every controlled vocabulary, alphabetically, with preview options, total count, and forms."""
     return _respond(services.get_all())
 
 

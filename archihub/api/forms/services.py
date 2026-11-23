@@ -373,6 +373,7 @@ def create(body: dict, user: str) -> tuple[dict, int]:
 
         form = FormCreate(**body)
         _mongo().insert_record(COLLECTION, form.model_dump(exclude_none=True))
+        _sync_list_form_usage(form.slug, form.name, form.fields)
 
         _register_log(user, "form_create", {"form": {"name": form.name, "slug": form.slug}})
         _clear_cache()
@@ -390,7 +391,7 @@ def update_by_slug(slug: str, body: dict, user: str) -> tuple[dict, int]:
     try:
         # Existence is checked FIRST, so a missing form is a 404 before any
         # validation runs.
-        form = _mongo().get_record(COLLECTION, {"slug": slug}, {"slug": 1})
+        form = _mongo().get_record(COLLECTION, {"slug": slug}, {"slug": 1, "name": 1, "fields": 1})
         if not form:
             return {"msg": _("Form not found")}, 404
 
@@ -401,7 +402,15 @@ def update_by_slug(slug: str, body: dict, user: str) -> tuple[dict, int]:
         from archihub.api.forms.schemas import FormUpdate
 
         update = FormUpdate(**body)
-        _mongo().update_record(COLLECTION, {"slug": slug}, update.model_dump(exclude_unset=True))
+        update_payload = update.model_dump(exclude_unset=True)
+        _mongo().update_record(COLLECTION, {"slug": slug}, update_payload)
+        effective = {**form, **update_payload}
+        _sync_list_form_usage(
+            effective.get("slug") or slug,
+            effective.get("name") or "",
+            effective.get("fields") or [],
+            previous_slug=slug,
+        )
 
         _register_log(user, "form_update", {"form": body})
         _clear_cache()
@@ -432,6 +441,7 @@ def delete_by_slug(slug: str, user: str) -> tuple[dict, int]:
             return {"msg": _("The form is being used by a post type")}, 400
 
         mongo.delete_record(COLLECTION, {"slug": slug})
+        _sync_list_form_usage("", "", [], previous_slug=slug)
         _register_log(
             user, "form_delete", {"form": {"name": form.get("name"), "slug": form.get("slug")}}
         )
@@ -518,6 +528,28 @@ def _call_hook_with_result(name: str, payload):
     except Exception:
         logger.warning("Hook %s failed", name, exc_info=True)
         return None
+
+
+def _sync_list_form_usage(
+    form_slug: str,
+    form_name: str,
+    fields: list[dict] | None,
+    *,
+    previous_slug: str | None = None,
+) -> None:
+    try:
+        from archihub.api.lists.services import extract_form_list_ids, sync_form_usage
+
+        list_ids = extract_form_list_ids({"fields": fields or []})
+        sync_form_usage(
+            form_slug,
+            form_name,
+            list_ids,
+            previous_slug=previous_slug,
+            mongo=_mongo(),
+        )
+    except Exception:
+        logger.warning("Could not sync list form usage for form %s", form_slug, exc_info=True)
 
 
 def _clear_cache() -> None:
