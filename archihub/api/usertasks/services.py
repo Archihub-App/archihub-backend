@@ -27,12 +27,13 @@ COLLECTION = "usertasks"
 PAGE_SIZE = 10
 
 STATUS_PENDING = "pending"
+STATUS_IN_PROGRESS = "in_progress"
 STATUS_REVIEW = "review"
-STATUS_REJECTED = "rejected"
 STATUS_APPROVED = "approved"
 
-VALID_STATUSES = {STATUS_PENDING, STATUS_REVIEW, STATUS_REJECTED, STATUS_APPROVED}
-OPEN_STATUSES = [STATUS_PENDING, STATUS_REVIEW, STATUS_REJECTED]
+VALID_STATUSES = {STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_REVIEW, STATUS_APPROVED}
+OPEN_STATUSES = [STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_REVIEW]
+_RETURN_STATUS_ALIASES = {STATUS_PENDING, "rejected"}
 
 _LIST_PROJECTION = {
     "user": 1,
@@ -130,6 +131,17 @@ def may_open_target(target_field: str, target_value: str, user: str) -> bool:
     )
 
 
+def is_task_manager(user: str) -> bool:
+    """Whether ``user`` may manage, assign to others, approve, or return tasks."""
+    from archihub.api.users.services import has_permission, has_role
+
+    return (
+        has_role(user, "admin")
+        or has_role(user, "team_lead")
+        or has_permission(user, "usertasks.manage")
+    )
+
+
 def _is_assignable(username: str) -> bool:
     if not username:
         return False
@@ -157,7 +169,8 @@ def _open_task(target_field: str, target_value: str, user: str, missing: str) ->
     """The open task on a target, for someone taking part in it or managing tasks.
 
     Anyone else - and anyone who may not open the target - is told there is no
-    task, as when there is none.
+    task, as when there is none. When the assigned user opens a task that is
+    still pending ("to do"), it advances to in-progress.
     """
     task = _mongo().get_record(
         COLLECTION,
@@ -169,38 +182,65 @@ def _open_task(target_field: str, target_value: str, user: str, missing: str) ->
         # `msg`, not `error` - see the module docstring.
         return {"msg": missing}, 404
 
-    task["_id"] = str(task["_id"])
-    task["createdAt"] = _iso(task.get("createdAt"))
-    task["comment"] = process_comments(task.get("comment"))
-    return task, 200
+    result = dict(task)
+    if result.get("status") == STATUS_PENDING and result.get("user") == user:
+        task_oid = result["_id"]
+        _mongo().update_record(COLLECTION, {"_id": task_oid}, {"status": STATUS_IN_PROGRESS})
+        result["status"] = STATUS_IN_PROGRESS
+
+        snapshot = dict(result)
+        snapshot["_id"] = str(task_oid)
+        snapshot["createdAt"] = _iso(snapshot.get("createdAt"))
+        snapshot["comment"] = [
+            {**entry, "createdAt": _iso(entry.get("createdAt"))}
+            if isinstance(entry, dict)
+            else entry
+            for entry in (result.get("comment") or [])
+        ]
+        target = {"resource": target_value} if target_field == "resourceId" else {"record": target_value}
+        _audit(user, "usertask_update", {
+            **target,
+            "task": str(task_oid),
+            "status": STATUS_IN_PROGRESS,
+            "approved": False,
+            "commented": False,
+        })
+        _call_hook("usertask_update", snapshot)
+
+    result["_id"] = str(result["_id"])
+    result["createdAt"] = _iso(result.get("createdAt"))
+    result["comment"] = process_comments(result.get("comment"))
+    return result, 200
 
 
 def _may_read_task(task: dict, user: str) -> bool:
     """The assignee, the creator, a commenter, or a task manager."""
-    from archihub.api.users.services import has_permission, has_role
-
     participants = {task.get("user"), task.get("createdBy")}
     participants.update(
         c.get("user") for c in task.get("comment") or [] if isinstance(c, dict)
     )
     if user in participants:
         return True
-    return (
-        has_role(user, "admin")
-        or has_role(user, "team_lead")
-        or has_permission(user, "usertasks.manage")
-    )
+    return is_task_manager(user)
 
 
 def get_all_tasks(filters: dict) -> tuple[dict, int]:
     """Paginated task list, newest first."""
     try:
-        statuses = filters.get("status") or []
-        if isinstance(statuses, str):
-            statuses = [statuses]
+        raw_statuses = filters.get("status")
+        if raw_statuses is None:
+            statuses = []
+        elif isinstance(raw_statuses, str):
+            statuses = [raw_statuses]
+        elif isinstance(raw_statuses, list) and all(isinstance(s, str) for s in raw_statuses):
+            statuses = raw_statuses
+        else:
+            return {"error": _("Invalid status")}, 400
 
         query: dict = {"status": {"$in": statuses}}
         username = filters.get("user")
+        if username is not None and not isinstance(username, str):
+            return {"error": _("user is required")}, 400
         if username:
             if filters.get("include_created"):
                 query["$or"] = [
@@ -276,22 +316,37 @@ def get_editors() -> tuple[list | dict, int]:
 # ---------------------------------------------------------------------------
 
 
-def create_task(body: dict, user: str) -> tuple[dict, int]:
+def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tuple[dict, int]:
     """Assign review work.
 
-    Refuses when the target already has an open task: two editors asked to
-    review the same thing would produce conflicting outcomes.
+    All authenticated users may assign a task to themselves; only admins and
+    team leads may assign a task to someone else. Refuses when the target
+    already has an open task: two editors asked to review the same thing would
+    produce conflicting outcomes.
     """
     try:
-        resource_id = (body.get("resourceId") or "").strip()
-        record_id = (body.get("recordId") or "").strip()
+        raw_resource = body.get("resourceId")
+        raw_record = body.get("recordId")
+        raw_assignee = body.get("user")
+        raw_comment = body.get("comment")
+
+        resource_id = raw_resource.strip() if isinstance(raw_resource, str) else ""
+        record_id = raw_record.strip() if isinstance(raw_record, str) else ""
+        assignee = raw_assignee.strip() if isinstance(raw_assignee, str) else ""
+        comment_text = raw_comment.strip() if isinstance(raw_comment, str) else ""
 
         if not resource_id and not record_id:
             return {"error": _("resourceId or recordId is required")}, 400
-        if not (body.get("user") or "").strip():
+        if not assignee:
             return {"error": _("user is required")}, 400
-        if not (body.get("comment") or "").strip():
+        if not comment_text:
             return {"error": _("comment is required")}, 400
+
+        if is_team_lead is None:
+            is_team_lead = is_task_manager(user)
+
+        if assignee != user and not is_team_lead:
+            return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
 
         mongo = _mongo()
         target_field = "resourceId" if resource_id else "recordId"
@@ -299,7 +354,7 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
 
         if not may_open_target(target_field, target_value, user):
             return {"error": _("Resource does not exist")}, 404
-        if not _is_assignable(body["user"].strip()):
+        if assignee != user and not _is_assignable(assignee):
             return {"error": _("user is required")}, 400
 
         if mongo.get_record(COLLECTION, {target_field: target_value, "status": {"$in": OPEN_STATUSES}}):
@@ -313,11 +368,11 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         now = utcnow()
         record = {
             target_field: target_value,
-            "user": body["user"].strip(),
+            "user": assignee,
             "createdBy": user,
             "status": STATUS_PENDING,
             "createdAt": now,
-            "comment": [{"user": user, "comment": body["comment"], "createdAt": now}],
+            "comment": [{"user": user, "comment": raw_comment, "createdAt": now}],
         }
         result = mongo.insert_record(COLLECTION, record)
 
@@ -331,7 +386,7 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         _audit(user, "usertask_create", {
             target_name: target_value,
             "task": created["_id"],
-            "assignee": body["user"],
+            "assignee": assignee,
         })
         _call_hook("usertask_create", created)
 
@@ -344,8 +399,9 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
 def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tuple[dict, int]:
     """Comment on a task, or update its status.
 
-    ONLY A TEAM LEAD (OR ADMIN) MAY APPROVE OR REJECT. An editor can update their
-    own task and advance it to 'review', but cannot sign off their own work.
+    ONLY A TEAM LEAD (OR ADMIN) MAY APPROVE OR RETURN A TASK. An assigned user
+    can update their own task and advance it to 'review', where it remains until
+    approved or returned to 'pending' by an admin or team lead.
     """
     object_id = _to_object_id(task_id)
     if object_id is None:
@@ -357,7 +413,8 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
         if not task:
             return {"error": _("Task not found")}, 404
 
-        if task.get("status") == STATUS_APPROVED:
+        current_status = task.get("status")
+        if current_status == STATUS_APPROVED:
             return {"error": _("Task already approved")}, 400
 
         creator = task.get("createdBy") or (
@@ -370,15 +427,18 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
 
         update: dict = {}
 
-        comment = (body.get("comment") or "").strip()
+        raw_comment = body.get("comment")
+        if raw_comment is not None and not isinstance(raw_comment, str):
+            return {"error": _("comment is required")}, 400
+        comment = raw_comment.strip() if isinstance(raw_comment, str) else ""
         if comment:
             update["comment"] = (task.get("comment") or []) + [
                 {"user": user, "comment": comment, "createdAt": utcnow()}
             ]
 
         new_status = body.get("status")
-        if new_status:
-            if new_status not in VALID_STATUSES:
+        if new_status is not None and new_status != "":
+            if not isinstance(new_status, str) or new_status not in (VALID_STATUSES | _RETURN_STATUS_ALIASES):
                 return {"error": _("Invalid status")}, 400
 
             if new_status == STATUS_APPROVED:
@@ -387,15 +447,16 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
                 update["status"] = STATUS_APPROVED
                 update["approvedBy"] = user
                 update["approvedAt"] = utcnow()
-            elif new_status == STATUS_REJECTED:
+            elif new_status in _RETURN_STATUS_ALIASES:
                 if not is_team_lead:
                     return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
-                update["status"] = STATUS_REJECTED
+                update["status"] = STATUS_PENDING
             elif new_status == STATUS_REVIEW:
                 update["status"] = STATUS_REVIEW
-            elif new_status == STATUS_PENDING:
-                if is_team_lead:
-                    update["status"] = STATUS_PENDING
+            elif new_status == STATUS_IN_PROGRESS:
+                if current_status == STATUS_REVIEW and not is_team_lead:
+                    return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+                update["status"] = STATUS_IN_PROGRESS
 
         if not update:
             return {"error": _("No changes were made")}, 400

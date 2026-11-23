@@ -121,10 +121,10 @@ def test_a_malformed_task_id_is_not_found(mongo):
 def test_a_second_task_for_the_same_resource_is_refused(mongo):
     """Two editors asked to review the same thing would produce conflicting
     outcomes."""
-    mongo.records["usertasks"] = {"_id": ObjectId(VALID_ID), "status": "pending"}
+    mongo.records["usertasks"] = {"_id": ObjectId(VALID_ID), "status": "in_progress"}
 
     _payload, status = services.create_task(
-        {"resourceId": "r1", "user": "e@x.test", "comment": "please review"}, "lead"
+        {"resourceId": "r1", "user": "e@x.test", "comment": "please review"}, "lead", is_team_lead=True
     )
     assert status == 400
     assert mongo.inserted == []
@@ -134,7 +134,7 @@ def test_a_task_is_created_when_the_target_is_free(mongo):
     mongo.records["usertasks"] = None
 
     payload, status = services.create_task(
-        {"resourceId": "r1", "user": "e@x.test", "comment": "please review"}, "lead"
+        {"resourceId": "r1", "user": "e@x.test", "comment": "please review"}, "lead", is_team_lead=True
     )
 
     assert status == 201
@@ -154,7 +154,7 @@ def test_a_task_is_created_when_the_target_is_free(mongo):
 )
 def test_incomplete_assignments_are_rejected(mongo, body):
     mongo.records["usertasks"] = None
-    _payload, status = services.create_task(body, "lead")
+    _payload, status = services.create_task(body, "lead", is_team_lead=True)
     assert status == 400
 
 
@@ -223,7 +223,7 @@ def test_an_editor_may_submit_task_for_review(mongo):
     assert update["status"] == "review"
 
 
-def test_a_team_lead_may_reject_a_task(mongo):
+def test_a_team_lead_may_return_a_task_to_pending(mongo):
     mongo.records["usertasks"] = {
         "_id": ObjectId(VALID_ID),
         "status": "review",
@@ -231,17 +231,26 @@ def test_a_team_lead_may_reject_a_task(mongo):
         "comment": [],
     }
 
-    _payload, status = services.update_task(
+    payload, status = services.update_task(
         VALID_ID, {"status": "rejected", "comment": "needs corrections"}, "lead@x.test", is_team_lead=True
     )
 
     assert status == 200
     _c, _f, update = mongo.updated[0]
-    assert update["status"] == "rejected"
+    assert update["status"] == "pending"
+    assert payload["status"] == "pending"
     assert update["comment"][0]["comment"] == "needs corrections"
 
+    # Returning explicitly with status="pending" also resets to pending.
+    mongo.records["usertasks"]["status"] = "review"
+    payload2, status2 = services.update_task(
+        VALID_ID, {"status": "pending", "comment": "try again"}, "lead@x.test", is_team_lead=True
+    )
+    assert status2 == 200
+    assert payload2["status"] == "pending"
 
-def test_an_editor_cannot_reject_a_task(mongo):
+
+def test_an_editor_cannot_reject_or_return_a_task(mongo):
     mongo.records["usertasks"] = {
         "_id": ObjectId(VALID_ID),
         "status": "review",
@@ -249,12 +258,12 @@ def test_an_editor_cannot_reject_a_task(mongo):
         "comment": [],
     }
 
-    _payload, status = services.update_task(
-        VALID_ID, {"status": "rejected"}, "editor@x.test", is_team_lead=False
-    )
-
-    assert status == ROLE_FAILURE_STATUS
-    assert mongo.updated == []
+    for return_status in ("rejected", "pending"):
+        _payload, status = services.update_task(
+            VALID_ID, {"status": return_status}, "editor@x.test", is_team_lead=False
+        )
+        assert status == ROLE_FAILURE_STATUS
+        assert mongo.updated == []
 
 
 def test_an_editor_cannot_update_another_users_task(mongo):
@@ -273,11 +282,12 @@ def test_an_editor_cannot_update_another_users_task(mongo):
     assert mongo.updated == []
 
 
-def test_open_task_can_be_retrieved_in_review_or_rejected_state(mongo):
+def test_open_task_can_be_retrieved_in_review_or_in_progress_state(mongo):
     mongo.records["usertasks"] = {
         "_id": ObjectId(VALID_ID),
         "resourceId": "res123",
         "status": "review",
+        "user": "ed",
         "comment": [{"user": "ed", "comment": "done"}],
     }
     payload, status = services.get_resource_tasks("res123", "ed")
@@ -288,13 +298,14 @@ def test_open_task_can_be_retrieved_in_review_or_rejected_state(mongo):
     mongo.records["usertasks"] = {
         "_id": ObjectId(VALID_ID),
         "recordId": "rec123",
-        "status": "rejected",
-        "comment": [{"user": "lead", "comment": "redo"}],
+        "status": "in_progress",
+        "user": "ed",
+        "comment": [{"user": "lead", "comment": "start"}],
     }
-    payload, status = services.get_record_tasks("rec123", "lead")
+    payload, status = services.get_record_tasks("rec123", "ed")
     assert status == 200
-    assert payload["status"] == "rejected"
-    assert "lead: redo" in payload["comment"]
+    assert payload["status"] == "in_progress"
+    assert "lead: start" in payload["comment"]
 
 
 def test_create_task_records_audit_and_hook(mongo, monkeypatch):
@@ -305,7 +316,7 @@ def test_create_task_records_audit_and_hook(mongo, monkeypatch):
     mongo.records["usertasks"] = None
 
     _payload, status = services.create_task(
-        {"resourceId": "r1", "user": "e@x.test", "comment": "check this"}, "lead"
+        {"resourceId": "r1", "user": "e@x.test", "comment": "check this"}, "lead", is_team_lead=True
     )
 
     assert status == 201
@@ -345,15 +356,15 @@ def test_update_task_records_audit_and_hook(mongo, monkeypatch):
 def test_listing_tasks_as_editor_constrains_to_self(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from archihub.api.usertasks.router import router, require_task_reader
-    from archihub.core.security.jwt import CurrentUser
+    from archihub.api.usertasks.router import router
+    from archihub.core.security.jwt import CurrentUser, get_current_user
     from archihub.api.users import services as user_services
 
     app = FastAPI()
     app.include_router(router)
 
     # Simulate editor caller
-    app.dependency_overrides[require_task_reader] = lambda: CurrentUser(username="editor@x.test", claims={})
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="editor@x.test", claims={})
     monkeypatch.setattr(user_services, "has_role", lambda user, role: False)
 
     called_filters = []
@@ -381,15 +392,15 @@ def test_listing_tasks_as_editor_constrains_to_self(monkeypatch):
 def test_listing_tasks_as_admin_or_team_lead_allows_all(monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
-    from archihub.api.usertasks.router import router, require_task_reader
-    from archihub.core.security.jwt import CurrentUser
+    from archihub.api.usertasks.router import router
+    from archihub.core.security.jwt import CurrentUser, get_current_user
     from archihub.api.users import services as user_services
 
     app = FastAPI()
     app.include_router(router)
 
     # Simulate admin caller
-    app.dependency_overrides[require_task_reader] = lambda: CurrentUser(username="admin@x.test", claims={})
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="admin@x.test", claims={})
     monkeypatch.setattr(user_services, "has_role", lambda user, role: role in ("admin", "team_lead"))
 
     called_filters = []
@@ -452,6 +463,7 @@ def test_create_task_records_created_by_field(mongo):
     created, status = services.create_task(
         {"resourceId": "r1", "user": "assignee@x.test", "comment": "work on this"},
         "creator@x.test",
+        is_team_lead=True,
     )
     assert status == 201
     assert created["createdBy"] == "creator@x.test"
@@ -459,13 +471,11 @@ def test_create_task_records_created_by_field(mongo):
     assert record["createdBy"] == "creator@x.test"
 
 
-
-
 def test_a_task_on_a_target_the_creator_cannot_open_is_refused(mongo, monkeypatch):
     monkeypatch.setattr(services, "may_open_target", lambda field, value, user: False)
 
     _payload, status = services.create_task(
-        {"resourceId": "res1", "user": "ed", "comment": "check"}, "lead"
+        {"resourceId": "res1", "user": "ed", "comment": "check"}, "lead", is_team_lead=True
     )
 
     assert status == 404
@@ -476,7 +486,7 @@ def test_a_task_is_assigned_only_to_someone_who_can_take_it(mongo, monkeypatch):
     monkeypatch.setattr(services, "_is_assignable", lambda username: False)
 
     _payload, status = services.create_task(
-        {"resourceId": "res1", "user": "nobody", "comment": "check"}, "lead"
+        {"resourceId": "res1", "user": "nobody", "comment": "check"}, "lead", is_team_lead=True
     )
 
     assert status == 400
@@ -529,3 +539,195 @@ def test_a_task_is_not_shown_when_its_target_cannot_be_opened(mongo, monkeypatch
     }
 
     assert services.get_record_tasks("rec1", "ed")[1] == 404
+
+
+# ---------------------------------------------------------------------------
+# Self-assignment and full 4-state workflow
+# ---------------------------------------------------------------------------
+
+
+def test_any_user_can_assign_a_task_to_themselves(mongo, monkeypatch):
+    mongo.records["usertasks"] = None
+    # Self-assignment does not require an editor/transcriber role.
+    monkeypatch.setattr(services, "_is_assignable", lambda username: False)
+
+    payload, status = services.create_task(
+        {"resourceId": "r1", "user": "plain_user", "comment": "taking this"},
+        "plain_user",
+        is_team_lead=False,
+    )
+
+    assert status == 201
+    assert payload["status"] == "pending"
+    assert payload["user"] == "plain_user"
+    assert payload["createdBy"] == "plain_user"
+
+
+def test_non_lead_user_cannot_assign_a_task_to_someone_else(mongo):
+    mongo.records["usertasks"] = None
+
+    _payload, status = services.create_task(
+        {"resourceId": "r1", "user": "other_user", "comment": "do this"},
+        "plain_user",
+        is_team_lead=False,
+    )
+
+    assert status == ROLE_FAILURE_STATUS
+    assert mongo.inserted == []
+
+
+def test_opening_pending_task_as_assignee_moves_it_to_in_progress(mongo, monkeypatch):
+    audits = []
+    hooks = []
+    monkeypatch.setattr(services, "_audit", lambda u, action, d: audits.append((u, action, d)))
+    monkeypatch.setattr(services, "_call_hook", lambda name, p: hooks.append((name, p)))
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "resourceId": "res1",
+        "status": "pending",
+        "user": "ed",
+        "createdBy": "lead",
+        "comment": [{"user": "lead", "comment": "check"}],
+    }
+
+    payload, status = services.get_resource_tasks("res1", "ed")
+
+    assert status == 200
+    assert payload["status"] == "in_progress"
+    assert mongo.updated == [("usertasks", {"_id": ObjectId(VALID_ID)}, {"status": "in_progress"})]
+    assert len(audits) == 1
+    assert audits[0][1] == "usertask_update"
+    assert audits[0][2]["status"] == "in_progress"
+    assert len(hooks) == 1
+    assert hooks[0][0] == "usertask_update"
+
+    # Opening again while already in_progress does not write a second update.
+    payload2, status2 = services.get_resource_tasks("res1", "ed")
+    assert status2 == 200
+    assert payload2["status"] == "in_progress"
+    assert len(mongo.updated) == 1
+
+
+def test_opening_pending_task_as_non_assignee_keeps_it_pending(mongo, monkeypatch):
+    monkeypatch.setattr("archihub.api.users.services.has_role", lambda u, r: r == "team_lead")
+    monkeypatch.setattr("archihub.api.users.services.has_permission", lambda u, p: False)
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "recordId": "rec1",
+        "status": "pending",
+        "user": "ed",
+        "createdBy": "lead",
+        "comment": [{"user": "lead", "comment": "check"}],
+    }
+
+    payload, status = services.get_record_tasks("rec1", "lead")
+
+    assert status == 200
+    assert payload["status"] == "pending"
+    assert mongo.updated == []
+
+
+def test_task_in_review_cannot_be_pulled_back_by_assignee(mongo):
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "status": "review",
+        "user": "ed",
+        "comment": [],
+    }
+
+    for target_status in ("in_progress", "pending", "approved"):
+        _payload, status = services.update_task(
+            VALID_ID, {"status": target_status}, "ed", is_team_lead=False
+        )
+        assert status == ROLE_FAILURE_STATUS
+        assert mongo.updated == []
+
+
+def test_returned_task_restarts_from_pending_and_reenters_in_progress_on_open(mongo):
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "resourceId": "res1",
+        "status": "review",
+        "user": "ed",
+        "createdBy": "lead",
+        "comment": [{"user": "lead", "comment": "initial"}],
+    }
+
+    # Team lead returns task -> resets to pending ("por hacer").
+    returned, status = services.update_task(
+        VALID_ID, {"status": "rejected", "comment": "fix section 2"}, "lead", is_team_lead=True
+    )
+    assert status == 200
+    assert returned["status"] == "pending"
+
+    # Assigned user opens it again -> transitions back to in_progress.
+    reopened, status = services.get_resource_tasks("res1", "ed")
+    assert status == 200
+    assert reopened["status"] == "in_progress"
+
+    # Assigned user sends it to review again.
+    reviewed, status = services.update_task(
+        VALID_ID, {"status": "review", "comment": "fixed"}, "ed", is_team_lead=False
+    )
+    assert status == 200
+    assert reviewed["status"] == "review"
+
+    # Team lead approves -> completed ("approved").
+    approved, status = services.update_task(
+        VALID_ID, {"status": "approved"}, "lead", is_team_lead=True
+    )
+    assert status == 200
+    assert approved["status"] == "approved"
+
+
+def test_plain_user_self_assign_and_lifecycle_via_router(mongo, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from archihub.api.usertasks.router import router
+    from archihub.core.errors import register_exception_handlers
+    from archihub.core.security.jwt import CurrentUser, get_current_user
+    from archihub.api.users import services as user_services
+
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="plain@x.test", claims={})
+    monkeypatch.setattr(user_services, "has_role", lambda user, role: False)
+    monkeypatch.setattr(services, "_is_assignable", lambda username: False)
+
+    client = TestClient(app)
+
+    # Assigning someone else is forbidden for a plain user.
+    resp = client.post(
+        "/usertasks",
+        json={"resourceId": "res1", "user": "other@x.test", "comment": "nope"},
+    )
+    assert resp.status_code == 403
+
+    # Listing assignable editors is forbidden for a plain user.
+    assert client.get("/usertasks/editors").status_code == 403
+
+    # Self-assignment succeeds with initial status "pending".
+    resp = client.post(
+        "/usertasks",
+        json={"resourceId": "res1", "user": "plain@x.test", "comment": "mine"},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["status"] == "pending"
+
+    # Simulate persisted task and verify open -> in_progress -> review via routes.
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "resourceId": "res1",
+        "status": "pending",
+        "user": "plain@x.test",
+        "createdBy": "plain@x.test",
+        "comment": [{"user": "plain@x.test", "comment": "mine"}],
+    }
+    open_resp = client.get("/usertasks/res1")
+    assert open_resp.status_code == 200
+    assert open_resp.json()["status"] == "in_progress"
+
+    review_resp = client.put(f"/usertasks/{VALID_ID}", json={"status": "review", "comment": "ready"})
+    assert review_resp.status_code == 200
+    assert review_resp.json()["status"] == "review"
