@@ -24,7 +24,9 @@ from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 logger = logging.getLogger(__name__)
 
 COLLECTION = "usertasks"
+NOTIFICATIONS_COLLECTION = "usertask_notifications"
 PAGE_SIZE = 10
+NOTIFICATIONS_PAGE_SIZE = 20
 
 STATUS_PENDING = "pending"
 STATUS_IN_PROGRESS = "in_progress"
@@ -60,6 +62,86 @@ def _to_object_id(value):
         return ObjectId(value)
     except Exception:
         return None
+
+
+def _task_creator(task: dict) -> str | None:
+    if task.get("createdBy"):
+        return task["createdBy"]
+    comments = task.get("comment")
+    if isinstance(comments, list) and comments and isinstance(comments[0], dict):
+        return comments[0].get("user")
+    return None
+
+
+def _task_snapshot(task: dict) -> dict:
+    snapshot = dict(task)
+    snapshot["_id"] = str(snapshot.get("_id"))
+    snapshot["createdAt"] = _iso(snapshot.get("createdAt"))
+    if "approvedAt" in snapshot:
+        snapshot["approvedAt"] = _iso(snapshot.get("approvedAt"))
+    snapshot["comment"] = [
+        {**entry, "createdAt": _iso(entry.get("createdAt"))}
+        if isinstance(entry, dict)
+        else entry
+        for entry in (snapshot.get("comment") or [])
+    ]
+    return snapshot
+
+
+def _notification_recipients(task: dict, actor: str) -> list[str]:
+    """Task participants to notify, excluding the user who performed the action."""
+    participants: set[str] = set()
+    if task.get("user"):
+        participants.add(task["user"])
+    creator = _task_creator(task)
+    if creator:
+        participants.add(creator)
+    for entry in task.get("comment") or []:
+        if isinstance(entry, dict) and entry.get("user"):
+            participants.add(entry["user"])
+    participants.discard(actor)
+    return sorted(p for p in participants if isinstance(p, str) and p)
+
+
+def _serialize_notification(notification: dict) -> dict:
+    doc = dict(notification)
+    doc["_id"] = str(doc.get("_id"))
+    doc["createdAt"] = _iso(doc.get("createdAt"))
+    if "readAt" in doc:
+        doc["readAt"] = _iso(doc.get("readAt"))
+    return doc
+
+
+def _notify_task_event(
+    task: dict,
+    actor: str,
+    event_type: str,
+    comment_text: str | None = None,
+) -> None:
+    """Create active notifications for task participants other than ``actor``."""
+    try:
+        recipients = _notification_recipients(task, actor)
+        if not recipients:
+            return
+        task_id = str(task.get("_id"))
+        now = utcnow()
+        mongo = _mongo()
+        for recipient in recipients:
+            record = {
+                "taskId": task_id,
+                "user": recipient,
+                "actor": actor,
+                "type": event_type,
+                "status": task.get("status"),
+                "resourceId": task.get("resourceId"),
+                "recordId": task.get("recordId"),
+                "comment": comment_text,
+                "active": True,
+                "createdAt": now,
+            }
+            mongo.insert_record(NOTIFICATIONS_COLLECTION, record)
+    except Exception:
+        logger.exception("Could not record task notifications for %s", task.get("_id"))
 
 
 def _audit(user: str | None, action: str, details: dict) -> None:
@@ -205,6 +287,7 @@ def _open_task(target_field: str, target_value: str, user: str, missing: str) ->
             "approved": False,
             "commented": False,
         })
+        _notify_task_event(result, user, "status")
         _call_hook("usertask_update", snapshot)
 
     result["_id"] = str(result["_id"])
@@ -319,10 +402,10 @@ def get_editors() -> tuple[list | dict, int]:
 def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tuple[dict, int]:
     """Assign review work.
 
-    All authenticated users may assign a task to themselves; only admins and
-    team leads may assign a task to someone else. Refuses when the target
-    already has an open task: two editors asked to review the same thing would
-    produce conflicting outcomes.
+    Users with an assignable role (``editor`` or ``transcriber``) may assign a
+    task to themselves; only admins and team leads may assign a task to someone
+    else. Refuses when the target already has an open task: two editors asked to
+    review the same thing would produce conflicting outcomes.
     """
     try:
         raw_resource = body.get("resourceId")
@@ -345,7 +428,10 @@ def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tupl
         if is_team_lead is None:
             is_team_lead = is_task_manager(user)
 
-        if assignee != user and not is_team_lead:
+        if assignee != user:
+            if not is_team_lead:
+                return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+        elif not _is_assignable(user):
             return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
 
         mongo = _mongo()
@@ -388,6 +474,7 @@ def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tupl
             "task": created["_id"],
             "assignee": assignee,
         })
+        _notify_task_event(created, user, "created", comment_text=comment_text)
         _call_hook("usertask_create", created)
 
         return created, 201
@@ -417,9 +504,7 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
         if current_status == STATUS_APPROVED:
             return {"error": _("Task already approved")}, 400
 
-        creator = task.get("createdBy") or (
-            task.get("comment") and isinstance(task["comment"], list) and task["comment"][0].get("user")
-        )
+        creator = _task_creator(task)
         has_owner = bool(task.get("user") or creator)
         is_owner = (task.get("user") == user) or (creator == user)
         if not is_team_lead and has_owner and not is_owner:
@@ -481,11 +566,164 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
         }
 
         _audit(user, "usertask_update", audit_details)
+        if "comment" in update and "status" in update:
+            event_type = "update"
+        elif "comment" in update:
+            event_type = "comment"
+        else:
+            event_type = "status"
+        _notify_task_event(updated, user, event_type, comment_text=comment or None)
         _call_hook("usertask_update", updated)
 
         return updated, 200
     except Exception:
         logger.exception("Could not update review task %s", task_id)
+        return {"error": _("Error while processing the request")}, 500
+
+
+def delete_task(task_id: str, user: str) -> tuple[dict, int]:
+    """Delete a review task.
+
+    Only the user who created or assigned the task may delete it.
+    """
+    object_id = _to_object_id(task_id)
+    if object_id is None:
+        return {"error": _("Task not found")}, 404
+
+    try:
+        mongo = _mongo()
+        task = mongo.get_record(COLLECTION, {"_id": object_id})
+        if not task:
+            return {"error": _("Task not found")}, 404
+
+        creator = _task_creator(task)
+        if not creator or creator != user:
+            return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+
+        mongo.delete_record(COLLECTION, {"_id": object_id})
+        try:
+            mongo.delete_records(NOTIFICATIONS_COLLECTION, {"taskId": task_id})
+        except Exception:
+            logger.exception("Could not clean up notifications for task %s", task_id)
+
+        target = (
+            {"resource": task["resourceId"]}
+            if task.get("resourceId")
+            else {"record": task.get("recordId")}
+        )
+        _audit(user, "usertask_delete", {
+            **target,
+            "task": task_id,
+            "assignee": task.get("user"),
+        })
+        _call_hook("usertask_delete", _task_snapshot(task))
+
+        return {"msg": _("Task deleted successfully")}, 200
+    except Exception:
+        logger.exception("Could not delete review task %s", task_id)
+        return {"error": _("Error while processing the request")}, 500
+
+
+def get_notifications(user: str, page: int = 0, limit: int = NOTIFICATIONS_PAGE_SIZE) -> tuple[dict, int]:
+    """List active review-task notifications for ``user``, newest first."""
+    parsed_page = page_number(page)
+    if parsed_page is None:
+        return {"error": _('"{field}" must be a number', field="page")}, 400
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        return {"error": _('"{field}" must be a number', field="limit")}, 400
+    effective_limit = min(limit, 100)
+
+    try:
+        mongo = _mongo()
+        query = {"user": user, "active": True}
+        rows = list(
+            mongo.get_all_records(
+                NOTIFICATIONS_COLLECTION,
+                query,
+                sort=[("createdAt", -1)],
+                limit=effective_limit,
+                skip=parsed_page * effective_limit,
+            )
+        )
+        total = mongo.count(NOTIFICATIONS_COLLECTION, query) or 0
+        return {
+            "results": [_serialize_notification(row) for row in rows],
+            "total": total,
+        }, 200
+    except Exception:
+        logger.exception("Could not list task notifications for %s", user)
+        return {"error": _("Error while processing the request")}, 500
+
+
+def deactivate_notifications(user: str, body: dict | None = None) -> tuple[dict, int]:
+    """Deactivate active task notifications for ``user``.
+
+    Accepts optional ``ids`` (list of notification ids) or ``taskId`` to scope
+    deactivation; an empty body deactivates all active notifications for ``user``.
+    """
+    payload = body if isinstance(body, dict) else {}
+    query: dict = {"user": user, "active": True}
+
+    raw_ids = payload.get("ids")
+    raw_task_id = payload.get("taskId")
+    if raw_ids is not None:
+        if not isinstance(raw_ids, list) or not raw_ids or not all(isinstance(i, str) for i in raw_ids):
+            return {"error": _("Invalid notification ids")}, 400
+        object_ids = []
+        for raw_id in raw_ids:
+            oid = _to_object_id(raw_id)
+            if oid is None:
+                return {"error": _("Invalid notification ids")}, 400
+            object_ids.append(oid)
+        query["_id"] = {"$in": object_ids}
+    elif raw_task_id is not None:
+        if not isinstance(raw_task_id, str) or not raw_task_id.strip():
+            return {"error": _("Invalid taskId")}, 400
+        query["taskId"] = raw_task_id.strip()
+
+    try:
+        result = _mongo().update_records(
+            NOTIFICATIONS_COLLECTION,
+            query,
+            {"active": False, "readAt": utcnow()},
+        )
+        modified = getattr(result, "modified_count", 0) or 0
+        return {"msg": _("Notifications deactivated"), "modified": modified}, 200
+    except Exception:
+        logger.exception("Could not deactivate task notifications for %s", user)
+        return {"error": _("Error while processing the request")}, 500
+
+
+def deactivate_notification(notification_id: str, user: str) -> tuple[dict, int]:
+    """Deactivate a single task notification belonging to ``user``."""
+    object_id = _to_object_id(notification_id)
+    if object_id is None:
+        return {"error": _("Notification not found")}, 404
+
+    try:
+        mongo = _mongo()
+        notification = mongo.get_record(NOTIFICATIONS_COLLECTION, {"_id": object_id})
+        if not notification:
+            return {"error": _("Notification not found")}, 404
+        if notification.get("user") != user:
+            return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+
+        if notification.get("active", True):
+            now = utcnow()
+            mongo.update_record(
+                NOTIFICATIONS_COLLECTION,
+                {"_id": object_id},
+                {"active": False, "readAt": now},
+            )
+            notification = mongo.get_record(NOTIFICATIONS_COLLECTION, {"_id": object_id}) or {
+                **notification,
+                "active": False,
+                "readAt": now,
+            }
+
+        return _serialize_notification(notification), 200
+    except Exception:
+        logger.exception("Could not deactivate task notification %s", notification_id)
         return {"error": _("Error while processing the request")}, 500
 
 

@@ -69,7 +69,7 @@ _CATEGORY_BY_KEY = {
     "list_create": CATALOGING, "list_update": CATALOGING, "list_delete": CATALOGING,
     "view_create": CATALOGING, "view_update": CATALOGING, "view_delete": CATALOGING,
     "snap_create": CATALOGING, "snap_delete": CATALOGING,
-    "usertask_create": CATALOGING, "usertask_update": CATALOGING,
+    "usertask_create": CATALOGING, "usertask_update": CATALOGING, "usertask_delete": CATALOGING,
     "search": CATALOGING,
 
     # Work handed to a worker: transcription, extraction, analysis, and any
@@ -292,6 +292,7 @@ _DESCRIPTIONS = {
     "api_key_revoke": "%(user)s revoked an API key",
     "usertask_create": "%(user)s assigned a task",
     "usertask_update": "%(user)s updated a task",
+    "usertask_delete": "%(user)s deleted a task",
     "plugin_task": "%(user)s launched a plugin task",
     "task_cancel": "%(user)s stopped a background task",
     "system_setup": "%(user)s completed the initial setup",

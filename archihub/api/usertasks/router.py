@@ -2,11 +2,12 @@
 
 Permission levels enforced:
 
-* Any authenticated user may assign a task to themselves, view their own tasks,
-  comment on them, and submit them for review.
+* Users with ``editor`` or ``transcriber`` role may assign a task to themselves.
 * Assigning work to another user, listing assignable editors, listing all tasks,
   approving tasks, and returning tasks to pending require ``admin``,
   ``team_lead``, or the ``usertasks.manage`` permission.
+* Task participants may view their own tasks, comment on them, and submit them
+  for review.
 
 A role failure answers 403; 401 is reserved for "I do not know who you are".
 """
@@ -19,8 +20,10 @@ from fastapi import APIRouter, Body, Depends
 from fastapi.responses import JSONResponse
 
 from archihub.api.usertasks import services
+from archihub.core.errors import PermissionDeniedError
 from archihub.core.i18n import gettext as _
 from archihub.core.security.jwt import (
+    MSG_INSUFFICIENT_PERMISSIONS,
     ROLE_FAILURE_STATUS,
     CurrentUser,
     get_current_user,
@@ -33,6 +36,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/usertasks", tags=["Review tasks"])
 
 require_lead = require_permission("usertasks.manage")
+
+
+def require_task_creator(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    """Allow task managers (who assign others) and assignable roles (who self-assign)."""
+    from archihub.api.users.services import has_role
+
+    if not (
+        services.is_task_manager(current_user.username)
+        or any(has_role(current_user.username, role) for role in services.ASSIGNABLE_ROLES)
+    ):
+        raise PermissionDeniedError(_(MSG_INSUFFICIENT_PERMISSIONS), status_code=ROLE_FAILURE_STATUS)
+    return current_user
 
 _ROLE_RESPONSES = {401: {"description": "Missing or invalid token"},
         403: {"description": "Insufficient role"}}
@@ -101,6 +118,47 @@ def get_editors(current_user: CurrentUser = Depends(require_lead)) -> JSONRespon
 
 
 @router.get(
+    "/notifications",
+    responses={200: {"description": "Active review-task notifications for the current user"}, **_ROLE_RESPONSES},
+)
+def get_notifications(
+    page: int = 0,
+    limit: int = services.NOTIFICATIONS_PAGE_SIZE,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """List active review-task notifications for the authenticated user."""
+    return _respond(services.get_notifications(current_user.username, page=page, limit=limit))
+
+
+@router.put(
+    "/notifications/read",
+    responses={200: {"description": "Notifications deactivated"}, **_ROLE_RESPONSES},
+)
+def deactivate_notifications(
+    body: dict = Body(default_factory=dict),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Deactivate all or selected active task notifications for the current user."""
+    return _respond(services.deactivate_notifications(current_user.username, body))
+
+
+@router.put(
+    "/notifications/{notification_id}/read",
+    responses={
+        200: {"description": "Notification deactivated"},
+        404: {"description": "Notification not found"},
+        **_ROLE_RESPONSES,
+    },
+)
+def deactivate_notification(
+    notification_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Deactivate one active task notification belonging to the current user."""
+    return _respond(services.deactivate_notification(notification_id, current_user.username))
+
+
+@router.get(
     "/record/{record_id}",
     responses={200: {"description": "The open task for that record"}, 404: {"description": "No task"}, **_ROLE_RESPONSES},
 )
@@ -119,7 +177,7 @@ def get_record_tasks(
 )
 def create_task(
     body: dict = Body(...),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_task_creator),
 ) -> JSONResponse:
     """Assign review work on a resource or record."""
     is_lead = services.is_task_manager(current_user.username)
@@ -146,6 +204,25 @@ def update_task(
     """
     is_team_lead = services.is_task_manager(current_user.username)
     return _respond(services.update_task(task_id, body, current_user.username, is_team_lead))
+
+
+@router.delete(
+    "/{task_id}",
+    responses={
+        200: {"description": "Task deleted"},
+        404: {"description": "Task not found"},
+        **_ROLE_RESPONSES,
+    },
+)
+def delete_task(
+    task_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> JSONResponse:
+    """Delete a review task.
+
+    Only the user who created or assigned the task may delete it.
+    """
+    return _respond(services.delete_task(task_id, current_user.username))
 
 
 # Declared last: a literal path must not be captured by the parameterised one.

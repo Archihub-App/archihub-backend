@@ -25,6 +25,7 @@ class FakeMongo:
         self.rows: dict[str, list] = {}
         self.inserted: list = []
         self.updated: list = []
+        self.deleted: list = []
 
     def get_record(self, collection, filters, fields=None):
         source = self.records.get(collection)
@@ -44,6 +45,31 @@ class FakeMongo:
         self.updated.append((collection, filters, update))
         if collection in self.records and isinstance(self.records[collection], dict):
             self.records[collection].update(update)
+
+    def update_records(self, collection, filters, update):
+        self.updated.append((collection, filters, update))
+        modified = 0
+        for row in self.rows.get(collection, []):
+            if all(
+                (row.get(k) in v["$in"] if isinstance(v, dict) and "$in" in v else row.get(k) == v)
+                for k, v in filters.items()
+            ):
+                row.update(update)
+                modified += 1
+        return type("Result", (), {"modified_count": modified})()
+
+    def delete_record(self, collection, filters):
+        self.deleted.append((collection, filters))
+        if collection in self.records:
+            self.records[collection] = None
+
+    def delete_records(self, collection, filters):
+        self.deleted.append((collection, filters))
+        if collection in self.rows:
+            self.rows[collection] = [
+                row for row in self.rows[collection]
+                if not all(row.get(k) == v for k, v in filters.items())
+            ]
 
 
 @pytest.fixture
@@ -546,21 +572,33 @@ def test_a_task_is_not_shown_when_its_target_cannot_be_opened(mongo, monkeypatch
 # ---------------------------------------------------------------------------
 
 
-def test_any_user_can_assign_a_task_to_themselves(mongo, monkeypatch):
+def test_editor_or_transcriber_can_assign_a_task_to_themselves(mongo):
     mongo.records["usertasks"] = None
-    # Self-assignment does not require an editor/transcriber role.
-    monkeypatch.setattr(services, "_is_assignable", lambda username: False)
 
     payload, status = services.create_task(
-        {"resourceId": "r1", "user": "plain_user", "comment": "taking this"},
-        "plain_user",
+        {"resourceId": "r1", "user": "ed@x.test", "comment": "taking this"},
+        "ed@x.test",
         is_team_lead=False,
     )
 
     assert status == 201
     assert payload["status"] == "pending"
-    assert payload["user"] == "plain_user"
-    assert payload["createdBy"] == "plain_user"
+    assert payload["user"] == "ed@x.test"
+    assert payload["createdBy"] == "ed@x.test"
+
+
+def test_user_without_assignable_role_cannot_self_assign(mongo, monkeypatch):
+    mongo.records["usertasks"] = None
+    monkeypatch.setattr(services, "_is_assignable", lambda username: False)
+
+    _payload, status = services.create_task(
+        {"resourceId": "r1", "user": "plain_user", "comment": "taking this"},
+        "plain_user",
+        is_team_lead=False,
+    )
+
+    assert status == ROLE_FAILURE_STATUS
+    assert mongo.inserted == []
 
 
 def test_non_lead_user_cannot_assign_a_task_to_someone_else(mongo):
@@ -568,7 +606,7 @@ def test_non_lead_user_cannot_assign_a_task_to_someone_else(mongo):
 
     _payload, status = services.create_task(
         {"resourceId": "r1", "user": "other_user", "comment": "do this"},
-        "plain_user",
+        "ed@x.test",
         is_team_lead=False,
     )
 
@@ -680,7 +718,7 @@ def test_returned_task_restarts_from_pending_and_reenters_in_progress_on_open(mo
     assert approved["status"] == "approved"
 
 
-def test_plain_user_self_assign_and_lifecycle_via_router(mongo, monkeypatch):
+def test_self_assign_and_lifecycle_via_router(mongo, monkeypatch):
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from archihub.api.usertasks.router import router
@@ -691,38 +729,47 @@ def test_plain_user_self_assign_and_lifecycle_via_router(mongo, monkeypatch):
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(router)
+    client = TestClient(app)
+
+    # 1. Plain user (neither editor nor transcriber) cannot self-assign.
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="plain@x.test", claims={})
     monkeypatch.setattr(user_services, "has_role", lambda user, role: False)
     monkeypatch.setattr(services, "_is_assignable", lambda username: False)
 
-    client = TestClient(app)
-
-    # Assigning someone else is forbidden for a plain user.
     resp = client.post(
         "/usertasks",
-        json={"resourceId": "res1", "user": "other@x.test", "comment": "nope"},
+        json={"resourceId": "res1", "user": "plain@x.test", "comment": "nope"},
     )
     assert resp.status_code == 403
 
-    # Listing assignable editors is forbidden for a plain user.
-    assert client.get("/usertasks/editors").status_code == 403
+    # 2. Editor or transcriber can self-assign, but cannot assign others or list editors.
+    for role_name in ("editor", "transcriber"):
+        username = f"{role_name}@x.test"
+        app.dependency_overrides[get_current_user] = lambda u=username: CurrentUser(username=u, claims={})
+        monkeypatch.setattr(user_services, "has_role", lambda user, role, r=role_name: role == r)
+        monkeypatch.setattr(services, "_is_assignable", lambda u, target=username: u == target)
 
-    # Self-assignment succeeds with initial status "pending".
-    resp = client.post(
-        "/usertasks",
-        json={"resourceId": "res1", "user": "plain@x.test", "comment": "mine"},
-    )
-    assert resp.status_code == 201
-    assert resp.json()["status"] == "pending"
+        assert client.post(
+            "/usertasks",
+            json={"resourceId": "res1", "user": "other@x.test", "comment": "nope"},
+        ).status_code == 403
+        assert client.get("/usertasks/editors").status_code == 403
 
-    # Simulate persisted task and verify open -> in_progress -> review via routes.
+        create_resp = client.post(
+            "/usertasks",
+            json={"resourceId": "res1", "user": username, "comment": "mine"},
+        )
+        assert create_resp.status_code == 201
+        assert create_resp.json()["status"] == "pending"
+
+    # 3. Verify open -> in_progress -> review via routes for transcriber.
     mongo.records["usertasks"] = {
         "_id": ObjectId(VALID_ID),
         "resourceId": "res1",
         "status": "pending",
-        "user": "plain@x.test",
-        "createdBy": "plain@x.test",
-        "comment": [{"user": "plain@x.test", "comment": "mine"}],
+        "user": "transcriber@x.test",
+        "createdBy": "transcriber@x.test",
+        "comment": [{"user": "transcriber@x.test", "comment": "mine"}],
     }
     open_resp = client.get("/usertasks/res1")
     assert open_resp.status_code == 200
@@ -731,3 +778,249 @@ def test_plain_user_self_assign_and_lifecycle_via_router(mongo, monkeypatch):
     review_resp = client.put(f"/usertasks/{VALID_ID}", json={"status": "review", "comment": "ready"})
     assert review_resp.status_code == 200
     assert review_resp.json()["status"] == "review"
+
+
+# ---------------------------------------------------------------------------
+# Deletion (creator / assigner only)
+# ---------------------------------------------------------------------------
+
+
+def test_creator_may_delete_their_task_and_record_audit_and_hook(mongo, monkeypatch):
+    audits = []
+    hooks = []
+    monkeypatch.setattr(services, "_audit", lambda u, action, d: audits.append((u, action, d)))
+    monkeypatch.setattr(services, "_call_hook", lambda name, p: hooks.append((name, p)))
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "resourceId": "r1",
+        "status": "pending",
+        "user": "editor@x.test",
+        "createdBy": "lead@x.test",
+        "comment": [{"user": "lead@x.test", "comment": "check"}],
+    }
+
+    payload, status = services.delete_task(VALID_ID, "lead@x.test")
+
+    assert status == 200
+    assert "msg" in payload
+    assert mongo.deleted == [("usertasks", {"_id": ObjectId(VALID_ID)})]
+    assert audits == [("lead@x.test", "usertask_delete", {"resource": "r1", "task": VALID_ID, "assignee": "editor@x.test"})]
+    assert len(hooks) == 1
+    assert hooks[0][0] == "usertask_delete"
+    assert hooks[0][1]["_id"] == VALID_ID
+
+
+def test_legacy_task_without_created_by_uses_first_comment_author(mongo):
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "recordId": "rec1",
+        "status": "pending",
+        "user": "editor@x.test",
+        "comment": [{"user": "lead@x.test", "comment": "check"}],
+    }
+
+    _payload, status = services.delete_task(VALID_ID, "lead@x.test")
+    assert status == 200
+    assert mongo.deleted == [("usertasks", {"_id": ObjectId(VALID_ID)})]
+
+
+def test_assignee_and_other_users_cannot_delete_someone_elses_task(mongo):
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "resourceId": "r1",
+        "status": "pending",
+        "user": "editor@x.test",
+        "createdBy": "lead@x.test",
+        "comment": [{"user": "lead@x.test", "comment": "check"}],
+    }
+
+    for caller in ("editor@x.test", "other_lead@x.test", "admin@x.test"):
+        _payload, status = services.delete_task(VALID_ID, caller)
+        assert status == ROLE_FAILURE_STATUS
+        assert mongo.deleted == []
+
+
+def test_task_without_creator_cannot_be_deleted(mongo):
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "resourceId": "r1",
+        "status": "pending",
+        "user": "editor@x.test",
+        "comment": [],
+    }
+
+    _payload, status = services.delete_task(VALID_ID, "admin@x.test")
+    assert status == ROLE_FAILURE_STATUS
+    assert mongo.deleted == []
+
+
+def test_delete_missing_or_malformed_task_is_not_found(mongo):
+    mongo.records["usertasks"] = None
+    assert services.delete_task(VALID_ID, "lead@x.test")[1] == 404
+    assert services.delete_task("not-an-id", "lead@x.test")[1] == 404
+
+
+def test_delete_task_via_router(mongo, monkeypatch):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from archihub.api.usertasks.router import router
+    from archihub.core.errors import register_exception_handlers
+    from archihub.core.security.jwt import CurrentUser, get_current_user
+
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.include_router(router)
+    client = TestClient(app)
+
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "resourceId": "res1",
+        "status": "pending",
+        "user": "editor@x.test",
+        "createdBy": "lead@x.test",
+        "comment": [{"user": "lead@x.test", "comment": "check"}],
+    }
+
+    # Assignee cannot delete
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="editor@x.test", claims={})
+    assert client.delete(f"/usertasks/{VALID_ID}").status_code == 403
+    assert mongo.deleted == []
+
+    # Another user cannot delete
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="admin@x.test", claims={})
+    assert client.delete(f"/usertasks/{VALID_ID}").status_code == 403
+    assert mongo.deleted == []
+
+    # Creator / assigner can delete
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="lead@x.test", claims={})
+    resp = client.delete(f"/usertasks/{VALID_ID}")
+    assert resp.status_code == 200
+    assert "msg" in resp.json()
+    assert mongo.deleted == [("usertasks", {"_id": ObjectId(VALID_ID)})]
+
+
+# ---------------------------------------------------------------------------
+# Task Notifications
+# ---------------------------------------------------------------------------
+
+
+def test_creating_a_task_for_someone_else_creates_a_notification(mongo):
+    mongo.records["usertasks"] = None
+
+    payload, status = services.create_task(
+        {"resourceId": "r1", "user": "editor@x.test", "comment": "please review"},
+        "lead@x.test",
+        is_team_lead=True,
+    )
+
+    assert status == 201
+    notifs = [rec for coll, rec in mongo.inserted if coll == services.NOTIFICATIONS_COLLECTION]
+    assert len(notifs) == 1
+    assert notifs[0]["user"] == "editor@x.test"
+    assert notifs[0]["actor"] == "lead@x.test"
+    assert notifs[0]["type"] == "created"
+    assert notifs[0]["taskId"] == payload["_id"]
+    assert notifs[0]["active"] is True
+
+
+def test_self_assigning_a_task_does_not_notify_the_creator(mongo):
+    mongo.records["usertasks"] = None
+
+    _payload, status = services.create_task(
+        {"resourceId": "r1", "user": "editor@x.test", "comment": "self"},
+        "editor@x.test",
+        is_team_lead=False,
+    )
+
+    assert status == 201
+    notifs = [rec for coll, rec in mongo.inserted if coll == services.NOTIFICATIONS_COLLECTION]
+    assert notifs == []
+
+
+def test_updating_task_notifies_other_participants_only(mongo):
+    mongo.records["usertasks"] = {
+        "_id": ObjectId(VALID_ID),
+        "resourceId": "r1",
+        "status": "in_progress",
+        "user": "editor@x.test",
+        "createdBy": "lead@x.test",
+        "comment": [{"user": "lead@x.test", "comment": "initial"}],
+    }
+
+    _payload, status = services.update_task(
+        VALID_ID, {"comment": "ready for review", "status": "review"}, "editor@x.test", is_team_lead=False
+    )
+
+    assert status == 200
+    notifs = [rec for coll, rec in mongo.inserted if coll == services.NOTIFICATIONS_COLLECTION]
+    assert len(notifs) == 1
+    assert notifs[0]["user"] == "lead@x.test"
+    assert notifs[0]["actor"] == "editor@x.test"
+    assert notifs[0]["type"] == "update"
+    assert notifs[0]["status"] == "review"
+    assert notifs[0]["comment"] == "ready for review"
+
+
+def test_get_and_deactivate_notifications_via_router(mongo):
+    from datetime import datetime
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from archihub.api.usertasks.router import router
+    from archihub.core.errors import register_exception_handlers
+    from archihub.core.security.jwt import CurrentUser, get_current_user
+
+    nid1 = "6a70b8c3497d4440325c94c4"
+    nid2 = "6a70b8c3497d4440325c94c5"
+    mongo.rows[services.NOTIFICATIONS_COLLECTION] = [
+        {
+            "_id": ObjectId(nid1),
+            "taskId": VALID_ID,
+            "user": "editor@x.test",
+            "actor": "lead@x.test",
+            "type": "comment",
+            "status": "pending",
+            "active": True,
+            "createdAt": datetime(2026, 11, 24, 10, 0, 0),
+        },
+        {
+            "_id": ObjectId(nid2),
+            "taskId": VALID_ID,
+            "user": "editor@x.test",
+            "actor": "lead@x.test",
+            "type": "status",
+            "status": "approved",
+            "active": True,
+            "createdAt": datetime(2026, 11, 24, 10, 5, 0),
+        },
+    ]
+
+    app = FastAPI()
+    register_exception_handlers(app)
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(username="editor@x.test", claims={})
+    client = TestClient(app)
+
+    # Listing returns active notifications
+    resp = client.get("/usertasks/notifications")
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 2
+    assert len(resp.json()["results"]) == 2
+
+    # Deactivating a single notification belonging to someone else is refused
+    mongo.records[services.NOTIFICATIONS_COLLECTION] = {
+        "_id": ObjectId(nid1),
+        "user": "someone_else@x.test",
+        "active": True,
+    }
+    assert client.put(f"/usertasks/notifications/{nid1}/read").status_code == 403
+
+    # Deactivating own single notification succeeds
+    mongo.records[services.NOTIFICATIONS_COLLECTION] = mongo.rows[services.NOTIFICATIONS_COLLECTION][0]
+    single_resp = client.put(f"/usertasks/notifications/{nid1}/read")
+    assert single_resp.status_code == 200
+    assert single_resp.json()["active"] is False
+
+    # Bulk deactivate remaining notifications
+    bulk_resp = client.put("/usertasks/notifications/read", json={})
+    assert bulk_resp.status_code == 200
+    assert all(row["active"] is False for row in mongo.rows[services.NOTIFICATIONS_COLLECTION])

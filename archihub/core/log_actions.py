@@ -60,6 +60,7 @@ log_actions = {
     'view_delete': 'VIEW_DELETE',
     'usertask_create': 'USERTASK_CREATE',
     'usertask_update': 'USERTASK_UPDATE',
+    'usertask_delete': 'USERTASK_DELETE',
     'plugin_task': 'PLUGIN_TASK',
     'task_cancel': 'TASK_CANCEL',
     'docseg_extraction': 'DOCSEG_EXTRACTION',
@@ -70,4 +71,5 @@ log_actions = {
     'resource_files_order_update': 'RESOURCE_FILES_ORDER_UPDATE',
     'usertask_create': 'USERTASK_CREATE',
     'usertask_update': 'USERTASK_UPDATE',
+    'usertask_delete': 'USERTASK_DELETE',
 }
