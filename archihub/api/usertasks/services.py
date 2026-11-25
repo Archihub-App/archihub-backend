@@ -13,6 +13,7 @@ one key or the other per route. Do not tidy it without a paired frontend change.
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from bson.objectid import ObjectId
 
@@ -37,6 +38,19 @@ VALID_STATUSES = {STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_REVIEW, STATUS_APPR
 OPEN_STATUSES = [STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_REVIEW]
 _RETURN_STATUS_ALIASES = {STATUS_PENDING, "rejected"}
 
+#: Descriptive fields a task carries besides its target, each with the longest
+#: text accepted. They are shown to every participant, so they are stored with
+#: the task rather than kept by the browser that created it.
+DETAIL_TEXT_LIMITS = {
+    "title": 200,
+    "instruction": 5000,
+    "resourceTitle": 300,
+    "locationLabel": 300,
+    "locationPath": 500,
+}
+#: Where a task points, as the task dialog names it.
+LOCATION_TYPES = ("record", "collection", "upload")
+
 _LIST_PROJECTION = {
     "user": 1,
     "createdBy": 1,
@@ -44,6 +58,11 @@ _LIST_PROJECTION = {
     "createdAt": 1,
     "resourceId": 1,
     "recordId": 1,
+    "comment": 1,
+    "dueDate": 1,
+    "isPersonal": 1,
+    "locationType": 1,
+    **{field: 1 for field in DETAIL_TEXT_LIMITS},
 }
 
 
@@ -142,6 +161,43 @@ def _notify_task_event(
             mongo.insert_record(NOTIFICATIONS_COLLECTION, record)
     except Exception:
         logger.exception("Could not record task notifications for %s", task.get("_id"))
+
+
+def _task_details(body: dict) -> tuple[dict, str | None]:
+    """The optional descriptive fields of a new task, validated.
+
+    Returns ``(details, error)``. Only the fields named here are read: a link
+    to follow is never stored, it is derived from the task's target when shown.
+    """
+    details: dict = {}
+    for field, limit in DETAIL_TEXT_LIMITS.items():
+        value = body.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            return {}, _('"{field}" must be text', field=field)
+        value = value.strip()
+        if len(value) > limit:
+            return {}, _('"{field}" is too long', field=field)
+        if value:
+            details[field] = value
+
+    due = body.get("dueDate")
+    if due not in (None, ""):
+        if not isinstance(due, str):
+            return {}, _("Invalid due date")
+        try:
+            details["dueDate"] = date.fromisoformat(due.strip()).isoformat()
+        except ValueError:
+            return {}, _("Invalid due date")
+
+    location_type = body.get("locationType")
+    if location_type not in (None, ""):
+        if location_type not in LOCATION_TYPES:
+            return {}, _("Invalid location type")
+        details["locationType"] = location_type
+
+    return details, None
 
 
 def _audit(user: str | None, action: str, details: dict) -> None:
@@ -351,6 +407,7 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
         for task in tasks:
             task["_id"] = str(task["_id"])
             task["createdAt"] = _iso(task.get("createdAt"))
+            task["comment"] = process_comments(task.get("comment"))
             if task.get("recordId"):
                 task["recordId"] = str(task["recordId"])
             if task.get("resourceId"):
@@ -425,6 +482,10 @@ def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tupl
         if not comment_text:
             return {"error": _("comment is required")}, 400
 
+        details, error = _task_details(body)
+        if error:
+            return {"error": error}, 400
+
         if is_team_lead is None:
             is_team_lead = is_task_manager(user)
 
@@ -459,6 +520,8 @@ def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tupl
             "status": STATUS_PENDING,
             "createdAt": now,
             "comment": [{"user": user, "comment": raw_comment, "createdAt": now}],
+            "isPersonal": assignee == user,
+            **details,
         }
         result = mongo.insert_record(COLLECTION, record)
 
@@ -584,7 +647,9 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
 def delete_task(task_id: str, user: str) -> tuple[dict, int]:
     """Delete a review task.
 
-    Only the user who created or assigned the task may delete it.
+    The user who created or assigned the task may delete it, and so may an
+    administrator - otherwise a task whose creator has left could never be
+    removed.
     """
     object_id = _to_object_id(task_id)
     if object_id is None:
@@ -596,8 +661,7 @@ def delete_task(task_id: str, user: str) -> tuple[dict, int]:
         if not task:
             return {"error": _("Task not found")}, 404
 
-        creator = _task_creator(task)
-        if not creator or creator != user:
+        if not _may_delete_task(task, user):
             return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
 
         mongo.delete_record(COLLECTION, {"_id": object_id})
@@ -622,6 +686,28 @@ def delete_task(task_id: str, user: str) -> tuple[dict, int]:
     except Exception:
         logger.exception("Could not delete review task %s", task_id)
         return {"error": _("Error while processing the request")}, 500
+
+
+def _is_admin(user: str) -> bool:
+    from archihub.api.users.services import has_role
+
+    return bool(has_role(user, "admin"))
+
+
+def _may_delete_task(task: dict, user: str) -> bool:
+    creator = _task_creator(task)
+    return bool(creator and creator == user) or _is_admin(user)
+
+
+def migrate_legacy_statuses() -> int:
+    """Move tasks stored as ``rejected`` back to ``pending``; returns how many.
+
+    A returned task is pending again, and only the statuses in
+    ``OPEN_STATUSES`` count as open: a task left as ``rejected`` would not stop
+    a second task being opened on the same target. Idempotent.
+    """
+    result = _mongo().update_records(COLLECTION, {"status": "rejected"}, {"status": STATUS_PENDING})
+    return getattr(result, "modified_count", 0) or 0
 
 
 def get_notifications(user: str, page: int = 0, limit: int = NOTIFICATIONS_PAGE_SIZE) -> tuple[dict, int]:

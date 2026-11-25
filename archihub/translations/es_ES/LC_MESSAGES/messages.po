@@ -2429,3 +2429,15 @@ msgstr "%(user)s actualizó los niveles de acceso"
 msgid "%(user)s updated roles"
 msgstr "%(user)s actualizó los roles"
 
+
+msgid "\"{field}\" must be text"
+msgstr "\"{field}\" debe ser texto"
+
+msgid "\"{field}\" is too long"
+msgstr "\"{field}\" es demasiado largo"
+
+msgid "Invalid due date"
+msgstr "Fecha de vencimiento no válida"
+
+msgid "Invalid location type"
+msgstr "Tipo de ubicación no válido"

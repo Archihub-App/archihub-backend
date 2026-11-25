@@ -168,6 +168,71 @@ def test_a_task_is_created_when_the_target_is_free(mongo):
     assert payload["comment"][0]["user"] == "lead"
 
 
+def test_a_task_stores_its_details_and_not_a_link(mongo):
+    mongo.records["usertasks"] = None
+    body = {
+        "resourceId": "r1", "user": "e@x.test", "comment": "c",
+        "title": "  Revisar fechas  ", "instruction": "Las del acta", "dueDate": "2026-12-01",
+        "locationType": "record", "locationLabel": "Acta 3", "locationPath": "Fondo / Serie",
+        "resourceTitle": "Acta 3", "locationHref": "javascript:alert(1)", "assignedBy": "someone-else",
+    }
+
+    payload, status = services.create_task(body, "lead", is_team_lead=True)
+
+    assert status == 201
+    _collection, stored = mongo.inserted[0]
+    assert stored["title"] == "Revisar fechas"
+    assert stored["instruction"] == "Las del acta"
+    assert stored["dueDate"] == "2026-12-01"
+    assert stored["locationType"] == "record"
+    assert stored["locationPath"] == "Fondo / Serie"
+    assert stored["isPersonal"] is False
+    assert "locationHref" not in stored
+    assert "assignedBy" not in stored
+    assert payload["title"] == "Revisar fechas"
+
+
+def test_a_self_assigned_task_is_personal(mongo):
+    mongo.records["usertasks"] = None
+    _payload, status = services.create_task(
+        {"resourceId": "r1", "user": "e@x.test", "comment": "c"}, "e@x.test", is_team_lead=False
+    )
+    assert status == 201
+    assert mongo.inserted[0][1]["isPersonal"] is True
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"dueDate": "mañana"},
+        {"dueDate": "2026-13-01"},
+        {"dueDate": 20261201},
+        {"title": ["a"]},
+        {"title": "x" * 201},
+        {"instruction": "x" * 5001},
+        {"locationType": "elsewhere"},
+    ],
+)
+def test_malformed_task_details_are_refused(mongo, extra):
+    mongo.records["usertasks"] = None
+    body = {"resourceId": "r1", "user": "e@x.test", "comment": "c", **extra}
+    _payload, status = services.create_task(body, "lead", is_team_lead=True)
+    assert status == 400
+    assert mongo.inserted == []
+
+
+def test_rejected_tasks_are_migrated_to_pending(mongo):
+    mongo.rows["usertasks"] = [
+        {"_id": 1, "status": "rejected"},
+        {"_id": 2, "status": "review"},
+        {"_id": 3, "status": "rejected"},
+    ]
+
+    assert services.migrate_legacy_statuses() == 2
+    assert [row["status"] for row in mongo.rows["usertasks"]] == ["pending", "review", "pending"]
+    assert services.migrate_legacy_statuses() == 0
+
+
 @pytest.mark.parametrize(
     "body",
     [
@@ -207,6 +272,26 @@ def test_dates_are_serialised(mongo):
     payload, _status = services.get_all_tasks({"status": ["pending"], "page": 0})
 
     assert payload["results"][0]["createdAt"] == "2026-01-02 03:04:05"
+
+
+def test_the_listing_carries_comments_and_task_details(mongo):
+    """Every participant sees the title, due date and thread, not just the creator."""
+    mongo.rows["usertasks"] = [
+        {
+            "_id": ObjectId(VALID_ID), "status": "pending", "createdAt": None,
+            "title": "Revisar fechas", "dueDate": "2026-12-01",
+            "comment": [{"user": "lead", "comment": "Las del acta"}],
+        }
+    ]
+    payload, status = services.get_all_tasks({"status": ["pending"], "page": 0})
+
+    assert status == 200
+    row = payload["results"][0]
+    assert row["title"] == "Revisar fechas"
+    assert row["dueDate"] == "2026-12-01"
+    assert row["comment"] == "lead: Las del acta"
+    for field in ("comment", "dueDate", "title", "instruction", "locationType"):
+        assert field in services._LIST_PROJECTION
 
 
 def test_missing_resource_domain_does_not_break_the_listing(mongo):
@@ -803,7 +888,10 @@ def test_creator_may_delete_their_task_and_record_audit_and_hook(mongo, monkeypa
 
     assert status == 200
     assert "msg" in payload
-    assert mongo.deleted == [("usertasks", {"_id": ObjectId(VALID_ID)})]
+    assert mongo.deleted == [
+        ("usertasks", {"_id": ObjectId(VALID_ID)}),
+        ("usertask_notifications", {"taskId": VALID_ID}),
+    ]
     assert audits == [("lead@x.test", "usertask_delete", {"resource": "r1", "task": VALID_ID, "assignee": "editor@x.test"})]
     assert len(hooks) == 1
     assert hooks[0][0] == "usertask_delete"
@@ -821,10 +909,14 @@ def test_legacy_task_without_created_by_uses_first_comment_author(mongo):
 
     _payload, status = services.delete_task(VALID_ID, "lead@x.test")
     assert status == 200
-    assert mongo.deleted == [("usertasks", {"_id": ObjectId(VALID_ID)})]
+    assert mongo.deleted == [
+        ("usertasks", {"_id": ObjectId(VALID_ID)}),
+        ("usertask_notifications", {"taskId": VALID_ID}),
+    ]
 
 
-def test_assignee_and_other_users_cannot_delete_someone_elses_task(mongo):
+def test_assignee_and_other_users_cannot_delete_someone_elses_task(mongo, monkeypatch):
+    monkeypatch.setattr(services, "_is_admin", lambda user: False)
     mongo.records["usertasks"] = {
         "_id": ObjectId(VALID_ID),
         "resourceId": "r1",
@@ -834,13 +926,14 @@ def test_assignee_and_other_users_cannot_delete_someone_elses_task(mongo):
         "comment": [{"user": "lead@x.test", "comment": "check"}],
     }
 
-    for caller in ("editor@x.test", "other_lead@x.test", "admin@x.test"):
+    for caller in ("editor@x.test", "other_lead@x.test"):
         _payload, status = services.delete_task(VALID_ID, caller)
         assert status == ROLE_FAILURE_STATUS
         assert mongo.deleted == []
 
 
-def test_task_without_creator_cannot_be_deleted(mongo):
+def test_task_without_creator_cannot_be_deleted_by_a_non_admin(mongo, monkeypatch):
+    monkeypatch.setattr(services, "_is_admin", lambda user: False)
     mongo.records["usertasks"] = {
         "_id": ObjectId(VALID_ID),
         "resourceId": "r1",
@@ -849,9 +942,32 @@ def test_task_without_creator_cannot_be_deleted(mongo):
         "comment": [],
     }
 
-    _payload, status = services.delete_task(VALID_ID, "admin@x.test")
+    _payload, status = services.delete_task(VALID_ID, "editor@x.test")
     assert status == ROLE_FAILURE_STATUS
     assert mongo.deleted == []
+
+
+@pytest.mark.parametrize("creator", ["lead@x.test", None])
+def test_an_admin_may_delete_any_task(mongo, monkeypatch, creator):
+    """Including one whose creator is gone, which nobody else could remove."""
+    monkeypatch.setattr(services, "_is_admin", lambda user: user == "admin@x.test")
+    monkeypatch.setattr(services, "_audit", lambda *a: None)
+    monkeypatch.setattr(services, "_call_hook", lambda *a: None)
+    task = {
+        "_id": ObjectId(VALID_ID),
+        "resourceId": "r1",
+        "status": "pending",
+        "user": "editor@x.test",
+        "comment": [],
+    }
+    if creator:
+        task["createdBy"] = creator
+    mongo.records["usertasks"] = task
+
+    _payload, status = services.delete_task(VALID_ID, "admin@x.test")
+
+    assert status == 200
+    assert ("usertasks", {"_id": ObjectId(VALID_ID)}) in mongo.deleted
 
 
 def test_delete_missing_or_malformed_task_is_not_found(mongo):
@@ -896,7 +1012,10 @@ def test_delete_task_via_router(mongo, monkeypatch):
     resp = client.delete(f"/usertasks/{VALID_ID}")
     assert resp.status_code == 200
     assert "msg" in resp.json()
-    assert mongo.deleted == [("usertasks", {"_id": ObjectId(VALID_ID)})]
+    assert mongo.deleted == [
+        ("usertasks", {"_id": ObjectId(VALID_ID)}),
+        ("usertask_notifications", {"taskId": VALID_ID}),
+    ]
 
 
 # ---------------------------------------------------------------------------
