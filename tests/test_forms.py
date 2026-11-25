@@ -490,3 +490,92 @@ def test_a_field_may_only_name_an_installed_plugin(monkeypatch):
         form_services.validate_form({"fields": [title, {**canvas, "plugin": "records/public/x"}]})
 
     form_services.validate_form({"fields": [title, {**canvas, "plugin": "canvasPlugin"}]})
+
+
+# ---------------------------------------------------------------------------
+# List usage sync
+# ---------------------------------------------------------------------------
+
+
+def test_create_syncs_form_usage_onto_referenced_lists(mongo):
+    from bson.objectid import ObjectId
+
+    list_id = ObjectId("6a70b8c3497d4440325c94c1")
+    mongo.collections["forms"] = []
+    mongo.collections["lists"] = [{"_id": list_id, "name": "Countries", "forms": []}]
+    mongo.records["forms"] = None
+
+    _payload, status = services.create(
+        {
+            "name": "Archive Form",
+            "slug": "archive-form",
+            "fields": [
+                title_field(),
+                {"label": "Country", "destiny": "metadata.country", "type": "select", "list": str(list_id)},
+            ],
+        },
+        "admin",
+    )
+
+    assert status == 201
+    assert (
+        "lists",
+        {"_id": list_id},
+        {"forms": [{"slug": "archive-form", "name": "Archive Form"}]},
+    ) in mongo.updated
+
+
+def test_update_syncs_added_removed_and_renamed_form_usage(mongo):
+    from bson.objectid import ObjectId
+
+    old_list_id = ObjectId("6a70b8c3497d4440325c94c1")
+    new_list_id = ObjectId("6a70b8c3497d4440325c94c2")
+    mongo.collections["forms"] = []
+    mongo.collections["lists"] = [
+        {"_id": old_list_id, "name": "Old List", "forms": [{"slug": "my-form", "name": "Old Form"}]},
+        {"_id": new_list_id, "name": "New List", "forms": []},
+    ]
+    mongo.records["forms"] = {
+        "slug": "my-form",
+        "name": "Old Form",
+        "fields": [
+            title_field(),
+            {"label": "Old", "destiny": "metadata.old", "type": "select", "list": str(old_list_id)},
+        ],
+    }
+
+    _payload, status = services.update_by_slug(
+        "my-form",
+        {
+            "name": "Renamed Form",
+            "fields": [
+                title_field(),
+                {"label": "New", "destiny": "metadata.new", "type": "select", "list": str(new_list_id)},
+            ],
+        },
+        "admin",
+    )
+
+    assert status == 200
+    assert ("lists", {"_id": old_list_id}, {"forms": []}) in mongo.updated
+    assert (
+        "lists",
+        {"_id": new_list_id},
+        {"forms": [{"slug": "my-form", "name": "Renamed Form"}]},
+    ) in mongo.updated
+
+
+def test_delete_removes_form_usage_from_lists(mongo):
+    from bson.objectid import ObjectId
+
+    list_id = ObjectId("6a70b8c3497d4440325c94c1")
+    mongo.records["forms"] = {"name": "Archive Form", "slug": "archive-form"}
+    mongo.counts["post_types"] = 0
+    mongo.collections["lists"] = [
+        {"_id": list_id, "name": "Countries", "forms": [{"slug": "archive-form", "name": "Archive Form"}]},
+    ]
+
+    _payload, status = services.delete_by_slug("archive-form", "admin")
+
+    assert status == 200
+    assert ("lists", {"_id": list_id}, {"forms": []}) in mongo.updated

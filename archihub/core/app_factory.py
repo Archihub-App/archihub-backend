@@ -65,6 +65,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     _ensure_system_settings_safely()
     _migrate_authorisation_vocabularies_safely()
+    _sync_list_form_usage_safely()
+    _migrate_task_statuses_safely()
 
     yield
 
@@ -237,6 +239,39 @@ def _migrate_authorisation_vocabularies_safely() -> None:
             "Authorisation vocabularies migration check deferred; continuing startup",
             exc_info=True,
         )
+
+
+def _sync_list_form_usage_safely() -> None:
+    """Backfill each list's ``forms`` usage from existing metadata forms on startup.
+
+    Idempotent and non-fatal: if MongoDB is unseeded or temporarily unreachable,
+    it logs and continues. The lazy check on first read will complete the sync.
+    """
+    try:
+        from archihub.api.lists.services import sync_all_forms_usage
+
+        sync_all_forms_usage()
+    except Exception:
+        logger.warning(
+            "List form usage sync deferred; continuing startup",
+            exc_info=True,
+        )
+
+
+def _migrate_task_statuses_safely() -> None:
+    """Rewrite review tasks stored with a status that no longer exists.
+
+    Idempotent and non-fatal, like the other startup reconciliations: a failure
+    is logged and startup continues.
+    """
+    try:
+        from archihub.api.usertasks.services import migrate_legacy_statuses
+
+        moved = migrate_legacy_statuses()
+        if moved:
+            logger.info("Moved %d review tasks from 'rejected' to 'pending'", moved)
+    except Exception:
+        logger.warning("Review task status migration deferred; continuing startup", exc_info=True)
 
 
 def _check_plugin_readiness() -> None:

@@ -1,8 +1,18 @@
 """Editorial review tasks.
 
-A user task assigns review work on one resource or record to one editor. Exactly
-one may be open per target at a time, which is what stops two editors being
-asked to review the same thing.
+A user task assigns work to one user. Its ``locationType`` says where the work
+is:
+
+* ``record`` (the default): review of one resource or record. Exactly one task
+  may be open per target at a time, which is what stops two editors being asked
+  to review the same thing.
+* ``collection``: work across a content type, stored as ``postType``. Several
+  may be open at once - many people can catalogue the same collection.
+* ``upload``: loading new documents; it has no target.
+
+Collection and upload work is assigned only to editors who may edit the
+content type involved: a task its assignee cannot carry out is refused when it
+is created, not discovered later.
 
 ERROR KEY: this domain answers with ``{"error": ...}`` rather than the
 ``{"msg": ...}`` every other domain uses - **except** the two "there are no
@@ -13,6 +23,7 @@ one key or the other per route. Do not tidy it without a paired frontend change.
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from bson.objectid import ObjectId
 
@@ -24,15 +35,34 @@ from archihub.core.security.jwt import ROLE_FAILURE_STATUS
 logger = logging.getLogger(__name__)
 
 COLLECTION = "usertasks"
+NOTIFICATIONS_COLLECTION = "usertask_notifications"
 PAGE_SIZE = 10
+NOTIFICATIONS_PAGE_SIZE = 20
 
 STATUS_PENDING = "pending"
+STATUS_IN_PROGRESS = "in_progress"
 STATUS_REVIEW = "review"
-STATUS_REJECTED = "rejected"
 STATUS_APPROVED = "approved"
 
-VALID_STATUSES = {STATUS_PENDING, STATUS_REVIEW, STATUS_REJECTED, STATUS_APPROVED}
-OPEN_STATUSES = [STATUS_PENDING, STATUS_REVIEW, STATUS_REJECTED]
+VALID_STATUSES = {STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_REVIEW, STATUS_APPROVED}
+OPEN_STATUSES = [STATUS_PENDING, STATUS_IN_PROGRESS, STATUS_REVIEW]
+_RETURN_STATUS_ALIASES = {STATUS_PENDING, "rejected"}
+
+#: Descriptive fields a task carries besides its target, each with the longest
+#: text accepted. They are shown to every participant, so they are stored with
+#: the task rather than kept by the browser that created it.
+DETAIL_TEXT_LIMITS = {
+    "title": 200,
+    "instruction": 5000,
+    "resourceTitle": 300,
+    "locationLabel": 300,
+    "locationPath": 500,
+}
+#: Where a task points, as the task dialog names it.
+LOCATION_TYPES = ("record", "collection", "upload")
+#: The role an assignee needs for collection and upload work, which creates and
+#: edits resources rather than reviewing one.
+WORK_ROLE = "editor"
 
 _LIST_PROJECTION = {
     "user": 1,
@@ -41,6 +71,12 @@ _LIST_PROJECTION = {
     "createdAt": 1,
     "resourceId": 1,
     "recordId": 1,
+    "postType": 1,
+    "comment": 1,
+    "dueDate": 1,
+    "isPersonal": 1,
+    "locationType": 1,
+    **{field: 1 for field in DETAIL_TEXT_LIMITS},
 }
 
 
@@ -59,6 +95,123 @@ def _to_object_id(value):
         return ObjectId(value)
     except Exception:
         return None
+
+
+def _task_creator(task: dict) -> str | None:
+    if task.get("createdBy"):
+        return task["createdBy"]
+    comments = task.get("comment")
+    if isinstance(comments, list) and comments and isinstance(comments[0], dict):
+        return comments[0].get("user")
+    return None
+
+
+def _task_snapshot(task: dict) -> dict:
+    snapshot = dict(task)
+    snapshot["_id"] = str(snapshot.get("_id"))
+    snapshot["createdAt"] = _iso(snapshot.get("createdAt"))
+    if "approvedAt" in snapshot:
+        snapshot["approvedAt"] = _iso(snapshot.get("approvedAt"))
+    snapshot["comment"] = [
+        {**entry, "createdAt": _iso(entry.get("createdAt"))}
+        if isinstance(entry, dict)
+        else entry
+        for entry in (snapshot.get("comment") or [])
+    ]
+    return snapshot
+
+
+def _notification_recipients(task: dict, actor: str) -> list[str]:
+    """Task participants to notify, excluding the user who performed the action."""
+    participants: set[str] = set()
+    if task.get("user"):
+        participants.add(task["user"])
+    creator = _task_creator(task)
+    if creator:
+        participants.add(creator)
+    for entry in task.get("comment") or []:
+        if isinstance(entry, dict) and entry.get("user"):
+            participants.add(entry["user"])
+    participants.discard(actor)
+    return sorted(p for p in participants if isinstance(p, str) and p)
+
+
+def _serialize_notification(notification: dict) -> dict:
+    doc = dict(notification)
+    doc["_id"] = str(doc.get("_id"))
+    doc["createdAt"] = _iso(doc.get("createdAt"))
+    if "readAt" in doc:
+        doc["readAt"] = _iso(doc.get("readAt"))
+    return doc
+
+
+def _notify_task_event(
+    task: dict,
+    actor: str,
+    event_type: str,
+    comment_text: str | None = None,
+) -> None:
+    """Create active notifications for task participants other than ``actor``."""
+    try:
+        recipients = _notification_recipients(task, actor)
+        if not recipients:
+            return
+        task_id = str(task.get("_id"))
+        now = utcnow()
+        mongo = _mongo()
+        for recipient in recipients:
+            record = {
+                "taskId": task_id,
+                "user": recipient,
+                "actor": actor,
+                "type": event_type,
+                "status": task.get("status"),
+                "resourceId": task.get("resourceId"),
+                "recordId": task.get("recordId"),
+                "comment": comment_text,
+                "active": True,
+                "createdAt": now,
+            }
+            mongo.insert_record(NOTIFICATIONS_COLLECTION, record)
+    except Exception:
+        logger.exception("Could not record task notifications for %s", task.get("_id"))
+
+
+def _task_details(body: dict) -> tuple[dict, str | None]:
+    """The optional descriptive fields of a new task, validated.
+
+    Returns ``(details, error)``. Only the fields named here are read: a link
+    to follow is never stored, it is derived from the task's target when shown.
+    """
+    details: dict = {}
+    for field, limit in DETAIL_TEXT_LIMITS.items():
+        value = body.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            return {}, _('"{field}" must be text', field=field)
+        value = value.strip()
+        if len(value) > limit:
+            return {}, _('"{field}" is too long', field=field)
+        if value:
+            details[field] = value
+
+    due = body.get("dueDate")
+    if due not in (None, ""):
+        if not isinstance(due, str):
+            return {}, _("Invalid due date")
+        try:
+            details["dueDate"] = date.fromisoformat(due.strip()).isoformat()
+        except ValueError:
+            return {}, _("Invalid due date")
+
+    location_type = body.get("locationType")
+    if location_type not in (None, ""):
+        if location_type not in LOCATION_TYPES:
+            return {}, _("Invalid location type")
+        details["locationType"] = location_type
+
+    return details, None
 
 
 def _audit(user: str | None, action: str, details: dict) -> None:
@@ -130,6 +283,85 @@ def may_open_target(target_field: str, target_value: str, user: str) -> bool:
     )
 
 
+def _holds_role(username: str, role: str) -> bool:
+    from archihub.api.users.services import has_role
+
+    return bool(has_role(username, role))
+
+
+def _type_exists(post_type: str) -> bool:
+    return bool(_mongo().get_record("post_types", {"slug": post_type}, fields={"_id": 1}))
+
+
+def may_view_type(username: str, post_type: str) -> bool:
+    """Whether ``username`` may see a content type, by its ``viewRoles``."""
+    from archihub.api.resources.services import can_view_type
+
+    return bool(can_view_type(username, post_type))
+
+
+def may_edit_type(username: str, post_type: str) -> bool:
+    """Whether ``username`` may see a content type and edit its resources."""
+    from archihub.api.resources.access import holds_edit_role
+
+    return may_view_type(username, post_type) and bool(
+        holds_edit_role(username, post_type, _holds_role(username, "admin"))
+    )
+
+
+def _task_target(
+    location_type: str, body: dict, resource_id: str, record_id: str, user: str, assignee: str
+) -> tuple[dict, tuple[dict, int] | None]:
+    """The fields that store where a new task points, or the refusal.
+
+    Returns ``(target, error)``; ``target`` is merged into the stored task.
+    """
+    if location_type in ("collection", "upload"):
+        post_type = ""
+        if location_type == "collection":
+            raw_type = body.get("resourceType")
+            post_type = raw_type.strip() if isinstance(raw_type, str) else ""
+            if not post_type:
+                return {}, ({"error": _("resourceType is required")}, 400)
+            if not _type_exists(post_type) or not may_view_type(user, post_type):
+                return {}, ({"error": _("Collection not found")}, 404)
+        if not _holds_role(assignee, WORK_ROLE):
+            return {}, ({"error": _("Only editors can be assigned this task")}, 400)
+        if post_type and not may_edit_type(assignee, post_type):
+            return {}, ({"error": _("The assignee cannot edit this collection")}, 400)
+        return ({"postType": post_type} if post_type else {}), None
+
+    if not resource_id and not record_id:
+        return {}, ({"error": _("resourceId or recordId is required")}, 400)
+    target_field = "resourceId" if resource_id else "recordId"
+    target_value = resource_id or record_id
+    if not may_open_target(target_field, target_value, user):
+        return {}, ({"error": _("Resource does not exist")}, 404)
+    return {target_field: target_value}, None
+
+
+def _audit_target(task: dict) -> dict:
+    """Where a task points, for its audit entries."""
+    if task.get("resourceId"):
+        return {"resource": task["resourceId"]}
+    if task.get("recordId"):
+        return {"record": task["recordId"]}
+    if task.get("postType"):
+        return {"postType": task["postType"]}
+    return {"location": task["locationType"]} if task.get("locationType") else {}
+
+
+def is_task_manager(user: str) -> bool:
+    """Whether ``user`` may manage, assign to others, approve, or return tasks."""
+    from archihub.api.users.services import has_permission, has_role
+
+    return (
+        has_role(user, "admin")
+        or has_role(user, "team_lead")
+        or has_permission(user, "usertasks.manage")
+    )
+
+
 def _is_assignable(username: str) -> bool:
     if not username:
         return False
@@ -157,7 +389,8 @@ def _open_task(target_field: str, target_value: str, user: str, missing: str) ->
     """The open task on a target, for someone taking part in it or managing tasks.
 
     Anyone else - and anyone who may not open the target - is told there is no
-    task, as when there is none.
+    task, as when there is none. When the assigned user opens a task that is
+    still pending ("to do"), it advances to in-progress.
     """
     task = _mongo().get_record(
         COLLECTION,
@@ -169,38 +402,66 @@ def _open_task(target_field: str, target_value: str, user: str, missing: str) ->
         # `msg`, not `error` - see the module docstring.
         return {"msg": missing}, 404
 
-    task["_id"] = str(task["_id"])
-    task["createdAt"] = _iso(task.get("createdAt"))
-    task["comment"] = process_comments(task.get("comment"))
-    return task, 200
+    result = dict(task)
+    if result.get("status") == STATUS_PENDING and result.get("user") == user:
+        task_oid = result["_id"]
+        _mongo().update_record(COLLECTION, {"_id": task_oid}, {"status": STATUS_IN_PROGRESS})
+        result["status"] = STATUS_IN_PROGRESS
+
+        snapshot = dict(result)
+        snapshot["_id"] = str(task_oid)
+        snapshot["createdAt"] = _iso(snapshot.get("createdAt"))
+        snapshot["comment"] = [
+            {**entry, "createdAt": _iso(entry.get("createdAt"))}
+            if isinstance(entry, dict)
+            else entry
+            for entry in (result.get("comment") or [])
+        ]
+        target = {"resource": target_value} if target_field == "resourceId" else {"record": target_value}
+        _audit(user, "usertask_update", {
+            **target,
+            "task": str(task_oid),
+            "status": STATUS_IN_PROGRESS,
+            "approved": False,
+            "commented": False,
+        })
+        _notify_task_event(result, user, "status")
+        _call_hook("usertask_update", snapshot)
+
+    result["_id"] = str(result["_id"])
+    result["createdAt"] = _iso(result.get("createdAt"))
+    result["comment"] = process_comments(result.get("comment"))
+    return result, 200
 
 
 def _may_read_task(task: dict, user: str) -> bool:
     """The assignee, the creator, a commenter, or a task manager."""
-    from archihub.api.users.services import has_permission, has_role
-
     participants = {task.get("user"), task.get("createdBy")}
     participants.update(
         c.get("user") for c in task.get("comment") or [] if isinstance(c, dict)
     )
     if user in participants:
         return True
-    return (
-        has_role(user, "admin")
-        or has_role(user, "team_lead")
-        or has_permission(user, "usertasks.manage")
-    )
+    return is_task_manager(user)
 
 
 def get_all_tasks(filters: dict) -> tuple[dict, int]:
     """Paginated task list, newest first."""
     try:
-        statuses = filters.get("status") or []
-        if isinstance(statuses, str):
-            statuses = [statuses]
+        raw_statuses = filters.get("status")
+        if raw_statuses is None:
+            statuses = []
+        elif isinstance(raw_statuses, str):
+            statuses = [raw_statuses]
+        elif isinstance(raw_statuses, list) and all(isinstance(s, str) for s in raw_statuses):
+            statuses = raw_statuses
+        else:
+            return {"error": _("Invalid status")}, 400
 
         query: dict = {"status": {"$in": statuses}}
         username = filters.get("user")
+        if username is not None and not isinstance(username, str):
+            return {"error": _("user is required")}, 400
         if username:
             if filters.get("include_created"):
                 query["$or"] = [
@@ -228,10 +489,13 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
         for task in tasks:
             task["_id"] = str(task["_id"])
             task["createdAt"] = _iso(task.get("createdAt"))
+            task["comment"] = process_comments(task.get("comment"))
             if task.get("recordId"):
                 task["recordId"] = str(task["recordId"])
             if task.get("resourceId"):
                 task["resourceType"] = _resource_type(task["resourceId"])
+            elif task.get("postType"):
+                task["resourceType"] = task["postType"]
 
         total = mongo.count(COLLECTION, query) or 0
         return {
@@ -252,17 +516,24 @@ def get_editors() -> tuple[list | dict, int]:
     ``value ?? id ?? term ?? name``, so it would submit the display *name* as
     the assignee where the assignment needs the username. Identical for an
     account whose name is its username, wrong for every other one.
+
+    ``roles`` lists which assignable roles the user holds, so the picker can
+    offer only editors for the work that requires one.
     """
     try:
         editors = list(
             _mongo().get_all_records(
                 "users",
                 {"roles": {"$in": ASSIGNABLE_ROLES}},
-                fields={"name": 1, "username": 1, "_id": 0},
+                fields={"name": 1, "username": 1, "roles": 1, "_id": 0},
             )
         )
         options = [
-            {"label": editor.get("name", editor.get("username")), "value": editor.get("username")}
+            {
+                "label": editor.get("name", editor.get("username")),
+                "value": editor.get("username"),
+                "roles": [r for r in editor.get("roles") or [] if r in ASSIGNABLE_ROLES],
+            }
             for editor in editors
         ]
         return options, 200
@@ -276,48 +547,74 @@ def get_editors() -> tuple[list | dict, int]:
 # ---------------------------------------------------------------------------
 
 
-def create_task(body: dict, user: str) -> tuple[dict, int]:
-    """Assign review work.
+def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tuple[dict, int]:
+    """Assign work.
 
-    Refuses when the target already has an open task: two editors asked to
-    review the same thing would produce conflicting outcomes.
+    Users with an assignable role (``editor`` or ``transcriber``) may assign a
+    task to themselves; only admins and team leads may assign a task to someone
+    else. A review task is refused when its target already has an open task:
+    two editors asked to review the same thing would produce conflicting
+    outcomes. What each kind of task requires is in the module docstring.
     """
     try:
-        resource_id = (body.get("resourceId") or "").strip()
-        record_id = (body.get("recordId") or "").strip()
+        raw_resource = body.get("resourceId")
+        raw_record = body.get("recordId")
+        raw_assignee = body.get("user")
+        raw_comment = body.get("comment")
 
-        if not resource_id and not record_id:
-            return {"error": _("resourceId or recordId is required")}, 400
-        if not (body.get("user") or "").strip():
+        resource_id = raw_resource.strip() if isinstance(raw_resource, str) else ""
+        record_id = raw_record.strip() if isinstance(raw_record, str) else ""
+        assignee = raw_assignee.strip() if isinstance(raw_assignee, str) else ""
+        comment_text = raw_comment.strip() if isinstance(raw_comment, str) else ""
+
+        if not assignee:
             return {"error": _("user is required")}, 400
-        if not (body.get("comment") or "").strip():
+        if not comment_text:
             return {"error": _("comment is required")}, 400
 
-        mongo = _mongo()
-        target_field = "resourceId" if resource_id else "recordId"
-        target_value = resource_id or record_id
+        details, error = _task_details(body)
+        if error:
+            return {"error": error}, 400
 
-        if not may_open_target(target_field, target_value, user):
-            return {"error": _("Resource does not exist")}, 404
-        if not _is_assignable(body["user"].strip()):
+        if is_team_lead is None:
+            is_team_lead = is_task_manager(user)
+
+        if assignee != user:
+            if not is_team_lead:
+                return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+        elif not _is_assignable(user):
+            return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+
+        mongo = _mongo()
+        location_type = details.get("locationType", "record")
+        target, refusal = _task_target(
+            location_type, body, resource_id, record_id, user, assignee
+        )
+        if refusal:
+            return refusal
+        if assignee != user and not _is_assignable(assignee):
             return {"error": _("user is required")}, 400
 
-        if mongo.get_record(COLLECTION, {target_field: target_value, "status": {"$in": OPEN_STATUSES}}):
+        if location_type == "record" and mongo.get_record(
+            COLLECTION, {**target, "status": {"$in": OPEN_STATUSES}}
+        ):
             message = (
                 _("There is already a task for this resource")
-                if resource_id
+                if "resourceId" in target
                 else _("There is already a task for this record")
             )
             return {"error": message}, 400
 
         now = utcnow()
         record = {
-            target_field: target_value,
-            "user": body["user"].strip(),
+            **target,
+            "user": assignee,
             "createdBy": user,
             "status": STATUS_PENDING,
             "createdAt": now,
-            "comment": [{"user": user, "comment": body["comment"], "createdAt": now}],
+            "comment": [{"user": user, "comment": raw_comment, "createdAt": now}],
+            "isPersonal": assignee == user,
+            **details,
         }
         result = mongo.insert_record(COLLECTION, record)
 
@@ -327,12 +624,12 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
         for comment in created["comment"]:
             comment["createdAt"] = _iso(comment["createdAt"])
 
-        target_name = "resource" if resource_id else "record"
         _audit(user, "usertask_create", {
-            target_name: target_value,
+            **_audit_target(record),
             "task": created["_id"],
-            "assignee": body["user"],
+            "assignee": assignee,
         })
+        _notify_task_event(created, user, "created", comment_text=comment_text)
         _call_hook("usertask_create", created)
 
         return created, 201
@@ -344,8 +641,9 @@ def create_task(body: dict, user: str) -> tuple[dict, int]:
 def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tuple[dict, int]:
     """Comment on a task, or update its status.
 
-    ONLY A TEAM LEAD (OR ADMIN) MAY APPROVE OR REJECT. An editor can update their
-    own task and advance it to 'review', but cannot sign off their own work.
+    ONLY A TEAM LEAD (OR ADMIN) MAY APPROVE OR RETURN A TASK. An assigned user
+    can update their own task and advance it to 'review', where it remains until
+    approved or returned to 'pending' by an admin or team lead.
     """
     object_id = _to_object_id(task_id)
     if object_id is None:
@@ -357,12 +655,11 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
         if not task:
             return {"error": _("Task not found")}, 404
 
-        if task.get("status") == STATUS_APPROVED:
+        current_status = task.get("status")
+        if current_status == STATUS_APPROVED:
             return {"error": _("Task already approved")}, 400
 
-        creator = task.get("createdBy") or (
-            task.get("comment") and isinstance(task["comment"], list) and task["comment"][0].get("user")
-        )
+        creator = _task_creator(task)
         has_owner = bool(task.get("user") or creator)
         is_owner = (task.get("user") == user) or (creator == user)
         if not is_team_lead and has_owner and not is_owner:
@@ -370,15 +667,18 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
 
         update: dict = {}
 
-        comment = (body.get("comment") or "").strip()
+        raw_comment = body.get("comment")
+        if raw_comment is not None and not isinstance(raw_comment, str):
+            return {"error": _("comment is required")}, 400
+        comment = raw_comment.strip() if isinstance(raw_comment, str) else ""
         if comment:
             update["comment"] = (task.get("comment") or []) + [
                 {"user": user, "comment": comment, "createdAt": utcnow()}
             ]
 
         new_status = body.get("status")
-        if new_status:
-            if new_status not in VALID_STATUSES:
+        if new_status is not None and new_status != "":
+            if not isinstance(new_status, str) or new_status not in (VALID_STATUSES | _RETURN_STATUS_ALIASES):
                 return {"error": _("Invalid status")}, 400
 
             if new_status == STATUS_APPROVED:
@@ -387,15 +687,16 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
                 update["status"] = STATUS_APPROVED
                 update["approvedBy"] = user
                 update["approvedAt"] = utcnow()
-            elif new_status == STATUS_REJECTED:
+            elif new_status in _RETURN_STATUS_ALIASES:
                 if not is_team_lead:
                     return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
-                update["status"] = STATUS_REJECTED
+                update["status"] = STATUS_PENDING
             elif new_status == STATUS_REVIEW:
                 update["status"] = STATUS_REVIEW
-            elif new_status == STATUS_PENDING:
-                if is_team_lead:
-                    update["status"] = STATUS_PENDING
+            elif new_status == STATUS_IN_PROGRESS:
+                if current_status == STATUS_REVIEW and not is_team_lead:
+                    return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+                update["status"] = STATUS_IN_PROGRESS
 
         if not update:
             return {"error": _("No changes were made")}, 400
@@ -410,9 +711,8 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
             if isinstance(entry, dict):
                 entry["createdAt"] = _iso(entry.get("createdAt"))
 
-        target = {"resource": task["resourceId"]} if task.get("resourceId") else {"record": task.get("recordId")}
         audit_details = {
-            **target,
+            **_audit_target(task),
             "task": task_id,
             "status": updated.get("status"),
             "approved": update.get("status") == STATUS_APPROVED,
@@ -420,11 +720,182 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
         }
 
         _audit(user, "usertask_update", audit_details)
+        if "comment" in update and "status" in update:
+            event_type = "update"
+        elif "comment" in update:
+            event_type = "comment"
+        else:
+            event_type = "status"
+        _notify_task_event(updated, user, event_type, comment_text=comment or None)
         _call_hook("usertask_update", updated)
 
         return updated, 200
     except Exception:
         logger.exception("Could not update review task %s", task_id)
+        return {"error": _("Error while processing the request")}, 500
+
+
+def delete_task(task_id: str, user: str) -> tuple[dict, int]:
+    """Delete a review task.
+
+    The user who created or assigned the task may delete it, and so may an
+    administrator - otherwise a task whose creator has left could never be
+    removed.
+    """
+    object_id = _to_object_id(task_id)
+    if object_id is None:
+        return {"error": _("Task not found")}, 404
+
+    try:
+        mongo = _mongo()
+        task = mongo.get_record(COLLECTION, {"_id": object_id})
+        if not task:
+            return {"error": _("Task not found")}, 404
+
+        if not _may_delete_task(task, user):
+            return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+
+        mongo.delete_record(COLLECTION, {"_id": object_id})
+        try:
+            mongo.delete_records(NOTIFICATIONS_COLLECTION, {"taskId": task_id})
+        except Exception:
+            logger.exception("Could not clean up notifications for task %s", task_id)
+
+        _audit(user, "usertask_delete", {
+            **_audit_target(task),
+            "task": task_id,
+            "assignee": task.get("user"),
+        })
+        _call_hook("usertask_delete", _task_snapshot(task))
+
+        return {"msg": _("Task deleted successfully")}, 200
+    except Exception:
+        logger.exception("Could not delete review task %s", task_id)
+        return {"error": _("Error while processing the request")}, 500
+
+
+def _is_admin(user: str) -> bool:
+    from archihub.api.users.services import has_role
+
+    return bool(has_role(user, "admin"))
+
+
+def _may_delete_task(task: dict, user: str) -> bool:
+    creator = _task_creator(task)
+    return bool(creator and creator == user) or _is_admin(user)
+
+
+def migrate_legacy_statuses() -> int:
+    """Move tasks stored as ``rejected`` back to ``pending``; returns how many.
+
+    A returned task is pending again, and only the statuses in
+    ``OPEN_STATUSES`` count as open: a task left as ``rejected`` would not stop
+    a second task being opened on the same target. Idempotent.
+    """
+    result = _mongo().update_records(COLLECTION, {"status": "rejected"}, {"status": STATUS_PENDING})
+    return getattr(result, "modified_count", 0) or 0
+
+
+def get_notifications(user: str, page: int = 0, limit: int = NOTIFICATIONS_PAGE_SIZE) -> tuple[dict, int]:
+    """List active review-task notifications for ``user``, newest first."""
+    parsed_page = page_number(page)
+    if parsed_page is None:
+        return {"error": _('"{field}" must be a number', field="page")}, 400
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        return {"error": _('"{field}" must be a number', field="limit")}, 400
+    effective_limit = min(limit, 100)
+
+    try:
+        mongo = _mongo()
+        query = {"user": user, "active": True}
+        rows = list(
+            mongo.get_all_records(
+                NOTIFICATIONS_COLLECTION,
+                query,
+                sort=[("createdAt", -1)],
+                limit=effective_limit,
+                skip=parsed_page * effective_limit,
+            )
+        )
+        total = mongo.count(NOTIFICATIONS_COLLECTION, query) or 0
+        return {
+            "results": [_serialize_notification(row) for row in rows],
+            "total": total,
+        }, 200
+    except Exception:
+        logger.exception("Could not list task notifications for %s", user)
+        return {"error": _("Error while processing the request")}, 500
+
+
+def deactivate_notifications(user: str, body: dict | None = None) -> tuple[dict, int]:
+    """Deactivate active task notifications for ``user``.
+
+    Accepts optional ``ids`` (list of notification ids) or ``taskId`` to scope
+    deactivation; an empty body deactivates all active notifications for ``user``.
+    """
+    payload = body if isinstance(body, dict) else {}
+    query: dict = {"user": user, "active": True}
+
+    raw_ids = payload.get("ids")
+    raw_task_id = payload.get("taskId")
+    if raw_ids is not None:
+        if not isinstance(raw_ids, list) or not raw_ids or not all(isinstance(i, str) for i in raw_ids):
+            return {"error": _("Invalid notification ids")}, 400
+        object_ids = []
+        for raw_id in raw_ids:
+            oid = _to_object_id(raw_id)
+            if oid is None:
+                return {"error": _("Invalid notification ids")}, 400
+            object_ids.append(oid)
+        query["_id"] = {"$in": object_ids}
+    elif raw_task_id is not None:
+        if not isinstance(raw_task_id, str) or not raw_task_id.strip():
+            return {"error": _("Invalid taskId")}, 400
+        query["taskId"] = raw_task_id.strip()
+
+    try:
+        result = _mongo().update_records(
+            NOTIFICATIONS_COLLECTION,
+            query,
+            {"active": False, "readAt": utcnow()},
+        )
+        modified = getattr(result, "modified_count", 0) or 0
+        return {"msg": _("Notifications deactivated"), "modified": modified}, 200
+    except Exception:
+        logger.exception("Could not deactivate task notifications for %s", user)
+        return {"error": _("Error while processing the request")}, 500
+
+
+def deactivate_notification(notification_id: str, user: str) -> tuple[dict, int]:
+    """Deactivate a single task notification belonging to ``user``."""
+    object_id = _to_object_id(notification_id)
+    if object_id is None:
+        return {"error": _("Notification not found")}, 404
+
+    try:
+        mongo = _mongo()
+        notification = mongo.get_record(NOTIFICATIONS_COLLECTION, {"_id": object_id})
+        if not notification:
+            return {"error": _("Notification not found")}, 404
+        if notification.get("user") != user:
+            return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
+
+        if notification.get("active", True):
+            now = utcnow()
+            mongo.update_record(
+                NOTIFICATIONS_COLLECTION,
+                {"_id": object_id},
+                {"active": False, "readAt": now},
+            )
+            notification = mongo.get_record(NOTIFICATIONS_COLLECTION, {"_id": object_id}) or {
+                **notification,
+                "active": False,
+                "readAt": now,
+            }
+
+        return _serialize_notification(notification), 200
+    except Exception:
+        logger.exception("Could not deactivate task notification %s", notification_id)
         return {"error": _("Error while processing the request")}, 500
 
 

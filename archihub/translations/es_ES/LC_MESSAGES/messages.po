@@ -2324,11 +2324,8 @@ msgstr "Corregir cualquier transcripción, sin tarea asignada. También requiere
 msgid "Built in: admin and team_lead; editor too, unless they also hold transcriber"
 msgstr "Por defecto: admin y team_lead; también editor, salvo que tenga además transcriber"
 
-msgid "Create, assign, list and approve user tasks"
-msgstr "Crear, asignar, listar y aprobar tareas de usuario"
-
-msgid "Comment on user tasks"
-msgstr "Comentar tareas de usuario"
+msgid "Assign tasks to other users, list all tasks, and approve or return tasks"
+msgstr "Asignar tareas a otros usuarios, listar todas las tareas y aprobar o devolver tareas"
 
 msgid "See other users' cataloguing and processing activity in the activity feed"
 msgstr "Ver la actividad de catalogación y procesamiento de otros usuarios en el registro de actividad"
@@ -2432,3 +2429,27 @@ msgstr "%(user)s actualizó los niveles de acceso"
 msgid "%(user)s updated roles"
 msgstr "%(user)s actualizó los roles"
 
+
+msgid "\"{field}\" must be text"
+msgstr "\"{field}\" debe ser texto"
+
+msgid "\"{field}\" is too long"
+msgstr "\"{field}\" es demasiado largo"
+
+msgid "Invalid due date"
+msgstr "Fecha de vencimiento no válida"
+
+msgid "Invalid location type"
+msgstr "Tipo de ubicación no válido"
+
+msgid "resourceType is required"
+msgstr "resourceType es requerido"
+
+msgid "Collection not found"
+msgstr "Colección no encontrada"
+
+msgid "Only editors can be assigned this task"
+msgstr "Solo se puede asignar esta tarea a un editor"
+
+msgid "The assignee cannot edit this collection"
+msgstr "La persona asignada no puede editar esta colección"

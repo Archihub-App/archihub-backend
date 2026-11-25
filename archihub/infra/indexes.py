@@ -330,6 +330,19 @@ INDEXES: list[IndexSpec] = [
             "then sort, so the same index serves the level-only query too."
         ),
     ),
+    # ---------------------------------------------- usertask_notifications
+    IndexSpec(
+        collection="usertask_notifications",
+        keys=[("user", ASC), ("active", ASC), ("createdAt", DESC)],
+        name="ix_usertask_notifications_user_active_createdAt",
+        reason="Fetches a user's active review-task notifications newest first.",
+    ),
+    IndexSpec(
+        collection="usertask_notifications",
+        keys=[("taskId", ASC)],
+        name="ix_usertask_notifications_taskId",
+        reason="Cleans up or deactivates notifications belonging to a specific review task.",
+    ),
 ]
 
 

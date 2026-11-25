@@ -126,13 +126,8 @@ _CATALOGUE = (
     # User tasks
     Point(
         "usertasks.manage", "usertasks",
-        "Create, assign, list and approve user tasks",
+        "Assign tasks to other users, list all tasks, and approve or return tasks",
         ("admin", "team_lead"),
-    ),
-    Point(
-        "usertasks.comment", "usertasks",
-        "Comment on user tasks",
-        ("admin", "team_lead", "editor"),
     ),
     # Activity feed
     Point(

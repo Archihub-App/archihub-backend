@@ -34,7 +34,7 @@ TRANSCRIPTION_TYPE = "av_transcribe"
 
 #: Task states in which an assigned transcriber may still edit. A task that has
 #: been accepted is finished work and is not reopened by editing.
-OPEN_TASK_STATES = ("review", "pending", "rejected")
+OPEN_TASK_STATES = ("review", "pending", "in_progress", "rejected")
 
 #: Trailing credits that speech-to-text models hallucinate from their training
 #: data ("subtitles by ...", a bare URL). Dropped from the flattened text only -

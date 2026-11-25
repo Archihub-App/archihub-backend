@@ -363,3 +363,165 @@ def test_delete_audit_id_is_serialisable(mongo):
 def test_slug_lookup_is_not_ported():
     """`lists` documents have no slug."""
     assert not hasattr(services, "get_by_slug")
+
+
+# ---------------------------------------------------------------------------
+# get_all - preview options, option counts, and form usage
+# ---------------------------------------------------------------------------
+
+
+def test_get_all_returns_first_three_options_total_count_and_forms(mongo):
+    opt_ids = [f"60000000000000000000000{i}" for i in range(1, 6)]
+    list_id = ObjectId(VALID_ID)
+    mongo.collections["lists"] = [
+        {
+            "_id": list_id,
+            "name": "Languages",
+            "options": [opt_ids[3], opt_ids[0], opt_ids[2], opt_ids[1], opt_ids[4]],
+            "forms": [{"slug": "isadg", "name": "ISAD-G"}],
+        }
+    ]
+    mongo.collections["options"] = [
+        {"_id": ObjectId(opt_ids[i]), "term": f"Term {i + 1}"} for i in range(5)
+    ]
+
+    payload, status = services.get_all()
+
+    assert status == 200
+    assert len(payload) == 1
+    item = payload[0]
+    assert item["id"] == VALID_ID
+    assert item["name"] == "Languages"
+    assert item["optionsCount"] == 5
+    assert item["options"] == [
+        {"id": opt_ids[3], "term": "Term 4"},
+        {"id": opt_ids[0], "term": "Term 1"},
+        {"id": opt_ids[2], "term": "Term 3"},
+    ]
+    assert item["forms"] == [{"slug": "isadg", "name": "ISAD-G"}]
+    assert mongo.updated == []
+
+
+def test_get_all_skips_dangling_preview_options_and_handles_empty_lists(mongo):
+    opt_ids = [f"60000000000000000000000{i}" for i in range(1, 5)]
+    missing_id = "600000000000000000000099"
+    first_id = ObjectId("6a70b8c3497d4440325c94c1")
+    second_id = ObjectId("6a70b8c3497d4440325c94c2")
+
+    mongo.collections["lists"] = [
+        {
+            "_id": first_id,
+            "name": "Empty",
+            "options": [],
+            "forms": [],
+        },
+        {
+            "_id": second_id,
+            "name": "With Dangling",
+            "options": [missing_id, opt_ids[0], opt_ids[1], opt_ids[2], opt_ids[3]],
+            "forms": [],
+        },
+    ]
+    mongo.collections["options"] = [
+        {"_id": ObjectId(opt_ids[i]), "term": f"T{i + 1}"} for i in range(4)
+    ]
+
+    payload, status = services.get_all()
+
+    assert status == 200
+    assert payload[0]["options"] == []
+    assert payload[0]["optionsCount"] == 0
+    assert payload[1]["options"] == [
+        {"id": opt_ids[0], "term": "T1"},
+        {"id": opt_ids[1], "term": "T2"},
+        {"id": opt_ids[2], "term": "T3"},
+    ]
+    assert payload[1]["optionsCount"] == 5
+
+
+def test_get_all_backfills_forms_lazily_when_missing(mongo):
+    list_id = ObjectId(VALID_ID)
+    other_id = ObjectId("6a70b8c3497d4440325c94c4")
+    mongo.collections["lists"] = [
+        {"_id": list_id, "name": "Used", "options": []},
+        {"_id": other_id, "name": "Unused", "options": []},
+    ]
+    mongo.collections["forms"] = [
+        {
+            "slug": "dublin-core",
+            "name": "Dublin Core",
+            "fields": [
+                {"label": "Language", "type": "select", "list": VALID_ID},
+                {
+                    "label": "Group",
+                    "type": "repeater",
+                    "subfields": [{"label": "Sub", "type": "select", "list": VALID_ID}],
+                },
+            ],
+        }
+    ]
+
+    payload, status = services.get_all()
+
+    assert status == 200
+    by_id = {entry["id"]: entry for entry in payload}
+    assert by_id[VALID_ID]["forms"] == [{"slug": "dublin-core", "name": "Dublin Core"}]
+    assert by_id[str(other_id)]["forms"] == []
+    assert ("lists", {"_id": list_id}, {"forms": [{"slug": "dublin-core", "name": "Dublin Core"}]}) in mongo.updated
+    assert ("lists", {"_id": other_id}, {"forms": []}) in mongo.updated
+
+
+def test_sync_all_forms_usage_is_idempotent(mongo):
+    list_id = ObjectId(VALID_ID)
+    expected_forms = [{"slug": "isadg", "name": "ISAD-G"}]
+    mongo.collections["lists"] = [
+        {"_id": list_id, "name": "L", "options": [], "forms": expected_forms},
+    ]
+    mongo.collections["forms"] = [
+        {
+            "slug": "isadg",
+            "name": "ISAD-G",
+            "fields": [{"label": "Type", "type": "select-multiple2", "list": VALID_ID}],
+        }
+    ]
+
+    services.sync_all_forms_usage()
+
+    assert mongo.updated == []
+
+
+def test_sync_form_usage_adds_renames_and_removes_without_touching_unrelated(mongo):
+    kept_id = ObjectId("6a70b8c3497d4440325c94c1")
+    added_id = ObjectId("6a70b8c3497d4440325c94c2")
+    removed_id = ObjectId("6a70b8c3497d4440325c94c3")
+    unrelated_id = ObjectId("6a70b8c3497d4440325c94c4")
+
+    mongo.collections["lists"] = [
+        {"_id": kept_id, "name": "Kept", "forms": [{"slug": "form-a", "name": "Old Name"}]},
+        {"_id": added_id, "name": "Added", "forms": []},
+        {"_id": removed_id, "name": "Removed", "forms": [{"slug": "form-a", "name": "Old Name"}]},
+        {"_id": unrelated_id, "name": "Unrelated", "forms": [{"slug": "other", "name": "Other"}]},
+    ]
+
+    services.sync_form_usage("form-a", "New Name", [str(kept_id), str(added_id)])
+
+    assert (
+        "lists",
+        {"_id": kept_id},
+        {"forms": [{"slug": "form-a", "name": "New Name"}]},
+    ) in mongo.updated
+    assert (
+        "lists",
+        {"_id": added_id},
+        {"forms": [{"slug": "form-a", "name": "New Name"}]},
+    ) in mongo.updated
+    assert ("lists", {"_id": removed_id}, {"forms": []}) in mongo.updated
+    assert all(filters != {"_id": unrelated_id} for _c, filters, _u in mongo.updated)
+
+
+def test_create_initializes_empty_forms_list(mongo):
+    _payload, status = services.create({"name": "Fresh", "options": []}, "admin")
+
+    assert status == 201
+    list_insert = next(r for c, r in mongo.inserted if c == "lists")
+    assert list_insert["forms"] == []

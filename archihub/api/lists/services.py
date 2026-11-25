@@ -8,6 +8,7 @@ the frontend's ``!response.ok`` check sees them as errors.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import json
 import logging
 
@@ -22,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 COLLECTION = "lists"
 OPTIONS_COLLECTION = "options"
+FORMS_COLLECTION = "forms"
+PREVIEW_OPTIONS_LIMIT = 3
 
 
 def _mongo():
@@ -45,7 +48,7 @@ def _to_object_id(value: str) -> ObjectId | None:
         return None
 
 
-def _load_options(option_ids: list[str]) -> list[dict]:
+def _load_options(option_ids: list[str], mongo=None) -> list[dict]:
     """Resolve option ids to ``{id, term}``, preserving the list's own order.
 
     Order is significant - it is the order the options are presented in - and
@@ -56,7 +59,8 @@ def _load_options(option_ids: list[str]) -> list[dict]:
     if not object_ids:
         return []
 
-    records = list(_mongo().get_all_records(OPTIONS_COLLECTION, {"_id": {"$in": object_ids}}))
+    client = mongo or _mongo()
+    records = list(client.get_all_records(OPTIONS_COLLECTION, {"_id": {"$in": object_ids}}))
     by_id = {str(record["_id"]): record for record in records}
 
     resolved = []
@@ -67,6 +71,168 @@ def _load_options(option_ids: list[str]) -> list[dict]:
     return resolved
 
 
+def _load_preview_options(records: list[dict], mongo) -> dict[str, list[dict]]:
+    """Resolve up to ``PREVIEW_OPTIONS_LIMIT`` ordered options per list in one batch."""
+    batch_oids: list[ObjectId] = []
+    seen_oids: set[str] = set()
+    for record in records:
+        for option_id in (record.get("options") or [])[:PREVIEW_OPTIONS_LIMIT]:
+            oid = _to_object_id(str(option_id))
+            if oid and str(oid) not in seen_oids:
+                seen_oids.add(str(oid))
+                batch_oids.append(oid)
+
+    by_id: dict[str, dict] = {}
+    if batch_oids:
+        option_docs = list(
+            mongo.get_all_records(
+                OPTIONS_COLLECTION,
+                {"_id": {"$in": batch_oids}},
+                fields={"term": 1},
+            )
+        )
+        by_id = {str(doc["_id"]): doc for doc in option_docs}
+
+    previews: dict[str, list[dict]] = {}
+    for record in records:
+        list_id = str(record["_id"])
+        raw_ids = [str(item) for item in (record.get("options") or [])]
+        resolved: list[dict] = []
+        for option_id in raw_ids[:PREVIEW_OPTIONS_LIMIT]:
+            doc = by_id.get(option_id)
+            if doc:
+                resolved.append({"id": str(doc["_id"]), "term": doc.get("term")})
+
+        if len(resolved) < PREVIEW_OPTIONS_LIMIT and len(raw_ids) > PREVIEW_OPTIONS_LIMIT:
+            extra = _load_options(raw_ids[PREVIEW_OPTIONS_LIMIT:], mongo=mongo)
+            resolved.extend(extra[: PREVIEW_OPTIONS_LIMIT - len(resolved)])
+
+        previews[list_id] = resolved
+    return previews
+
+
+def _sort_form_refs(forms: Iterable[dict]) -> list[dict[str, str]]:
+    """Normalise, deduplicate by slug, and sort ``{slug, name}`` form references."""
+    deduped: dict[str, dict[str, str]] = {}
+    for entry in forms:
+        if not isinstance(entry, dict) or not entry.get("slug"):
+            continue
+        slug = str(entry["slug"])
+        deduped[slug] = {"slug": slug, "name": str(entry.get("name") or "")}
+    return sorted(
+        deduped.values(),
+        key=lambda item: (item["name"].lower(), item["slug"]),
+    )
+
+
+def extract_form_list_ids(form: dict) -> list[str]:
+    """Return deduplicated list ids referenced anywhere in ``form['fields']``."""
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def _walk(fields) -> None:
+        if not isinstance(fields, list):
+            return
+        for field in fields:
+            if not isinstance(field, dict):
+                continue
+            list_id = field.get("list")
+            if list_id is not None and not isinstance(list_id, bool):
+                cleaned = str(list_id).strip()
+                if cleaned and cleaned not in seen:
+                    seen.add(cleaned)
+                    found.append(cleaned)
+            subfields = field.get("subfields")
+            if isinstance(subfields, list):
+                _walk(subfields)
+
+    _walk(form.get("fields") if isinstance(form, dict) else None)
+    return found
+
+
+def sync_form_usage(
+    form_slug: str,
+    form_name: str,
+    list_ids: Iterable[str],
+    *,
+    previous_slug: str | None = None,
+    mongo=None,
+) -> None:
+    """Keep each list's ``forms`` field aligned with a created, updated, or deleted form."""
+    if not form_slug and not previous_slug:
+        return
+
+    client = mongo or _mongo()
+    target_ids = {
+        str(item).strip()
+        for item in list_ids
+        if item is not None and not isinstance(item, bool) and str(item).strip()
+    }
+    match_slugs = {slug for slug in (form_slug, previous_slug) if slug}
+
+    target_oids = [oid for oid in (_to_object_id(item) for item in target_ids) if oid is not None]
+    or_clauses: list[dict] = []
+    if target_oids:
+        or_clauses.append({"_id": {"$in": target_oids}})
+    if match_slugs:
+        or_clauses.append({"forms.slug": {"$in": sorted(match_slugs)}})
+    if not or_clauses:
+        return
+
+    query = or_clauses[0] if len(or_clauses) == 1 else {"$or": or_clauses}
+    candidates = list(client.get_all_records(COLLECTION, query, fields={"forms": 1}))
+
+    for doc in candidates:
+        doc_id = str(doc["_id"])
+        raw_forms = doc.get("forms")
+        current_forms = _sort_form_refs(raw_forms) if isinstance(raw_forms, list) else []
+
+        is_target = doc_id in target_ids
+        has_match = any(entry["slug"] in match_slugs for entry in current_forms)
+        if not is_target and not has_match:
+            continue
+
+        updated_forms = [entry for entry in current_forms if entry["slug"] not in match_slugs]
+        if is_target and form_slug:
+            updated_forms.append({"slug": str(form_slug), "name": str(form_name or "")})
+        updated_forms = _sort_form_refs(updated_forms)
+
+        if raw_forms != updated_forms:
+            client.update_record(COLLECTION, {"_id": doc["_id"]}, {"forms": updated_forms})
+
+
+def sync_all_forms_usage(*, mongo=None, list_docs: list[dict] | None = None) -> dict[str, list[dict[str, str]]]:
+    """Reconcile every list's ``forms`` field against all stored metadata forms."""
+    client = mongo or _mongo()
+    forms = list(
+        client.get_all_records(FORMS_COLLECTION, {}, fields={"slug": 1, "name": 1, "fields": 1})
+    )
+
+    usage_by_list_id: dict[str, dict[str, dict[str, str]]] = {}
+    for form in forms:
+        slug = form.get("slug")
+        if not slug:
+            continue
+        form_ref = {"slug": str(slug), "name": str(form.get("name") or "")}
+        for list_id in extract_form_list_ids(form):
+            usage_by_list_id.setdefault(list_id, {})[str(slug)] = form_ref
+
+    records = (
+        list_docs
+        if list_docs is not None
+        else list(client.get_all_records(COLLECTION, {}, fields={"forms": 1}))
+    )
+
+    resolved: dict[str, list[dict[str, str]]] = {}
+    for doc in records:
+        list_id = str(doc["_id"])
+        desired_forms = _sort_form_refs(usage_by_list_id.get(list_id, {}).values())
+        resolved[list_id] = desired_forms
+        if doc.get("forms") != desired_forms:
+            client.update_record(COLLECTION, {"_id": doc["_id"]}, {"forms": desired_forms})
+    return resolved
+
+
 # ---------------------------------------------------------------------------
 # Reads
 # ---------------------------------------------------------------------------
@@ -74,8 +240,31 @@ def _load_options(option_ids: list[str]) -> list[dict]:
 
 def get_all() -> tuple[list | dict, int]:
     try:
-        records = _mongo().get_all_records(COLLECTION, {}, sort=[("name", 1)])
-        lists = [{"name": record.get("name"), "id": str(record["_id"])} for record in records]
+        mongo = _mongo()
+        records = list(mongo.get_all_records(COLLECTION, {}, sort=[("name", 1)]))
+        synced_forms: dict[str, list[dict[str, str]]] | None = None
+        if any("forms" not in record or not isinstance(record.get("forms"), list) for record in records):
+            synced_forms = sync_all_forms_usage(mongo=mongo, list_docs=records)
+
+        previews = _load_preview_options(records, mongo)
+        lists = []
+        for record in records:
+            list_id = str(record["_id"])
+            raw_options = record.get("options") or []
+            forms = (
+                synced_forms[list_id]
+                if synced_forms is not None and list_id in synced_forms
+                else _sort_form_refs(record.get("forms") or [])
+            )
+            lists.append(
+                {
+                    "name": record.get("name"),
+                    "id": list_id,
+                    "options": previews.get(list_id, []),
+                    "optionsCount": len(raw_options),
+                    "forms": forms,
+                }
+            )
         return lists, 200
     except Exception:
         logger.exception("Could not list vocabularies")
@@ -154,6 +343,7 @@ def create(body: dict, user: str) -> tuple[dict, int]:
             "name": body.get("name"),
             "description": body.get("description", ""),
             "options": option_ids,
+            "forms": [],
         }
         new_list = mongo.insert_record(COLLECTION, payload)
 

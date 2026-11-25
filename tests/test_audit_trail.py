@@ -377,7 +377,7 @@ def test_assigning_and_approving_a_review_task_are_recorded(audit_log, monkeypat
     monkeypatch.setattr(services, "may_open_target", lambda field, value, user: True)
     monkeypatch.setattr(services, "_is_assignable", lambda username: True)
 
-    services.create_task({"resourceId": "r1", "user": "ed", "comment": "check it"}, "lead")
+    services.create_task({"resourceId": "r1", "user": "ed", "comment": "check it"}, "lead", is_team_lead=True)
     created = audit_log[-1]
     assert created["action"] == "USERTASK_CREATE"
     assert created["metadata"] == {"resource": "r1", "task": VALID_ID, "assignee": "ed"}
