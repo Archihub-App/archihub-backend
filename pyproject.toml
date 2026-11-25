@@ -1,6 +1,6 @@
 [project]
 name = "archihub-backend"
-version = "2.1.0b0"
+version = "2.1.0"
 description = "ArchiHUB: a comprehensive tool for organizing and connecting information"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
