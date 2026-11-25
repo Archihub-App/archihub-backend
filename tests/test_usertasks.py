@@ -221,6 +221,123 @@ def test_malformed_task_details_are_refused(mongo, extra):
     assert mongo.inserted == []
 
 
+# ---------------------------------------------------------------------------
+# Collection and upload work
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def work(mongo, monkeypatch):
+    """A collection ``actas`` that exists and that ``ed`` may see and edit."""
+    state = {"editors": {"ed"}, "types": {"actas"}, "visible": {"actas"}, "editable": {"actas"}}
+    monkeypatch.setattr(services, "_holds_role", lambda u, role: role == "editor" and u in state["editors"])
+    monkeypatch.setattr(services, "_type_exists", lambda slug: slug in state["types"])
+    monkeypatch.setattr(services, "may_view_type", lambda u, slug: slug in state["visible"])
+    monkeypatch.setattr(services, "may_edit_type", lambda u, slug: slug in state["editable"])
+    mongo.records["usertasks"] = None
+    return state
+
+
+def _work_task(location_type, **extra):
+    return {"locationType": location_type, "user": "ed", "comment": "c", **extra}
+
+
+def test_a_collection_task_stores_its_type_and_no_target(mongo, work):
+    payload, status = services.create_task(
+        _work_task("collection", resourceType=" actas "), "lead", is_team_lead=True
+    )
+
+    assert status == 201
+    stored = mongo.inserted[0][1]
+    assert stored["postType"] == "actas"
+    assert "resourceId" not in stored and "recordId" not in stored
+    assert payload["postType"] == "actas"
+
+
+def test_an_upload_task_has_no_target(mongo, work):
+    _payload, status = services.create_task(_work_task("upload"), "lead", is_team_lead=True)
+
+    assert status == 201
+    stored = mongo.inserted[0][1]
+    assert stored["locationType"] == "upload"
+    assert not {"resourceId", "recordId", "postType"} & set(stored)
+
+
+def test_several_collection_tasks_may_be_open_at_once(mongo, work):
+    # An open task on the same collection does not block another one.
+    mongo.records["usertasks"] = {"_id": ObjectId(VALID_ID), "status": "in_progress", "postType": "actas"}
+
+    _payload, status = services.create_task(
+        _work_task("collection", resourceType="actas"), "lead", is_team_lead=True
+    )
+    assert status == 201
+
+
+@pytest.mark.parametrize(
+    "body, change, expected",
+    [
+        (_work_task("collection"), None, 400),                             # no collection
+        (_work_task("collection", resourceType=["actas"]), None, 400),     # not text
+        (_work_task("collection", resourceType="otra"), None, 404),        # does not exist
+        (_work_task("collection", resourceType="actas"), "hidden", 404),   # creator cannot see it
+        (_work_task("collection", resourceType="actas"), "readonly", 400), # assignee cannot edit it
+        (_work_task("collection", resourceType="actas"), "transcriber", 400),
+        (_work_task("upload"), "transcriber", 400),                        # not an editor
+    ],
+)
+def test_collection_and_upload_work_needs_an_editor_who_may_edit(mongo, work, body, change, expected):
+    if change == "hidden":
+        work["visible"].clear()
+    elif change == "readonly":
+        work["editable"].clear()
+    elif change == "transcriber":
+        work["editors"].clear()
+
+    _payload, status = services.create_task(body, "lead", is_team_lead=True)
+
+    assert status == expected
+    assert mongo.inserted == []
+
+
+def test_the_listing_names_a_collection_tasks_type(mongo):
+    mongo.rows["usertasks"] = [
+        {"_id": ObjectId(VALID_ID), "status": "pending", "postType": "actas", "locationType": "collection"}
+    ]
+    payload, status = services.get_all_tasks({"status": ["pending"], "page": 0})
+
+    assert status == 200
+    assert payload["results"][0]["resourceType"] == "actas"
+
+
+def test_may_edit_type_needs_both_view_and_edit_rights(monkeypatch):
+    import archihub.api.resources.access as access
+
+    monkeypatch.setattr(services, "_holds_role", lambda u, role: False)
+    monkeypatch.setattr(services, "may_view_type", lambda u, slug: True)
+    monkeypatch.setattr(access, "holds_edit_role", lambda u, slug, is_admin: False)
+    assert services.may_edit_type("ed", "actas") is False
+
+    monkeypatch.setattr(access, "holds_edit_role", lambda u, slug, is_admin: True)
+    assert services.may_edit_type("ed", "actas") is True
+
+    monkeypatch.setattr(services, "may_view_type", lambda u, slug: False)
+    assert services.may_edit_type("ed", "actas") is False
+
+
+def test_editors_list_carries_their_assignable_roles(mongo):
+    mongo.rows["users"] = [
+        {"name": "Ana", "username": "ana", "roles": ["editor", "team_lead"]},
+        {"username": "tom", "roles": ["transcriber"]},
+    ]
+    options, status = services.get_editors()
+
+    assert status == 200
+    assert options == [
+        {"label": "Ana", "value": "ana", "roles": ["editor"]},
+        {"label": "tom", "value": "tom", "roles": ["transcriber"]},
+    ]
+
+
 def test_rejected_tasks_are_migrated_to_pending(mongo):
     mongo.rows["usertasks"] = [
         {"_id": 1, "status": "rejected"},

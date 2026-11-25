@@ -1,8 +1,18 @@
 """Editorial review tasks.
 
-A user task assigns review work on one resource or record to one editor. Exactly
-one may be open per target at a time, which is what stops two editors being
-asked to review the same thing.
+A user task assigns work to one user. Its ``locationType`` says where the work
+is:
+
+* ``record`` (the default): review of one resource or record. Exactly one task
+  may be open per target at a time, which is what stops two editors being asked
+  to review the same thing.
+* ``collection``: work across a content type, stored as ``postType``. Several
+  may be open at once - many people can catalogue the same collection.
+* ``upload``: loading new documents; it has no target.
+
+Collection and upload work is assigned only to editors who may edit the
+content type involved: a task its assignee cannot carry out is refused when it
+is created, not discovered later.
 
 ERROR KEY: this domain answers with ``{"error": ...}`` rather than the
 ``{"msg": ...}`` every other domain uses - **except** the two "there are no
@@ -50,6 +60,9 @@ DETAIL_TEXT_LIMITS = {
 }
 #: Where a task points, as the task dialog names it.
 LOCATION_TYPES = ("record", "collection", "upload")
+#: The role an assignee needs for collection and upload work, which creates and
+#: edits resources rather than reviewing one.
+WORK_ROLE = "editor"
 
 _LIST_PROJECTION = {
     "user": 1,
@@ -58,6 +71,7 @@ _LIST_PROJECTION = {
     "createdAt": 1,
     "resourceId": 1,
     "recordId": 1,
+    "postType": 1,
     "comment": 1,
     "dueDate": 1,
     "isPersonal": 1,
@@ -269,6 +283,74 @@ def may_open_target(target_field: str, target_value: str, user: str) -> bool:
     )
 
 
+def _holds_role(username: str, role: str) -> bool:
+    from archihub.api.users.services import has_role
+
+    return bool(has_role(username, role))
+
+
+def _type_exists(post_type: str) -> bool:
+    return bool(_mongo().get_record("post_types", {"slug": post_type}, fields={"_id": 1}))
+
+
+def may_view_type(username: str, post_type: str) -> bool:
+    """Whether ``username`` may see a content type, by its ``viewRoles``."""
+    from archihub.api.resources.services import can_view_type
+
+    return bool(can_view_type(username, post_type))
+
+
+def may_edit_type(username: str, post_type: str) -> bool:
+    """Whether ``username`` may see a content type and edit its resources."""
+    from archihub.api.resources.access import holds_edit_role
+
+    return may_view_type(username, post_type) and bool(
+        holds_edit_role(username, post_type, _holds_role(username, "admin"))
+    )
+
+
+def _task_target(
+    location_type: str, body: dict, resource_id: str, record_id: str, user: str, assignee: str
+) -> tuple[dict, tuple[dict, int] | None]:
+    """The fields that store where a new task points, or the refusal.
+
+    Returns ``(target, error)``; ``target`` is merged into the stored task.
+    """
+    if location_type in ("collection", "upload"):
+        post_type = ""
+        if location_type == "collection":
+            raw_type = body.get("resourceType")
+            post_type = raw_type.strip() if isinstance(raw_type, str) else ""
+            if not post_type:
+                return {}, ({"error": _("resourceType is required")}, 400)
+            if not _type_exists(post_type) or not may_view_type(user, post_type):
+                return {}, ({"error": _("Collection not found")}, 404)
+        if not _holds_role(assignee, WORK_ROLE):
+            return {}, ({"error": _("Only editors can be assigned this task")}, 400)
+        if post_type and not may_edit_type(assignee, post_type):
+            return {}, ({"error": _("The assignee cannot edit this collection")}, 400)
+        return ({"postType": post_type} if post_type else {}), None
+
+    if not resource_id and not record_id:
+        return {}, ({"error": _("resourceId or recordId is required")}, 400)
+    target_field = "resourceId" if resource_id else "recordId"
+    target_value = resource_id or record_id
+    if not may_open_target(target_field, target_value, user):
+        return {}, ({"error": _("Resource does not exist")}, 404)
+    return {target_field: target_value}, None
+
+
+def _audit_target(task: dict) -> dict:
+    """Where a task points, for its audit entries."""
+    if task.get("resourceId"):
+        return {"resource": task["resourceId"]}
+    if task.get("recordId"):
+        return {"record": task["recordId"]}
+    if task.get("postType"):
+        return {"postType": task["postType"]}
+    return {"location": task["locationType"]} if task.get("locationType") else {}
+
+
 def is_task_manager(user: str) -> bool:
     """Whether ``user`` may manage, assign to others, approve, or return tasks."""
     from archihub.api.users.services import has_permission, has_role
@@ -412,6 +494,8 @@ def get_all_tasks(filters: dict) -> tuple[dict, int]:
                 task["recordId"] = str(task["recordId"])
             if task.get("resourceId"):
                 task["resourceType"] = _resource_type(task["resourceId"])
+            elif task.get("postType"):
+                task["resourceType"] = task["postType"]
 
         total = mongo.count(COLLECTION, query) or 0
         return {
@@ -432,17 +516,24 @@ def get_editors() -> tuple[list | dict, int]:
     ``value ?? id ?? term ?? name``, so it would submit the display *name* as
     the assignee where the assignment needs the username. Identical for an
     account whose name is its username, wrong for every other one.
+
+    ``roles`` lists which assignable roles the user holds, so the picker can
+    offer only editors for the work that requires one.
     """
     try:
         editors = list(
             _mongo().get_all_records(
                 "users",
                 {"roles": {"$in": ASSIGNABLE_ROLES}},
-                fields={"name": 1, "username": 1, "_id": 0},
+                fields={"name": 1, "username": 1, "roles": 1, "_id": 0},
             )
         )
         options = [
-            {"label": editor.get("name", editor.get("username")), "value": editor.get("username")}
+            {
+                "label": editor.get("name", editor.get("username")),
+                "value": editor.get("username"),
+                "roles": [r for r in editor.get("roles") or [] if r in ASSIGNABLE_ROLES],
+            }
             for editor in editors
         ]
         return options, 200
@@ -457,12 +548,13 @@ def get_editors() -> tuple[list | dict, int]:
 
 
 def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tuple[dict, int]:
-    """Assign review work.
+    """Assign work.
 
     Users with an assignable role (``editor`` or ``transcriber``) may assign a
     task to themselves; only admins and team leads may assign a task to someone
-    else. Refuses when the target already has an open task: two editors asked to
-    review the same thing would produce conflicting outcomes.
+    else. A review task is refused when its target already has an open task:
+    two editors asked to review the same thing would produce conflicting
+    outcomes. What each kind of task requires is in the module docstring.
     """
     try:
         raw_resource = body.get("resourceId")
@@ -475,8 +567,6 @@ def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tupl
         assignee = raw_assignee.strip() if isinstance(raw_assignee, str) else ""
         comment_text = raw_comment.strip() if isinstance(raw_comment, str) else ""
 
-        if not resource_id and not record_id:
-            return {"error": _("resourceId or recordId is required")}, 400
         if not assignee:
             return {"error": _("user is required")}, 400
         if not comment_text:
@@ -496,25 +586,28 @@ def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tupl
             return {"error": _("You don't have the required authorization")}, ROLE_FAILURE_STATUS
 
         mongo = _mongo()
-        target_field = "resourceId" if resource_id else "recordId"
-        target_value = resource_id or record_id
-
-        if not may_open_target(target_field, target_value, user):
-            return {"error": _("Resource does not exist")}, 404
+        location_type = details.get("locationType", "record")
+        target, refusal = _task_target(
+            location_type, body, resource_id, record_id, user, assignee
+        )
+        if refusal:
+            return refusal
         if assignee != user and not _is_assignable(assignee):
             return {"error": _("user is required")}, 400
 
-        if mongo.get_record(COLLECTION, {target_field: target_value, "status": {"$in": OPEN_STATUSES}}):
+        if location_type == "record" and mongo.get_record(
+            COLLECTION, {**target, "status": {"$in": OPEN_STATUSES}}
+        ):
             message = (
                 _("There is already a task for this resource")
-                if resource_id
+                if "resourceId" in target
                 else _("There is already a task for this record")
             )
             return {"error": message}, 400
 
         now = utcnow()
         record = {
-            target_field: target_value,
+            **target,
             "user": assignee,
             "createdBy": user,
             "status": STATUS_PENDING,
@@ -531,9 +624,8 @@ def create_task(body: dict, user: str, is_team_lead: bool | None = None) -> tupl
         for comment in created["comment"]:
             comment["createdAt"] = _iso(comment["createdAt"])
 
-        target_name = "resource" if resource_id else "record"
         _audit(user, "usertask_create", {
-            target_name: target_value,
+            **_audit_target(record),
             "task": created["_id"],
             "assignee": assignee,
         })
@@ -619,9 +711,8 @@ def update_task(task_id: str, body: dict, user: str, is_team_lead: bool) -> tupl
             if isinstance(entry, dict):
                 entry["createdAt"] = _iso(entry.get("createdAt"))
 
-        target = {"resource": task["resourceId"]} if task.get("resourceId") else {"record": task.get("recordId")}
         audit_details = {
-            **target,
+            **_audit_target(task),
             "task": task_id,
             "status": updated.get("status"),
             "approved": update.get("status") == STATUS_APPROVED,
@@ -670,13 +761,8 @@ def delete_task(task_id: str, user: str) -> tuple[dict, int]:
         except Exception:
             logger.exception("Could not clean up notifications for task %s", task_id)
 
-        target = (
-            {"resource": task["resourceId"]}
-            if task.get("resourceId")
-            else {"record": task.get("recordId")}
-        )
         _audit(user, "usertask_delete", {
-            **target,
+            **_audit_target(task),
             "task": task_id,
             "assignee": task.get("user"),
         })
