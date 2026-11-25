@@ -2429,3 +2429,27 @@ msgstr "%(user)s actualizó los niveles de acceso"
 msgid "%(user)s updated roles"
 msgstr "%(user)s actualizó los roles"
 
+
+msgid "\"{field}\" must be text"
+msgstr "\"{field}\" debe ser texto"
+
+msgid "\"{field}\" is too long"
+msgstr "\"{field}\" es demasiado largo"
+
+msgid "Invalid due date"
+msgstr "Fecha de vencimiento no válida"
+
+msgid "Invalid location type"
+msgstr "Tipo de ubicación no válido"
+
+msgid "resourceType is required"
+msgstr "resourceType es requerido"
+
+msgid "Collection not found"
+msgstr "Colección no encontrada"
+
+msgid "Only editors can be assigned this task"
+msgstr "Solo se puede asignar esta tarea a un editor"
+
+msgid "The assignee cannot edit this collection"
+msgstr "La persona asignada no puede editar esta colección"

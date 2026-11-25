@@ -220,7 +220,8 @@ def delete_task(
 ) -> JSONResponse:
     """Delete a review task.
 
-    Only the user who created or assigned the task may delete it.
+    The user who created or assigned the task may delete it, and so may an
+    administrator.
     """
     return _respond(services.delete_task(task_id, current_user.username))
 
